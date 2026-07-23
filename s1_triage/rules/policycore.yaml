@@ -1,0 +1,5 @@
+name: PolicyCore SSO callback timeout
+keywords: sso, callback, timeout, session token
+category: Access
+priority: P3
+why: Matches the recurring SSO timeout pattern seen in PolicyCore incidents.

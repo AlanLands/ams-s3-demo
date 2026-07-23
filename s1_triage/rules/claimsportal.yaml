@@ -1,0 +1,5 @@
+name: ClaimsPortal document upload handoff
+keywords: document, upload, scan, token
+category: Request
+priority: P3
+why: Matches the claims document upload failure cluster involving scan handoff token errors.

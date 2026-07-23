@@ -1,0 +1,111 @@
+"""Tests for s3_enhancement/relevance.py's scoped file-selection logic.
+
+Runs against the real mockapp/ tree (including the mockapp/systems/ decoy
+padding), not a fixture — the whole point of this module is to prove
+selection behaves correctly at the actual demo-day scale.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from s3_enhancement import cr, relevance
+
+
+def test_discover_mockapp_files_returns_the_full_candidate_pool() -> None:
+    files = relevance.discover_mockapp_files()
+    assert 45 <= len(files) <= 60
+    assert any(path.endswith(".java") for path in files)
+    assert any(path.endswith(".py") for path in files)
+
+
+def test_canonical_cr_selects_only_core_files() -> None:
+    cr_text = cr.render_cr("Elite")
+    all_files = relevance.discover_mockapp_files()
+    selection = relevance.select_relevant_files(cr_text, all_files)
+
+    assert set(selection.selected) == set(relevance.CORE_FILES)
+    assert selection.extra_files == ()
+    for decoy_path in selection.selected:
+        assert "mockapp/systems/" not in decoy_path
+
+
+def test_canonical_cr_selection_is_deterministic_across_runs() -> None:
+    cr_text = cr.render_cr("Elite")
+    all_files = relevance.discover_mockapp_files()
+    first = relevance.select_relevant_files(cr_text, all_files)
+    second = relevance.select_relevant_files(cr_text, all_files)
+    third = relevance.select_relevant_files(cr_text, all_files)
+
+    assert set(first.selected) == set(second.selected) == set(third.selected)
+    assert first.extra_files == second.extra_files == third.extra_files
+
+
+def test_core_files_included_even_when_missing_on_disk() -> None:
+    all_files = {"mockapp/core/models.py": "class Policy: ...", "mockapp/systems/x.py": "x = 1"}
+    selection = relevance.select_relevant_files("some CR text", all_files)
+
+    assert selection.selected["mockapp/core/coverage.py"] == ""
+    assert selection.selected["mockapp/core/models.py"] == "class Policy: ..."
+
+
+def test_verify_core_recall_passes_on_a_full_selection() -> None:
+    cr_text = cr.render_cr("Elite")
+    all_files = relevance.discover_mockapp_files()
+    selection = relevance.select_relevant_files(cr_text, all_files)
+    relevance.verify_core_recall(selection.selected)
+
+
+def test_verify_core_recall_raises_on_incomplete_file_set() -> None:
+    incomplete = {"mockapp/core/models.py": "...", "mockapp/core/db.py": "..."}
+    with pytest.raises(Exception, match="missing required core file"):
+        relevance.verify_core_recall(incomplete)
+
+
+def test_candidate_pool_by_language_counts_both_languages() -> None:
+    all_files = relevance.discover_mockapp_files()
+    selection = relevance.select_relevant_files(cr.render_cr("Elite"), all_files)
+    by_language = selection.candidate_pool_by_language
+    assert by_language["python"] > 0
+    assert by_language["java"] > 0
+    assert by_language["python"] + by_language["java"] == selection.candidate_pool_size
+
+
+def test_estimate_tokens_is_a_rough_positive_heuristic() -> None:
+    assert relevance.estimate_tokens("") == 1
+    assert relevance.estimate_tokens("a" * 400) == 100
+
+
+def test_discover_subsystem_design_docs_finds_all_legacy_subsystems() -> None:
+    docs = relevance.discover_subsystem_design_docs()
+    assert len(docs) == 6
+    assert all(name.startswith("mockapp/systems/") for name in docs)
+
+
+def test_canonical_cr_screens_out_every_legacy_subsystem() -> None:
+    cr_text = cr.render_cr("Elite")
+    docs = relevance.discover_subsystem_design_docs()
+    screen = relevance.screen_subsystems(cr_text, docs)
+
+    assert screen.in_scope == ()
+    assert len(screen.screened_out) == len(docs)
+
+
+def test_select_relevant_files_never_opens_a_screened_out_subsystems_files() -> None:
+    cr_text = cr.render_cr("Elite")
+    all_files = relevance.discover_mockapp_files()
+    selection = relevance.select_relevant_files(cr_text, all_files)
+
+    assert selection.subsystem_screen.in_scope == ()
+    assert set(selection.subsystem_screen.screened_out) == set(
+        relevance.discover_subsystem_design_docs()
+    )
+    for decoy_path in selection.scores:
+        assert "mockapp/systems/" not in decoy_path
+
+
+def test_screen_subsystems_with_no_design_docs_screens_nothing() -> None:
+    screen = relevance.screen_subsystems("some CR text", {})
+    assert screen.in_scope == ()
+    assert screen.screened_out == ()
+    assert screen.scores == {}

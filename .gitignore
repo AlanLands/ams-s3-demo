@@ -1,0 +1,47 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+
+# generated data & cache — never hand-edit, regenerate via datagen
+.cache/
+data/*
+!data/.gitkeep
+!data/kb_articles
+data/kb_articles/*
+!data/kb_articles/.gitkeep
+
+# S3 live-codegen per-run staging/diff artifacts — regenerated every run,
+# never hand-edited. s3_enhancement/cache/ (the replay safety net) is NOT
+# excluded here — that one is a real deliverable, committed for demo reliability.
+s3_enhancement/out/
+
+# React frontend — build output/deps regenerate via npm install / npm run build.
+# See CLAUDE.md's Working style note: frontend/dist must be built or vendored
+# ahead of time for the locked-down-environment port, since npm may not be
+# available there.
+frontend/node_modules/
+frontend/dist/
+
+# OS / editor noise
+.DS_Store
+*.swp
+
+# local scratch — never demo material
+tmp/
+output/
+.claude-scratch-*
+
+# personal files parked inside the repo dir (move them out when convenient) —
+# ignored so a broad `git add` can never sweep multi-GB media into the repo
+123/
+
+# reference material with real client name/faces — never commit (hard rule #2)
+DemoThatAnotherTeam created/
