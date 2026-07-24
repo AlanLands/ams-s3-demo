@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from mockapp.core.models import Claim, Policy
+from mockapp.core.models import Claim, Endorsement, Policy
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
@@ -35,6 +35,17 @@ CREATE TABLE IF NOT EXISTS claims (
     status        TEXT NOT NULL,
     filed_at      TEXT NOT NULL,
     notes         TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS endorsements (
+    endorsement_number TEXT PRIMARY KEY,
+    policy_number      TEXT NOT NULL REFERENCES policies (policy_number),
+    endorsement_type   TEXT NOT NULL,
+    requested_change   TEXT NOT NULL,
+    effective_date     TEXT NOT NULL,
+    contact_phone      TEXT NOT NULL,
+    contact_email      TEXT NOT NULL,
+    filed_at           TEXT NOT NULL
 );
 """
 
@@ -98,6 +109,19 @@ def _row_to_claim(row: sqlite3.Row) -> Claim:
     )
 
 
+def _row_to_endorsement(row: sqlite3.Row) -> Endorsement:
+    return Endorsement(
+        endorsement_number=row["endorsement_number"],
+        policy_number=row["policy_number"],
+        endorsement_type=row["endorsement_type"],
+        requested_change=row["requested_change"],
+        effective_date=row["effective_date"],
+        contact_phone=row["contact_phone"],
+        contact_email=row["contact_email"],
+        filed_at=row["filed_at"],
+    )
+
+
 def list_policies() -> list[Policy]:
     """Return all policies, ordered by policy_number."""
     conn = _connect()
@@ -131,6 +155,19 @@ def list_claims(policy_number: str) -> list[Claim]:
             (policy_number,),
         ).fetchall()
         return [_row_to_claim(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def list_endorsements(policy_number: str) -> list[Endorsement]:
+    """Return all endorsement requests for a given policy, most recent first."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM endorsements WHERE policy_number = ? ORDER BY filed_at DESC",
+            (policy_number,),
+        ).fetchall()
+        return [_row_to_endorsement(r) for r in rows]
     finally:
         conn.close()
 
@@ -186,12 +223,41 @@ def insert_claim(claim: Claim) -> None:
         conn.close()
 
 
+def insert_endorsement(endorsement: Endorsement) -> None:
+    """Insert (or replace) an endorsement-request row."""
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO endorsements
+                (endorsement_number, policy_number, endorsement_type, requested_change,
+                 effective_date, contact_phone, contact_email, filed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                endorsement.endorsement_number,
+                endorsement.policy_number,
+                endorsement.endorsement_type,
+                endorsement.requested_change,
+                endorsement.effective_date,
+                endorsement.contact_phone,
+                endorsement.contact_email,
+                endorsement.filed_at,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def wipe_db() -> None:
     """Drop all tables. Used by the seed script before reseeding."""
     conn = _connect()
     try:
         conn.executescript(
-            "DROP TABLE IF EXISTS claims; DROP TABLE IF EXISTS policies;"
+            "DROP TABLE IF EXISTS endorsements; "
+            "DROP TABLE IF EXISTS claims; "
+            "DROP TABLE IF EXISTS policies;"
         )
         conn.commit()
     finally:

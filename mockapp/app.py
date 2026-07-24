@@ -11,7 +11,8 @@ import streamlit as st
 from common.constants import INSURER_NAME
 from common.ui_theme import inject_theme
 from mockapp.core.claims import submit_claim
-from mockapp.core.db import get_policy, init_db, list_claims, list_policies
+from mockapp.core.db import get_policy, init_db, list_claims, list_endorsements, list_policies
+from mockapp.core.endorsements import submit_endorsement
 
 
 def render() -> None:
@@ -107,6 +108,54 @@ def render() -> None:
                         notes=notes,
                     )
                     st.success(f"Claim {new_claim.claim_number} submitted.")
+                    st.rerun()
+
+            st.subheader("Endorsement Requests on this policy")
+            endorsements = list_endorsements(policy.policy_number)
+            if endorsements:
+                st.dataframe(
+                    [
+                        {
+                            "Endorsement #": e.endorsement_number,
+                            "Type": e.endorsement_type,
+                            "Requested Change": e.requested_change,
+                            "Effective Date": e.effective_date,
+                            "Contact Phone": e.contact_phone,
+                            "Contact Email": e.contact_email,
+                            "Filed At": e.filed_at,
+                        }
+                        for e in endorsements
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.write("No endorsement requests on file for this policy.")
+
+            st.subheader("Request a Policy Endorsement")
+            with st.form("submit_endorsement_form", clear_on_submit=True):
+                endorsement_type = st.selectbox(
+                    "Endorsement type",
+                    ["Coverage Detail Change", "Address Change", "Name Correction", "Other"],
+                )
+                requested_change = st.text_area("Describe the requested change")
+                effective_date = st.date_input("Effective date")
+                contact_phone = st.text_input("Contact phone")
+                contact_email = st.text_input("Contact email")
+                endorsement_submitted = st.form_submit_button("Submit Endorsement Request")
+
+                if endorsement_submitted:
+                    new_endorsement = submit_endorsement(
+                        policy_number=policy.policy_number,
+                        endorsement_type=endorsement_type,
+                        requested_change=requested_change,
+                        effective_date=str(effective_date),
+                        contact_phone=contact_phone,
+                        contact_email=contact_email,
+                    )
+                    st.success(
+                        f"Endorsement request {new_endorsement.endorsement_number} submitted."
+                    )
                     st.rerun()
 
 

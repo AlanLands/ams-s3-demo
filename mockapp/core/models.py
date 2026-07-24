@@ -29,3 +29,15 @@ class Claim:
     status: str  # "Submitted" | "Under Review" | "Approved" | "Denied"
     filed_at: str  # ISO datetime string
     notes: str = ""
+
+
+@dataclass
+class Endorsement:
+    endorsement_number: str
+    policy_number: str
+    endorsement_type: str  # "Coverage Detail Change" | "Address Change" | "Name Correction" | ...
+    requested_change: str
+    effective_date: str  # ISO date string, e.g. "2024-03-01"
+    contact_phone: str
+    contact_email: str
+    filed_at: str  # ISO datetime string
