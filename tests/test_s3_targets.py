@@ -80,6 +80,42 @@ def test_register_target_rejects_duplicate_cache_namespace():
         )
 
 
+def test_post_apply_commands_matched_by_root_not_target_id():
+    """The regression this guards: an applied CR that changes a schema (e.g.
+    adds a column) must always trigger that app's migration/reseed step — for
+    every mockapp target, current or future, without the API being told the
+    target id. Matching is by root, so sibling targets inherit the step."""
+    repo_root = targets.REPO_ROOT
+    commands = targets.post_apply_commands_for(["mockapp/core/db.py"], repo_root)
+    assert commands == [("{python}", "-m", "mockapp.core.seed")]
+
+    # Both mockapp targets declare the same command — it must run once, not twice.
+    commands = targets.post_apply_commands_for(
+        ["mockapp/core/db.py", "mockapp/app.py"], repo_root
+    )
+    assert len(commands) == 1
+
+
+def test_post_apply_commands_empty_for_non_stateful_targets():
+    repo_root = targets.REPO_ROOT
+    spring_file = (
+        "sandbox/spring-demo/claims-service/src/main/java/com/maplesure/claims/ClaimRules.java"
+    )
+    assert targets.post_apply_commands_for([spring_file], repo_root) == []
+    assert targets.post_apply_commands_for([], repo_root) == []
+
+
+def test_every_mockapp_rooted_target_declares_post_apply():
+    """A new mockapp CR target registered without the reseed step would
+    reintroduce the applied-schema crash — fail here instead of in a demo."""
+    for target in targets.all_targets():
+        if target.root is not None and target.root.name == "mockapp":
+            assert target.post_apply_command, (
+                f"{target.target_id} is rooted at mockapp/ but declares no "
+                "post_apply_command — applied schema changes would crash the portal"
+            )
+
+
 def test_discover_files_for_target_scopes_to_local_target_root(tmp_path):
     (tmp_path / "app.py").write_text("print('hello from synthetic repo')\n")
     (tmp_path / "helper.py").write_text("def helper():\n    pass\n")

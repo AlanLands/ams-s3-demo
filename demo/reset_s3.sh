@@ -16,6 +16,11 @@ rm -rf .cache/llm
 # per run, so a "between rehearsals" reset should leave none of it behind.
 rm -rf s3_enhancement/out/*
 rm -f data/ticket_events.jsonl
+# Board workflow transitions (analysis -> In Progress, QA hand-off, Done)
+# persist into the committed per-issue Jira replay caches via
+# _update_get_issue_cache — restore them so every rehearsal starts from the
+# seeded To Do / In Progress board, not wherever the last run ended.
+git checkout -- 's3_enhancement/cache/jira_*.json' 2>/dev/null || true
 # Lets the AMS console (which caches per-ticket analysis/proposal results in
 # the browser's localStorage) detect that server state was just reset and
 # drop its stale cache instead of continuing to show it — see

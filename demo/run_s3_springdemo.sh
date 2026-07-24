@@ -5,10 +5,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/../sandbox/spring-demo"
 
+# Always rebuild: an existing jar may predate a just-applied S3 change, and
+# serving stale code silently breaks the before/after demo beat. With a warm
+# local Maven repo this is seconds, not minutes.
 for svc in policy-service claims-service; do
-  if [ ! -f "$svc/target/$svc-1.0.0.jar" ]; then
-    (cd "$svc" && mvn -q package -DskipTests)
-  fi
+  (cd "$svc" && mvn -q package -DskipTests)
 done
 
 trap 'kill 0' EXIT

@@ -53,6 +53,39 @@ def test_apply_change_unknown_proposal_raises(staged_proposal):
         codegen.apply_change("does-not-exist")
 
 
+def test_drop_unchanged_files_keeps_only_real_changes(monkeypatch, tmp_path):
+    """A proposal should never stage a file the model returned byte-identical
+    to the repo (or one an earlier run already applied) — only actual pending
+    changes reach the review cards. A file the repo doesn't have yet (the CR
+    creates it) always counts as changed, even when returned empty."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    monkeypatch.setattr(codegen, "REPO_ROOT", repo_root)
+    (repo_root / "same.py").write_text("A = 1\n")
+    (repo_root / "edited.py").write_text("B = 2\n")
+
+    files = {
+        "same.py": "A = 1\n",  # identical -> dropped
+        "edited.py": "B = 3\n",  # real change -> kept
+        "brand_new.py": "C = 4\n",  # repo doesn't have it -> kept
+        "new_empty.py": "",  # created empty is still a creation -> kept
+    }
+    assert codegen._drop_unchanged_files(files) == {
+        "edited.py": "B = 3\n",
+        "brand_new.py": "C = 4\n",
+        "new_empty.py": "",
+    }
+
+
+def test_stage_files_creates_dir_even_with_no_files(monkeypatch, tmp_path):
+    """An all-unchanged proposal stages zero files but must still be
+    addressable by proposal_id — apply becomes a no-op, not a 502."""
+    monkeypatch.setattr(codegen, "OUT_ROOT", tmp_path / "out")
+    staged_dir = codegen._stage_files({})
+    assert staged_dir.is_dir()
+    assert codegen.apply_change(staged_dir.parent.name) == []
+
+
 def test_safe_repo_relative_path_rejects_absolute():
     with pytest.raises(LLMError, match="not.*absolute"):
         codegen._safe_repo_relative_path("/etc/passwd")

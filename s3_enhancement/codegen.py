@@ -66,6 +66,9 @@ class CodegenResult:
     candidate_pool_by_language: dict[str, int] | None = None
     scoped_input_tokens: int | None = None
     scoped_output_tokens: int | None = None
+    # True when the token counts are a chars/4 estimate reconstructed from an
+    # older replay recording rather than provider-reported usage.
+    tokens_estimated: bool = False
     naive_input_tokens_estimate: int = 0
     proposal_id: str = ""
     message: str | None = None
@@ -152,6 +155,12 @@ def _propose_change_once(
         _validate_spring_file_set(files, selection)
     else:
         _validate_file_set(files, selection)
+    # Validation runs on the full response (core recall requires every core
+    # file back), but the staged proposal should only carry actual pending
+    # changes — a file the model returned byte-identical to the repo (or one
+    # a previous run already applied) is review noise, not a change.
+    files = _drop_unchanged_files(files)
+    file_reasons = {path: reason for path, reason in file_reasons.items() if path in files}
     staged_dir = _stage_files(files)
     diff_text = _write_diff(staged_dir, files)
     return CodegenResult(
@@ -165,6 +174,7 @@ def _propose_change_once(
         candidate_pool_by_language=selection.candidate_pool_by_language,
         scoped_input_tokens=usage.get("input_tokens"),
         scoped_output_tokens=usage.get("output_tokens"),
+        tokens_estimated=bool(usage.get("estimated")),
         naive_input_tokens_estimate=sum(
             relevance.estimate_tokens(content) for content in all_files.values()
         ),
@@ -881,9 +891,26 @@ def _strip_java_strings_and_comments(content: str) -> str:
     return _JAVA_NOISE_RE.sub("", content)
 
 
+def _drop_unchanged_files(files: dict[str, str]) -> dict[str, str]:
+    """Return only the files whose proposed content actually differs from
+    what's on disk right now. A missing repo file (one the CR creates) always
+    counts as changed."""
+    changed: dict[str, str] = {}
+    for rel_path, content in files.items():
+        path = REPO_ROOT / rel_path
+        current = path.read_text(encoding="utf-8") if path.exists() else None
+        if content != current:
+            changed[rel_path] = content
+    return changed
+
+
 def _stage_files(files: dict[str, str]) -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     staged_dir = OUT_ROOT / stamp / "staged"
+    # Always create the directory itself — a proposal where every returned
+    # file matched the repo stages zero files but must still be addressable
+    # by proposal_id (apply becomes a no-op, not a 502).
+    staged_dir.mkdir(parents=True, exist_ok=True)
     for rel_path, content in files.items():
         target = staged_dir / rel_path
         target.parent.mkdir(parents=True, exist_ok=True)

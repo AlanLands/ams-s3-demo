@@ -53,6 +53,24 @@ _LEGACY_STREAM_CACHE_KEYS: dict[str, str] = {
 
 
 @dataclass(frozen=True)
+class Mutation:
+    """One seeded, revertible bug for the "prove the tests catch bugs" beat.
+
+    `old_snippet` must appear verbatim in the target's *generated* code (the
+    replay caches make that deterministic for the demo); the endpoint applies
+    the first candidate whose snippet is present, runs the generated suite,
+    and always restores the original content afterwards. A candidate whose
+    snippet has drifted out of the generated code is skipped, never guessed
+    at — if none match, the beat fails loudly instead of mutating blind.
+    """
+
+    rel_path: str
+    old_snippet: str
+    new_snippet: str
+    description: str
+
+
+@dataclass(frozen=True)
 class Target:
     """One repo/CR pairing S3 can operate against.
 
@@ -89,11 +107,24 @@ class Target:
     # content validators codegen/testgen apply (ast.parse is Python-only) and
     # which test runner the /s3/tests beat uses.
     language: Literal["python", "java"] = "python"
+    # Runs after any proposal file under this target's root is applied to the
+    # working tree — the migration/refresh step that keeps the running app
+    # consistent with just-applied code (e.g. rebuilding the mockapp SQLite
+    # schema so a CR that adds a column doesn't crash the portal). The
+    # literal "{python}" element is replaced with the current interpreter at
+    # run time. Every new local target that owns runtime state MUST declare
+    # this — the apply endpoint resolves it by root, so sibling targets on
+    # the same root inherit it automatically.
+    post_apply_command: tuple[str, ...] = ()
     # Test command for the /s3/tests beat. Empty means the default
     # `pytest testgen_allowlist[0]` invocation; a non-empty command runs
     # verbatim from `test_cwd` (e.g. Maven for a Java target).
     test_command: tuple[str, ...] = ()
     test_cwd: Path | None = None
+
+    # Seeded bugs for the /s3/tests/mutation beat, tried in declaration order
+    # (see Mutation). Empty means the beat is unavailable for this target.
+    mutations: tuple[Mutation, ...] = ()
 
     cache_namespace: str = ""
 
@@ -158,6 +189,19 @@ MOCKAPP_COVERAGE_UPGRADE = Target(
         "mockapp/app.py",
         "tests/test_s3_coverage_upgrade.py",
     ),
+    post_apply_command=("{python}", "-m", "mockapp.core.seed"),
+    mutations=(
+        Mutation(
+            rel_path="mockapp/core/coverage.py",
+            old_snippet="if new_index <= old_index:",
+            new_snippet="if new_index < old_index:",
+            description=(
+                "Weakened the same-tier/downgrade guard from `<=` to `<` — "
+                "a same-tier \"upgrade\" is now silently accepted instead of "
+                "raising ValueError."
+            ),
+        ),
+    ),
     cache_namespace="",
 )
 register_target(MOCKAPP_COVERAGE_UPGRADE)
@@ -186,6 +230,19 @@ MOCKAPP_ENDORSEMENT_FIELD_ADD = Target(
     ),
     testgen_allowlist=("tests/test_s3_endorsement_priority.py",),
     harness_expected_files=(),
+    post_apply_command=("{python}", "-m", "mockapp.core.seed"),
+    mutations=(
+        Mutation(
+            rel_path="mockapp/core/endorsements.py",
+            old_snippet='priority: str = "Standard",',
+            new_snippet='priority: str = "Urgent",',
+            description=(
+                'Flipped the default priority from "Standard" to "Urgent" — '
+                "endorsements submitted without an explicit priority are now "
+                "silently marked Urgent."
+            ),
+        ),
+    ),
     cache_namespace="endorsement_field_add",
 )
 register_target(MOCKAPP_ENDORSEMENT_FIELD_ADD)
@@ -230,6 +287,18 @@ SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
     language="java",
     test_command=("mvn", "-q", "-Dtest=ClaimRulesTest", "test"),
     test_cwd=_SPRING_ROOT / "claims-service",
+    mutations=(
+        Mutation(
+            rel_path=f"{_SPRING_CLAIMS_SRC}/ClaimRules.java",
+            old_snippet="if (amount.compareTo(deductible) <= 0) {",
+            new_snippet="if (amount.compareTo(deductible) < 0) {",
+            description=(
+                "Weakened the deductible boundary check from `<=` to `<` — "
+                "a claim for exactly the deductible amount is now accepted "
+                "instead of rejected below-deductible."
+            ),
+        ),
+    ),
     cache_namespace="spring_claims_deductible",
 )
 register_target(SPRINGDEMO_CLAIMS_DEDUCTIBLE)
@@ -238,3 +307,34 @@ register_target(SPRINGDEMO_CLAIMS_DEDUCTIBLE)
 def get_target(target_id: str | None) -> Target:
     """Resolve a target by id, defaulting to today's one demo target."""
     return _REGISTRY[target_id or DEFAULT_TARGET_ID]
+
+
+def all_targets() -> tuple[Target, ...]:
+    """Every registered target — used by the apply endpoint to resolve which
+    target's post_apply_command a just-applied file set belongs to, keyed by
+    root, so the migration step runs for any current or future CR without
+    the API needing to be told the target explicitly."""
+    return tuple(_REGISTRY.values())
+
+
+def post_apply_commands_for(applied_files: list[str], repo_root: Path) -> list[tuple[str, ...]]:
+    """The distinct post-apply commands owed for this applied file set.
+
+    Matched by target root (not target id): a proposal's files identify which
+    local app they belong to, and every registered target rooted there
+    contributes its declared post_apply_command. Sibling targets sharing a
+    root therefore inherit each other's migration step — a new mockapp CR is
+    covered even before its author thinks about schema drift.
+    """
+    commands: list[tuple[str, ...]] = []
+    for target in all_targets():
+        if target.root is None or not target.post_apply_command:
+            continue
+        try:
+            prefix = target.root.relative_to(repo_root).as_posix() + "/"
+        except ValueError:
+            continue
+        if any(path.startswith(prefix) for path in applied_files):
+            if target.post_apply_command not in commands:
+                commands.append(target.post_apply_command)
+    return commands

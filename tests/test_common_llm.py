@@ -86,6 +86,71 @@ def test_complete_logs_telemetry_on_cache_hit(tmp_path: Path, monkeypatch):
     assert calls[1]["input_tokens"] is None
 
 
+def test_complete_cache_hit_reports_real_usage_via_usage_out(tmp_path: Path, monkeypatch):
+    """A cache HIT must still be able to answer 'what did this cost' for the
+    UI's scoped-vs-naive token panel — the first (live) call's real,
+    provider-reported usage is persisted alongside the response and replayed
+    on every later hit, not just returned once and discarded."""
+    _isolate_llm_env(tmp_path, monkeypatch)
+    monkeypatch.setitem(
+        llm._PROVIDER_CALLERS, "anthropic", lambda prompt, system, json_mode: ("hello", 3502, 210)
+    )
+
+    complete("a fairly long prompt", cache_key="s3_impact_analysis:coverage_upgrade:v2")
+
+    usage_out: dict = {}
+    result = complete(
+        "a fairly long prompt",
+        cache_key="s3_impact_analysis:coverage_upgrade:v2",
+        usage_out=usage_out,
+    )
+
+    assert result == "hello"
+    assert usage_out == {"input_tokens": 3502, "output_tokens": 210}
+    assert "estimated" not in usage_out
+
+
+def test_complete_cache_hit_estimates_usage_when_none_was_recorded(tmp_path: Path, monkeypatch):
+    """An older cache entry written before usage capture existed only has
+    `{"response": ...}` — no `usage`, but the prompt IS available (this repo
+    has always stored it). A hit on such an entry should still degrade to an
+    honest, clearly-flagged estimate rather than silently reporting nothing."""
+    _isolate_llm_env(tmp_path, monkeypatch)
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir(parents=True)
+    path = cache_dir / "deadbeef.json"
+    path.write_text(
+        llm.json.dumps({"response": "a" * 40, "prompt": "b" * 400}), encoding="utf-8"
+    )
+    monkeypatch.setattr(llm, "_cache_path", lambda *a, **k: path)
+
+    usage_out: dict = {}
+    result = complete("ignored", usage_out=usage_out)
+
+    assert result == "a" * 40
+    assert usage_out == {"input_tokens": 100, "output_tokens": 10, "estimated": True}
+
+
+def test_complete_cache_hit_leaves_usage_out_empty_with_no_prompt_or_usage(
+    tmp_path: Path, monkeypatch
+):
+    """The oldest possible cache shape — bare `{"response": ...}`, no prompt
+    either — has nothing to estimate from. Leaving usage_out untouched (the
+    panel shows "unavailable") is more honest than fabricating a number."""
+    _isolate_llm_env(tmp_path, monkeypatch)
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir(parents=True)
+    path = cache_dir / "deadbeef.json"
+    path.write_text(llm.json.dumps({"response": "hello"}), encoding="utf-8")
+    monkeypatch.setattr(llm, "_cache_path", lambda *a, **k: path)
+
+    usage_out: dict = {}
+    result = complete("ignored", usage_out=usage_out)
+
+    assert result == "hello"
+    assert usage_out == {}
+
+
 def test_complete_logs_telemetry_on_failure(tmp_path: Path, monkeypatch):
     _isolate_llm_env(tmp_path, monkeypatch)
 
@@ -221,6 +286,130 @@ def test_resolve_provider_raises_without_key_mentions_ollama(monkeypatch):
 
     with pytest.raises(LLMError, match="ollama"):
         llm._resolve_provider()
+
+
+def test_call_anthropic_wraps_system_prompt_with_cache_control(monkeypatch):
+    import anthropic
+
+    captured = {}
+
+    class FakeUsage:
+        input_tokens = 11
+        output_tokens = 4
+
+    class FakeContent:
+        text = "hi there"
+
+    class FakeResponse:
+        content = [FakeContent()]
+        usage = FakeUsage()
+
+    class FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return FakeResponse()
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            pass
+
+        messages = FakeMessages()
+
+    monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
+
+    text, input_tokens, output_tokens = llm._call_anthropic("hi", "be nice", False)
+
+    assert text == "hi there"
+    assert input_tokens == 11
+    assert output_tokens == 4
+    # A static system prompt reused across every call to this beat is exactly
+    # what Anthropic's cache_control is for — the plain string must never be
+    # sent bare once this is in place.
+    assert captured["system"] == [
+        {"type": "text", "text": "be nice", "cache_control": {"type": "ephemeral"}}
+    ]
+
+
+def test_call_anthropic_without_system_sends_no_system_kwarg(monkeypatch):
+    import anthropic
+
+    captured = {}
+
+    class FakeUsage:
+        input_tokens = 1
+        output_tokens = 1
+
+    class FakeContent:
+        text = "ok"
+
+    class FakeResponse:
+        content = [FakeContent()]
+        usage = FakeUsage()
+
+    class FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return FakeResponse()
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            pass
+
+        messages = FakeMessages()
+
+    monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
+
+    llm._call_anthropic("hi", None, False)
+
+    assert "system" not in captured
+
+
+def test_stream_anthropic_wraps_system_prompt_with_cache_control(monkeypatch):
+    import anthropic
+
+    captured = {}
+
+    class FakeFinalUsage:
+        input_tokens = 9
+        output_tokens = 6
+
+    class FakeFinalMessage:
+        usage = FakeFinalUsage()
+
+    class FakeStreamCtx:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.text_stream = iter(["he", "llo"])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get_final_message(self):
+            return FakeFinalMessage()
+
+    class FakeMessages:
+        def stream(self, **kwargs):
+            return FakeStreamCtx(**kwargs)
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            pass
+
+        messages = FakeMessages()
+
+    monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
+
+    usage_out: dict = {}
+    chunks = list(llm._stream_anthropic("hi", "be nice", False, usage_out=usage_out))
+
+    assert chunks == ["he", "llo"]
+    assert usage_out == {"input_tokens": 9, "output_tokens": 6}
+    assert captured["system"] == [
+        {"type": "text", "text": "be nice", "cache_control": {"type": "ephemeral"}}
+    ]
 
 
 def test_call_ollama_uses_openai_compatible_endpoint(monkeypatch):

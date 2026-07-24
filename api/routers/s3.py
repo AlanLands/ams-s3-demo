@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,7 +30,7 @@ from common.ticket_events import (
     record_event,
 )
 from s1_triage.roster_auth import Identity
-from s3_enhancement import targets
+from s3_enhancement import targets, testrun
 from s3_enhancement.analyze import (
     draft_adhoc_effort_estimate,
     draft_adhoc_impact_analysis,
@@ -50,6 +51,7 @@ from s3_enhancement.quick_chat import QuickChatTurn, continue_session
 from s3_enhancement.relevance import (
     discover_files_for_target,
     discover_gitlab_files,
+    estimate_tokens,
     select_relevant_files,
 )
 from s3_enhancement.repo_match import suggest_target_repo
@@ -87,27 +89,36 @@ def _cr_text_or_400(tier_name: str, *, target: Target | None = None) -> str:
     return render_cr(clean, target=target)
 
 
-def _run_tests(target: Target) -> str:
+def _run_suite_or_502(target: Target) -> testrun.SuiteRun:
     """Run the target's generated test suite with the target's own runner —
     pytest by default; a Java target declares its Maven invocation on the
-    Target itself (test_command/test_cwd)."""
-    if target.test_command:
-        process = subprocess.run(
-            list(target.test_command),
-            check=False,
-            capture_output=True,
-            text=True,
-            cwd=target.test_cwd,
-        )
-        return process.stdout + process.stderr
-    test_path = target.testgen_allowlist[0] if target.testgen_allowlist else ""
-    process = subprocess.run(
-        [sys.executable, "-m", "pytest", test_path, "-v"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    return process.stdout + process.stderr
+    Target itself (test_command/test_cwd). A missing runner binary surfaces as
+    a clean 502, not an uncaught FileNotFoundError 500."""
+    try:
+        return testrun.run_suite(target)
+    except testrun.TestRunnerNotFoundError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+def _suite_run_dict(run: testrun.SuiteRun) -> dict:
+    return {
+        "passed": run.passed,
+        "returncode": run.returncode,
+        "output": run.output,
+        "duration_s": run.duration_s,
+        "summary": run.summary(),
+        "cases": [
+            {
+                "name": case.name,
+                "classname": case.classname,
+                "description": case.description,
+                "status": case.status,
+                "time_s": case.time_s,
+                "message": case.message,
+            }
+            for case in run.cases
+        ],
+    }
 
 
 def _selection_dict(selection) -> dict:
@@ -121,6 +132,21 @@ def _selection_dict(selection) -> dict:
             "screened_out": list(screen.screened_out),
             "scores": screen.scores,
         },
+    }
+
+
+def _token_panel(usage: dict, all_files: dict[str, str]) -> dict:
+    """Same scoped-vs-naive comparison /s3/generate already shows, for any
+    other beat that also reads codebase context through the relevance
+    funnel (impact analysis, cross-team impact) — `all_files` is whatever
+    that beat's own `discover_files_for_target()` call already produced."""
+    return {
+        "scoped_input_tokens": usage.get("input_tokens"),
+        "scoped_output_tokens": usage.get("output_tokens"),
+        "estimated": bool(usage.get("estimated")),
+        "naive_input_tokens_estimate": sum(
+            estimate_tokens(content) for content in all_files.values()
+        ),
     }
 
 
@@ -152,8 +178,9 @@ def cr(
 def analyze(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
     target = targets.get_target(payload.target_id)
     cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    usage: dict = {}
     try:
-        impact_text = draft_impact_analysis(cr_text, target=target)
+        impact_text = draft_impact_analysis(cr_text, target=target, usage_out=usage)
         effort = draft_effort_estimate(cr_text, target=target)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -176,6 +203,7 @@ def analyze(payload: TierRequest, identity: Identity = Depends(require_identity)
             "reasoning": effort.reasoning,
         },
         "file_selection": _selection_dict(selection),
+        "token_panel": _token_panel(usage, all_files),
     }
 
 
@@ -223,11 +251,13 @@ def cross_team_impact(payload: TierRequest, identity: Identity = Depends(require
     before any ticket is actually created."""
     target = targets.get_target(payload.target_id)
     cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    usage: dict = {}
     try:
-        impacts = draft_cross_team_impact(cr_text, target=target)
+        impacts = draft_cross_team_impact(cr_text, target=target, usage_out=usage)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    all_files = discover_files_for_target(target, cr_text)
     if payload.ticket_number:
         record_event(
             payload.ticket_number,
@@ -245,6 +275,7 @@ def cross_team_impact(payload: TierRequest, identity: Identity = Depends(require
             }
             for impact in impacts
         ],
+        "token_panel": _token_panel(usage, all_files),
     }
 
 
@@ -419,6 +450,7 @@ def generate(payload: TierRequest, identity: Identity = Depends(require_identity
         "token_panel": {
             "scoped_input_tokens": result.scoped_input_tokens,
             "scoped_output_tokens": result.scoped_output_tokens,
+            "estimated": result.tokens_estimated,
             "naive_input_tokens_estimate": result.naive_input_tokens_estimate,
         },
     }
@@ -446,6 +478,57 @@ def revise(payload: ReviseRequest, identity: Identity = Depends(require_identity
     }
 
 
+_POST_APPLY_OUTPUT_TAIL = 4000
+
+
+def _run_post_apply(applied_files: list[str], ticket_number: str | None) -> dict:
+    """Run every registered target's post-apply migration owed for this file
+    set (see targets.post_apply_commands_for) — e.g. rebuilding the mockapp
+    SQLite schema so a CR that adds a column doesn't crash the running
+    portal. Subprocesses, not in-process imports, so each step runs against
+    the newly written module files rather than whatever this API process
+    imported at startup. This is target-registry-driven on purpose: any new
+    CR against a registered root inherits its migration step automatically.
+
+    Returns {"ok": bool, "steps": [...]} so a migration crash — the applied
+    CR broke the app — reaches the caller with its traceback instead of
+    dying silently in a discarded subprocess result.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    steps = []
+    for command in targets.post_apply_commands_for(applied_files, repo_root):
+        argv = [sys.executable if part == "{python}" else part for part in command]
+        cmd_display = " ".join(command).replace("{python}", "python")
+        result = subprocess.run(argv, check=False, capture_output=True, text=True)
+        output_tail = ""
+        if result.returncode != 0:
+            output_tail = (result.stdout + result.stderr)[-_POST_APPLY_OUTPUT_TAIL:]
+        steps.append(
+            {
+                "command": cmd_display,
+                "returncode": result.returncode,
+                "output_tail": output_tail,
+            }
+        )
+        if ticket_number:
+            if result.returncode == 0:
+                record_event(
+                    ticket_number,
+                    "system",
+                    "post_apply_migration",
+                    detail=cmd_display,
+                )
+            else:
+                last_line = output_tail.strip().splitlines()[-1] if output_tail.strip() else ""
+                record_event(
+                    ticket_number,
+                    "system",
+                    "post_apply_migration_failed",
+                    detail=f"{cmd_display}: {last_line}",
+                )
+    return {"ok": all(step["returncode"] == 0 for step in steps), "steps": steps}
+
+
 @router.post("/apply")
 def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity)) -> dict:
     """Apply a reviewed proposal to the working tree — the only endpoint that
@@ -456,6 +539,8 @@ def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity))
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    post_apply = _run_post_apply(applied_files, payload.ticket_number)
+
     if payload.ticket_number:
         record_event(
             payload.ticket_number,
@@ -463,7 +548,11 @@ def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity))
             "code_change_applied",
             detail=payload.file_path or payload.proposal_id,
         )
-    return {"proposal_id": payload.proposal_id, "applied_files": applied_files}
+    return {
+        "proposal_id": payload.proposal_id,
+        "applied_files": applied_files,
+        "post_apply": post_apply,
+    }
 
 
 @router.post("/add-file")
@@ -547,11 +636,28 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
         except JiraError:
             continue
 
-    return {"project_key": project_key, "issues": issues}
+    # Overlay each issue's current status/assignee from the per-issue cache:
+    # the seeded search recording is static, but assign/status changes made
+    # during a session (analysis started -> In Progress, QA handoff) update
+    # the get_issue cache — without this merge the board would show stale
+    # columns after any workflow transition.
+    merged = []
+    for issue in issues:
+        key = issue.get("key")
+        try:
+            fresh = client.get_issue(str(key))
+        except JiraError:
+            merged.append(issue)
+            continue
+        merged.append({**issue, **{k: v for k, v in fresh.items() if v is not None}})
+
+    return {"project_key": project_key, "issues": merged}
 
 
-@router.post("/tests")
-def tests(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
+@router.post("/tests/generate")
+def tests_generate(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Generate (and stage into the working tree) the target's test file only
+    — nothing runs yet. The tester reviews the diff, then hits /tests/run."""
     target = targets.get_target(payload.target_id)
     cr_text = _cr_text_or_400(payload.tier_name, target=target)
     try:
@@ -559,16 +665,108 @@ def tests(payload: TierRequest, identity: Identity = Depends(require_identity)) 
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    pytest_output = _run_tests(target)
+    if payload.ticket_number:
+        record_event(
+            payload.ticket_number,
+            "ai",
+            "tests_generated",
+            detail=", ".join(result.files_changed),
+        )
     return {
         "label": AI_SUGGESTION_LABEL,
         "diff_text": result.diff_text,
         "files_changed": result.files_changed,
         "used_replay": result.used_replay,
-        "pytest_output": pytest_output,
         "token_panel": {
             "scoped_input_tokens": result.scoped_input_tokens,
             "scoped_output_tokens": result.scoped_output_tokens,
+            "estimated": result.tokens_estimated,
+        },
+    }
+
+
+@router.post("/tests/run")
+def tests_run(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Run the previously generated suite and return parsed per-test results."""
+    target = targets.get_target(payload.target_id)
+    if not testrun.generated_test_file_exists(target):
+        raise HTTPException(
+            status_code=409,
+            detail="No generated test file to run yet — generate the tests first.",
+        )
+    run = _run_suite_or_502(target)
+    if payload.ticket_number:
+        summary = run.summary()
+        record_event(
+            payload.ticket_number,
+            "ai",
+            "tests_passed" if run.passed else "tests_failed",
+            detail=f"{summary['passed']}/{summary['total']} passed",
+        )
+    return {"label": AI_SUGGESTION_LABEL, **_suite_run_dict(run)}
+
+
+@router.post("/tests/mutation")
+def tests_mutation(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """The "prove the tests catch bugs" beat: inject the target's seeded bug,
+    re-run the generated suite, and always revert the working tree — a strong
+    suite goes red on exactly the right test, then the bug disappears."""
+    target = targets.get_target(payload.target_id)
+    try:
+        result = testrun.run_mutation(target)
+    except testrun.MutationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except testrun.TestRunnerNotFoundError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if payload.ticket_number:
+        record_event(
+            payload.ticket_number,
+            "ai",
+            "mutation_check",
+            detail=(
+                "seeded bug caught by the suite"
+                if result.tests_caught_bug
+                else "seeded bug NOT caught by the suite"
+            ),
+        )
+    return {
+        "label": AI_SUGGESTION_LABEL,
+        "description": result.description,
+        "file": result.rel_path,
+        "mutation_diff": result.mutation_diff,
+        "tests_caught_bug": result.tests_caught_bug,
+        "reverted": True,
+        **_suite_run_dict(result.run),
+    }
+
+
+@router.post("/tests")
+def tests(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Legacy one-shot generate-and-run — kept for compatibility (scripts,
+    rehearsal notes). The console now drives the split /tests/generate ->
+    /tests/run flow instead."""
+    target = targets.get_target(payload.target_id)
+    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    try:
+        result = generate_tests(payload.tier_name, cr_text, target=target)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    run = _run_suite_or_502(target)
+    return {
+        "label": AI_SUGGESTION_LABEL,
+        "diff_text": result.diff_text,
+        "files_changed": result.files_changed,
+        "used_replay": result.used_replay,
+        "pytest_output": run.output,
+        "returncode": run.returncode,
+        "passed": run.passed,
+        "cases": _suite_run_dict(run)["cases"],
+        "token_panel": {
+            "scoped_input_tokens": result.scoped_input_tokens,
+            "scoped_output_tokens": result.scoped_output_tokens,
+            "estimated": result.tokens_estimated,
         },
     }
 
@@ -613,7 +811,18 @@ def harness_latest(identity: Identity = Depends(require_identity)) -> dict:
     status_dict = json.loads((run_dir / "status.json").read_text(encoding="utf-8"))
     diff_path = run_dir / "diff.patch"
     diff_text = diff_path.read_text(encoding="utf-8") if diff_path.exists() else ""
-    return {"label": AI_SUGGESTION_LABEL, "status": status_dict, "diff_text": diff_text}
+    log_path = run_dir / "session.log"
+    session_log_tail = (
+        log_path.read_text(encoding="utf-8", errors="replace")[-6000:]
+        if log_path.exists()
+        else ""
+    )
+    return {
+        "label": AI_SUGGESTION_LABEL,
+        "status": status_dict,
+        "diff_text": diff_text,
+        "session_log_tail": session_log_tail,
+    }
 
 
 @router.get("/gitlab/projects")

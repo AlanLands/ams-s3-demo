@@ -41,14 +41,25 @@ process serves the OLD behavior and silently ruins the after-beat.
 4. **Generate**: diff spans BOTH services — the record gains `deductible`
    on the policy side and the consuming record on the claims side, plus the
    new ClaimRules class. Point out reasons-per-file, then **Apply**.
-5. **Generate tests**: a JUnit 5 suite (`ClaimRulesTest.java`), and the test
-   run output is **Maven**, not pytest — the pipeline speaks the target
-   repo's language end to end. 5 tests green.
-6. **After**: rebuild + restart the services (Ctrl-C terminal 3, rerun
+5. **Design doc + QA hand-off**: the workflow is real Jira discipline, live
+   on the board — running the analysis already moved the card
+   To Do → In Progress automatically. After Apply, draft the design doc: it
+   renders as an actual MapleSure letterhead document, downloadable as
+   .html/.md ("this is the artifact QA receives"). Then hand off: pick a
+   tester (Priya Nair, passcode 1003, or Tom Becker, 1004) → the card moves
+   to the **QA column**, assigned to them, and the developer is now locked
+   out of the test step (show the lock hint).
+6. **Generate tests, as the tester**: log out, log in as the tester, open
+   the ticket from the QA column, run "Generate tests + run": a JUnit 5
+   suite (`ClaimRulesTest.java`), and the test run output is **Maven**, not
+   pytest — the pipeline speaks the target repo's language end to end.
+   5 tests green.
+7. **After**: rebuild + restart the services (Ctrl-C terminal 3, rerun
    `./demo/run_s3_springdemo.sh` — it rebuilds automatically), resubmit the
    same 80-dollar claim on MS-1004 → **REJECTED_BELOW_DEDUCTIBLE**; a
    1,200-dollar claim on MS-1001 → ACCEPTED with **payableAmount 700**.
-7. **Release notes** beat as usual.
+8. **Release notes** (still as the tester), then "QA passed — mark ticket
+   Done" closes the loop on the board.
 
 ## Fallbacks
 

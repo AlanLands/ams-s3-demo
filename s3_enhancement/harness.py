@@ -348,41 +348,60 @@ def _run_live(tier_name: str, target: Target) -> HarnessResult:
     out_dir = OUT_ROOT / stamp / "harness"
     log_path = out_dir / "session.log"
 
-    start = time.monotonic()
-    returncode, session_log = _stream_process(argv, log_path, _TIMEOUT_SECONDS)
-    duration = time.monotonic() - start
+    # Any HarnessError past this point still leaves a status.json behind, so a
+    # failed run stays inspectable (session.log + status) instead of 404ing at
+    # /s3/harness/latest as if it never happened.
+    try:
+        start = time.monotonic()
+        returncode, session_log = _stream_process(argv, log_path, _TIMEOUT_SECONDS)
+        duration = time.monotonic() - start
 
-    after_untracked = _untracked_paths()
-    after_hashes = _tracked_content_hashes()
-    new_untracked = after_untracked - before_untracked
-    changed_tracked = {
-        rel_path for rel_path, before_hash in before_hashes.items()
-        if after_hashes.get(rel_path) != before_hash
-    }
-    touched = new_untracked | changed_tracked
-    unexpected = touched - set(expected_files)
-    if unexpected:
-        raise HarnessError(
-            f"harness touched unexpected path(s) {sorted(unexpected)} — "
-            f"expected only a subset of {sorted(expected_files)}"
-        )
-    if not touched:
-        raise HarnessError(
-            f"harness run finished (exit {returncode}) but touched no files"
-        )
+        after_untracked = _untracked_paths()
+        after_hashes = _tracked_content_hashes()
+        new_untracked = after_untracked - before_untracked
+        changed_tracked = {
+            rel_path for rel_path, before_hash in before_hashes.items()
+            if after_hashes.get(rel_path) != before_hash
+        }
+        touched = new_untracked | changed_tracked
+        unexpected = touched - set(expected_files)
+        if unexpected:
+            raise HarnessError(
+                f"harness touched unexpected path(s) {sorted(unexpected)} — "
+                f"expected only a subset of {sorted(expected_files)}"
+            )
+        if not touched:
+            raise HarnessError(
+                f"harness run finished (exit {returncode}) but touched no files"
+            )
 
-    pytest_result = _run_pytest()
-    if pytest_result.returncode != 0:
-        raise HarnessError(
-            "harness-generated tests failed:\n" + pytest_result.stdout + pytest_result.stderr
-        )
+        pytest_result = _run_pytest()
+        if pytest_result.returncode != 0:
+            raise HarnessError(
+                "harness-generated tests failed:\n" + pytest_result.stdout + pytest_result.stderr
+            )
 
-    _validate_content(tier_name)
+        _validate_content(tier_name)
+    except HarnessError as exc:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        failed_status = {
+            "status": "failed",
+            "error": str(exc),
+            "tier_name": tier_name,
+            "harness": harness,
+            "used_replay": False,
+            "timestamp": stamp,
+        }
+        (out_dir / "status.json").write_text(
+            json.dumps(failed_status, indent=2), encoding="utf-8"
+        )
+        raise
 
     diff_text = _build_diff(before_content, expected_files)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "diff.patch").write_text(diff_text, encoding="utf-8")
     status = {
+        "status": "ok",
         "tier_name": tier_name,
         "harness": harness,
         "used_replay": False,

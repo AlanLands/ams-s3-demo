@@ -77,17 +77,46 @@ def _cache_path(
     return _cache_dir() / f"{digest}.json"
 
 
-def _read_cache(path: Path) -> str | None:
+def _read_cache_entry(path: Path) -> dict | None:
     if not _cache_enabled() or not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))["response"]
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _write_cache(path: Path, response: str) -> None:
+def _write_cache(
+    path: Path, response: str, *, prompt: str | None = None, usage: dict | None = None
+) -> None:
     if not _cache_enabled():
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"response": response}), encoding="utf-8")
+    payload: dict = {"response": response}
+    # `prompt` and `usage` are stored so a future cache HIT can still report a
+    # token-cost figure for the UI's scoped-vs-naive panel (same idea as
+    # stream_complete's replay store) — the response alone was always enough
+    # to satisfy the caller, but not enough to answer "what did this cost".
+    if prompt is not None:
+        payload["prompt"] = prompt
+    if usage:
+        payload["usage"] = {
+            "input_tokens": usage.get("input_tokens"),
+            "output_tokens": usage.get("output_tokens"),
+        }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _anthropic_system_blocks(system: str) -> list[dict]:
+    """Wrap a system prompt as an Anthropic prompt-cache breakpoint.
+
+    Every S3/S1/S2 beat's system prompt is a fixed module-level constant,
+    reused verbatim across every call to that beat — exactly the shape
+    Anthropic's `cache_control` is for. This only affects live/record-mode
+    calls that actually reach the API; it has no bearing on this repo's own
+    `complete()`/`stream_complete()` caches, which already make replay-mode
+    calls free. OpenAI auto-caches long prompts server-side with no
+    equivalent opt-in, and Ollama has no prompt-caching concept at all — so
+    this is Anthropic-only, applied here rather than in each caller.
+    """
+    return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
 
 
 def _call_anthropic(prompt: str, system: str | None, json_mode: bool) -> tuple[str, int, int]:
@@ -97,7 +126,7 @@ def _call_anthropic(prompt: str, system: str | None, json_mode: bool) -> tuple[s
     model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
     kwargs: dict = {}
     if system:
-        kwargs["system"] = system
+        kwargs["system"] = _anthropic_system_blocks(system)
     if json_mode:
         prompt = prompt + "\n\nRespond with valid JSON only, no surrounding prose."
 
@@ -211,7 +240,7 @@ def _stream_anthropic(
     model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
     kwargs: dict = {}
     if system:
-        kwargs["system"] = system
+        kwargs["system"] = _anthropic_system_blocks(system)
     if json_mode:
         prompt = prompt + "\n\nRespond with valid JSON only, no surrounding prose."
 
@@ -305,8 +334,28 @@ def complete(
     path = _cache_path(provider, model, system, prompt, cache_key)
 
     t0 = time.monotonic()
-    cached = _read_cache(path)
-    if cached is not None:
+    entry = _read_cache_entry(path)
+    if entry is not None:
+        response = entry["response"]
+        if usage_out is not None:
+            recorded_usage = entry.get("usage")
+            recorded_prompt = entry.get("prompt")
+            if isinstance(recorded_usage, dict):
+                usage_out.update(recorded_usage)
+            elif recorded_prompt is not None:
+                # No real usage recorded for this entry (an older cache write,
+                # or nothing was ever passed for `prompt`) but we do have the
+                # actual prompt that was sent — estimate from it rather than
+                # leaving the UI panel blank. Same ~4-chars/token heuristic
+                # and `estimated` flag as stream_complete's replay path; never
+                # presented as a provider-reported count.
+                usage_out.update(
+                    {
+                        "input_tokens": max(1, len(recorded_prompt) // 4),
+                        "output_tokens": max(1, len(response) // 4),
+                        "estimated": True,
+                    }
+                )
         log_call(
             scenario=scenario,
             beat=beat,
@@ -318,14 +367,19 @@ def complete(
             output_tokens=None,
             success=True,
         )
-        return cached
+        return response
 
     caller = _PROVIDER_CALLERS[provider]
     last_error: Exception | None = None
     for attempt in range(retries + 1):
         try:
             result, input_tokens, output_tokens = caller(prompt, system, json_mode)
-            _write_cache(path, result)
+            _write_cache(
+                path,
+                result,
+                prompt=prompt,
+                usage={"input_tokens": input_tokens, "output_tokens": output_tokens},
+            )
             log_call(
                 scenario=scenario,
                 beat=beat,
@@ -392,6 +446,7 @@ def stream_complete(
                 replay_substitutions=replay_substitutions,
                 chunk_delay=chunk_delay,
                 started_at=t0,
+                usage_out=usage_out,
             )
             return
         # Replay-primary with live fallback (CLAUDE.md demo-reliability rule):
@@ -427,6 +482,7 @@ def stream_complete(
                     provider=provider,
                     model=model,
                     response=response,
+                    usage=usage or None,
                 )
             log_call(
                 scenario=scenario,
@@ -471,6 +527,7 @@ def _stream_replay(
     replay_substitutions: dict[str, str] | None,
     chunk_delay: float,
     started_at: float,
+    usage_out: dict | None = None,
 ) -> Iterator[str]:
     path = _stream_cache_path(cache_key)
     if not path.exists():
@@ -484,6 +541,27 @@ def _stream_replay(
 
     for old, new in (replay_substitutions or {}).items():
         response = response.replace(old, new)
+
+    # Recordings made since usage capture was added carry the original live
+    # run's provider-reported token counts — surface them so a replayed demo
+    # beat shows the real cost of the recorded call instead of "unavailable".
+    # Older recordings lack the key: estimate from the recorded prompt and
+    # response (~4 chars/token, same heuristic as relevance.estimate_tokens)
+    # and say so via the "estimated" flag — an honest approximation beats a
+    # blank panel, but it must never masquerade as a provider-reported count.
+    recorded_usage = data.get("usage")
+    if usage_out is not None:
+        if isinstance(recorded_usage, dict):
+            usage_out.update(recorded_usage)
+        else:
+            recorded_prompt = str(data.get("prompt", ""))
+            usage_out.update(
+                {
+                    "input_tokens": max(1, len(recorded_prompt) // 4),
+                    "output_tokens": max(1, len(response) // 4),
+                    "estimated": True,
+                }
+            )
 
     delay = 0.02 if chunk_delay == 0.0 else chunk_delay
     for idx in range(0, len(response), 40):
@@ -500,7 +578,9 @@ def _stream_replay(
         model=model,
         cached=True,
         latency_s=time.monotonic() - started_at,
-        input_tokens=None,
+        input_tokens=(
+            recorded_usage.get("input_tokens") if isinstance(recorded_usage, dict) else None
+        ),
         output_tokens=len(response),
         success=True,
     )
@@ -514,22 +594,23 @@ def _write_stream_cache(
     provider: str,
     model: str,
     response: str,
+    usage: dict | None = None,
 ) -> None:
     path = _stream_cache_path(cache_key)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {
-                "prompt": prompt,
-                "system": system,
-                "provider": provider,
-                "model": model,
-                "response": response,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    payload: dict = {
+        "prompt": prompt,
+        "system": system,
+        "provider": provider,
+        "model": model,
+        "response": response,
+    }
+    if usage:
+        payload["usage"] = {
+            "input_tokens": usage.get("input_tokens"),
+            "output_tokens": usage.get("output_tokens"),
+        }
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def parse_json_response(response: str, required_keys: set[str] = frozenset()) -> dict:

@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import FileSelectionPanel from './FileSelectionPanel'
+import TokenPanel from './TokenPanel'
 import type {
   AnalyzeResponse,
   CrossTeamImpact,
   JiraIssue,
   TicketEvent,
+  TokenPanel as TokenPanelData,
 } from './api_s3'
 
 const ASSIGNEE_ROSTER = ['Ravi Kumar', 'Elena Cruz', 'Priya Nair']
@@ -97,6 +99,7 @@ export interface TicketModalProps {
   onRunAnalysis: () => void
 
   crossTeamImpacts?: CrossTeamImpact[]
+  crossTeamTokenPanel?: TokenPanelData
   crossTeamLoading: boolean
   onCheckCrossTeam: () => void
   createdTickets: Record<string, { key: string; assignee: string | null }>
@@ -127,6 +130,7 @@ export default function TicketModal({
   analysisError,
   onRunAnalysis,
   crossTeamImpacts,
+  crossTeamTokenPanel,
   crossTeamLoading,
   onCheckCrossTeam,
   createdTickets,
@@ -183,18 +187,42 @@ export default function TicketModal({
                     the ticket's own text instead.
                   </p>
                 )}
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <button className="ams-button" onClick={onRunAnalysis} disabled={analysisLoading}>
-                    {analysisLoading ? 'Running…' : 'Run AI impact analysis'}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    className={analysisResult ? 'ams-button-secondary' : 'ams-button'}
+                    onClick={onRunAnalysis}
+                    disabled={analysisLoading}
+                  >
+                    {analysisLoading
+                      ? 'Running…'
+                      : analysisResult
+                        ? 'Re-run AI impact analysis'
+                        : 'Run AI impact analysis'}
                   </button>
+                  {analysisResult && !analysisLoading && (
+                    <span className="ams-pill ams-pill-general">✓ Analyzed</span>
+                  )}
                   {crLabel && (
-                    <button
-                      className="ams-button-secondary"
-                      onClick={onCheckCrossTeam}
-                      disabled={crossTeamLoading}
-                    >
-                      {crossTeamLoading ? 'Checking…' : 'Check for other teams affected'}
-                    </button>
+                    <>
+                      <button
+                        className={crossTeamImpacts !== undefined ? 'ams-button-secondary' : 'ams-button'}
+                        onClick={onCheckCrossTeam}
+                        disabled={crossTeamLoading}
+                      >
+                        {crossTeamLoading
+                          ? 'Checking…'
+                          : crossTeamImpacts !== undefined
+                            ? 'Re-check for other teams affected'
+                            : 'Check for other teams affected'}
+                      </button>
+                      {crossTeamImpacts !== undefined && !crossTeamLoading && (
+                        <span className="ams-pill ams-pill-general">
+                          {crossTeamImpacts.length === 0
+                            ? '✓ No teams affected'
+                            : `✓ ${crossTeamImpacts.length} team${crossTeamImpacts.length > 1 ? 's' : ''} affected`}
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
                 {analysisError && (
@@ -225,6 +253,11 @@ export default function TicketModal({
                 {analysisResult?.file_selection && (
                   <FileSelectionPanel selection={analysisResult.file_selection} />
                 )}
+                {analysisResult?.token_panel && (
+                  <div style={{ marginTop: '0.4rem' }}>
+                    <TokenPanel panel={analysisResult.token_panel} />
+                  </div>
+                )}
                 {crossTeamImpacts && (
                   <div className="ams-card" style={{ marginTop: '0.75rem' }}>
                     <strong>Other teams depended on</strong>
@@ -246,6 +279,11 @@ export default function TicketModal({
                           onAssign={() => onAssignTicket(impact.app_name)}
                         />
                       ))
+                    )}
+                    {crossTeamTokenPanel && (
+                      <div style={{ marginTop: '0.6rem' }}>
+                        <TokenPanel panel={crossTeamTokenPanel} />
+                      </div>
                     )}
                   </div>
                 )}

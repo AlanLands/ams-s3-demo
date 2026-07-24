@@ -32,14 +32,18 @@ export interface AnalyzeResponse {
   label: string
   impact_analysis: string
   effort_estimate: EffortEstimate
-  // Absent for analyze-adhoc's ad-hoc tickets — those have no in-console
+  // Both absent for analyze-adhoc's ad-hoc tickets — those have no in-console
   // target/codebase to select files from (see s3Api.analyzeAdhoc).
   file_selection?: FileSelection
+  token_panel?: TokenPanel
 }
 
 export interface TokenPanel {
   scoped_input_tokens: number | null
   scoped_output_tokens: number | null
+  // True when counts are reconstructed from a replay recording (chars/4
+  // heuristic), not provider-reported usage — the UI marks them "~".
+  estimated?: boolean
   naive_input_tokens_estimate?: number
 }
 
@@ -64,9 +68,21 @@ export interface ReviseResponse {
   token_panel: Pick<TokenPanel, 'scoped_input_tokens' | 'scoped_output_tokens'>
 }
 
+export interface PostApplyStep {
+  command: string
+  returncode: number
+  output_tail: string
+}
+
+export interface PostApplyResult {
+  ok: boolean
+  steps: PostApplyStep[]
+}
+
 export interface ApplyResponse {
   proposal_id: string
   applied_files: string[]
+  post_apply?: PostApplyResult | null
 }
 
 export interface AddFileResponse {
@@ -84,7 +100,54 @@ export interface TestsResponse {
   files_changed: string[]
   used_replay: boolean
   pytest_output: string
+  returncode?: number
+  passed?: boolean
   token_panel: TokenPanel
+}
+
+export interface TestsGenerateResponse {
+  label: string
+  diff_text: string
+  files_changed: string[]
+  used_replay: boolean
+  token_panel: TokenPanel
+}
+
+export interface TestCaseResult {
+  name: string
+  classname: string
+  description: string
+  status: 'passed' | 'failed' | 'error' | 'skipped'
+  time_s: number
+  message: string | null
+}
+
+export interface TestRunSummary {
+  total: number
+  passed: number
+  failed: number
+  errors: number
+  skipped: number
+}
+
+export interface TestsRunResponse {
+  label: string
+  passed: boolean
+  returncode: number
+  output: string
+  duration_s: number
+  summary: TestRunSummary
+  cases: TestCaseResult[]
+}
+
+// The "prove the tests catch bugs" beat: a seeded bug is injected, the suite
+// re-run, and the working tree reverted server-side before this returns.
+export interface MutationCheckResponse extends TestsRunResponse {
+  description: string
+  file: string
+  mutation_diff: string
+  tests_caught_bug: boolean
+  reverted: boolean
 }
 
 export interface ReleaseNotesResponse {
@@ -101,7 +164,9 @@ export interface HarnessStatus {
   tier_name: string
   harness: string
   used_replay: boolean
-  duration_s: number
+  duration_s?: number
+  status?: 'ok' | 'failed'
+  error?: string
   [key: string]: unknown
 }
 
@@ -109,6 +174,7 @@ export interface HarnessResponse {
   label: string
   status: HarnessStatus
   diff_text: string
+  session_log_tail?: string
 }
 
 export interface GitlabProject {
@@ -151,6 +217,7 @@ export interface CrossTeamImpact {
 export interface CrossTeamImpactResponse {
   label: string
   impacts: CrossTeamImpact[]
+  token_panel: TokenPanel
 }
 
 export interface CrossTeamTicketResponse {
@@ -273,6 +340,33 @@ export const s3Api = {
     request<TestsResponse>('/api/s3/tests', {
       method: 'POST',
       body: JSON.stringify({ tier_name: tierName, target_id: targetId ?? null }),
+    }),
+  testsGenerate: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
+    request<TestsGenerateResponse>('/api/s3/tests/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  testsRun: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
+    request<TestsRunResponse>('/api/s3/tests/run', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  testsMutation: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
+    request<MutationCheckResponse>('/api/s3/tests/mutation', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+      }),
     }),
   releaseNotes: (tierName: string, targetId?: string | null) =>
     request<ReleaseNotesResponse>('/api/s3/release-notes', {

@@ -45,6 +45,7 @@ class TestgenResult:
     stream_text_generator: Iterator[str] | None
     scoped_input_tokens: int | None = None
     scoped_output_tokens: int | None = None
+    tokens_estimated: bool = False
 
 
 def generate_tests(
@@ -106,6 +107,7 @@ def _generate_tests_once(
         stream_text_generator=iter(chunks),
         scoped_input_tokens=usage.get("input_tokens"),
         scoped_output_tokens=usage.get("output_tokens"),
+        tokens_estimated=bool(usage.get("estimated")),
     )
 
 

@@ -144,6 +144,10 @@ a:hover {
   background: #e9eef2;
   color: var(--ams-info);
 }
+.ams-pill-error {
+  background: #fdecea;
+  color: var(--ams-error);
+}
 
 /* Jira-board-styled ticket view (engineer role) — columns of ticket cards,
    built from the existing card/pill tokens rather than a new visual
@@ -336,6 +340,52 @@ a:hover {
   align-self: flex-start;
 }
 
+/* Design-document "paper" — the QA hand-off artifact rendered as an actual
+   document (letterhead, serif body, double-rule header) instead of a text
+   dump in a card. Downloads reuse the same structure (see
+   buildDesignDocHtml in pages/S3.tsx). */
+.ams-doc {
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.08);
+  padding: 1.8rem 2.2rem;
+  margin-top: 0.75rem;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.55;
+}
+.ams-doc-letterhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  border-bottom: 3px double var(--ams-line);
+  padding-bottom: 0.55rem;
+}
+.ams-doc-org {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.ams-doc-kind {
+  font-size: 0.72rem;
+  color: var(--ams-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.ams-doc-meta {
+  font-size: 0.8rem;
+  color: var(--ams-ink-soft);
+  margin: 0.7rem 0 1.2rem;
+}
+.ams-doc-label {
+  margin-top: 1.6rem;
+  font-size: 0.72rem;
+  color: var(--ams-ink-soft);
+  border-top: 1px solid var(--ams-line);
+  padding-top: 0.5rem;
+}
+
 /* Ticket detail modal — a real overlay dialog (like Jira's issue view),
    not an inline expansion within the board column: backdrop + centered
    panel, a scrollable two-column body (main content + a Details sidebar),
@@ -410,7 +460,7 @@ a:hover {
 .ams-modal-main {
   flex: 1;
   min-width: 0;
-  padding: 1.25rem;
+  padding: 1.25rem 1.25rem 2rem;
 }
 .ams-modal-main h2 {
   font-size: 1.3rem;
@@ -467,6 +517,7 @@ a:hover {
 }
 .ams-modal-activity-tabs {
   display: flex;
+  width: 100%;
   gap: 0.2rem;
   border-bottom: 1px solid var(--ams-line);
   margin-bottom: 0.75rem;

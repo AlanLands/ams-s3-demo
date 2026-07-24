@@ -8,6 +8,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
@@ -169,6 +170,38 @@ def test_analyze_returns_impact_effort_and_file_selection():
     assert body["impact_analysis"].startswith("Update policy model")
     assert body["effort_estimate"]["hours_class"] == "~40h"
     assert body["file_selection"]["selected_files"]
+    assert "token_panel" in body
+    assert "naive_input_tokens_estimate" in body["token_panel"]
+
+
+def test_analyze_reports_scoped_vs_naive_token_comparison():
+    """Impact analysis already runs codebase content through the relevance
+    funnel (same as code generation) — the response should surface the same
+    scoped-vs-naive comparison /s3/generate does, not just a bare answer."""
+    client = _client()
+
+    def complete_side_effect(prompt: str, *, usage_out=None, **kwargs):
+        if kwargs.get("json_mode") is True:
+            return json.dumps(
+                {"hours_class": "~40h", "priority_equivalent": "P3", "reasoning": "x"}
+            )
+        if usage_out is not None:
+            usage_out["input_tokens"] = 3502
+            usage_out["output_tokens"] = 210
+        return "Update policy model, persistence, coverage rules, and portal UI."
+
+    with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect):
+        response = client.post("/api/s3/analyze", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    panel = response.json()["token_panel"]
+    assert panel["scoped_input_tokens"] == 3502
+    assert panel["scoped_output_tokens"] == 210
+    # naive_input_tokens_estimate sums relevance.estimate_tokens() over every
+    # candidate file in the target — must be a real, positive number (there
+    # are real .py files under mockapp/), and comfortably bigger than the
+    # scoped figure, since it's the "if we sent everything" baseline.
+    assert panel["naive_input_tokens_estimate"] > panel["scoped_input_tokens"]
 
 
 def test_analyze_adhoc_returns_impact_and_effort_without_file_selection():
@@ -221,6 +254,45 @@ def test_analyze_adhoc_llm_error_returns_502():
     assert response.json()["detail"] == "boom"
 
 
+def test_cross_team_impact_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/impact/cross-team", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def test_cross_team_impact_returns_impacts_and_token_panel():
+    """Cross-team impact runs the same relevance-funnel codebase context as
+    impact analysis — it should get the same scoped-vs-naive visibility."""
+    client = _client()
+
+    def complete_side_effect(prompt: str, *, usage_out=None, **kwargs):
+        if usage_out is not None:
+            usage_out["input_tokens"] = 3410
+            usage_out["output_tokens"] = 95
+        return json.dumps({"impacts": []})
+
+    with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect):
+        response = client.post("/api/s3/impact/cross-team", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["label"] == AI_SUGGESTION_LABEL
+    assert body["impacts"] == []
+    panel = body["token_panel"]
+    assert panel["scoped_input_tokens"] == 3410
+    assert panel["naive_input_tokens_estimate"] > panel["scoped_input_tokens"]
+
+
+def test_cross_team_impact_llm_error_returns_502():
+    client = _client()
+
+    with patch("s3_enhancement.analyze.complete", side_effect=LLMError("boom")):
+        response = client.post("/api/s3/impact/cross-team", json={"tier_name": "Elite"})
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "boom"
+
+
 def test_generate_llm_error_returns_502():
     client = _client()
 
@@ -229,6 +301,207 @@ def test_generate_llm_error_returns_502():
 
     assert response.status_code == 502
     assert response.json()["detail"] == "boom"
+
+
+def test_tests_failure_carries_returncode_and_passed_flag():
+    client = _client()
+    fake_result = SimpleNamespace(
+        diff_text="diff --git a/tests/x.py b/tests/x.py",
+        files_changed=["tests/x.py"],
+        used_replay=True,
+        scoped_input_tokens=10,
+        scoped_output_tokens=5,
+        tokens_estimated=False,
+    )
+
+    with (
+        patch("api.routers.s3.generate_tests", return_value=fake_result),
+        patch("s3_enhancement.testrun.subprocess.run") as run,
+    ):
+        run.return_value.returncode = 1
+        run.return_value.stdout = "1 failed, 4 passed"
+        run.return_value.stderr = ""
+        response = client.post("/api/s3/tests", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["returncode"] == 1
+    assert body["passed"] is False
+    assert "1 failed" in body["pytest_output"]
+    # The mocked runner never wrote JUnit XML — the parsed case list must
+    # degrade to empty, not crash the endpoint.
+    assert body["cases"] == []
+
+
+def test_run_tests_missing_runner_returns_502():
+    """A Java target's mvn not being on PATH must surface as a clean 502
+    detail, not an uncaught FileNotFoundError 500."""
+    from fastapi import HTTPException
+
+    from api.routers.s3 import _run_suite_or_502
+
+    target = SimpleNamespace(
+        test_command=("definitely-not-a-real-binary-xyz", "test"),
+        test_cwd=None,
+        testgen_allowlist=[],
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        _run_suite_or_502(target)
+    assert excinfo.value.status_code == 502
+    assert "not found" in excinfo.value.detail
+
+
+def test_tests_generate_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/tests/generate", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def test_tests_run_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/tests/run", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def test_tests_mutation_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/tests/mutation", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def test_tests_generate_returns_diff_without_running():
+    """Beat 1 of the split flow: the test file is generated and staged, but
+    nothing runs — no runner subprocess, no pytest output in the payload."""
+    client = _client()
+    fake_result = SimpleNamespace(
+        diff_text="diff --git a/tests/x.py b/tests/x.py",
+        files_changed=["tests/x.py"],
+        used_replay=True,
+        scoped_input_tokens=10,
+        scoped_output_tokens=5,
+        tokens_estimated=False,
+    )
+
+    with (
+        patch("api.routers.s3.generate_tests", return_value=fake_result),
+        patch("s3_enhancement.testrun.subprocess.run") as run,
+    ):
+        response = client.post("/api/s3/tests/generate", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["label"] == AI_SUGGESTION_LABEL
+    assert body["diff_text"].startswith("diff --git")
+    assert body["files_changed"] == ["tests/x.py"]
+    assert "pytest_output" not in body
+    run.assert_not_called()
+
+
+def test_tests_run_409s_before_generation():
+    client = _client()
+
+    with patch("api.routers.s3.testrun.generated_test_file_exists", return_value=False):
+        response = client.post("/api/s3/tests/run", json={"tier_name": "Elite"})
+
+    assert response.status_code == 409
+    assert "generate the tests first" in response.json()["detail"]
+
+
+def test_tests_run_returns_parsed_cases():
+    from s3_enhancement.testrun import SuiteRun, TestCase
+
+    client = _client()
+    fake_run = SuiteRun(
+        output="2 passed",
+        returncode=0,
+        cases=[
+            TestCase(
+                name="test_default_tier_is_standard",
+                classname="tests.test_s3_coverage_upgrade",
+                description="Default tier is standard",
+                status="passed",
+                time_s=0.01,
+                message=None,
+            ),
+            TestCase(
+                name="test_upgrade_recalculates_premium",
+                classname="tests.test_s3_coverage_upgrade",
+                description="Upgrade recalculates premium",
+                status="passed",
+                time_s=0.02,
+                message=None,
+            ),
+        ],
+        duration_s=0.5,
+    )
+
+    with (
+        patch("api.routers.s3.testrun.generated_test_file_exists", return_value=True),
+        patch("api.routers.s3.testrun.run_suite", return_value=fake_run),
+    ):
+        response = client.post("/api/s3/tests/run", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["passed"] is True
+    assert body["summary"] == {"total": 2, "passed": 2, "failed": 0, "errors": 0, "skipped": 0}
+    assert [case["description"] for case in body["cases"]] == [
+        "Default tier is standard",
+        "Upgrade recalculates premium",
+    ]
+
+
+def test_tests_mutation_returns_verdict_and_reverted_flag():
+    from s3_enhancement.testrun import MutationRun, SuiteRun, TestCase
+
+    client = _client()
+    fake_run = SuiteRun(
+        output="1 failed, 1 passed",
+        returncode=1,
+        cases=[
+            TestCase(
+                name="test_same_tier_raises",
+                classname="tests.test_s3_coverage_upgrade",
+                description="Same tier raises",
+                status="failed",
+                time_s=0.01,
+                message="ValueError not raised",
+            ),
+        ],
+        duration_s=0.4,
+    )
+    fake_mutation = MutationRun(
+        description="Weakened the same-tier guard",
+        rel_path="mockapp/core/coverage.py",
+        mutation_diff="--- a/mockapp/core/coverage.py\n+++ b/mockapp/core/coverage.py\n",
+        run=fake_run,
+        tests_caught_bug=True,
+    )
+
+    with patch("api.routers.s3.testrun.run_mutation", return_value=fake_mutation):
+        response = client.post("/api/s3/tests/mutation", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tests_caught_bug"] is True
+    assert body["reverted"] is True
+    assert body["file"] == "mockapp/core/coverage.py"
+    assert body["cases"][0]["status"] == "failed"
+
+
+def test_tests_mutation_409s_when_unavailable():
+    from s3_enhancement.testrun import MutationError
+
+    client = _client()
+
+    with patch(
+        "api.routers.s3.testrun.run_mutation",
+        side_effect=MutationError("Generate and run the tests first"),
+    ):
+        response = client.post("/api/s3/tests/mutation", json={"tier_name": "Elite"})
+
+    assert response.status_code == 409
+    assert "Generate and run the tests first" in response.json()["detail"]
 
 
 def test_tests_llm_error_returns_502():
@@ -285,7 +558,82 @@ def test_apply_calls_apply_change_with_file_path():
 
     apply_change.assert_called_once_with("prop-1", "a.py")
     assert response.status_code == 200
-    assert response.json() == {"proposal_id": "prop-1", "applied_files": ["a.py"]}
+    assert response.json() == {
+        "proposal_id": "prop-1",
+        "applied_files": ["a.py"],
+        "post_apply": {"ok": True, "steps": []},
+    }
+
+
+def test_apply_mockapp_files_runs_post_apply_migration():
+    """Applying files under mockapp/ must rebuild the SQLite schema in a
+    subprocess (the applied CR may have added a column the existing DB
+    predates) — the crash-after-apply regression."""
+    client = _client()
+
+    with (
+        patch("api.routers.s3.apply_change", return_value=["mockapp/core/db.py"]),
+        patch("api.routers.s3.subprocess.run") as run,
+    ):
+        run.return_value.returncode = 0
+        run.return_value.stdout = ""
+        run.return_value.stderr = ""
+        response = client.post("/api/s3/apply", json={"proposal_id": "prop-1"})
+
+    assert response.status_code == 200
+    assert run.call_count == 1
+    argv = run.call_args.args[0]
+    assert argv[1:] == ["-m", "mockapp.core.seed"]
+    post_apply = response.json()["post_apply"]
+    assert post_apply["ok"] is True
+    assert post_apply["steps"][0]["returncode"] == 0
+    assert post_apply["steps"][0]["output_tail"] == ""
+
+
+def test_apply_post_apply_failure_carried_in_response(tmp_path, monkeypatch):
+    """A migration crash after apply — the applied CR broke the app — must
+    reach the caller with its traceback and land on the ticket timeline,
+    not vanish into a discarded subprocess result."""
+    events_path = tmp_path / "ticket_events.jsonl"
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    client = _client()
+
+    with (
+        patch("api.routers.s3.apply_change", return_value=["mockapp/core/db.py"]),
+        patch("api.routers.s3.subprocess.run") as run,
+    ):
+        run.return_value.returncode = 1
+        run.return_value.stdout = "Traceback (most recent call last):\nKeyError: 'deductible'"
+        run.return_value.stderr = ""
+        response = client.post(
+            "/api/s3/apply", json={"proposal_id": "prop-1", "ticket_number": "AMS-101"}
+        )
+
+    assert response.status_code == 200
+    post_apply = response.json()["post_apply"]
+    assert post_apply["ok"] is False
+    step = post_apply["steps"][0]
+    assert step["returncode"] == 1
+    assert "Traceback" in step["output_tail"]
+
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    failed = [e for e in events if e["action"] == "post_apply_migration_failed"]
+    assert len(failed) == 1
+    assert failed[0]["actor"] == "system"
+    assert "KeyError: 'deductible'" in failed[0]["detail"]
+
+
+def test_apply_non_stateful_files_skips_post_apply_migration():
+    client = _client()
+
+    with (
+        patch("api.routers.s3.apply_change", return_value=["a.py"]),
+        patch("api.routers.s3.subprocess.run") as run,
+    ):
+        response = client.post("/api/s3/apply", json={"proposal_id": "prop-1"})
+
+    assert response.status_code == 200
+    run.assert_not_called()
 
 
 def test_apply_llm_error_returns_502():
