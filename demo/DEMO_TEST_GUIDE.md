@@ -40,17 +40,42 @@ python -m pytest tests/ -q   # expect all green (194 passed as of this writing)
 of calling a live provider. Set `LLM_MODE=live` (or per-call) only if you
 specifically want to test the real API path.
 
-### Known fix already applied
+### Known fixes already applied
 
-`demo/reset_s4_endorsement.sh` (CR-2026-042 reset) depends on a git tag,
-`s3-endorsement-baseline`, marking the pre-CR-042 commit. That tag had never
-been created, so the script would fail with `FAIL: git tag
-'s3-endorsement-baseline' does not exist`. Verified the working tree was
-already at the correct pristine state (no Priority field, no
-`tests/test_s3_endorsement_priority.py`) and created the tag locally
-(`git tag s3-endorsement-baseline`) pointing at the current commit. It's a
-local-only tag, not pushed — flagging it here since it wasn't previously
-part of the documented setup.
+1. `demo/reset_s4_endorsement.sh` (CR-2026-042 reset) depends on a git tag,
+   `s3-endorsement-baseline`, marking the pre-CR-042 commit. That tag had
+   never been created, so the script would fail with `FAIL: git tag
+   's3-endorsement-baseline' does not exist`.
+2. Bigger gap: the pre-CR-042 baseline itself was incomplete.
+   `mockapp/core/endorsements.py` was committed for CR-2026-042, but the
+   scaffold it depends on — the `Endorsement` model, the `endorsements`
+   table, and the "Request a Policy Endorsement" form in `mockapp/app.py` —
+   was never added. The module didn't even import
+   (`ImportError: cannot import name 'insert_endorsement'`), and there was
+   no form to show as the "before" state. The committed codegen replay
+   recording also silently built the *entire* feature from scratch
+   (with priority baked in from the start) rather than adding one field to
+   an existing form, so even the replay path wouldn't have shown a real
+   before/after.
+
+   Fixed by adding the missing scaffold (matching exactly what the CR's own
+   codegen prompt in `s3_enhancement/codegen.py::build_endorsement_prompt`
+   already assumed it would be adding a field *to*), re-recording both the
+   codegen and testgen fixed-key replay caches
+   (`s3_enhancement/cache/s3_codegen__endorsement_field_add.json` and
+   `s3_testgen__endorsement_field_add.json`) against the corrected baseline,
+   and moving `s3-endorsement-baseline` to tag the fixing commit
+   (`git tag -f s3-endorsement-baseline`). Verified the full propose →
+   apply → generate-tests → pytest cycle end to end via replay (no live
+   API calls) — commit `7693e51`.
+
+   One known cosmetic issue remains: the live model's "complete file
+   replacement" style drops blank lines and docstrings across the whole
+   file, not just the lines it's actually changing, so the diff shown in
+   the console is noisier than a hand-written patch would be (same
+   characteristic likely applies to CR-2026-041's diffs too — not new to
+   this fix). Functionally harmless; flagging so it isn't mistaken for a
+   demo bug if a presenter reviews the diff closely on stage.
 
 ### Login roster (all scenarios)
 
