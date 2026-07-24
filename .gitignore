@@ -42,6 +42,10 @@ output/
 # personal files parked inside the repo dir (move them out when convenient) —
 # ignored so a broad `git add` can never sweep multi-GB media into the repo
 123/
+sandbox/callToday/
+
+# local editor config
+.vscode/
 
 # reference material with real client name/faces — never commit (hard rule #2)
 DemoThatAnotherTeam created/

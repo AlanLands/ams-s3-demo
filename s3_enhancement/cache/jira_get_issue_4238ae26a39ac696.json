@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-724"
+  },
+  "response": {
+    "key": "AMS-724",
+    "status": "Done",
+    "summary": "Handle updated premiums for coverage upgrades in BillingGateway",
+    "issue_type": "Task",
+    "assignee": "Ravi Kumar",
+    "description": "BillingGateway needs to handle updated premiums when coverage is upgraded."
+  }
+}

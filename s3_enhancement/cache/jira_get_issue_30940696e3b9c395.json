@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-800"
+  },
+  "response": {
+    "key": "AMS-800",
+    "status": "Done",
+    "summary": "Ensure claims eligibility checks against coverage tier at claim filing time, not current policy tier.",
+    "issue_type": "Task",
+    "assignee": "Ravi Kumar",
+    "description": "Claims eligibility check needs to evaluate claims against the tier at the time of filing, not after an upgrade."
+  }
+}

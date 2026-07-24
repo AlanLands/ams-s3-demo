@@ -13,6 +13,11 @@ from common.schema import DATETIME_FMT
 Actor = Literal["ai", "human", "system"]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EVENTS_PATH = REPO_ROOT / "data" / "ticket_events.jsonl"
+# Written by demo/reset_s3.sh only — never touched by normal event recording,
+# so (unlike EVENTS_PATH's own mtime, which changes on every single event
+# appended) this only ever changes when an actual reset happens. See
+# events_log_marker().
+RESET_MARKER_PATH = REPO_ROOT / "data" / ".s3_reset_marker"
 
 
 def _events_path() -> Path:
@@ -114,3 +119,16 @@ def clear_events() -> None:
     path = _events_path()
     if path.exists():
         path.unlink()
+
+
+def events_log_marker() -> str:
+    """A value that changes only when `demo/reset_s3.sh` (or equivalent) runs
+    — for a caller (the frontend) that caches per-ticket AI results
+    client-side and needs to know server state was reset out from under it,
+    rather than keep showing results for a ticket the server has no record of
+    anymore. Deliberately not derived from EVENTS_PATH's own mtime, which
+    changes on every single event appended, not just on a reset."""
+    path = Path(os.environ.get("TICKET_RESET_MARKER_PATH", RESET_MARKER_PATH))
+    if not path.exists():
+        return "0"
+    return path.read_text(encoding="utf-8").strip() or "0"

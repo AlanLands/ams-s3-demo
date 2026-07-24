@@ -1,0 +1,10 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-102"
+  },
+  "response": {
+    "key": "AMS-102",
+    "assignee": "Ravi Kumar"
+  }
+}

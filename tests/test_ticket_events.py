@@ -3,6 +3,7 @@ from __future__ import annotations
 from common.ticket_events import (
     clear_events,
     events_for,
+    events_log_marker,
     record_event,
     tickets_with_action_detail,
 )
@@ -85,3 +86,34 @@ def test_clear_events_removes_file(tmp_path, monkeypatch):
 
     assert not path.exists()
     assert events_for("INC000001") == []
+
+
+def test_events_log_marker_missing_file_returns_zero(tmp_path, monkeypatch):
+    monkeypatch.setenv("TICKET_RESET_MARKER_PATH", str(tmp_path / "missing"))
+
+    assert events_log_marker() == "0"
+
+
+def test_events_log_marker_reads_marker_file_contents(tmp_path, monkeypatch):
+    marker_path = tmp_path / ".s3_reset_marker"
+    marker_path.write_text("12345\n", encoding="utf-8")
+    monkeypatch.setenv("TICKET_RESET_MARKER_PATH", str(marker_path))
+
+    assert events_log_marker() == "12345"
+
+
+def test_events_log_marker_unaffected_by_recording_events(tmp_path, monkeypatch):
+    """The marker must only change on an explicit reset (demo/reset_s3.sh
+    writing a fresh marker file) — never as a side effect of normal event
+    recording, or every reload would look like a reset happened."""
+    events_path = tmp_path / "ticket_events.jsonl"
+    marker_path = tmp_path / ".s3_reset_marker"
+    marker_path.write_text("1", encoding="utf-8")
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    monkeypatch.setenv("TICKET_RESET_MARKER_PATH", str(marker_path))
+
+    before = events_log_marker()
+    record_event("INC000001", "system", "created")
+    record_event("INC000001", "ai", "triage", "P2 / Batch")
+
+    assert events_log_marker() == before

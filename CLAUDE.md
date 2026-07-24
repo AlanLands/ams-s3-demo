@@ -35,6 +35,11 @@ mockapp/       "MapleSure" policy/claims app S3 targets for CRs
 api/           FastAPI backend — auth.py, session.py, routers/s3.py only
 frontend/      React (Vite + TypeScript) console — Login, Home, S3 only
 demo/          S3 run/reset/cache-warm scripts + presenter notes
+sandbox/       side projects; spring-demo/ is also S3's second target —
+               "ClaimsPortal" (Java/Spring Boot, CR-2026-043, ticket AMS-103,
+               target id springdemo-claims-deductible). Its checked-in source
+               is the pre-CR baseline (snapshot in .baseline/); reset with
+               demo/reset_s3_springdemo.sh, run with demo/run_s3_springdemo.sh
 tools/         verify_s3_live.py (live-demo rehearsal gate), autofix/ (S3-only
                calibration fix loop — `--scenario` is fixed to s3)
 ```

@@ -63,7 +63,12 @@ def generate_tests(
 def _generate_tests_once(
     tier_name: str, cr_text: str, *, target: Target, used_replay: bool
 ) -> TestgenResult:
-    prompt = build_prompt(tier_name, cr_text)
+    if target.cache_namespace == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace:
+        prompt = build_endorsement_prompt(cr_text, target=target)
+    elif target.cache_namespace == targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE.cache_namespace:
+        prompt = build_spring_prompt(cr_text, target=target)
+    else:
+        prompt = build_prompt(tier_name, cr_text)
     usage: dict = {}
     substitutions = {"{{TIER_NAME}}": tier_name} if used_replay else None
     chunks: list[str] = []
@@ -176,6 +181,126 @@ mockapp.core.seed using the exact names given above. The test file should be
 deterministic and have no LLM calls or network access."""
 
 
+def build_endorsement_prompt(cr_text: str, *, target: Target) -> str:
+    """Prompt for CR-2026-042's generated test file — no audience-picked
+    placeholder, unlike the coverage-upgrade CR's {{TIER_NAME}}."""
+    test_path = target.testgen_allowlist[0]
+
+    reference = """Tests should cover:
+- submitting an endorsement request with no priority argument defaults to "Standard"
+- submitting an endorsement request with priority="Urgent" persists "Urgent"
+- the persisted endorsement round-trips through list_endorsements() with the
+  chosen priority
+- existing fields (endorsement_type, requested_change, effective_date,
+  contact_phone, contact_email) are unaffected by the new field
+"""
+
+    context_files = []
+    for rel_path in (
+        "mockapp/core/models.py",
+        "mockapp/core/db.py",
+        "mockapp/core/endorsements.py",
+        "mockapp/core/seed.py",
+    ):
+        path = REPO_ROOT / rel_path
+        content = path.read_text(encoding="utf-8") if path.exists() else ""
+        context_files.append(f"--- {rel_path} ---\n{content}")
+
+    return f"""Change request:
+{cr_text}
+
+Current generated app files are already applied. Generate only this test file:
+{test_path}
+
+{reference}
+
+Exact API to test — this is a fixed, known contract, do not guess field names,
+do not write fallback/try-except import chains, and do not treat an
+Endorsement as a dict:
+{chr(10).join(context_files)}
+
+`mockapp.core.endorsements.submit_endorsement(policy_number: str,
+endorsement_type: str, requested_change: str, effective_date: str,
+contact_phone: str, contact_email: str, priority: str = "Standard") ->
+Endorsement` is the only function that creates an endorsement.
+`mockapp.core.db.list_endorsements(policy_number: str) -> list[Endorsement]`
+returns `Endorsement` dataclass instances — access fields with plain
+attribute access (`endorsement.priority`), never dict-style access.
+`mockapp.core.seed.reseed() -> None` reseeds known synthetic policies (e.g.
+"POL-10001") — call it directly by that name in an autouse fixture, no
+aliasing needed.
+
+Return structured JSON only with this exact shape:
+{{
+  "files": [
+    {{"path": "{test_path}", "content": "<complete replacement>"}}
+  ]
+}}
+
+Use pytest, reseed the mock app database before each test via an autouse
+fixture, and import directly from mockapp.core.endorsements, mockapp.core.db,
+and mockapp.core.seed using the exact names given above. The test file should
+be deterministic and have no LLM calls or network access."""
+
+
+def build_spring_prompt(cr_text: str, *, target: Target) -> str:
+    """Prompt for CR-2026-043's generated JUnit suite — a plain unit test of
+    the ClaimRules contract, no Spring context and no HTTP, so `mvn test`
+    stays fast and deterministic."""
+    test_path = target.testgen_allowlist[0]
+
+    reference = """Tests should cover:
+- a claim strictly above the deductible and within the limit on an ACTIVE
+  policy is "ACCEPTED"
+- a claim at exactly the deductible, and one below it, is
+  "REJECTED_BELOW_DEDUCTIBLE"
+- a claim above the coverage limit is "REJECTED_OVER_LIMIT" even when it is
+  also above the deductible
+- any non-ACTIVE status (e.g. "LAPSED") is "REJECTED_POLICY_LAPSED",
+  taking precedence over both amount checks
+- payable(amount, deductible) is amount minus deductible, and never negative
+  (a deductible larger than the amount floors at zero)
+"""
+
+    context_files = []
+    context_paths = [
+        rel_path
+        for rel_path in target.codegen_allowlist
+        if rel_path.endswith(("ClaimRules.java", "Claim.java"))
+    ]
+    for rel_path in context_paths:
+        path = REPO_ROOT / rel_path
+        content = path.read_text(encoding="utf-8") if path.exists() else ""
+        context_files.append(f"--- {rel_path} ---\n{content}")
+
+    return f"""Change request:
+{cr_text}
+
+Current generated app files are already applied. Generate only this test file:
+{test_path}
+
+{reference}
+
+Exact API to test — this is a fixed, known contract, do not guess names and
+do not add fallback logic:
+{chr(10).join(context_files)}
+
+Return structured JSON only with this exact shape:
+{{
+  "files": [
+    {{"path": "{test_path}", "content": "<complete replacement>"}}
+  ]
+}}
+
+Use JUnit 5 (org.junit.jupiter.api — already on the claims-service test
+classpath via spring-boot-starter-test), package com.maplesure.claims, class
+ClaimRulesTest. Plain unit tests of ClaimRules only: no @SpringBootTest, no
+web/server startup, no mocking framework, no network. Compare BigDecimal
+values with compareTo (assertEquals(0, expected.compareTo(actual)) or
+assertTrue) — never assertEquals on two BigDecimals with different scales.
+The test file must be deterministic."""
+
+
 def _parse_files_response(response: str) -> dict[str, str]:
     text = response.strip()
     if text.startswith("```"):
@@ -209,10 +334,19 @@ def _validate_file_set(files: dict[str, str], *, allowlist: tuple[str, ...] = AL
             f"expected {sorted(allowlist)}, got {sorted(files)}"
         )
     content = files[allowlist[0]]
-    try:
-        ast.parse(content, filename=allowlist[0])
-    except SyntaxError as exc:
-        raise LLMError(f"S3 generated invalid Python for {allowlist[0]}: {exc}") from exc
+    if allowlist[0].endswith(".java"):
+        # Java can't go through ast.parse — the compile check is the Maven
+        # test run right after apply. Gate on the JUnit shape instead.
+        for token in (f"class {Path(allowlist[0]).stem}", "@Test", "org.junit.jupiter"):
+            if token not in content:
+                raise LLMError(
+                    f"S3 generated {allowlist[0]} is missing required token {token!r}"
+                )
+    else:
+        try:
+            ast.parse(content, filename=allowlist[0])
+        except SyntaxError as exc:
+            raise LLMError(f"S3 generated invalid Python for {allowlist[0]}: {exc}") from exc
     lowered = content.lower()
     for forbidden in ("real client", ".env", "api_key", "api key", "secret"):
         if forbidden in lowered:

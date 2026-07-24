@@ -35,9 +35,33 @@ def test_cr_401s_without_login():
     assert client.get("/api/s3/cr").status_code == 401
 
 
+def test_reset_marker_401s_without_login():
+    client = TestClient(app)
+    assert client.get("/api/s3/reset-marker").status_code == 401
+
+
+def test_reset_marker_reflects_events_log_marker(tmp_path, monkeypatch):
+    monkeypatch.setenv("TICKET_RESET_MARKER_PATH", str(tmp_path / "missing"))
+    client = _client()
+
+    assert client.get("/api/s3/reset-marker").json() == {"marker": "0"}
+
+    marker_path = tmp_path / ".s3_reset_marker"
+    marker_path.write_text("99", encoding="utf-8")
+    monkeypatch.setenv("TICKET_RESET_MARKER_PATH", str(marker_path))
+
+    assert client.get("/api/s3/reset-marker").json() == {"marker": "99"}
+
+
 def test_analyze_401s_without_login():
     client = TestClient(app)
     response = client.post("/api/s3/analyze", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def test_analyze_adhoc_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/analyze-adhoc", json={"cr_text": "Some ticket text"})
     assert response.status_code == 401
 
 
@@ -56,6 +80,27 @@ def test_tests_401s_without_login():
 def test_release_notes_401s_without_login():
     client = TestClient(app)
     response = client.post("/api/s3/release-notes", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def test_design_doc_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/design-doc", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def test_apply_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/apply", json={"proposal_id": "prop-1"})
+    assert response.status_code == 401
+
+
+def test_add_file_401s_without_login():
+    client = TestClient(app)
+    response = client.post(
+        "/api/s3/add-file",
+        json={"proposal_id": "prop-1", "file_path": "a.py", "instruction": "do it"},
+    )
     assert response.status_code == 401
 
 
@@ -126,6 +171,56 @@ def test_analyze_returns_impact_effort_and_file_selection():
     assert body["file_selection"]["selected_files"]
 
 
+def test_analyze_adhoc_returns_impact_and_effort_without_file_selection():
+    client = _client()
+
+    def complete_side_effect(prompt: str, **kwargs) -> str:
+        if kwargs.get("json_mode") is True:
+            return json.dumps(
+                {
+                    "hours_class": "~8h",
+                    "priority_equivalent": "P4",
+                    "reasoning": "Small, isolated change in another team's app.",
+                }
+            )
+        assert "no source access" in prompt.lower()
+        return "Likely a small change to BillingGateway's premium recalculation logic."
+
+    with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect):
+        response = client.post(
+            "/api/s3/analyze-adhoc",
+            json={
+                "cr_text": "BillingGateway needs to handle recalculated premiums.",
+                "ticket_number": "AMS-132",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["label"] == AI_SUGGESTION_LABEL
+    assert body["impact_analysis"].startswith("Likely a small change")
+    assert body["effort_estimate"]["hours_class"] == "~8h"
+    assert "file_selection" not in body
+
+
+def test_analyze_adhoc_empty_text_returns_422():
+    client = _client()
+
+    response = client.post("/api/s3/analyze-adhoc", json={"cr_text": "   "})
+
+    assert response.status_code == 422
+
+
+def test_analyze_adhoc_llm_error_returns_502():
+    client = _client()
+
+    with patch("s3_enhancement.analyze.complete", side_effect=LLMError("boom")):
+        response = client.post("/api/s3/analyze-adhoc", json={"cr_text": "Some ticket text"})
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "boom"
+
+
 def test_generate_llm_error_returns_502():
     client = _client()
 
@@ -156,6 +251,89 @@ def test_release_notes_returns_label_and_text():
     body = response.json()
     assert body["label"] == AI_SUGGESTION_LABEL
     assert body["release_notes"] == "Release note text."
+
+
+def test_design_doc_returns_label_and_text():
+    client = _client()
+
+    with patch("s3_enhancement.docgen.complete", return_value="Design doc text."):
+        response = client.post("/api/s3/design-doc", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["label"] == AI_SUGGESTION_LABEL
+    assert body["design_doc"] == "Design doc text."
+
+
+def test_design_doc_llm_error_returns_502():
+    client = _client()
+
+    with patch("s3_enhancement.docgen.complete", side_effect=LLMError("boom")):
+        response = client.post("/api/s3/design-doc", json={"tier_name": "Elite"})
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "boom"
+
+
+def test_apply_calls_apply_change_with_file_path():
+    client = _client()
+
+    with patch("api.routers.s3.apply_change", return_value=["a.py"]) as apply_change:
+        response = client.post(
+            "/api/s3/apply", json={"proposal_id": "prop-1", "file_path": "a.py"}
+        )
+
+    apply_change.assert_called_once_with("prop-1", "a.py")
+    assert response.status_code == 200
+    assert response.json() == {"proposal_id": "prop-1", "applied_files": ["a.py"]}
+
+
+def test_apply_llm_error_returns_502():
+    client = _client()
+
+    with patch("api.routers.s3.apply_change", side_effect=LLMError("no such proposal")):
+        response = client.post("/api/s3/apply", json={"proposal_id": "prop-1"})
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "no such proposal"
+
+
+def test_add_file_returns_diff_and_files_changed():
+    client = _client()
+    fake_result = SimpleNamespace(
+        proposal_id="prop-1",
+        diff_text="diff --git a/a.py b/a.py",
+        files_changed=["a.py"],
+        message=None,
+        scoped_input_tokens=10,
+        scoped_output_tokens=5,
+    )
+
+    with patch("api.routers.s3.add_file_to_proposal", return_value=fake_result) as add_file:
+        response = client.post(
+            "/api/s3/add-file",
+            json={"proposal_id": "prop-1", "file_path": "a.py", "instruction": "add a field"},
+        )
+
+    add_file.assert_called_once_with("prop-1", "a.py", "add a field")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["label"] == AI_SUGGESTION_LABEL
+    assert body["files_changed"] == ["a.py"]
+    assert body["token_panel"] == {"scoped_input_tokens": 10, "scoped_output_tokens": 5}
+
+
+def test_add_file_llm_error_returns_502():
+    client = _client()
+
+    with patch("api.routers.s3.add_file_to_proposal", side_effect=LLMError("nope")):
+        response = client.post(
+            "/api/s3/add-file",
+            json={"proposal_id": "prop-1", "file_path": "a.py", "instruction": "add a field"},
+        )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "nope"
 
 
 def test_harness_latest_without_run_returns_404():

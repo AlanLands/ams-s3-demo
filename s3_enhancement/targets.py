@@ -40,6 +40,11 @@ _LEGACY_CACHE_KEYS: dict[str, str] = {
     "impact_analysis": "s3_impact_analysis:coverage_upgrade:v2",
     "effort_estimate": "s3_effort_estimate:coverage_upgrade:v2",
     "release_notes": "s3_release_notes:coverage_upgrade",
+    # Added after the above three shipped — no pre-existing recording to stay
+    # byte-identical with, so this literal isn't "legacy" in the same sense,
+    # just following the same naming convention for the default target.
+    "cross_team_impact": "s3_cross_team_impact:coverage_upgrade:v1",
+    "design_doc": "s3_design_doc:coverage_upgrade:v1",
 }
 _LEGACY_STREAM_CACHE_KEYS: dict[str, str] = {
     "codegen": "s3_codegen",
@@ -79,6 +84,16 @@ class Target:
     codegen_allowlist: tuple[str, ...] = ()
     testgen_allowlist: tuple[str, ...] = ()
     harness_expected_files: tuple[str, ...] = ()
+
+    # Language of the target's source and generated tests. Drives which
+    # content validators codegen/testgen apply (ast.parse is Python-only) and
+    # which test runner the /s3/tests beat uses.
+    language: Literal["python", "java"] = "python"
+    # Test command for the /s3/tests beat. Empty means the default
+    # `pytest testgen_allowlist[0]` invocation; a non-empty command runs
+    # verbatim from `test_cwd` (e.g. Maven for a Java target).
+    test_command: tuple[str, ...] = ()
+    test_cwd: Path | None = None
 
     cache_namespace: str = ""
 
@@ -146,6 +161,78 @@ MOCKAPP_COVERAGE_UPGRADE = Target(
     cache_namespace="",
 )
 register_target(MOCKAPP_COVERAGE_UPGRADE)
+
+ENDORSEMENT_TARGET_ID = "mockapp-endorsement-field-add"
+
+MOCKAPP_ENDORSEMENT_FIELD_ADD = Target(
+    target_id=ENDORSEMENT_TARGET_ID,
+    source_kind="local",
+    display_name="MapleSure mockapp — endorsement priority field (CR-2026-042)",
+    root=REPO_ROOT / "mockapp",
+    cr_template_path=REPO_ROOT / "mockapp" / "crs" / "CR-2026-042.md",
+    cr_placeholder="",  # this CR has no audience-picked placeholder token
+    core_files=(
+        "mockapp/core/models.py",
+        "mockapp/core/db.py",
+        "mockapp/core/endorsements.py",
+        "mockapp/app.py",
+    ),
+    never_extra=frozenset({"mockapp/core/seed.py"}),
+    codegen_allowlist=(
+        "mockapp/core/models.py",
+        "mockapp/core/db.py",
+        "mockapp/core/endorsements.py",
+        "mockapp/app.py",
+    ),
+    testgen_allowlist=("tests/test_s3_endorsement_priority.py",),
+    harness_expected_files=(),
+    cache_namespace="endorsement_field_add",
+)
+register_target(MOCKAPP_ENDORSEMENT_FIELD_ADD)
+
+
+SPRING_TARGET_ID = "springdemo-claims-deductible"
+
+_SPRING_ROOT = REPO_ROOT / "sandbox" / "spring-demo"
+_SPRING_CLAIMS_SRC = "sandbox/spring-demo/claims-service/src/main/java/com/maplesure/claims"
+_SPRING_POLICY_SRC = "sandbox/spring-demo/policy-service/src/main/java/com/maplesure/policy"
+
+SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
+    target_id=SPRING_TARGET_ID,
+    source_kind="local",
+    display_name="ClaimsPortal (Spring Boot) — claims deductible handling (CR-2026-043)",
+    root=_SPRING_ROOT,
+    cr_template_path=_SPRING_ROOT / "crs" / "CR-2026-043.md",
+    cr_placeholder="",  # like CR-2026-042, no audience-picked placeholder token
+    core_files=(
+        f"{_SPRING_POLICY_SRC}/Policy.java",
+        f"{_SPRING_POLICY_SRC}/PolicyController.java",
+        f"{_SPRING_CLAIMS_SRC}/Claim.java",
+        f"{_SPRING_CLAIMS_SRC}/PolicyClient.java",
+        f"{_SPRING_CLAIMS_SRC}/ClaimsController.java",
+        # Does not exist until the CR creates it — same idiom as
+        # mockapp/core/coverage.py on the default target.
+        f"{_SPRING_CLAIMS_SRC}/ClaimRules.java",
+    ),
+    codegen_allowlist=(
+        f"{_SPRING_POLICY_SRC}/Policy.java",
+        f"{_SPRING_POLICY_SRC}/PolicyController.java",
+        f"{_SPRING_CLAIMS_SRC}/Claim.java",
+        f"{_SPRING_CLAIMS_SRC}/PolicyClient.java",
+        f"{_SPRING_CLAIMS_SRC}/ClaimsController.java",
+        f"{_SPRING_CLAIMS_SRC}/ClaimRules.java",
+    ),
+    testgen_allowlist=(
+        "sandbox/spring-demo/claims-service/src/test/java/com/maplesure/claims/"
+        "ClaimRulesTest.java",
+    ),
+    harness_expected_files=(),
+    language="java",
+    test_command=("mvn", "-q", "-Dtest=ClaimRulesTest", "test"),
+    test_cwd=_SPRING_ROOT / "claims-service",
+    cache_namespace="spring_claims_deductible",
+)
+register_target(SPRINGDEMO_CLAIMS_DEDUCTIBLE)
 
 
 def get_target(target_id: str | None) -> Target:

@@ -33,11 +33,18 @@ def sanitize_tier_name(raw: str) -> tuple[str | None, str | None]:
 
 
 def render_cr(tier_name: str, *, target: Target | None = None) -> str:
-    """tier_name must already be sanitized by the caller (see sanitize_tier_name)."""
+    """tier_name must already be sanitized by the caller (see sanitize_tier_name).
+
+    Targets with no audience-picked placeholder (`cr_placeholder == ""`) render
+    their CR text unchanged — `str.replace("", ...)` would otherwise insert
+    `tier_name` between every character, so the empty-placeholder case is a
+    deliberate no-op, not an oversight.
+    """
     target = target or targets.get_target(None)
-    return target.cr_template_path.read_text(encoding="utf-8").replace(
-        target.cr_placeholder, tier_name
-    )
+    text = target.cr_template_path.read_text(encoding="utf-8")
+    if not target.cr_placeholder:
+        return text
+    return text.replace(target.cr_placeholder, tier_name)
 
 
 def raw_cr_template(*, target: Target | None = None) -> str:

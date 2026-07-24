@@ -73,7 +73,12 @@ CORE_FILES: tuple[str, ...] = targets.MOCKAPP_COVERAGE_UPGRADE.core_files
 # eligible to be selected as extra editable context.
 NEVER_EXTRA: frozenset[str] = targets.MOCKAPP_COVERAGE_UPGRADE.never_extra
 
-_EXCLUDED_DIR_NAMES = {"__pycache__"}
+# "target" is Maven's build-output directory (the Spring Boot target's root
+# contains two Maven services) and ".baseline" is that target's pristine
+# pre-CR snapshot (demo/reset_s3_springdemo.sh restores from it) — sources
+# under either must never enter the candidate pool, same reasoning as
+# __pycache__ for Python.
+_EXCLUDED_DIR_NAMES = {"__pycache__", "target", ".baseline"}
 _SOURCE_GLOBS = ("*.py", "*.java")
 
 

@@ -1,0 +1,44 @@
+{
+  "call": "search_issues",
+  "args": {
+    "jql": "project = AMS ORDER BY updated DESC"
+  },
+  "response": [
+    {
+      "key": "AMS-101",
+      "id": "10101",
+      "self": null,
+      "summary": "CR-2026-041: Coverage-Upgrade Option",
+      "status": "In Progress",
+      "issue_type": "Task",
+      "assignee": "Ravi Kumar"
+    },
+    {
+      "key": "AMS-102",
+      "id": "10102",
+      "self": null,
+      "summary": "CR-2026-042: Endorsement Priority Field",
+      "status": "To Do",
+      "issue_type": "Task",
+      "assignee": null
+    },
+    {
+      "key": "AMS-103",
+      "id": "10103",
+      "self": null,
+      "summary": "CR-2026-043: Claims Deductible Handling (ClaimsPortal)",
+      "status": "To Do",
+      "issue_type": "Task",
+      "assignee": "Ravi Kumar"
+    },
+    {
+      "key": "AMS-098",
+      "id": "10098",
+      "self": null,
+      "summary": "Quarterly policy data cleanup",
+      "status": "Done",
+      "issue_type": "Task",
+      "assignee": "Elena Cruz"
+    }
+  ]
+}

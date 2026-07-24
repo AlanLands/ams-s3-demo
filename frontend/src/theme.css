@@ -13,7 +13,7 @@
   --ams-accent-soft: #f5e6e9;
   --ams-secondary: #005656;
   --ams-line: rgba(54, 53, 48, 0.16);
-  --ams-bg: #eff0ef;
+  --ams-bg: #eef1f4;
   --ams-surface: #f7f7f6;
   --ams-shadow: 0 2px 10px rgba(147, 148, 142, 0.3);
   --ams-success: #007f7f;
@@ -93,8 +93,23 @@ a:hover {
 }
 
 .ams-button-secondary {
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
   background: #fff;
   color: var(--ams-accent);
+  border: 1px solid var(--ams-accent);
+  border-radius: 2px;
+  padding: 0.5rem 1.1rem;
+  cursor: pointer;
+}
+.ams-button-secondary:hover {
+  background: var(--ams-accent-soft);
+}
+.ams-button-secondary:disabled {
+  color: var(--ams-ink-soft);
+  border-color: var(--ams-line);
+  cursor: not-allowed;
 }
 
 .ams-input,
@@ -130,81 +145,521 @@ a:hover {
   color: var(--ams-info);
 }
 
-/* App shell — persistent sidebar nav, same role as the old Streamlit
-   sidebar (demo/unified_app.py) and the recorded competitor demo's
-   always-visible left nav: switching scenarios is one click, not a
-   round trip back to a home grid. */
+/* Jira-board-styled ticket view (engineer role) — columns of ticket cards,
+   built from the existing card/pill tokens rather than a new visual
+   language or a kanban/dnd library. */
+.ams-board-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.ams-board-search {
+  flex: 1;
+  min-width: 200px;
+}
+.ams-board-counts {
+  display: flex;
+  gap: 0.4rem;
+}
+.ams-board-count {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ams-ink-soft);
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ams-board-count:hover {
+  background: var(--ams-surface);
+}
+.ams-board-count-active {
+  color: var(--ams-ink);
+  border-color: var(--ams-line);
+  background: #fff;
+}
+.ams-board-count-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--ams-accent-soft);
+  color: var(--ams-accent-ink);
+  font-size: 0.72rem;
+}
+.ams-board-column {
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: 6px;
+  padding: 0.6rem;
+}
+.ams-ticket-card {
+  background: #fff;
+  box-shadow: var(--ams-shadow);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.5rem;
+}
+.ams-ticket-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.ams-ticket-card-selected {
+  border-color: var(--ams-accent);
+  box-shadow: 0 0 0 2px var(--ams-accent-soft);
+}
+
+/* Manager's ticket dashboard — a flat assignable list rather than a kanban
+   board, since the manager's job here is "who should work this" not
+   "what's the status flow." */
+.ams-dashboard-list {
+  margin-top: 0.75rem;
+}
+.ams-dashboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.3rem;
+  border-bottom: 1px solid var(--ams-line);
+  border-radius: 4px;
+}
+.ams-dashboard-row:last-child {
+  border-bottom: none;
+}
+.ams-dashboard-row-selected {
+  background: var(--ams-accent-soft);
+}
+.ams-dashboard-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+/* Codegen pipeline stages — collapsible, one open at a time, locked until
+   the prior stage is done (see S3.tsx's canGenerate/canTest/canDraftNotes). */
+.ams-stage-card {
+  background: #fff;
+  border: 1px solid var(--ams-line);
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+.ams-stage-card-locked {
+  background: var(--ams-surface);
+}
+.ams-stage-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.ams-stage-header:disabled {
+  cursor: not-allowed;
+  color: var(--ams-ink-soft);
+}
+.ams-stage-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--ams-accent-soft);
+  color: var(--ams-accent-ink);
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+.ams-stage-card-locked .ams-stage-index {
+  background: var(--ams-line);
+  color: var(--ams-ink-soft);
+}
+.ams-stage-title {
+  flex: 1;
+}
+.ams-stage-chevron {
+  color: var(--ams-ink-soft);
+}
+.ams-stage-hint {
+  margin: 0 1rem 0.85rem;
+  font-size: 0.82rem;
+  color: var(--ams-ink-soft);
+}
+.ams-stage-body {
+  padding: 0 1rem 1.1rem;
+  border-top: 1px solid var(--ams-line);
+  padding-top: 1rem;
+}
+.ams-avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--ams-accent-soft);
+  color: var(--ams-accent-ink);
+  font-weight: 700;
+  font-size: 0.68rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Quick-impact chat thread (manager role). */
+.ams-chat-thread {
+  display: flex;
+  flex-direction: column;
+}
+.ams-chat-bubble[data-role='user'] {
+  align-self: flex-end;
+}
+.ams-chat-bubble[data-role='assistant'] {
+  align-self: flex-start;
+}
+
+/* Ticket detail modal — a real overlay dialog (like Jira's issue view),
+   not an inline expansion within the board column: backdrop + centered
+   panel, a scrollable two-column body (main content + a Details sidebar),
+   and a light pop-in so opening it reads as a deliberate reveal. */
+@keyframes ams-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.ams-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 31, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 1rem;
+  z-index: 100;
+  overflow-y: auto;
+}
+.ams-modal {
+  animation: ams-modal-in 0.16s ease-out;
+  background: #fff;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 960px;
+  max-height: calc(100vh - 6rem);
+  margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 36px rgba(15, 23, 31, 0.3);
+  overflow: hidden;
+}
+.ams-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.25rem;
+  border-bottom: 1px solid var(--ams-line);
+  flex-shrink: 0;
+}
+.ams-modal-breadcrumb {
+  font-size: 0.85rem;
+  color: var(--ams-ink-soft);
+}
+.ams-modal-breadcrumb strong {
+  color: var(--ams-ink);
+}
+.ams-modal-close {
+  border: none;
+  background: none;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ams-ink-soft);
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+}
+.ams-modal-close:hover {
+  background: var(--ams-surface);
+  color: var(--ams-ink);
+}
+.ams-modal-body {
+  display: flex;
+  overflow-y: auto;
+}
+.ams-modal-main {
+  flex: 1;
+  min-width: 0;
+  padding: 1.25rem;
+}
+.ams-modal-main h2 {
+  font-size: 1.3rem;
+  margin-bottom: 1rem;
+}
+.ams-modal-section {
+  margin-top: 1.75rem;
+}
+.ams-modal-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ams-ink-soft);
+  margin-bottom: 0.6rem;
+}
+.ams-modal-details {
+  width: 250px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--ams-line);
+  padding: 1.25rem 1.1rem;
+  background: var(--ams-surface);
+}
+.ams-modal-details dl {
+  margin: 0;
+}
+.ams-modal-details dt {
+  font-size: 0.7rem;
+  color: var(--ams-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 1rem;
+}
+.ams-modal-details dt:first-child {
+  margin-top: 0;
+}
+.ams-modal-details dd {
+  margin: 0.2rem 0 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.ams-modal-link {
+  color: var(--ams-info);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+.ams-modal-link:hover {
+  text-decoration: underline;
+}
+.ams-modal-activity-tabs {
+  display: flex;
+  gap: 0.2rem;
+  border-bottom: 1px solid var(--ams-line);
+  margin-bottom: 0.75rem;
+}
+.ams-modal-activity-tab {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ams-ink-soft);
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ams-modal-activity-tab-active {
+  color: var(--ams-accent-ink);
+  border-bottom-color: var(--ams-accent);
+}
+
+/* Per-file diff view — GitLab/GitHub-style colored +/- lines, one card per
+   file instead of one giant undifferentiated code block. */
+.ams-diff-file {
+  margin-top: 0.75rem;
+}
+.ams-diff-file-header {
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.45rem 0.7rem;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+}
+.ams-diff-body {
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  border: 1px solid var(--ams-line);
+  border-top: none;
+  overflow-x: auto;
+  padding: 0.35rem 0;
+}
+.ams-diff-line {
+  padding: 0 0.7rem;
+  white-space: pre;
+}
+.ams-diff-line-add {
+  background: #e6ffed;
+  color: #22863a;
+}
+.ams-diff-line-del {
+  background: #ffeef0;
+  color: #b31d28;
+}
+.ams-diff-line-meta {
+  color: var(--ams-ink-soft);
+  background: #f1f4f8;
+}
+.ams-diff-ask {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--ams-line);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  background: var(--ams-surface);
+}
+
+/* App shell — a slim persistent top bar (brand + identity, GitHub-header
+   style) above a two-column body (sidebar nav + content). The sidebar keeps
+   its old role from the Streamlit-era build (demo/unified_app.py) and the
+   recorded competitor demo's always-visible left nav: switching scenarios is
+   one click, not a round trip back to a home grid — just restyled to a
+   clean icon+label list instead of a boxed identity card. */
+:root {
+  --ams-topbar-height: 3.4rem;
+}
 .ams-shell {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
+.ams-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--ams-topbar-height);
+  flex-shrink: 0;
+  padding: 0 1.25rem;
+  background: #fff;
+  border-bottom: 1px solid var(--ams-line);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.ams-topbar-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.ams-topbar-brand-name {
+  font-family: 'Asap', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--ams-ink);
+}
+.ams-topbar-brand-caption {
+  color: var(--ams-ink-soft);
+  font-size: 0.78rem;
+}
+.ams-topbar-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.ams-topbar-identity-text {
+  text-align: right;
+  line-height: 1.25;
+}
+.ams-topbar-identity-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.ams-topbar-identity-role {
+  color: var(--ams-ink-soft);
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+.ams-topbar-avatar {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--ams-accent-soft);
+  color: var(--ams-accent-ink);
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ams-shell-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
 .ams-shell-sidebar {
-  width: 250px;
+  width: 232px;
   flex-shrink: 0;
   background: var(--ams-surface);
   border-right: 1px solid var(--ams-line);
-  padding: 1.5rem 1.1rem;
+  padding: 1.25rem 1rem;
+  align-self: flex-start;
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: var(--ams-topbar-height);
+  max-height: calc(100vh - var(--ams-topbar-height));
   overflow-y: auto;
 }
 .ams-shell-main {
   flex: 1;
   min-width: 0;
 }
-.ams-sidebar-title {
-  font-family: 'Asap', system-ui, sans-serif;
-  font-weight: 700;
-  font-size: 1.05rem;
-  color: var(--ams-ink);
-}
-.ams-sidebar-caption {
-  color: var(--ams-ink-soft);
-  font-size: 0.78rem;
-  margin-top: 0.15rem;
-  margin-bottom: 1.1rem;
-}
-.ams-sidebar-identity {
-  background: #fff;
-  border: 1px solid var(--ams-line);
-  border-radius: 6px;
-  padding: 0.6rem 0.7rem;
-  margin-bottom: 1.25rem;
-}
-.ams-sidebar-identity-name {
-  font-weight: 700;
-  font-size: 0.9rem;
-}
-.ams-sidebar-identity-role {
-  color: var(--ams-ink-soft);
-  font-size: 0.78rem;
-  text-transform: capitalize;
-  margin-bottom: 0.45rem;
-}
 .ams-sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.1rem;
 }
 .ams-sidebar-link {
-  display: block;
-  padding: 0.5rem 0.6rem;
-  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
   color: var(--ams-ink);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 600;
   text-decoration: none;
-  border-left: 3px solid transparent;
 }
 .ams-sidebar-link:hover {
-  background: var(--ams-accent-soft);
-  color: var(--ams-ink);
+  background: #fff;
 }
 .ams-sidebar-link-active {
   background: var(--ams-accent-soft);
   color: var(--ams-accent-ink) !important;
-  border-left-color: var(--ams-accent);
+}
+.ams-sidebar-link-icon {
+  width: 1rem;
+  text-align: center;
+  flex-shrink: 0;
+  opacity: 0.75;
 }
 .ams-sidebar-link-desc {
   display: block;
@@ -212,6 +667,30 @@ a:hover {
   font-size: 0.72rem;
   font-weight: 400;
   margin-top: 0.1rem;
+}
+.ams-sidebar-divider {
+  height: 1px;
+  background: var(--ams-line);
+  margin: 0.75rem 0;
+}
+
+/* Sub-navigation under a scenario's sidebar link — jumps to an in-page
+   section (anchor), same role-gated content the page itself already shows,
+   just a faster way in than scrolling. */
+.ams-sidebar-subnav {
+  display: flex;
+  flex-direction: column;
+  margin: 0.15rem 0 0.4rem 0.75rem;
+  border-left: 2px solid var(--ams-line);
+}
+.ams-sidebar-sublink {
+  padding: 0.3rem 0 0.3rem 0.6rem;
+  color: var(--ams-ink-soft);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+.ams-sidebar-sublink:hover {
+  color: var(--ams-accent-ink);
 }
 
 /* Pipeline stepper — ported from common/ui_pipeline.py's exact markup/CSS

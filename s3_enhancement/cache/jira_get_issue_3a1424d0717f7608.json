@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-838"
+  },
+  "response": {
+    "key": "AMS-838",
+    "status": "Done",
+    "summary": "Handle mid-cycle premium adjustments for coverage tier upgrades.",
+    "issue_type": "Task",
+    "assignee": "Ravi Kumar",
+    "description": "A tier upgrade changes the premium mid-cycle, requiring a new mid-cycle handling path for recalculating premiums."
+  }
+}

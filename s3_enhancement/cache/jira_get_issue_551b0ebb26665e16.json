@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-132"
+  },
+  "response": {
+    "key": "AMS-132",
+    "status": "To Do",
+    "summary": "Handle mid-cycle premium adjustments for coverage tier upgrades in BillingGateway.",
+    "issue_type": "Task",
+    "assignee": "Elena Cruz",
+    "description": "BillingGateway needs to handle mid-cycle premium adjustments due to the coverage tier upgrades."
+  }
+}
