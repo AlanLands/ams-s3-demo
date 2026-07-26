@@ -1,0 +1,12 @@
+{
+  "call": "list_repo_paths",
+  "args": {
+    "project_id": "203"
+  },
+  "response": [
+    "jobs/policy_data_cleanup.py",
+    "jobs/claims_archival.py",
+    "tests/test_jobs.py",
+    "README.md"
+  ]
+}

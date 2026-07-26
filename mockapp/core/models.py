@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 @dataclass
 class Policy:
     policy_number: str
@@ -18,7 +17,6 @@ class Policy:
     start_date: str  # ISO date string, e.g. "2024-03-01"
     status: str  # "Active" | "Lapsed" | "Cancelled"
     coverage_tier: str = "Standard"
-
 
 @dataclass
 class Claim:
@@ -30,7 +28,6 @@ class Claim:
     filed_at: str  # ISO datetime string
     notes: str = ""
 
-
 @dataclass
 class Endorsement:
     endorsement_number: str
@@ -41,3 +38,4 @@ class Endorsement:
     contact_phone: str
     contact_email: str
     filed_at: str  # ISO datetime string
+    priority: str = "Standard"

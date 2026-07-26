@@ -175,8 +175,8 @@ def _propose_change_once(
         scoped_input_tokens=usage.get("input_tokens"),
         scoped_output_tokens=usage.get("output_tokens"),
         tokens_estimated=bool(usage.get("estimated")),
-        naive_input_tokens_estimate=sum(
-            relevance.estimate_tokens(content) for content in all_files.values()
+        naive_input_tokens_estimate=relevance.naive_prompt_tokens(
+            usage.get("input_tokens"), all_files, selection.selected
         ),
         proposal_id=staged_dir.parent.name,
         file_reasons=file_reasons,
@@ -237,7 +237,8 @@ def revise_change(
         raise LLMError(f"No staged proposal found for proposal_id {proposal_id!r}")
     staged_files = _staged_files_on_disk(staged_dir)
 
-    prompt = _build_revise_prompt(staged_files, instruction)
+    pending_diff = _compute_diff(staged_dir, staged_files)
+    prompt = _build_revise_prompt(staged_files, instruction, pending_diff)
     digest = hashlib.sha256(f"{proposal_id}|{instruction}".encode()).hexdigest()[:16]
     cache_key = f"{target.stream_cache_key('codegen')}__revise__{digest}"
 
@@ -267,8 +268,9 @@ def revise_change(
             f"S3 revise returned files outside the staged proposal: {sorted(unexpected)}"
         )
     for rel_path, content in revised_files.items():
-        _validate_content(rel_path, content)
-        (staged_dir / rel_path).write_text(content, encoding="utf-8")
+        repaired = _restore_module_docstring(rel_path, content)
+        _validate_content(rel_path, repaired)
+        (staged_dir / rel_path).write_text(repaired, encoding="utf-8")
 
     all_files_now = _staged_files_on_disk(staged_dir)
     diff_text = _write_diff(staged_dir, all_files_now)
@@ -328,7 +330,9 @@ def add_file_to_proposal(proposal_id: str, rel_path: str, instruction: str) -> C
     return revise_change(proposal_id, f"For {rel}: {instruction}")
 
 
-def _build_revise_prompt(staged_files: dict[str, str], instruction: str) -> str:
+def _build_revise_prompt(
+    staged_files: dict[str, str], instruction: str, pending_diff: str = ""
+) -> str:
     current_files = [f"--- {rel_path} ---\n{content}" for rel_path, content in staged_files.items()]
     json_shape = json.dumps(
         {
@@ -340,10 +344,24 @@ def _build_revise_prompt(staged_files: dict[str, str], instruction: str) -> str:
         },
         indent=2,
     )
+    # Without the diff the model only ever sees the post-change file, so it
+    # cannot tell what it removed — asked "why did you delete X?" it answers
+    # from the only text it has and confidently denies the removal. Show it
+    # its own diff so "what changed / why" is answerable from evidence.
+    diff_section = (
+        f"""
+This is the diff your proposal produces against the current repo — the
+reviewer is looking at exactly this. Lines starting "-" are content you
+REMOVED; lines starting "+" are content you ADDED:
+{pending_diff}
+"""
+        if pending_diff.strip()
+        else ""
+    )
     return f"""You previously proposed the following file replacements for a live AMS
 demo change (not yet applied to the repo):
 {chr(10).join(current_files)}
-
+{diff_section}
 The reviewer wrote this in the "ask about this file" box:
 {instruction}
 
@@ -355,6 +373,14 @@ Rules:
   the reviewer asked a question rather than requesting an edit, answer it
   there and omit "files" entirely (or return it empty) — do not change code
   just because a question was asked.
+- Answer questions about what changed from the diff above, never from the
+  file contents alone. If the reviewer asks why something was removed, read
+  the "-" lines: if it really is gone, say so plainly and explain why, and
+  do NOT claim it was kept. Never tell the reviewer something is still
+  there when the diff shows it removed.
+- If the diff removes a docstring, comment, or blank line the change request
+  never asked you to touch, that is an unintended regression: say so, and
+  return the corrected file in "files" restoring it verbatim.
 - Only return files from the list above — never introduce a new file path.
 - Return each changed file as a complete replacement, not a patch or diff.
 - Keep every line at 100 characters or fewer; use modern built-in generics
@@ -904,6 +930,39 @@ def _drop_unchanged_files(files: dict[str, str]) -> dict[str, str]:
     return changed
 
 
+def _restore_module_docstring(rel_path: str, content: str) -> str:
+    """Put back a module docstring the model dropped on its way through a
+    whole-file replacement.
+
+    Returning each file as a complete replacement makes models silently shed
+    the leading docstring, and no prompt rule reliably stops it: asked about
+    the deletion they deny it, and told to fix it they echo the same content
+    back while reporting success. The CR never asks to delete a docstring, so
+    treat its disappearance as an artefact of the format and repair it here
+    instead of trusting the model to.
+    """
+    if not rel_path.endswith(".py"):
+        return content
+    source_path = REPO_ROOT / rel_path
+    if not source_path.exists():
+        return content
+    try:
+        original = source_path.read_text(encoding="utf-8")
+        original_tree = ast.parse(original, filename=rel_path)
+        if ast.get_docstring(original_tree) is None:
+            return content
+        if ast.get_docstring(ast.parse(content, filename=rel_path)) is not None:
+            return content
+    except (SyntaxError, ValueError):
+        # Invalid Python is _validate_content's problem to report, not ours.
+        return content
+    end_lineno = getattr(original_tree.body[0], "end_lineno", None)
+    if end_lineno is None:
+        return content
+    docstring_block = "".join(original.splitlines(keepends=True)[:end_lineno])
+    return f"{docstring_block}\n{content.lstrip(chr(10))}"
+
+
 def _stage_files(files: dict[str, str]) -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     staged_dir = OUT_ROOT / stamp / "staged"
@@ -914,11 +973,14 @@ def _stage_files(files: dict[str, str]) -> Path:
     for rel_path, content in files.items():
         target = staged_dir / rel_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        target.write_text(_restore_module_docstring(rel_path, content), encoding="utf-8")
     return staged_dir
 
 
-def _write_diff(staged_dir: Path, files: dict[str, str]) -> str:
+def _compute_diff(staged_dir: Path, files: dict[str, str]) -> str:
+    """Unified diff of the staged proposal against the current repo, with no
+    side effects. Split out from `_write_diff` so the revise prompt can show
+    the model what it actually changed without writing a diff.patch."""
     diff_parts: list[str] = []
     for rel_path in files:
         source_path = REPO_ROOT / rel_path
@@ -934,7 +996,11 @@ def _write_diff(staged_dir: Path, files: dict[str, str]) -> str:
                 tofile=f"b/{rel_path}",
             )
         )
-    diff_text = "".join(diff_parts)
+    return "".join(diff_parts)
+
+
+def _write_diff(staged_dir: Path, files: dict[str, str]) -> str:
+    diff_text = _compute_diff(staged_dir, files)
     diff_path = staged_dir.parent / "diff.patch"
     diff_path.write_text(diff_text, encoding="utf-8")
     return diff_text

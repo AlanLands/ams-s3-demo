@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "202",
+    "ref": "main",
+    "path": "README.md"
+  },
+  "response": "# claims-service\n\nSynthetic MapleSure demo repo -- claims intake and adjudication APIs.\n"
+}

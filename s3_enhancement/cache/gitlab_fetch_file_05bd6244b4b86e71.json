@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "202",
+    "ref": "main",
+    "path": "src/adjudication.py"
+  },
+  "response": "# MapleSure claims-service\n# Synthetic demo stub -- claim adjudication logic.\n\ndef adjudicate(claim):\n    raise NotImplementedError\n"
+}

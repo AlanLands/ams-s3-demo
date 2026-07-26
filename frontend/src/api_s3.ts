@@ -28,12 +28,45 @@ export interface EffortEstimate {
   reasoning: string
 }
 
+export interface TargetRepo {
+  id: string
+  name: string | null
+  reasoning: string
+  confidence: string
+}
+
 export interface AnalyzeResponse {
   label: string
   impact_analysis: string
+  // One sentence per gap the model had to fill in rather than ask about
+  // (see s3_enhancement/analyze.py's ImpactAnalysis) — empty when the CR
+  // left nothing unspecified.
+  assumptions: string[]
   effort_estimate: EffortEstimate
   // Both absent for analyze-adhoc's ad-hoc tickets — those have no in-console
   // target/codebase to select files from (see s3Api.analyzeAdhoc).
+  file_selection?: FileSelection
+  token_panel?: TokenPanel
+  // Ad-hoc tickets only — the AI's best guess at which connected GitLab repo
+  // this CR is for, once confident enough to stop asking (see
+  // AdhocAnalyzeResponse.target_repo and analyze-adhoc's clarification gate).
+  target_repo?: TargetRepo | null
+}
+
+// Raw wire shape of POST /analyze — unlike AnalyzeResponse (used for
+// already-resolved state storage once a clarification round is done, if
+// any), this can also come back as a pending question (see analyze.py's
+// check_cr_gaps: a specific missing detail like an unstated default gets
+// asked about instead of silently reported as an assumption).
+export interface AnalyzeApiResponse {
+  label: string
+  needs_clarification: boolean
+  // Present only when needs_clarification is true.
+  question?: string
+  // Present only when needs_clarification is false.
+  impact_analysis?: string
+  assumptions?: string[]
+  effort_estimate?: EffortEstimate
   file_selection?: FileSelection
   token_panel?: TokenPanel
 }
@@ -202,10 +235,16 @@ export interface SuggestedProject extends RepoMatch {
   confidence: string
 }
 
-export interface GitlabScopeAutoResponse extends GitlabScopeResponse {
+export interface GitlabScopeAutoResponse extends Partial<GitlabScopeResponse> {
   label: string
+  needs_clarification: boolean
+  // Present in both the clarification-needed and confirmed-scope responses —
+  // a confidence below 'high' means the developer should confirm this is the
+  // right repo before file discovery/codegen scopes against it.
   suggested_project: SuggestedProject
   alternates: RepoMatch[]
+  // Present only when needs_clarification is true.
+  question?: string
 }
 
 export interface CrossTeamImpact {
@@ -235,6 +274,13 @@ export interface JiraIssue {
   issue_type: string | null
   assignee?: string | null
   description?: string | null
+  // S3's two intake flavors — a direct business change request, or a ticket
+  // derived from a problem record (repeated incidents -> a permanent-fix
+  // problem record -> this ticket). Both converge on the identical
+  // analyze/codegen/test/docgen flow; this is presentational only.
+  origin?: 'business_cr' | 'problem_record'
+  // Present only when origin is 'problem_record'.
+  problem_id?: string
 }
 
 export interface JiraBoardResponse {
@@ -254,6 +300,22 @@ export interface ScreenshotResponse {
   stage: 'before' | 'after'
   namespace: string
   image_base64: string
+}
+
+export interface AdhocAnalyzeResponse {
+  label: string
+  needs_clarification: boolean
+  // Present only when needs_clarification is true — either about the CR
+  // text itself or, once that's clear, about which connected GitLab repo
+  // this is for (see api/routers/s3.py's analyze_adhoc for both gates).
+  question?: string
+  // Present only when needs_clarification is false.
+  impact_analysis?: string
+  assumptions?: string[]
+  effort_estimate?: EffortEstimate
+  // AI's best guess at the target repo once confident enough to stop
+  // asking — null when no GitLab connection was available to check against.
+  target_repo?: TargetRepo | null
 }
 
 export interface QuickChatResponse {
@@ -277,22 +339,44 @@ export const s3Api = {
       `/api/s3/cr?tier_name=${encodeURIComponent(tierName)}` +
         (targetId ? `&target_id=${encodeURIComponent(targetId)}` : '')
     ),
-  analyze: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
-    request<AnalyzeResponse>('/api/s3/analyze', {
+  // A CR with a specific missing detail (e.g. an unstated field default)
+  // comes back with needs_clarification: true and a follow-up question
+  // instead of an analysis; resubmit with the engineer's answer as
+  // `clarificationAnswer` (server keeps the transcript, same as
+  // analyzeAdhoc below). `resetClarification` clears that server-side
+  // history before this call.
+  analyze: (
+    tierName: string,
+    targetId?: string | null,
+    ticketNumber?: string,
+    clarificationAnswer?: string,
+    resetClarification = false
+  ) =>
+    request<AnalyzeApiResponse>('/api/s3/analyze', {
       method: 'POST',
       body: JSON.stringify({
         tier_name: tierName,
         target_id: targetId ?? null,
         ticket_number: ticketNumber ?? null,
+        clarification_answer: clarificationAnswer ?? null,
+        reset_clarification: resetClarification,
       }),
     }),
   // For a ticket with no linked CR/target in this console (e.g. a cross-team
   // ticket for another application) — runs off the ticket's own text instead
-  // of one of the two pinned CR templates, so there's no file_selection.
-  analyzeAdhoc: (crText: string, ticketNumber?: string) =>
-    request<AnalyzeResponse>('/api/s3/analyze-adhoc', {
+  // of one of the two pinned CR templates, so there's no file_selection. A
+  // vague ticket comes back with needs_clarification: true and a follow-up
+  // question instead of an analysis; resubmit with the engineer's answer as
+  // `crText` (server keeps the transcript, same as quickImpactChat below).
+  // `resetClarification` clears that server-side history before this call.
+  analyzeAdhoc: (crText: string, ticketNumber?: string, resetClarification = false) =>
+    request<AdhocAnalyzeResponse>('/api/s3/analyze-adhoc', {
       method: 'POST',
-      body: JSON.stringify({ cr_text: crText, ticket_number: ticketNumber ?? null }),
+      body: JSON.stringify({
+        cr_text: crText,
+        ticket_number: ticketNumber ?? null,
+        reset_clarification: resetClarification,
+      }),
     }),
   generate: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
     request<GenerateResponse>('/api/s3/generate', {
@@ -380,10 +464,27 @@ export const s3Api = {
       method: 'POST',
       body: JSON.stringify({ tier_name: tierName }),
     }),
-  gitlabScopeAuto: (tierName: string) =>
+  // A low/medium-confidence repo match comes back with needs_clarification:
+  // true and a "is this the right repo?" question instead of a scoped
+  // result; resubmit with `confirmedProjectId` set (from suggested_project.id
+  // or a chosen alternate) to skip straight to scoping. Exactly one of
+  // `tierName` (a pinned CR template) or `crText` (an ad-hoc ticket's own
+  // text, no target linked in this console) should be given — same split as
+  // analyze vs. analyzeAdhoc above.
+  gitlabScopeAuto: (options: {
+    tierName?: string
+    crText?: string
+    ticketNumber?: string
+    confirmedProjectId?: string
+  }) =>
     request<GitlabScopeAutoResponse>('/api/s3/gitlab/scope-auto', {
       method: 'POST',
-      body: JSON.stringify({ tier_name: tierName }),
+      body: JSON.stringify({
+        tier_name: options.tierName ?? null,
+        cr_text: options.crText ?? null,
+        ticket_number: options.ticketNumber ?? null,
+        confirmed_project_id: options.confirmedProjectId ?? null,
+      }),
     }),
   quickImpactChat: (message: string, reset = false) =>
     request<QuickChatResponse>('/api/s3/chat/quick-impact', {

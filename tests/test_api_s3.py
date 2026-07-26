@@ -16,6 +16,7 @@ from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError
 from common.llm import LLMError
 from s1_triage.roster_auth import PASSCODE_BY_NAME
+from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS
 
 
 def _login(client: TestClient, name: str) -> None:
@@ -147,10 +148,15 @@ def test_cr_invalid_tier_returns_422():
 
 
 def test_analyze_returns_impact_effort_and_file_selection():
+    """Three of /analyze's LLM calls pass json_mode=True now (the gap check,
+    impact analysis, and effort estimate) — disambiguate by a field name
+    unique to each prompt's own requested JSON shape."""
     client = _client()
 
     def complete_side_effect(prompt: str, **kwargs) -> str:
-        if kwargs.get("json_mode") is True:
+        if "needs_clarification" in prompt:
+            return json.dumps({"needs_clarification": False})
+        if "hours_class" in prompt:
             return json.dumps(
                 {
                     "hours_class": "~40h",
@@ -159,7 +165,15 @@ def test_analyze_returns_impact_effort_and_file_selection():
                 }
             )
         assert "impact analysis" in prompt.lower()
-        return "Update policy model, persistence, coverage rules, and portal UI."
+        # No assumptions: a draft that declares one is withheld and asked
+        # about instead of returned (test_analyze_asks_about_the_drafts_own_
+        # assumptions below), so it can't stand in for the happy path here.
+        return json.dumps(
+            {
+                "impact_analysis": "Update policy model, persistence, and portal UI.",
+                "assumptions": [],
+            }
+        )
 
     with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect):
         response = client.post("/api/s3/analyze", json={"tier_name": "Elite"})
@@ -167,7 +181,9 @@ def test_analyze_returns_impact_effort_and_file_selection():
     assert response.status_code == 200
     body = response.json()
     assert body["label"] == AI_SUGGESTION_LABEL
+    assert body["needs_clarification"] is False
     assert body["impact_analysis"].startswith("Update policy model")
+    assert body["assumptions"] == []
     assert body["effort_estimate"]["hours_class"] == "~40h"
     assert body["file_selection"]["selected_files"]
     assert "token_panel" in body
@@ -181,14 +197,21 @@ def test_analyze_reports_scoped_vs_naive_token_comparison():
     client = _client()
 
     def complete_side_effect(prompt: str, *, usage_out=None, **kwargs):
-        if kwargs.get("json_mode") is True:
+        if "needs_clarification" in prompt:
+            return json.dumps({"needs_clarification": False})
+        if "hours_class" in prompt:
             return json.dumps(
                 {"hours_class": "~40h", "priority_equivalent": "P3", "reasoning": "x"}
             )
         if usage_out is not None:
             usage_out["input_tokens"] = 3502
             usage_out["output_tokens"] = 210
-        return "Update policy model, persistence, coverage rules, and portal UI."
+        return json.dumps(
+            {
+                "impact_analysis": "Update policy model, persistence, and portal UI.",
+                "assumptions": [],
+            }
+        )
 
     with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect):
         response = client.post("/api/s3/analyze", json={"tier_name": "Elite"})
@@ -197,29 +220,276 @@ def test_analyze_reports_scoped_vs_naive_token_comparison():
     panel = response.json()["token_panel"]
     assert panel["scoped_input_tokens"] == 3502
     assert panel["scoped_output_tokens"] == 210
-    # naive_input_tokens_estimate sums relevance.estimate_tokens() over every
-    # candidate file in the target — must be a real, positive number (there
-    # are real .py files under mockapp/), and comfortably bigger than the
-    # scoped figure, since it's the "if we sent everything" baseline.
+    # naive_input_tokens_estimate is what the same prompt would have cost with
+    # every candidate file pasted in — so it's the scoped figure plus the
+    # unselected files, never less than what was actually spent.
     assert panel["naive_input_tokens_estimate"] > panel["scoped_input_tokens"]
 
 
-def test_analyze_adhoc_returns_impact_and_effort_without_file_selection():
+def test_analyze_asks_a_clarifying_question_for_an_unstated_default():
+    client = _client()
+    gap = json.dumps(
+        {
+            "needs_clarification": True,
+            "question": "What should the 'priority' field default to?",
+        }
+    )
+
+    with patch("s3_enhancement.analyze.complete", return_value=gap):
+        response = client.post("/api/s3/analyze", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is True
+    assert body["question"] == "What should the 'priority' field default to?"
+    assert "impact_analysis" not in body
+
+
+def test_analyze_second_call_folds_the_answer_into_the_final_analysis():
+    """The engineer's `clarification_answer` must reach the actual impact
+    analysis/effort prompts, not just get acknowledged and dropped — same
+    principle as /analyze-adhoc's full-context fix."""
+    client = _client()
+    gap = json.dumps(
+        {"needs_clarification": True, "question": "What should the priority default to?"}
+    )
+
+    with patch("s3_enhancement.analyze.complete", return_value=gap):
+        first = client.post("/api/s3/analyze", json={"tier_name": "Elite"})
+    assert first.json()["needs_clarification"] is True
+
+    def complete_side_effect(prompt: str, **kwargs) -> str:
+        if "needs_clarification" in prompt:
+            return json.dumps({"needs_clarification": False})
+        if "hours_class" in prompt:
+            return json.dumps(
+                {"hours_class": "~16h", "priority_equivalent": "P3", "reasoning": "x"}
+            )
+        return json.dumps({"impact_analysis": "Add the field.", "assumptions": []})
+
+    with patch(
+        "s3_enhancement.analyze.complete", side_effect=complete_side_effect
+    ) as mock_complete:
+        second = client.post(
+            "/api/s3/analyze",
+            json={"tier_name": "Elite", "clarification_answer": "Default to Standard"},
+        )
+
+    assert second.status_code == 200
+    assert second.json()["needs_clarification"] is False
+    impact_prompt = next(
+        call.args[0]
+        for call in mock_complete.call_args_list
+        if "impact analysis" in call.args[0].lower()
+    )
+    assert "Default to Standard" in impact_prompt
+
+
+def _analyze_stub(assumptions: list[str]):
+    """`complete()` stand-in for /analyze where the gap check passes and the
+    drafted analysis declares `assumptions`."""
+
+    def complete_side_effect(prompt: str, **kwargs) -> str:
+        if "needs_clarification" in prompt:
+            return json.dumps({"needs_clarification": False})
+        if "hours_class" in prompt:
+            return json.dumps(
+                {"hours_class": "~16h", "priority_equivalent": "P3", "reasoning": "x"}
+            )
+        return json.dumps({"impact_analysis": "Add the field.", "assumptions": assumptions})
+
+    return complete_side_effect
+
+
+def test_analyze_asks_about_the_drafts_own_assumptions():
+    """The gap check runs before the analysis and can only guess at what the
+    model will have to assume; it regularly passes a CR the draft then makes
+    an assumption about anyway. When that happens the draft is withheld and
+    the assumption asked about, rather than shipped in an "assumptions the AI
+    made" box the engineer never got a say in."""
+    client = _client()
+
+    with patch(
+        "s3_enhancement.analyze.complete",
+        side_effect=_analyze_stub(["Assumed the new field defaults to Standard."]),
+    ):
+        response = client.post("/api/s3/analyze", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is True
+    assert "Assumed the new field defaults to Standard." in body["question"]
+    # Withheld, not merely annotated — the engineer answers before seeing it.
+    assert "impact_analysis" not in body
+
+
+def test_analyze_asks_about_every_assumption_in_one_question():
+    """One question per assumption would silently drop all but the first once
+    MAX_CLARIFICATION_TURNS is spent, so they share a single turn."""
+    client = _client()
+
+    with patch(
+        "s3_enhancement.analyze.complete",
+        side_effect=_analyze_stub(["Assumed A applies.", "Assumed B is 30 days."]),
+    ):
+        response = client.post("/api/s3/analyze", json={"tier_name": "Elite"})
+
+    question = response.json()["question"]
+    assert "Assumed A applies." in question
+    assert "Assumed B is 30 days." in question
+
+
+def test_analyze_redrafts_off_the_answer_not_the_pinned_recording():
+    """The per-target `cache_key` deliberately ignores prompt content, so a
+    re-draft that kept it would replay the pre-answer analysis and re-report
+    the very assumption just resolved — an unbreakable question loop."""
+    client = _client()
+    stub = _analyze_stub(["Assumed the new field defaults to Standard."])
+
+    with patch("s3_enhancement.analyze.complete", side_effect=stub):
+        first = client.post("/api/s3/analyze", json={"tier_name": "Elite"})
+    assert first.json()["needs_clarification"] is True
+
+    with patch(
+        "s3_enhancement.analyze.complete", side_effect=_analyze_stub([])
+    ) as mock_complete:
+        second = client.post(
+            "/api/s3/analyze",
+            json={"tier_name": "Elite", "clarification_answer": "It defaults to Urgent"},
+        )
+
+    assert second.json()["needs_clarification"] is False
+    impact_call = next(
+        call
+        for call in mock_complete.call_args_list
+        if "impact analysis" in call.args[0].lower()
+    )
+    assert "It defaults to Urgent" in impact_call.args[0]
+    assert impact_call.kwargs["cache_key"] is None
+
+
+def test_analyze_stops_asking_and_reports_assumptions_at_the_turn_cap():
+    """The turn budget is a hard cost ceiling (docs/design/s3_llm_cost_
+    controls.md rule 1) — once it's spent the analysis ships, and the
+    unresolved assumptions are surfaced rather than dropped."""
+    client = _client()
+    stub = _analyze_stub(["Assumed the new field defaults to Standard."])
+
+    with patch("s3_enhancement.analyze.complete", side_effect=stub):
+        for _ in range(MAX_CLARIFICATION_TURNS):
+            asked = client.post(
+                "/api/s3/analyze", json={"tier_name": "Elite", "clarification_answer": "no idea"}
+            )
+            assert asked.json()["needs_clarification"] is True
+
+        final = client.post(
+            "/api/s3/analyze", json={"tier_name": "Elite", "clarification_answer": "still unsure"}
+        )
+
+    body = final.json()
+    assert body["needs_clarification"] is False
+    assert body["impact_analysis"] == "Add the field."
+    assert body["assumptions"] == ["Assumed the new field defaults to Standard."]
+
+
+def test_analyze_adhoc_asks_about_the_drafts_own_assumptions():
+    """Same assumptions-become-questions gate on the no-target path."""
     client = _client()
 
     def complete_side_effect(prompt: str, **kwargs) -> str:
-        if kwargs.get("json_mode") is True:
-            return json.dumps(
-                {
-                    "hours_class": "~8h",
-                    "priority_equivalent": "P4",
-                    "reasoning": "Small, isolated change in another team's app.",
-                }
-            )
-        assert "no source access" in prompt.lower()
-        return "Likely a small change to BillingGateway's premium recalculation logic."
+        if "needs_clarification" in prompt:
+            return json.dumps({"needs_clarification": False})
+        if "hours_class" in prompt:
+            return json.dumps({"hours_class": "~8h", "priority_equivalent": "P4", "reasoning": "x"})
+        return json.dumps(
+            {
+                "impact_analysis": "Likely a small change.",
+                "assumptions": ["Assumed this is the nightly batch job."],
+            }
+        )
 
-    with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect):
+    with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect), patch(
+        "api.routers.s3.get_client", side_effect=GitLabError("no token")
+    ):
+        response = client.post(
+            "/api/s3/analyze-adhoc",
+            json={"cr_text": "BillingGateway needs to handle recalculated premiums."},
+        )
+
+    body = response.json()
+    assert body["needs_clarification"] is True
+    assert "Assumed this is the nightly batch job." in body["question"]
+    assert "impact_analysis" not in body
+
+
+def test_analyze_reset_clarification_clears_history():
+    client = _client()
+    gap = json.dumps({"needs_clarification": True, "question": "What should it default to?"})
+
+    with patch("s3_enhancement.analyze.complete", return_value=gap):
+        client.post("/api/s3/analyze", json={"tier_name": "Elite"})
+
+    def complete_side_effect(prompt: str, **kwargs) -> str:
+        if "needs_clarification" in prompt:
+            return json.dumps({"needs_clarification": False})
+        if "hours_class" in prompt:
+            return json.dumps(
+                {"hours_class": "~16h", "priority_equivalent": "P3", "reasoning": "x"}
+            )
+        return json.dumps({"impact_analysis": "Add the field.", "assumptions": []})
+
+    with patch(
+        "s3_enhancement.analyze.complete", side_effect=complete_side_effect
+    ) as mock_complete:
+        response = client.post(
+            "/api/s3/analyze", json={"tier_name": "Elite", "reset_clarification": True}
+        )
+
+    assert response.status_code == 200
+    impact_prompt = next(
+        call.args[0]
+        for call in mock_complete.call_args_list
+        if "impact analysis" in call.args[0].lower()
+    )
+    assert "Additional detail from the engineer" not in impact_prompt
+
+
+def _adhoc_complete_side_effect(prompt: str, **kwargs) -> str:
+    """Shared `complete()` stand-in for the calls a clear (not vague, no gaps)
+    ad-hoc ticket now makes — the clarity check, gap check, effort estimate,
+    and impact analysis all pass `json_mode=True`, so disambiguate by prompt
+    content. Both clarity and gap checks share the "needs_clarification"
+    marker, so a single branch below satisfies either.
+
+    Returns an analysis with no assumptions: one with assumptions no longer
+    reaches the caller at all, it turns into another clarifying question (see
+    test_analyze_adhoc_asks_about_the_drafts_own_assumptions), which would
+    make this an awkward stand-in for the tests that just need a clean
+    end-to-end analysis."""
+    if "needs_clarification" in prompt:
+        return json.dumps({"needs_clarification": False})
+    if "hours_class" in prompt:
+        return json.dumps(
+            {
+                "hours_class": "~8h",
+                "priority_equivalent": "P4",
+                "reasoning": "Small, isolated change in another team's app.",
+            }
+        )
+    assert "no source access" in prompt.lower()
+    return json.dumps(
+        {
+            "impact_analysis": "Likely a small change to BillingGateway's recalculation logic.",
+            "assumptions": [],
+        }
+    )
+
+
+def test_analyze_adhoc_returns_impact_and_effort_without_file_selection(tmp_path, monkeypatch):
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    client = _client()
+
+    with patch("s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect):
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={
@@ -231,7 +501,9 @@ def test_analyze_adhoc_returns_impact_and_effort_without_file_selection():
     assert response.status_code == 200
     body = response.json()
     assert body["label"] == AI_SUGGESTION_LABEL
+    assert body["needs_clarification"] is False
     assert body["impact_analysis"].startswith("Likely a small change")
+    assert body["assumptions"] == []
     assert body["effort_estimate"]["hours_class"] == "~8h"
     assert "file_selection" not in body
 
@@ -252,6 +524,202 @@ def test_analyze_adhoc_llm_error_returns_502():
 
     assert response.status_code == 502
     assert response.json()["detail"] == "boom"
+
+
+def test_analyze_adhoc_asks_a_clarifying_question_for_a_vague_ticket():
+    client = _client()
+    canned = json.dumps({"needs_clarification": True, "question": "Which app is this for?"})
+
+    with patch("s3_enhancement.analyze.complete", return_value=canned):
+        response = client.post("/api/s3/analyze-adhoc", json={"cr_text": "fix the thing"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is True
+    assert body["question"] == "Which app is this for?"
+    assert "impact_analysis" not in body
+
+
+def test_analyze_adhoc_asks_about_a_gap_once_text_clarity_passes():
+    """check_cr_clarity (overall vagueness) and check_cr_gaps (a specific
+    missing detail) are two independent gates sharing one history/turn
+    budget — a ticket specific enough to pass the first can still trigger
+    the second."""
+    client = _client()
+
+    def complete_side_effect(prompt: str, *, system: str = "", **kwargs) -> str:
+        assert "needs_clarification" in prompt
+        if "specific missing detail" in system.lower():
+            return json.dumps(
+                {
+                    "needs_clarification": True,
+                    "question": "What should the discount percentage be?",
+                }
+            )
+        return json.dumps({"needs_clarification": False})
+
+    with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect):
+        response = client.post(
+            "/api/s3/analyze-adhoc",
+            json={"cr_text": "Apply a loyalty discount to renewal premiums."},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is True
+    assert body["question"] == "What should the discount percentage be?"
+
+
+def test_analyze_adhoc_second_call_answers_the_clarifying_question():
+    """The follow-up call's `cr_text` carries the engineer's answer, not the
+    original ticket text again — same "latest message" semantics as
+    /chat/quick-impact — and the accumulated transcript is kept server-side
+    in the login session, not resent by the client."""
+    client = _client()
+    vague = json.dumps({"needs_clarification": True, "question": "Which app is this for?"})
+
+    with patch("s3_enhancement.analyze.complete", return_value=vague):
+        first = client.post("/api/s3/analyze-adhoc", json={"cr_text": "fix the thing"})
+    assert first.json()["needs_clarification"] is True
+
+    with patch(
+        "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
+    ) as mock_complete:
+        second = client.post("/api/s3/analyze-adhoc", json={"cr_text": "the billing gateway"})
+
+    assert second.status_code == 200
+    assert second.json()["needs_clarification"] is False
+    clarity_prompt = mock_complete.call_args_list[0].args[0]
+    assert "fix the thing" in clarity_prompt
+    assert "the billing gateway" in clarity_prompt
+
+
+def test_analyze_adhoc_reset_clarification_clears_history():
+    client = _client()
+    vague = json.dumps({"needs_clarification": True, "question": "Which app is this for?"})
+
+    with patch("s3_enhancement.analyze.complete", return_value=vague):
+        client.post("/api/s3/analyze-adhoc", json={"cr_text": "fix the thing"})
+
+    with patch(
+        "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
+    ) as mock_complete:
+        response = client.post(
+            "/api/s3/analyze-adhoc",
+            json={
+                "cr_text": "BillingGateway needs to handle recalculated premiums.",
+                "reset_clarification": True,
+            },
+        )
+
+    assert response.status_code == 200
+    clarity_prompt = mock_complete.call_args_list[0].args[0]
+    assert "fix the thing" not in clarity_prompt
+
+
+def test_analyze_adhoc_final_analysis_uses_full_accumulated_text():
+    """Once a clarification round has happened, the final impact
+    analysis/effort estimate must see the whole conversation (original
+    ticket + the engineer's answer), not just the latest reply fragment —
+    otherwise the analysis is drafted against "the billing gateway" alone
+    with the original "fix the thing" context silently dropped."""
+    client = _client()
+    vague = json.dumps({"needs_clarification": True, "question": "Which app is this for?"})
+
+    with patch("s3_enhancement.analyze.complete", return_value=vague):
+        client.post("/api/s3/analyze-adhoc", json={"cr_text": "fix the thing"})
+
+    with patch(
+        "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
+    ) as mock_complete:
+        response = client.post(
+            "/api/s3/analyze-adhoc", json={"cr_text": "the billing gateway"}
+        )
+
+    assert response.status_code == 200
+    impact_prompt = next(
+        call.args[0]
+        for call in mock_complete.call_args_list
+        if "no source access" in call.args[0].lower()
+    )
+    assert "fix the thing" in impact_prompt
+    assert "the billing gateway" in impact_prompt
+
+
+def test_analyze_adhoc_asks_repo_confirmation_after_text_clarity_passes():
+    client = _client()
+    clear = json.dumps({"needs_clarification": False})
+    suggestion = SimpleNamespace(
+        best_match=SimpleNamespace(project_id="1", confidence="low", reasoning="weak match"),
+        alternates=(),
+    )
+    gitlab = MagicMock()
+    gitlab.list_projects.return_value = [
+        {"id": 1, "name": "policy-service", "description": "coverage APIs"},
+    ]
+
+    with patch("s3_enhancement.analyze.complete", return_value=clear), patch(
+        "api.routers.s3.get_client", return_value=gitlab
+    ), patch("api.routers.s3.suggest_target_repo", return_value=suggestion):
+        response = client.post(
+            "/api/s3/analyze-adhoc",
+            json={"cr_text": "Update the coverage limit calculation"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is True
+    assert "question" in body and body["question"]
+    assert "impact_analysis" not in body
+
+
+def test_analyze_adhoc_includes_high_confidence_target_repo_in_final_result(tmp_path, monkeypatch):
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    client = _client()
+    suggestion = SimpleNamespace(
+        best_match=SimpleNamespace(
+            project_id="1", confidence="high", reasoning="matches coverage"
+        ),
+        alternates=(),
+    )
+    gitlab = MagicMock()
+    gitlab.list_projects.return_value = [
+        {"id": 1, "name": "policy-service", "description": "coverage APIs"},
+    ]
+
+    with patch(
+        "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
+    ), patch("api.routers.s3.get_client", return_value=gitlab), patch(
+        "api.routers.s3.suggest_target_repo", return_value=suggestion
+    ):
+        response = client.post(
+            "/api/s3/analyze-adhoc",
+            json={"cr_text": "BillingGateway needs to handle recalculated premiums."},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is False
+    assert body["target_repo"]["id"] == "1"
+    assert body["target_repo"]["confidence"] == "high"
+
+
+def test_analyze_adhoc_skips_repo_check_when_gitlab_unavailable():
+    client = _client()
+
+    with patch(
+        "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
+    ), patch("api.routers.s3.get_client", side_effect=GitLabError("no token")) as mock_get_client:
+        response = client.post(
+            "/api/s3/analyze-adhoc",
+            json={"cr_text": "BillingGateway needs to handle recalculated premiums."},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is False
+    assert body["target_repo"] is None
+    mock_get_client.assert_called_once()
 
 
 def test_cross_team_impact_401s_without_login():
@@ -291,6 +759,52 @@ def test_cross_team_impact_llm_error_returns_502():
 
     assert response.status_code == 502
     assert response.json()["detail"] == "boom"
+
+
+def test_problem_record_ticket_401s_without_login():
+    client = TestClient(app)
+    response = client.post(
+        "/api/s3/jira/problem-record-ticket",
+        json={"summary": "Fix recurring timeout", "problem_id": "PRB0012345"},
+    )
+    assert response.status_code == 401
+
+
+def test_problem_record_ticket_appears_on_board_tagged_by_origin(tmp_path, monkeypatch):
+    """S3's second intake flavor: a ticket derived from a problem record
+    (repeated incidents -> permanent-fix problem record -> this ticket)
+    rather than a direct business CR. Both origins must converge on the same
+    board/downstream flow, distinguished only by the origin tag."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    client = _client()
+
+    created = client.post(
+        "/api/s3/jira/problem-record-ticket",
+        json={
+            "summary": "Fix recurring nightly batch timeout",
+            "description": "Derived from problem record for repeated incident INC0099.",
+            "problem_id": "PRB0012345",
+            "assignee": "Ravi Kumar",
+        },
+    )
+    assert created.status_code == 200
+    new_key = created.json()["issue"]["key"]
+    assert created.json()["issue"]["origin"] == "problem_record"
+    assert created.json()["issue"]["problem_id"] == "PRB0012345"
+
+    board = client.get("/api/s3/jira/board")
+    assert board.status_code == 200
+    issues = {issue["key"]: issue for issue in board.json()["issues"]}
+    assert new_key in issues
+    assert issues[new_key]["origin"] == "problem_record"
+    assert issues[new_key]["problem_id"] == "PRB0012345"
+
+    # A ticket with no problem-record-ticket-created event (the fixed demo
+    # CR tickets, and plain cross-team tickets) defaults to business_cr.
+    other_keys = [key for key in issues if key != new_key]
+    assert other_keys, "expected at least one other seeded ticket on the board"
+    assert issues[other_keys[0]]["origin"] == "business_cr"
+    assert "problem_id" not in issues[other_keys[0]]
 
 
 def test_generate_llm_error_returns_502():
@@ -760,10 +1274,104 @@ def test_gitlab_scope_auto_picks_repo_and_scopes_it():
     assert response.status_code == 200
     body = response.json()
     assert body["label"] == AI_SUGGESTION_LABEL
+    assert body["needs_clarification"] is False
     assert body["suggested_project"]["id"] == "1"
     assert body["suggested_project"]["name"] == "policy-service"
     assert body["repo_size"] == 2
     assert body["files_reached_llm"] == 1
+
+
+def test_gitlab_scope_auto_asks_for_confirmation_on_low_confidence():
+    client = _client()
+    gitlab = MagicMock()
+    gitlab.list_projects.return_value = [
+        {"id": 1, "name": "policy-service", "description": "coverage APIs"},
+        {"id": 2, "name": "billing-batch", "description": "nightly billing jobs"},
+    ]
+    suggestion = SimpleNamespace(
+        best_match=SimpleNamespace(project_id="1", confidence="low", reasoning="weak match"),
+        alternates=(SimpleNamespace(project_id="2", confidence="low", reasoning="also plausible"),),
+    )
+
+    with patch("api.routers.s3.get_client", return_value=gitlab), patch(
+        "api.routers.s3.suggest_target_repo", return_value=suggestion
+    ):
+        response = client.post("/api/s3/gitlab/scope-auto", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is True
+    assert "question" in body and body["question"]
+    assert body["suggested_project"]["id"] == "1"
+    assert body["suggested_project"]["confidence"] == "low"
+    assert [alt["id"] for alt in body["alternates"]] == ["2"]
+    # File discovery must not have run against the unconfirmed repo.
+    gitlab.list_repo_paths.assert_not_called()
+
+
+def test_gitlab_scope_auto_confirmed_project_id_skips_match_and_scopes():
+    client = _client()
+    gitlab = MagicMock()
+    gitlab.list_projects.return_value = [
+        {"id": 1, "name": "policy-service", "description": "coverage APIs"},
+        {"id": 2, "name": "billing-batch", "description": "nightly billing jobs"},
+    ]
+    gitlab.list_repo_paths.return_value = ["a.py"]
+    selection = SimpleNamespace(selected={"a.py": "print(1)"})
+
+    with patch("api.routers.s3.get_client", return_value=gitlab), patch(
+        "api.routers.s3.suggest_target_repo"
+    ) as mock_suggest, patch(
+        "api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}
+    ), patch("api.routers.s3.select_relevant_files", return_value=selection):
+        response = client.post(
+            "/api/s3/gitlab/scope-auto",
+            json={"tier_name": "Elite", "confirmed_project_id": "2"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is False
+    assert body["suggested_project"]["id"] == "2"
+    assert body["suggested_project"]["name"] == "billing-batch"
+    mock_suggest.assert_not_called()
+
+
+def test_gitlab_scope_auto_accepts_free_text_cr_for_adhoc_tickets():
+    client = _client()
+    gitlab = MagicMock()
+    gitlab.list_projects.return_value = [
+        {"id": 1, "name": "policy-service", "description": "coverage APIs"},
+    ]
+    gitlab.list_repo_paths.return_value = ["a.py"]
+    selection = SimpleNamespace(selected={"a.py": "print(1)"})
+    suggestion = SimpleNamespace(
+        best_match=SimpleNamespace(project_id="1", confidence="high", reasoning="matches coverage"),
+        alternates=(),
+    )
+
+    with patch("api.routers.s3.get_client", return_value=gitlab), patch(
+        "api.routers.s3.suggest_target_repo", return_value=suggestion
+    ) as mock_suggest, patch(
+        "api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}
+    ), patch("api.routers.s3.select_relevant_files", return_value=selection):
+        response = client.post(
+            "/api/s3/gitlab/scope-auto",
+            json={"cr_text": "Coverage limit is wrong for renewal policies"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_clarification"] is False
+    assert body["suggested_project"]["id"] == "1"
+    mock_suggest.assert_called_once()
+    assert mock_suggest.call_args.args[0] == "Coverage limit is wrong for renewal policies"
+
+
+def test_gitlab_scope_auto_422s_without_tier_name_or_cr_text():
+    client = _client()
+    response = client.post("/api/s3/gitlab/scope-auto", json={})
+    assert response.status_code == 422
 
 
 def test_gitlab_scope_auto_returns_502_on_llm_error():

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from common.constants import APPLICATIONS
 from common.llm import LLMError, complete, parse_json_response
 from s3_enhancement import relevance, targets
+from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS, ConversationTurn
 from s3_enhancement.targets import Target
 
 IMPACT_SYSTEM_PROMPT = (
@@ -38,6 +39,33 @@ ADHOC_IMPACT_SYSTEM_PROMPT = (
     "Given only the ticket's own text, write a short, practical impact analysis "
     "for the support engineer who will scope the work - general terms, no "
     "invented file or function names since you cannot see that codebase."
+)
+
+CLARITY_SYSTEM_PROMPT = (
+    "You are an AI engineering assistant supporting an application-maintenance "
+    "team for MapleSure Insurance, screening a ticket before impact analysis "
+    "runs. Decide whether the ticket text is specific enough to analyze "
+    "responsibly, or so vague/generic that impact analysis would likely be "
+    "misdirected at the wrong area. If genuinely unclear, ask ONE short "
+    "clarifying question. Most tickets are clear enough - an empty need for "
+    "clarification is the normal, correct answer; do not ask a question just "
+    "to be thorough."
+)
+
+GAP_SYSTEM_PROMPT = (
+    "You are an AI engineering assistant supporting an application-maintenance "
+    "team for MapleSure Insurance, screening a change request that has already "
+    "passed a general clarity check, for a specific missing detail that would "
+    "otherwise force you to silently guess: an unstated numeric threshold, "
+    "percentage, or amount; an unstated eligibility/scope criterion (who or "
+    "what this applies to); an unstated field name, data type, or default "
+    "value; an unstated target system or module. If you find one such gap, ask "
+    "ONE short clarifying question about it - naming the specific field or "
+    "value that's missing - instead of proceeding on a guess. Most CRs specify "
+    "enough on all of these dimensions - an empty need for clarification is "
+    "the normal, correct answer; do not ask about a detail that's genuinely "
+    "inferable or conventional (e.g. defaulting a boolean flag to false needs "
+    "no question)."
 )
 
 CROSS_TEAM_SYSTEM_PROMPT = (
@@ -66,6 +94,27 @@ class CrossTeamImpact:
     suggested_summary: str
 
 
+@dataclass(frozen=True)
+class ClarityResult:
+    needs_clarification: bool
+    question: str = ""
+
+
+@dataclass(frozen=True)
+class ImpactAnalysis:
+    text: str
+    # One sentence per gap the model had to fill in rather than ask about —
+    # e.g. an unstated field name, an assumed default, an assumed scope
+    # boundary. Surfaced separately from `text` so a reviewer sees each
+    # assumption as its own falsifiable line item instead of prose it could
+    # read past. Empty when the CR left nothing unspecified. This exists
+    # because the clarity check (ClarityResult above) only catches a ticket
+    # too vague to analyze *at all* — a ticket with some detail but a gap in
+    # one dimension sails through (or exhausts the clarification-turn cap)
+    # and the model fills that gap silently unless told to declare it here.
+    assumptions: list[str]
+
+
 def _read_codebase_context(cr_text: str, *, target: Target | None = None) -> str:
     """Read the target's source files relevant to this CR, as prompt context."""
     target = target or targets.get_target(None)
@@ -76,6 +125,40 @@ def _read_codebase_context(cr_text: str, *, target: Target | None = None) -> str
         for rel_path, content in selection.selected.items()
     ]
     return "\n\n".join(sections)
+
+
+_ASSUMPTIONS_INSTRUCTION = """Before writing the analysis, check specifically for these
+commonly-missing specifics: any unstated numeric threshold, percentage, or
+amount; any unstated eligibility/scope criterion (who or what this applies
+to); any unstated field name, data type, or default value; any unstated
+target system or module. Writing the analysis in general terms to route
+around a gap (e.g. "modify the relevant logic" instead of naming what the
+request never specified) is exactly the failure mode this is guarding
+against - it hides the same gap behind vaguer language instead of
+surfacing it. If the request doesn't pin one of these down and your
+analysis has to proceed on a specific reading anyway, that reading is an
+assumption: name it as a separate, one-sentence assumption, not as prose in
+the analysis.
+
+Two things are NOT assumptions and must never appear in the list: (1)
+anything the request already states explicitly - restating a given
+requirement back as an "assumption" is misleading, not helpful, even if
+it's paraphrased; (2) a normal inference about the existing codebase (e.g.
+that a field needs to be added to both a model and its schema, or how an
+existing table is structured) that the provided codebase context already
+answers or that you'd verify by reading the code rather than by asking the
+requester. Only list something here if it is a genuine external unknown -
+about the request's intent, not the code - that neither the request nor
+the codebase context resolves. An empty assumptions list is only correct
+when the request actually leaves nothing like this open - do not invent
+one otherwise, and do not leave the list empty just because the analysis
+reads smoothly.
+
+Return structured JSON only, exactly matching:
+{
+  "impact_analysis": "<the analysis text, roughly 5-10 lines>",
+  "assumptions": ["<one sentence per assumption you had to make>"]
+}"""
 
 
 def build_impact_prompt(cr_text: str, *, target: Target | None = None) -> str:
@@ -92,7 +175,9 @@ Write a short impact analysis (roughly 5-10 lines) covering:
 3. What should be tested before this ships.
 
 Keep it concise and practical - this is read by a support engineer deciding
-whether to approve the CR for build, not a formal spec document."""
+whether to approve the CR for build, not a formal spec document.
+
+{_ASSUMPTIONS_INSTRUCTION}"""
 
 
 def build_adhoc_impact_prompt(cr_text: str) -> str:
@@ -110,7 +195,20 @@ short impact analysis (roughly 5-10 lines) covering:
 3. What should be tested before this ships.
 
 Keep it concise and practical - this is read by a support engineer deciding
-how to scope the work, not a formal spec document."""
+how to scope the work, not a formal spec document.
+
+{_ASSUMPTIONS_INSTRUCTION}"""
+
+
+def _parse_impact_analysis_response(response: str) -> ImpactAnalysis:
+    data = parse_json_response(response, required_keys={"impact_analysis"})
+    assumptions = data.get("assumptions", [])
+    if not isinstance(assumptions, list):
+        raise LLMError("impact analysis response's 'assumptions' was not a list")
+    return ImpactAnalysis(
+        text=str(data["impact_analysis"]),
+        assumptions=[str(item) for item in assumptions],
+    )
 
 
 def build_effort_prompt(cr_text: str) -> str:
@@ -192,16 +290,32 @@ def draft_cross_team_impact(
 
 
 def draft_impact_analysis(
-    cr_text: str, *, target: Target | None = None, usage_out: dict | None = None
-) -> str:
-    """Draft a short impact analysis for the given CR text."""
+    cr_text: str,
+    *,
+    target: Target | None = None,
+    usage_out: dict | None = None,
+    pin_cache: bool = True,
+) -> ImpactAnalysis:
+    """Draft a short impact analysis for the given CR text, plus any
+    assumptions the model had to make to write it (see `ImpactAnalysis`).
+
+    `pin_cache=False` drops the fixed per-target `cache_key` and lets
+    `complete()` cache by prompt hash instead. Callers re-drafting after an
+    engineer answered a clarifying question MUST pass it: the pinned key
+    ignores prompt content entirely (that's the point of it — one recorded
+    response per demo beat, every rehearsal), so a re-draft would otherwise
+    replay the pre-answer analysis verbatim and keep reporting the very
+    assumption the engineer just resolved.
+    """
     target = target or targets.get_target(None)
-    return complete(
+    response = complete(
         build_impact_prompt(cr_text, target=target),
         system=IMPACT_SYSTEM_PROMPT,
-        cache_key=target.cache_key("impact_analysis"),
+        json_mode=True,
+        cache_key=target.cache_key("impact_analysis") if pin_cache else None,
         usage_out=usage_out,
     )
+    return _parse_impact_analysis_response(response)
 
 
 def _parse_effort_estimate_response(response: str) -> EffortEstimate:
@@ -217,21 +331,188 @@ def _parse_effort_estimate_response(response: str) -> EffortEstimate:
 
 
 def draft_effort_estimate(
-    cr_text: str, *, target: Target | None = None, usage_out: dict | None = None
+    cr_text: str,
+    *,
+    target: Target | None = None,
+    usage_out: dict | None = None,
+    pin_cache: bool = True,
 ) -> EffortEstimate:
-    """Draft an effort estimate for the given CR text."""
+    """Draft an effort estimate for the given CR text. See
+    `draft_impact_analysis` for when `pin_cache=False` is required."""
     target = target or targets.get_target(None)
     response = complete(
         build_effort_prompt(cr_text),
         system=EFFORT_SYSTEM_PROMPT,
         json_mode=True,
-        cache_key=target.cache_key("effort_estimate"),
+        cache_key=target.cache_key("effort_estimate") if pin_cache else None,
         usage_out=usage_out,
     )
     return _parse_effort_estimate_response(response)
 
 
-def draft_adhoc_impact_analysis(cr_text: str, *, usage_out: dict | None = None) -> str:
+def _clarification_turns_used(history: list[ConversationTurn]) -> int:
+    return sum(1 for turn in history if turn.role == "assistant")
+
+
+def build_clarity_prompt(cr_text: str, history: list[ConversationTurn]) -> str:
+    cap_note = ""
+    if _clarification_turns_used(history) >= MAX_CLARIFICATION_TURNS:
+        cap_note = (
+            "\nYou have already asked the maximum allowed number of clarifying "
+            "questions for this ticket - you MUST answer needs_clarification: "
+            "false now, even if some detail is still unclear; a human will "
+            "proceed with the best available reading of the ticket."
+        )
+    transcript = "\n".join(f"{turn.role}: {turn.text}" for turn in history)
+    return f"""Ticket, plus any follow-up exchanged so far:
+{transcript or "(no follow-up yet)"}
+
+Latest ticket text: {cr_text}
+{cap_note}
+
+Return structured JSON only, exactly one of these two shapes:
+{{"needs_clarification": true, "question": "<one short question>"}}
+{{"needs_clarification": false}}"""
+
+
+def check_cr_clarity(
+    cr_text: str,
+    history: list[ConversationTurn] | None = None,
+    *,
+    usage_out: dict | None = None,
+) -> ClarityResult:
+    """Screen an ad-hoc ticket for vagueness before impact analysis runs, at
+    most `MAX_CLARIFICATION_TURNS` clarifying questions (see
+    docs/design/s3_llm_cost_controls.md) - same needs_clarification/cap
+    pattern as `quick_chat.continue_session`, reused via `conversation.py`.
+
+    No target/codebase context: this only judges the ticket text's own
+    specificity, the same scope `draft_adhoc_impact_analysis` already
+    operates in - nothing to scope with `relevance.select_relevant_files`.
+    """
+    history = history or []
+    response = complete(
+        build_clarity_prompt(cr_text, history),
+        system=CLARITY_SYSTEM_PROMPT,
+        json_mode=True,
+        usage_out=usage_out,
+    )
+    data = parse_json_response(response, required_keys={"needs_clarification"})
+    if data["needs_clarification"]:
+        if _clarification_turns_used(history) >= MAX_CLARIFICATION_TURNS:
+            raise LLMError(
+                "adhoc clarity check tried to ask a clarifying question past the "
+                f"{MAX_CLARIFICATION_TURNS}-turn cap - treat as a bug in the prompt, "
+                "not a valid model response"
+            )
+        question = str(data.get("question", "")).strip()
+        if not question:
+            raise LLMError("clarity check needs_clarification=true but no question was given")
+        return ClarityResult(needs_clarification=True, question=question)
+    return ClarityResult(needs_clarification=False)
+
+
+def build_gap_prompt(cr_text: str, history: list[ConversationTurn]) -> str:
+    cap_note = ""
+    if _clarification_turns_used(history) >= MAX_CLARIFICATION_TURNS:
+        cap_note = (
+            "\nYou have already asked the maximum allowed number of clarifying "
+            "questions for this CR - you MUST answer needs_clarification: "
+            "false now, even if a gap remains; a human will proceed with the "
+            "best available reading, noted as an assumption in the analysis."
+        )
+    transcript = "\n".join(f"{turn.role}: {turn.text}" for turn in history)
+    return f"""Change request, plus any follow-up exchanged so far:
+{transcript or "(no follow-up yet)"}
+
+Latest CR text: {cr_text}
+{cap_note}
+
+Return structured JSON only, exactly one of these two shapes:
+{{"needs_clarification": true, "question": "<one short question about the missing detail>"}}
+{{"needs_clarification": false}}"""
+
+
+def check_cr_gaps(
+    cr_text: str,
+    history: list[ConversationTurn] | None = None,
+    *,
+    usage_out: dict | None = None,
+) -> ClarityResult:
+    """Screen a CR that has already passed the overall clarity check (see
+    `check_cr_clarity`) for a specific missing detail — an unstated default,
+    threshold, or scope boundary — that the final analysis would otherwise
+    have to silently guess and report back as an assumption (see
+    `ImpactAnalysis.assumptions`). Same needs_clarification/cap pattern and
+    turn budget as `check_cr_clarity`; callers run both against the same
+    shared history so the two gates share one conversational budget rather
+    than doubling `MAX_CLARIFICATION_TURNS`.
+
+    Runs on CR text alone, no codebase context — the categories of gap this
+    catches (numeric thresholds, eligibility criteria, field defaults, target
+    systems) are business decisions, not something source code would answer.
+    """
+    history = history or []
+    response = complete(
+        build_gap_prompt(cr_text, history),
+        system=GAP_SYSTEM_PROMPT,
+        json_mode=True,
+        usage_out=usage_out,
+    )
+    data = parse_json_response(response, required_keys={"needs_clarification"})
+    if data["needs_clarification"]:
+        if _clarification_turns_used(history) >= MAX_CLARIFICATION_TURNS:
+            raise LLMError(
+                "gap check tried to ask a clarifying question past the "
+                f"{MAX_CLARIFICATION_TURNS}-turn cap - treat as a bug in the prompt, "
+                "not a valid model response"
+            )
+        question = str(data.get("question", "")).strip()
+        if not question:
+            raise LLMError("gap check needs_clarification=true but no question was given")
+        return ClarityResult(needs_clarification=True, question=question)
+    return ClarityResult(needs_clarification=False)
+
+
+def build_assumption_question(assumptions: list[str]) -> str:
+    """Turn the assumptions a drafted analysis had to make into one clarifying
+    question back to the engineer.
+
+    This is the gate that actually closes the "ask, don't assume" loop.
+    `check_cr_gaps` runs *before* the analysis and can only predict what the
+    model might have to guess at — it screens the CR text alone and routinely
+    disagrees with what the draft then assumes (either passing a CR the
+    analysis goes on to guess about, or asking about a detail the CR already
+    states). This runs on the draft's own declared assumptions, so what gets
+    asked is exactly what would otherwise have been guessed.
+
+    Every assumption goes into a single question rather than one question
+    each: `MAX_CLARIFICATION_TURNS` is a hard budget shared with the other
+    gates, so asking them one-per-turn would silently drop the rest.
+
+    No LLM call — the assumption sentences are already the model's own words,
+    so wrapping them deterministically keeps this free and keeps a rehearsed
+    demo replaying identically.
+    """
+    if not assumptions:
+        raise ValueError("build_assumption_question called with no assumptions")
+    if len(assumptions) == 1:
+        return (
+            "Before I finalise the analysis — this isn't specified, so I'd "
+            f"otherwise assume: {assumptions[0]}\n\n"
+            "Is that right? If not, tell me what it should be."
+        )
+    numbered = "\n".join(f"{i}. {item}" for i, item in enumerate(assumptions, start=1))
+    return (
+        "Before I finalise the analysis — these aren't specified, so I'd "
+        f"otherwise assume:\n\n{numbered}\n\n"
+        "Are those right? If not, tell me what they should be."
+    )
+
+
+def draft_adhoc_impact_analysis(
+    cr_text: str, *, usage_out: dict | None = None
+) -> ImpactAnalysis:
     """Impact analysis for a ticket with no linked target/codebase in this
     console (e.g. a cross-team ticket for another application) — same shape
     as `draft_impact_analysis`, but skips codebase context entirely rather
@@ -242,11 +523,13 @@ def draft_adhoc_impact_analysis(cr_text: str, *, usage_out: dict | None = None) 
     content hash instead (`common.llm.complete`'s default when no cache_key is
     given) — safe because it never collides with a differently-worded ticket.
     """
-    return complete(
+    response = complete(
         build_adhoc_impact_prompt(cr_text),
         system=ADHOC_IMPACT_SYSTEM_PROMPT,
+        json_mode=True,
         usage_out=usage_out,
     )
+    return _parse_impact_analysis_response(response)
 
 
 def draft_adhoc_effort_estimate(cr_text: str, *, usage_out: dict | None = None) -> EffortEstimate:

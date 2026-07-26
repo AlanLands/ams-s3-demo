@@ -32,6 +32,9 @@ from common.ticket_events import (
 from s1_triage.roster_auth import Identity
 from s3_enhancement import targets, testrun
 from s3_enhancement.analyze import (
+    build_assumption_question,
+    check_cr_clarity,
+    check_cr_gaps,
     draft_adhoc_effort_estimate,
     draft_adhoc_impact_analysis,
     draft_cross_team_impact,
@@ -44,6 +47,7 @@ from s3_enhancement.codegen import (
     propose_change,
     revise_change,
 )
+from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS, clarification_turns_used
 from s3_enhancement.cr import render_cr, sanitize_tier_name
 from s3_enhancement.docgen import draft_design_doc, draft_release_notes
 from s3_enhancement.harness import latest_harness_run
@@ -51,15 +55,21 @@ from s3_enhancement.quick_chat import QuickChatTurn, continue_session
 from s3_enhancement.relevance import (
     discover_files_for_target,
     discover_gitlab_files,
-    estimate_tokens,
+    naive_prompt_tokens,
     select_relevant_files,
 )
-from s3_enhancement.repo_match import suggest_target_repo
+from s3_enhancement.repo_match import (
+    RepoMatch,
+    build_confirmation_question,
+    needs_confirmation,
+    suggest_target_repo,
+)
 from s3_enhancement.screenshots import ScreenshotError, capture_form_screenshot
 from s3_enhancement.targets import Target
 from s3_enhancement.testgen import generate_tests
 
 _QUICK_CHAT_SESSION_KEY = "s3_quick_chat_history"
+_ADHOC_CLARITY_SESSION_KEY = "s3_adhoc_clarity_history"
 
 router = APIRouter(prefix="/s3", tags=["s3"])
 
@@ -77,8 +87,12 @@ class AdhocAnalyzeRequest(BaseModel):
     # Free-text ticket content — unlike TierRequest, there's no tier_name/
     # target_id because this is for a ticket with no CR/target registered in
     # this console (e.g. a cross-team ticket raised against another app).
+    # On a follow-up call after `needs_clarification: true` came back, this
+    # field carries the engineer's answer, not the original ticket text again
+    # — same "latest message" semantics as QuickChatRequest.message.
     cr_text: str
     ticket_number: str | None = None
+    reset_clarification: bool = False
 
 
 def _cr_text_or_400(tier_name: str, *, target: Target | None = None) -> str:
@@ -135,19 +149,85 @@ def _selection_dict(selection) -> dict:
     }
 
 
-def _token_panel(usage: dict, all_files: dict[str, str]) -> dict:
+def _token_panel(
+    usage: dict, all_files: dict[str, str], selected: dict[str, str] | None = None
+) -> dict:
     """Same scoped-vs-naive comparison /s3/generate already shows, for any
     other beat that also reads codebase context through the relevance
     funnel (impact analysis, cross-team impact) — `all_files` is whatever
-    that beat's own `discover_files_for_target()` call already produced."""
+    that beat's own `discover_files_for_target()` call already produced,
+    `selected` the subset `select_relevant_files()` kept."""
     return {
         "scoped_input_tokens": usage.get("input_tokens"),
         "scoped_output_tokens": usage.get("output_tokens"),
         "estimated": bool(usage.get("estimated")),
-        "naive_input_tokens_estimate": sum(
-            estimate_tokens(content) for content in all_files.values()
+        "naive_input_tokens_estimate": naive_prompt_tokens(
+            usage.get("input_tokens"), all_files, selected
         ),
     }
+
+
+def _describe_repo_match(match: RepoMatch, projects: list[dict]) -> dict:
+    projects_by_id = {str(project.get("id")): project for project in projects}
+    project = projects_by_id.get(match.project_id, {})
+    return {
+        "id": match.project_id,
+        "name": project.get("name_with_namespace") or project.get("name"),
+        "reasoning": match.reasoning,
+        "confidence": match.confidence,
+    }
+
+
+def _ask_clarifying_question(
+    session: dict,
+    session_key: str,
+    history: list[QuickChatTurn],
+    latest_text: str,
+    question: str,
+    ticket_number: str | None,
+) -> dict:
+    """Record a clarifying question as the next turn in a shared
+    conversation history (whatever its source — CR-text vagueness, a
+    specific missing detail, or repo identity — they all share one
+    `needs_clarification`/`question` contract and one turn budget) and
+    return the response shape the frontend's single answer box expects."""
+    session[session_key] = [
+        *history,
+        QuickChatTurn(role="user", text=latest_text),
+        QuickChatTurn(role="assistant", text=question),
+    ]
+    if ticket_number:
+        record_event(ticket_number, "ai", "clarification_requested", detail=question)
+    return {"label": AI_SUGGESTION_LABEL, "needs_clarification": True, "question": question}
+
+
+def _full_cr_text(latest: str, history: list[QuickChatTurn]) -> str:
+    """Reconstruct the ticket's full text from the clarification transcript.
+
+    Once any clarification round has happened, `latest` alone is only the
+    newest fragment — the engineer's answer to the last question, not the
+    original ticket text (see AdhocAnalyzeRequest.cr_text's "latest message"
+    semantics). The final impact analysis and any repo-match both need the
+    whole picture, not just the last reply.
+    """
+    parts = [turn.text for turn in history if turn.role == "user"]
+    parts.append(latest)
+    return "\n".join(parts)
+
+
+def _origin_fields(key: str) -> dict:
+    """A ticket's intake origin — "problem_record" (created by
+    /jira/problem-record-ticket, tagged with the problem_id it was derived
+    from) or "business_cr" (everything else: the fixed CR demo tickets and
+    human-confirmed cross-team tickets). Both origins converge on the
+    identical downstream flow; this is presentational only, read from the
+    same ticket-events log every other workflow milestone already uses."""
+    for event in events_for(key):
+        if event.get("action") == "problem_record_ticket_created":
+            detail = event.get("detail", "")
+            problem_id = detail.split("problem_id=", 1)[1] if "problem_id=" in detail else ""
+            return {"origin": "problem_record", "problem_id": problem_id}
+    return {"origin": "business_cr"}
 
 
 @router.get("/reset-marker")
@@ -174,14 +254,102 @@ def cr(
     return {"tier_name": clean, "cr_text": render_cr(clean, target=target)}
 
 
+class AnalyzeRequest(TierRequest):
+    # Set only when responding to a prior needs_clarification: true for this
+    # same CR — carries the engineer's answer to the outstanding question.
+    # Unlike AdhocAnalyzeRequest.cr_text, tier_name/target_id here always
+    # render the same fixed CR text (see _cr_text_or_400), so there's no
+    # "latest message" ambiguity on tier_name itself to resolve.
+    clarification_answer: str | None = None
+    reset_clarification: bool = False
+
+
+def _analyze_session_key(tier_name: str, target_id: str | None) -> str:
+    return f"s3_analyze_clarity_history:{tier_name}:{target_id or ''}"
+
+
 @router.post("/analyze")
-def analyze(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
+def analyze(
+    payload: AnalyzeRequest,
+    session_id: str = Depends(require_session_id),
+    identity: Identity = Depends(require_identity),
+) -> dict:
+    """Impact analysis for one of the console's pinned CR templates.
+
+    Two gates run before an analysis is returned, sharing one budget of at
+    most `MAX_CLARIFICATION_TURNS` questions (not one each):
+
+    1. Before drafting, `analyze.check_cr_gaps` screens the CR text for a
+       specific missing detail (an unstated default, threshold, or scope
+       boundary) the analysis would otherwise have to guess at.
+    2. After drafting, any assumption the draft itself declared is asked
+       about via `analyze.build_assumption_question`, and the draft is
+       withheld until it's answered. Gate 1 predicts what the model might
+       guess at from the CR text alone and is regularly wrong in both
+       directions; this one reads what the model actually did guess, so the
+       "assumptions the AI made" box can only ever appear once the turn
+       budget is spent — never as the first thing the engineer sees.
+
+    Both use the same needs_clarification/question contract and per-login-
+    session history as /analyze-adhoc's gates. Answers, once given, are
+    folded into the CR text handed to the analysis/effort calls, which then
+    re-draft off the fold-in rather than the pinned demo recording (see
+    `draft_impact_analysis`'s `pin_cache`).
+    """
     target = targets.get_target(payload.target_id)
     cr_text = _cr_text_or_400(payload.tier_name, target=target)
+
+    session = get_session_data(session_id)
+    assert session is not None
+    session_key = _analyze_session_key(payload.tier_name, payload.target_id)
+    if payload.reset_clarification:
+        session.pop(session_key, None)
+    history: list[QuickChatTurn] = session.get(session_key, [])
+
+    try:
+        gaps = check_cr_gaps(cr_text, history)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if gaps.needs_clarification:
+        return _ask_clarifying_question(
+            session, session_key, history, payload.clarification_answer or "", gaps.question,
+            payload.ticket_number,
+        )
+
+    # `history`'s "user" turns are prior answers only (see _ask_clarifying_
+    # question) — the current call's answer, if any, was never appended to
+    # history since this is the call that resolved the gate rather than
+    # asking again, so it must be added explicitly here.
+    answers = [turn.text for turn in history if turn.role == "user" and turn.text]
+    if payload.clarification_answer:
+        answers.append(payload.clarification_answer)
+    effective_cr_text = cr_text
+    if answers:
+        effective_cr_text = f"{cr_text}\n\nAdditional detail from the engineer:\n" + "\n".join(
+            answers
+        )
+
     usage: dict = {}
     try:
-        impact_text = draft_impact_analysis(cr_text, target=target, usage_out=usage)
-        effort = draft_effort_estimate(cr_text, target=target)
+        impact = draft_impact_analysis(
+            effective_cr_text, target=target, usage_out=usage, pin_cache=not answers
+        )
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # Anything the draft had to assume gets asked, not shipped in an
+    # "assumptions the AI made" box the engineer never agreed to — the box
+    # only appears once the shared turn budget is genuinely spent (below).
+    if impact.assumptions and clarification_turns_used(history) < MAX_CLARIFICATION_TURNS:
+        return _ask_clarifying_question(
+            session, session_key, history, payload.clarification_answer or "",
+            build_assumption_question(impact.assumptions), payload.ticket_number,
+        )
+
+    session.pop(session_key, None)
+    try:
+        effort = draft_effort_estimate(effective_cr_text, target=target, pin_cache=not answers)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -196,33 +364,124 @@ def analyze(payload: TierRequest, identity: Identity = Depends(require_identity)
         )
     return {
         "label": AI_SUGGESTION_LABEL,
-        "impact_analysis": impact_text,
+        "needs_clarification": False,
+        "impact_analysis": impact.text,
+        "assumptions": impact.assumptions,
         "effort_estimate": {
             "hours_class": effort.hours_class,
             "priority_equivalent": effort.priority_equivalent,
             "reasoning": effort.reasoning,
         },
         "file_selection": _selection_dict(selection),
-        "token_panel": _token_panel(usage, all_files),
+        "token_panel": _token_panel(usage, all_files, selection.selected),
     }
 
 
 @router.post("/analyze-adhoc")
 def analyze_adhoc(
-    payload: AdhocAnalyzeRequest, identity: Identity = Depends(require_identity)
+    payload: AdhocAnalyzeRequest,
+    session_id: str = Depends(require_session_id),
+    identity: Identity = Depends(require_identity),
 ) -> dict:
     """Impact analysis for a ticket with no linked CR/target in this console
     (e.g. a cross-team ticket for another application) — runs directly off
     the ticket's own text instead of one of the two pinned CR templates, so
-    there's no codebase/file_selection to report."""
+    there's no codebase/file_selection to report.
+
+    Three clarification gates run before an analysis is produced, sharing
+    one conversational budget of at most `MAX_CLARIFICATION_TURNS` follow-up
+    questions total (not each): `analyze.check_cr_clarity` for overall
+    CR-text vagueness, then `analyze.check_cr_gaps` for a specific missing
+    detail (an unstated default/threshold/scope boundary that would
+    otherwise be silently guessed and reported as an assumption instead of
+    asked about), then — once the text itself is clear enough, and only if a
+    live GitLab connection is configured — a repo-identity check via
+    `repo_match.suggest_target_repo`. Each asks through the exact same
+    question/answer turn this endpoint already uses, rather than a separate
+    action; if GitLab isn't reachable the repo check is skipped entirely and
+    analysis proceeds same as before this existed. History is kept
+    server-side in the caller's own login session, same mechanism
+    /chat/quick-impact uses.
+    """
     cr_text = payload.cr_text.strip()
     if not cr_text:
         raise HTTPException(status_code=422, detail="cr_text must not be empty")
     if len(cr_text) > 4000:
         raise HTTPException(status_code=422, detail="cr_text is too long (max 4000 characters)")
+
+    session = get_session_data(session_id)
+    assert session is not None
+    if payload.reset_clarification:
+        session.pop(_ADHOC_CLARITY_SESSION_KEY, None)
+    history: list[QuickChatTurn] = session.get(_ADHOC_CLARITY_SESSION_KEY, [])
+
     try:
-        impact_text = draft_adhoc_impact_analysis(cr_text)
-        effort = draft_adhoc_effort_estimate(cr_text)
+        clarity = check_cr_clarity(cr_text, history)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if clarity.needs_clarification:
+        return _ask_clarifying_question(
+            session, _ADHOC_CLARITY_SESSION_KEY, history, cr_text, clarity.question,
+            payload.ticket_number,
+        )
+
+    try:
+        gaps = check_cr_gaps(cr_text, history)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if gaps.needs_clarification:
+        return _ask_clarifying_question(
+            session, _ADHOC_CLARITY_SESSION_KEY, history, cr_text, gaps.question,
+            payload.ticket_number,
+        )
+
+    full_cr_text = _full_cr_text(cr_text, history)
+
+    target_repo: dict | None = None
+    try:
+        projects = get_client().list_projects()
+    except GitLabError:
+        projects = None
+
+    if projects:
+        try:
+            suggestion = suggest_target_repo(full_cr_text, projects)
+        except LLMError:
+            # Repo identity is a bonus signal on top of the analysis, not a
+            # dependency of it — an LLM hiccup here shouldn't block the
+            # analysis the engineer actually asked for.
+            suggestion = None
+        if suggestion is not None:
+            if (
+                needs_confirmation(suggestion.best_match)
+                and clarification_turns_used(history) < MAX_CLARIFICATION_TURNS
+            ):
+                question = build_confirmation_question(suggestion, projects)
+                return _ask_clarifying_question(
+                    session, _ADHOC_CLARITY_SESSION_KEY, history, cr_text, question,
+                    payload.ticket_number,
+                )
+            target_repo = _describe_repo_match(suggestion.best_match, projects)
+
+    try:
+        impact = draft_adhoc_impact_analysis(full_cr_text)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # Same assumptions-become-questions gate as /analyze — see that
+    # endpoint's docstring for why the draft's own assumptions, not a
+    # pre-draft prediction of them, are what's worth asking about.
+    if impact.assumptions and clarification_turns_used(history) < MAX_CLARIFICATION_TURNS:
+        return _ask_clarifying_question(
+            session, _ADHOC_CLARITY_SESSION_KEY, history, cr_text,
+            build_assumption_question(impact.assumptions), payload.ticket_number,
+        )
+
+    session.pop(_ADHOC_CLARITY_SESSION_KEY, None)
+    try:
+        effort = draft_adhoc_effort_estimate(full_cr_text)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -235,12 +494,15 @@ def analyze_adhoc(
         )
     return {
         "label": AI_SUGGESTION_LABEL,
-        "impact_analysis": impact_text,
+        "needs_clarification": False,
+        "impact_analysis": impact.text,
+        "assumptions": impact.assumptions,
         "effort_estimate": {
             "hours_class": effort.hours_class,
             "priority_equivalent": effort.priority_equivalent,
             "reasoning": effort.reasoning,
         },
+        "target_repo": target_repo,
     }
 
 
@@ -258,6 +520,7 @@ def cross_team_impact(payload: TierRequest, identity: Identity = Depends(require
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     all_files = discover_files_for_target(target, cr_text)
+    selection = select_relevant_files(cr_text, all_files, core_files=target.core_files)
     if payload.ticket_number:
         record_event(
             payload.ticket_number,
@@ -275,7 +538,7 @@ def cross_team_impact(payload: TierRequest, identity: Identity = Depends(require
             }
             for impact in impacts
         ],
-        "token_panel": _token_panel(usage, all_files),
+        "token_panel": _token_panel(usage, all_files, selection.selected),
     }
 
 
@@ -317,6 +580,51 @@ def create_cross_team_ticket(
     record_event(payload.primary_ticket_key, "human", "cross_team_ticket_linked", detail=new_key)
 
     return {"label": AI_SUGGESTION_LABEL, "app_name": payload.app_name, "issue": issue}
+
+
+class ProblemRecordTicketRequest(BaseModel):
+    summary: str
+    description: str = ""
+    # Synthetic problem-record id from the incident-reduction pipeline (a
+    # separate workstream — see CLAUDE.md) this ticket is derived from, e.g.
+    # "PRB0012345". Illustrative only: this console has no live connection to
+    # that pipeline, it just carries the id through so the board/ticket
+    # modal can show the linkage the team asked for.
+    problem_id: str
+    assignee: str | None = None
+
+
+@router.post("/jira/problem-record-ticket")
+def create_problem_record_ticket(
+    payload: ProblemRecordTicketRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Create a ticket tagged as originating from a problem record (repeated
+    incidents -> a permanent-fix problem record -> this CR) rather than a
+    direct business change request — the second of S3's two intake flavors.
+    Runs through the exact same downstream flow as any other ticket
+    (clarity-gated ad-hoc analyze, codegen, tests, docs); only the origin tag
+    and problem_id differ, both purely presentational.
+    """
+    project_key = os.environ.get("JIRA_PROJECT_KEY", "AMS")
+    try:
+        issue = get_jira_client().create_issue(
+            project_key,
+            payload.summary,
+            payload.description,
+            issue_type="Task",
+            assignee_name=payload.assignee,
+        )
+    except JiraError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    new_key = str(issue.get("key", ""))
+    record_event(
+        new_key,
+        "system",
+        "problem_record_ticket_created",
+        detail=f"problem_id={payload.problem_id}",
+    )
+    return {"label": AI_SUGGESTION_LABEL, "issue": {**issue, **_origin_fields(new_key)}}
 
 
 class AssignTicketRequest(BaseModel):
@@ -614,12 +922,13 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
     """Compact issue list driving the engineer's Jira-styled board view.
 
     The seeded/recorded search result only ever reflects the fixed demo
-    tickets (AMS-101/102/098) — it has no way to know about a cross-team
-    ticket created moments ago. Those are tracked instead via the
-    ticket-events log (every creation records a `cross_team_ticket_created`
-    event on the new key), so this merges that list in — this is how an
-    assignee logging in separately actually sees their new ticket on the
-    shared board, not just via the dependency lookup.
+    tickets (AMS-101/102/098) — it has no way to know about a cross-team or
+    problem-record ticket created moments ago. Those are tracked instead via
+    the ticket-events log (every creation records a `cross_team_ticket_created`
+    or `problem_record_ticket_created` event on the new key), so this merges
+    that list in — this is how an assignee logging in separately actually
+    sees their new ticket on the shared board, not just via the dependency
+    lookup.
     """
     project_key = os.environ.get("JIRA_PROJECT_KEY", "AMS")
     client = get_jira_client()
@@ -629,7 +938,9 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     seen_keys = {issue.get("key") for issue in issues}
-    created_keys = distinct_tickets_with_action("cross_team_ticket_created")
+    created_keys = distinct_tickets_with_action(
+        "cross_team_ticket_created"
+    ) | distinct_tickets_with_action("problem_record_ticket_created")
     for key in sorted(created_keys - seen_keys):
         try:
             issues.append(client.get_issue(key))
@@ -640,16 +951,25 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
     # the seeded search recording is static, but assign/status changes made
     # during a session (analysis started -> In Progress, QA handoff) update
     # the get_issue cache — without this merge the board would show stale
-    # columns after any workflow transition.
+    # columns after any workflow transition. Origin/problem_id (see
+    # _origin_fields) are likewise derived fresh every call, not stored on
+    # the issue itself, so they stay correct even for a ticket created in an
+    # earlier session.
     merged = []
     for issue in issues:
         key = issue.get("key")
         try:
             fresh = client.get_issue(str(key))
         except JiraError:
-            merged.append(issue)
+            merged.append({**issue, **_origin_fields(str(key))})
             continue
-        merged.append({**issue, **{k: v for k, v in fresh.items() if v is not None}})
+        merged.append(
+            {
+                **issue,
+                **{k: v for k, v in fresh.items() if v is not None},
+                **_origin_fields(str(key)),
+            }
+        )
 
     return {"project_key": project_key, "issues": merged}
 
@@ -854,18 +1174,85 @@ def gitlab_scope(
     }
 
 
+class GitlabScopeAutoRequest(BaseModel):
+    # Exactly one of these carries the CR text: `tier_name` for one of the
+    # console's pinned CR templates (see TierRequest elsewhere in this
+    # file), or `cr_text` for a ticket with no tier/target linked in this
+    # console (e.g. a cross-team ticket) — same free-text shape
+    # AdhocAnalyzeRequest already uses for /analyze-adhoc, since those
+    # ad-hoc tickets are exactly the case where the caller doesn't already
+    # know which repo the CR belongs to.
+    tier_name: str | None = None
+    cr_text: str | None = None
+    target_id: str | None = None
+    ticket_number: str | None = None
+    # Set once the developer has confirmed (or overridden) an uncertain
+    # repo-match from a prior needs_clarification response below — skips the
+    # confidence gate and scopes directly against this project_id instead of
+    # asking again.
+    confirmed_project_id: str | None = None
+
+
 @router.post("/gitlab/scope-auto")
 def gitlab_scope_auto(
-    payload: TierRequest, identity: Identity = Depends(require_identity)
+    payload: GitlabScopeAutoRequest, identity: Identity = Depends(require_identity)
 ) -> dict:
     """Same as /gitlab/projects/{id}/scope, but for when the caller doesn't know
     which repo the CR belongs to — an AI pick over the project list stands in for
-    the manual project_id above, labeled like every other AI suggestion."""
-    cr_text = _cr_text_or_400(payload.tier_name)
+    the manual project_id above, labeled like every other AI suggestion.
+
+    A repo-match below 'high' confidence is not scoped against silently: it
+    comes back as `needs_clarification` (same contract as /analyze-adhoc and
+    /chat/quick-impact) asking the developer "is this the current repo?"
+    before file discovery runs against a possibly-wrong project. Resubmit
+    with `confirmed_project_id` set to skip straight to scoping.
+    """
+    if payload.cr_text is not None:
+        cr_text = payload.cr_text.strip()
+        if not cr_text:
+            raise HTTPException(status_code=422, detail="cr_text must not be empty")
+        if len(cr_text) > 4000:
+            raise HTTPException(
+                status_code=422, detail="cr_text is too long (max 4000 characters)"
+            )
+    elif payload.tier_name:
+        cr_text = _cr_text_or_400(payload.tier_name)
+    else:
+        raise HTTPException(status_code=422, detail="either tier_name or cr_text is required")
+
     try:
         projects = get_client().list_projects()
-        suggestion = suggest_target_repo(cr_text, projects)
-        project_id = suggestion.best_match.project_id
+        if payload.confirmed_project_id:
+            best_match = RepoMatch(
+                project_id=payload.confirmed_project_id,
+                confidence="confirmed",
+                reasoning="developer-confirmed",
+            )
+            alternates: tuple[RepoMatch, ...] = ()
+        else:
+            suggestion = suggest_target_repo(cr_text, projects)
+            if needs_confirmation(suggestion.best_match):
+                if payload.ticket_number:
+                    record_event(
+                        payload.ticket_number,
+                        "ai",
+                        "repo_match_confirmation_requested",
+                        detail=f"{suggestion.best_match.project_id} "
+                        f"({suggestion.best_match.confidence})",
+                    )
+                return {
+                    "label": AI_SUGGESTION_LABEL,
+                    "needs_clarification": True,
+                    "question": build_confirmation_question(suggestion, projects),
+                    "suggested_project": _describe_repo_match(suggestion.best_match, projects),
+                    "alternates": [
+                        _describe_repo_match(alt, projects) for alt in suggestion.alternates
+                    ],
+                }
+            best_match = suggestion.best_match
+            alternates = suggestion.alternates
+
+        project_id = best_match.project_id
         repo_size = len(get_client().list_repo_paths(project_id))
         gitlab_files = discover_gitlab_files(project_id, cr_text)
         selection = select_relevant_files(cr_text, gitlab_files, core_files=(), design_docs={})
@@ -874,24 +1261,11 @@ def gitlab_scope_auto(
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    projects_by_id = {str(project.get("id")): project for project in projects}
-
-    def _describe(match) -> dict:
-        project = projects_by_id.get(match.project_id, {})
-        return {
-            "id": match.project_id,
-            "name": project.get("name_with_namespace") or project.get("name"),
-            "reasoning": match.reasoning,
-        }
-
-    suggested_project = {
-        **_describe(suggestion.best_match),
-        "confidence": suggestion.best_match.confidence,
-    }
     return {
         "label": AI_SUGGESTION_LABEL,
-        "suggested_project": suggested_project,
-        "alternates": [_describe(alt) for alt in suggestion.alternates],
+        "needs_clarification": False,
+        "suggested_project": _describe_repo_match(best_match, projects),
+        "alternates": [_describe_repo_match(alt, projects) for alt in alternates],
         "repo_size": repo_size,
         "files_reached_llm": len(selection.selected),
         "selected_files": list(selection.selected.keys()),

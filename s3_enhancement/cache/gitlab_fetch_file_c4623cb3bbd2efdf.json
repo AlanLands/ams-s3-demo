@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "202",
+    "ref": "main",
+    "path": "src/claims_api.py"
+  },
+  "response": "# MapleSure claims-service\n# Synthetic demo stub -- claims intake endpoints.\n\ndef submit_claim(payload):\n    raise NotImplementedError\n"
+}

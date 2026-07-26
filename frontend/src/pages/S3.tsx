@@ -8,6 +8,7 @@ import {
   s3Api,
   type AnalyzeResponse,
   type CrossTeamImpact,
+  type EffortEstimate,
   type GenerateResponse,
   type JiraIssue,
   type MutationCheckResponse,
@@ -529,6 +530,11 @@ export default function S3() {
   })
   const [ticketAnalysisLoading, setTicketAnalysisLoading] = useState<Record<string, boolean>>({})
   const [ticketAnalysisError, setTicketAnalysisError] = useState<Record<string, string>>({})
+  // Set only for ad-hoc (no-target) tickets whose last analyze-adhoc call
+  // came back needs_clarification: true — see handleRunAnalysisForTicket.
+  const [ticketClarificationQuestion, setTicketClarificationQuestion] = useState<
+    Record<string, string>
+  >({})
   const [ticketCrossTeam, setTicketCrossTeam] = useState<Record<string, CrossTeamImpact[]>>({})
   const [ticketCrossTeamTokens, setTicketCrossTeamTokens] = useState<Record<string, TokenPanelData>>({})
   const [ticketCrossTeamLoading, setTicketCrossTeamLoading] = useState<Record<string, boolean>>({})
@@ -609,7 +615,18 @@ export default function S3() {
         result.message && result.files_changed.includes(path)
           ? { ...fileReasons, [path]: result.message }
           : fileReasons
-      const reply = result.message || 'Done — see the updated diff above.'
+      // A question (or an edit the model declines to make) comes back with no
+      // files_changed, so the diff above is byte-identical to before. Say that
+      // outright — otherwise an answered question is indistinguishable from a
+      // broken Ask, and the reviewer sits there waiting for a diff to move.
+      const changedNothing = result.files_changed.length === 0
+      const reply = result.message
+        ? changedNothing
+          ? `${result.message}\n\n(Answered your question — no code was changed.)`
+          : result.message
+        : changedNothing
+          ? 'Answered your question — no code was changed.'
+          : 'Done — see the updated diff above.'
       const nextChats = {
         ...askedChats,
         [path]: [...askedChats[path], { role: 'assistant' as const, text: reply }],
@@ -1019,21 +1036,86 @@ export default function S3() {
     }
   }
 
-  async function handleRunAnalysisForTicket(ticketKey: string) {
+  async function handleRunAnalysisForTicket(ticketKey: string, clarificationAnswer?: string) {
     const linked = TICKET_TARGETS[ticketKey]
     setTicketAnalysisLoading((prev) => ({ ...prev, [ticketKey]: true }))
     setTicketAnalysisError((prev) => ({ ...prev, [ticketKey]: '' }))
     try {
       let result: AnalyzeResponse
+      const pendingQuestion = ticketClarificationQuestion[ticketKey]
       if (linked) {
-        result = await s3Api.analyze(linked.tierName, linked.targetId, ticketKey)
+        let answer: string | undefined
+        if (pendingQuestion) {
+          // A clarifying question is outstanding (e.g. an unstated field
+          // default check_cr_gaps caught) — this call carries the
+          // engineer's answer; the server keeps the transcript.
+          answer = (clarificationAnswer || '').trim()
+          if (!answer) return
+        }
+        const analyzeResult = await s3Api.analyze(
+          linked.tierName,
+          linked.targetId,
+          ticketKey,
+          answer,
+          !pendingQuestion
+        )
+        if (analyzeResult.needs_clarification) {
+          setTicketClarificationQuestion((prev) => ({
+            ...prev,
+            [ticketKey]: analyzeResult.question || '',
+          }))
+          return
+        }
+        setTicketClarificationQuestion((prev) => {
+          if (!(ticketKey in prev)) return prev
+          const next = { ...prev }
+          delete next[ticketKey]
+          return next
+        })
+        result = {
+          label: analyzeResult.label,
+          impact_analysis: analyzeResult.impact_analysis || '',
+          assumptions: analyzeResult.assumptions || [],
+          effort_estimate: analyzeResult.effort_estimate as EffortEstimate,
+          file_selection: analyzeResult.file_selection,
+          token_panel: analyzeResult.token_panel,
+        }
       } else {
         // No CR/target registered for this ticket (e.g. a cross-team ticket
         // for another application) — analyze its own text directly instead.
-        const issue = (boardIssues || []).find((candidate) => candidate.key === ticketKey)
-        const crText = [issue?.summary, issue?.description].filter(Boolean).join('\n\n').trim()
-        if (!crText) return
-        result = await s3Api.analyzeAdhoc(crText, ticketKey)
+        let crText: string
+        if (pendingQuestion) {
+          // A clarifying question is outstanding — this call carries the
+          // engineer's answer, not the original ticket text again (the
+          // server keeps the transcript server-side).
+          crText = (clarificationAnswer || '').trim()
+          if (!crText) return
+        } else {
+          const issue = (boardIssues || []).find((candidate) => candidate.key === ticketKey)
+          crText = [issue?.summary, issue?.description].filter(Boolean).join('\n\n').trim()
+          if (!crText) return
+        }
+        const adhocResult = await s3Api.analyzeAdhoc(crText, ticketKey, !pendingQuestion)
+        if (adhocResult.needs_clarification) {
+          setTicketClarificationQuestion((prev) => ({
+            ...prev,
+            [ticketKey]: adhocResult.question || '',
+          }))
+          return
+        }
+        setTicketClarificationQuestion((prev) => {
+          if (!(ticketKey in prev)) return prev
+          const next = { ...prev }
+          delete next[ticketKey]
+          return next
+        })
+        result = {
+          label: adhocResult.label,
+          impact_analysis: adhocResult.impact_analysis || '',
+          assumptions: adhocResult.assumptions || [],
+          effort_estimate: adhocResult.effort_estimate as EffortEstimate,
+          target_repo: adhocResult.target_repo,
+        }
       }
       setTicketAnalysis((prev) => ({ ...prev, [ticketKey]: result }))
       saveTicketState(ticketKey, { analysis: result })
@@ -1555,6 +1637,15 @@ export default function S3() {
                         )}
                       </div>
                       <div style={{ marginTop: '0.25rem' }}>{issue.summary}</div>
+                      {issue.origin === 'problem_record' && (
+                        <span
+                          className="ams-pill ams-pill-preview"
+                          style={{ marginTop: '0.4rem', display: 'inline-block' }}
+                          title={issue.problem_id ? `Derived from ${issue.problem_id}` : undefined}
+                        >
+                          From problem record
+                        </span>
+                      )}
                     </div>
                   ))}
               </div>
@@ -1742,6 +1833,9 @@ export default function S3() {
                                     padding: '0.5rem 0.75rem',
                                     borderRadius: 6,
                                     maxWidth: '80%',
+                                    // Replies carry deliberate line breaks (e.g. the
+                                    // "no code was changed" note) — don't collapse them.
+                                    whiteSpace: 'pre-wrap',
                                     marginLeft: turn.role === 'user' ? 'auto' : 0,
                                     background:
                                       turn.role === 'user' ? 'var(--ams-accent)' : 'var(--ams-surface)',
@@ -2279,6 +2373,8 @@ export default function S3() {
             analysisLoading={!!ticketAnalysisLoading[expandedTicket]}
             analysisError={ticketAnalysisError[expandedTicket]}
             onRunAnalysis={() => handleRunAnalysisForTicket(expandedTicket)}
+            clarificationQuestion={ticketClarificationQuestion[expandedTicket]}
+            onSubmitClarification={(answer) => handleRunAnalysisForTicket(expandedTicket, answer)}
             crossTeamImpacts={ticketCrossTeam[expandedTicket]}
             crossTeamTokenPanel={ticketCrossTeamTokens[expandedTicket]}
             crossTeamLoading={!!ticketCrossTeamLoading[expandedTicket]}

@@ -14,19 +14,11 @@ from mockapp.core.models import Endorsement
 
 _ENDORSEMENT_PREFIX = "END"
 
-
 def _next_endorsement_number(policy_number: str) -> str:
-    """Generate a new endorsement number, unique across all policies.
-
-    Demo-grade: scans existing endorsements for the given policy plus a fixed
-    offset so numbers don't collide across policies in this synthetic
-    dataset. Good enough for the tabletop demo; not a production ID scheme.
-    """
     existing = list_endorsements(policy_number)
     seq = len(existing) + 1
     suffix = abs(hash(policy_number)) % 10000
     return f"{_ENDORSEMENT_PREFIX}-{suffix:04d}{seq:02d}"
-
 
 def submit_endorsement(
     policy_number: str,
@@ -35,8 +27,8 @@ def submit_endorsement(
     effective_date: str,
     contact_phone: str,
     contact_email: str,
+    priority: str = "Standard"
 ) -> Endorsement:
-    """Create and persist a new endorsement request, returning the record."""
     endorsement = Endorsement(
         endorsement_number=_next_endorsement_number(policy_number),
         policy_number=policy_number,
@@ -46,6 +38,7 @@ def submit_endorsement(
         contact_phone=contact_phone,
         contact_email=contact_email,
         filed_at=datetime.now(UTC).isoformat(timespec="seconds"),
+        priority=priority
     )
     insert_endorsement(endorsement)
     return endorsement

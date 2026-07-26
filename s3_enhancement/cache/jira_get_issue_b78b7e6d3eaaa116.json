@@ -1,0 +1,11 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-101"
+  },
+  "response": {
+    "key": "AMS-101",
+    "assignee": "Priya Nair",
+    "status": "QA"
+  }
+}

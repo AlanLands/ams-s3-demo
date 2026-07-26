@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "201",
+    "ref": "main",
+    "path": "README.md"
+  },
+  "response": "# policy-service\n\nSynthetic MapleSure demo repo -- policy administration APIs.\n"
+}

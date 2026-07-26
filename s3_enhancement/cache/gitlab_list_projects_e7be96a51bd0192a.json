@@ -1,0 +1,33 @@
+{
+  "call": "list_projects",
+  "args": {},
+  "response": [
+    {
+      "id": 201,
+      "name": "policy-service",
+      "name_with_namespace": "maplesure/policy-service",
+      "last_activity_at": "2026-07-20T10:00:00Z",
+      "web_url": "https://gitlab.com/maplesure/policy-service",
+      "default_branch": "main",
+      "description": "Policy administration APIs: CRUD for policy records, coverage tiers, quarterly data audits."
+    },
+    {
+      "id": 202,
+      "name": "claims-service",
+      "name_with_namespace": "maplesure/claims-service",
+      "last_activity_at": "2026-07-18T10:00:00Z",
+      "web_url": "https://gitlab.com/maplesure/claims-service",
+      "default_branch": "main",
+      "description": "Claims intake, adjudication, and status-notification APIs."
+    },
+    {
+      "id": 203,
+      "name": "data-maintenance-batch",
+      "name_with_namespace": "maplesure/data-maintenance-batch",
+      "last_activity_at": "2026-07-15T10:00:00Z",
+      "web_url": "https://gitlab.com/maplesure/data-maintenance-batch",
+      "default_branch": "main",
+      "description": "Scheduled batch jobs for data cleanup and archival across claims and policy tables."
+    }
+  ]
+}

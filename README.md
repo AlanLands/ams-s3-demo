@@ -37,8 +37,8 @@ cd frontend && npm install && cd ..
 ## Running
 
 ```bash
-# terminal 1 — backend, port 8000
-uvicorn api.main:app --reload
+# terminal 1 — backend, port 8000 (see the --reload caveat below)
+uvicorn api.main:app --port 8000
 
 # terminal 2 — frontend dev server, port 5173 (proxies /api to :8000)
 cd frontend && npm run dev
@@ -53,12 +53,23 @@ Production build: `cd frontend && npm run build`, then the same
 `uvicorn api.main:app` process serves the built app at `:8000` — one process,
 one port, no separate frontend server needed.
 
-> **`--reload` caveat:** code generation stages proposals under
-> `s3_enhancement/out/`, inside the directory `--reload` watches. Writing a
-> proposal can trigger a reload mid-session, which clears the in-memory
-> login-session store and 401s the very next request. Drop `--reload` (just
-> `uvicorn api.main:app --port 8000`) if you hit an unexpected 401 partway
-> through the Generate stage.
+> **Don't use `--reload` while driving S3.** The S3 pipeline writes `.py`
+> files into the tree `--reload` watches, so the app reload-kills its own
+> login session: sessions live in an in-memory dict (`api/session.py`), a
+> reload clears it, and the very next request 401s "Not logged in." — while
+> the UI still looks logged in, because `AuthContext` only calls
+> `/api/auth/me` once on mount. Two separate stages trigger it:
+>
+> - **Generate** stages the proposal under `s3_enhancement/out/…/staged/`.
+> - **Apply** copies staged files onto the real targets — `mockapp/app.py`,
+>   `mockapp/core/*.py`, and a new `tests/test_s3_*.py`.
+>
+> `--reload-exclude` can't save you: it only helps for `s3_enhancement/out`,
+> and Apply writes to the source dirs you'd never exclude. (It also needs an
+> *absolute directory* path — uvicorn's `FileFilter` only honours excludes
+> that `is_dir()` at startup and compares them against `path.parents`, so a
+> glob like `'s3_enhancement/out/*'` silently matches nothing.) Just run
+> without `--reload`; restart by hand when you change backend source.
 
 ### Resetting demo state
 

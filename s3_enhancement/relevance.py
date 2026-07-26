@@ -444,3 +444,33 @@ def estimate_tokens(text: str) -> int:
     number always comes from the provider's own reported usage instead.
     """
     return max(1, len(text) // 4)
+
+
+def naive_prompt_tokens(
+    scoped_input_tokens: int | None,
+    all_files: dict[str, str],
+    selected: dict[str, str] | None = None,
+) -> int:
+    """What the same prompt would have cost with the whole app pasted in
+    instead of just the selected files.
+
+    The naive prompt is the scoped prompt with every file substituted for
+    the selected ones, so it differs from what was actually billed by
+    exactly the *unselected* files' contents — everything else (system
+    prompt, CR text, task instructions) is identical and must not be
+    dropped from one side of the comparison. Summing all file bodies alone
+    was the earlier approach and it compared a full prompt against bare
+    source: it undercounted the naive side by the whole prompt scaffold, so
+    a target where scoping selects every file (the Spring demo's 8 of 8)
+    reported the naive baseline as *cheaper* than what was actually spent.
+
+    Falls back to summing every file when there's no scoped number to build
+    on (a replay recording with no usage), which is the best available
+    answer — the panel renders it as an estimate either way.
+    """
+    if selected is None or scoped_input_tokens is None:
+        return sum(estimate_tokens(content) for content in all_files.values())
+    unselected = sum(
+        estimate_tokens(content) for path, content in all_files.items() if path not in selected
+    )
+    return scoped_input_tokens + unselected

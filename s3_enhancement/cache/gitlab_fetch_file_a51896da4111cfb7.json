@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "203",
+    "ref": "main",
+    "path": "jobs/claims_archival.py"
+  },
+  "response": "# MapleSure data-maintenance-batch\n# Synthetic demo stub -- claims archival batch job.\n\ndef run_claims_archival():\n    raise NotImplementedError\n"
+}

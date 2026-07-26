@@ -1,0 +1,12 @@
+{
+  "call": "list_repo_paths",
+  "args": {
+    "project_id": "201"
+  },
+  "response": [
+    "src/policy_api.py",
+    "src/coverage_tiers.py",
+    "tests/test_policy_api.py",
+    "README.md"
+  ]
+}

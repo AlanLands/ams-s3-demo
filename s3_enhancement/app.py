@@ -257,11 +257,21 @@ def _render_token_panel(result: CodegenResult | None) -> None:
     elif result.naive_input_tokens_estimate > 0:
         scoped = result.scoped_input_tokens
         naive = result.naive_input_tokens_estimate
-        multiplier = max(1, round(naive / max(scoped, 1)))
-        st.caption(
-            f"Scoped context used {scoped:,} input tokens; a whole-app-context "
-            f"approach would have used ~{naive:,} tokens - {multiplier}x fewer."
-        )
+        ratio = naive / max(scoped, 1)
+        if ratio < 1.05:
+            # Scoping kept (nearly) every file, so there was nothing to save.
+            # Flooring the multiplier at 1 rendered this as "1x fewer".
+            st.caption(
+                f"Scoped context used {scoped:,} input tokens - no saving over "
+                "whole-app context here, since this change needed essentially "
+                "every file in the app."
+            )
+        else:
+            multiplier = f"{ratio:.1f}" if ratio < 10 else str(round(ratio))
+            st.caption(
+                f"Scoped context used {scoped:,} input tokens; a whole-app-context "
+                f"approach would have used ~{naive:,} tokens - {multiplier}x more."
+            )
     else:
         st.caption("Naive whole-app token estimate unavailable for this run.")
     if estimate is not None:

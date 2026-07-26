@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "201",
+    "ref": "main",
+    "path": "tests/test_policy_api.py"
+  },
+  "response": "# Synthetic demo stub test file.\n\ndef test_placeholder():\n    assert True\n"
+}

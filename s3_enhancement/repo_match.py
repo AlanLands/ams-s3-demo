@@ -71,6 +71,39 @@ Only include an alternate if it's a genuinely plausible second choice — an emp
 list is fine when there's one clear match."""
 
 
+def needs_confirmation(match: RepoMatch) -> bool:
+    """Whether this repo-match should be confirmed with the developer before
+    scoping proceeds against it, rather than silently treated as settled fact.
+
+    Only 'high' confidence is trusted outright — a wrong guess here would
+    scope file discovery/codegen against the wrong repo, the same class of
+    risk `analyze.py`'s CR-text clarity gate guards against for vague
+    tickets (see CLAUDE.md's requirement-clarity-gate rule).
+    """
+    return match.confidence != "high"
+
+
+def build_confirmation_question(suggestion: RepoSuggestion, projects: list[dict]) -> str:
+    """A short question for the developer to confirm (or override) an
+    uncertain repo-match — the repo-identity analogue of the CR text
+    clarity-gate question."""
+    projects_by_id = {str(project.get("id")): project for project in projects}
+
+    def _name(project_id: str) -> str:
+        project = projects_by_id.get(project_id, {})
+        return project.get("name_with_namespace") or project.get("name") or project_id
+
+    best = suggestion.best_match
+    question = (
+        f"I'm only {best.confidence}-confidence this CR is for "
+        f"'{_name(best.project_id)}' ({best.reasoning}). Is that the right repo?"
+    )
+    if suggestion.alternates:
+        alt_names = ", ".join(f"'{_name(alt.project_id)}'" for alt in suggestion.alternates)
+        question += f" Possible alternates: {alt_names}."
+    return question
+
+
 def suggest_target_repo(cr_text: str, projects: list[dict]) -> RepoSuggestion:
     """Ask the LLM to pick the most likely repo for this CR from `projects`.
 

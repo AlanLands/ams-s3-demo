@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "201",
+    "ref": "main",
+    "path": "src/coverage_tiers.py"
+  },
+  "response": "# MapleSure policy-service\n# Synthetic demo stub -- coverage tier lookups for quarterly policy data audits.\n\nCOVERAGE_TIERS = ['Silver', 'Elite']\n"
+}

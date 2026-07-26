@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "201",
+    "ref": "main",
+    "path": "src/policy_api.py"
+  },
+  "response": "# MapleSure policy-service\n# Synthetic demo stub -- policy CRUD endpoints.\n\ndef get_policy(policy_id):\n    raise NotImplementedError\n"
+}

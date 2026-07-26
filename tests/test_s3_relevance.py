@@ -76,6 +76,31 @@ def test_estimate_tokens_is_a_rough_positive_heuristic() -> None:
     assert relevance.estimate_tokens("a" * 400) == 100
 
 
+def test_naive_prompt_tokens_adds_the_unselected_files_to_what_was_spent() -> None:
+    """The naive prompt is the scoped prompt with every file pasted in, so it
+    differs by exactly the unselected files — the shared scaffold (system
+    prompt, CR text, instructions) counts on both sides."""
+    all_files = {"a.py": "x" * 400, "b.py": "y" * 800}
+    naive = relevance.naive_prompt_tokens(1000, all_files, {"a.py": all_files["a.py"]})
+    assert naive == 1000 + 200
+
+
+def test_naive_prompt_tokens_never_undercuts_what_was_actually_spent() -> None:
+    """When scoping selects every file there is no saving to claim. Summing
+    file bodies alone (the earlier approach) reported a *smaller* number than
+    the real prompt, because it dropped the scaffold from the naive side —
+    that's what made the Spring target's 8-of-8 selection read as though
+    whole-app context would have been cheaper."""
+    all_files = {"a.py": "x" * 400}
+    assert relevance.naive_prompt_tokens(1000, all_files, all_files) == 1000
+
+
+def test_naive_prompt_tokens_falls_back_when_usage_is_unknown() -> None:
+    """A replay recording with no usage has no scoped baseline to build on."""
+    all_files = {"a.py": "x" * 400, "b.py": "y" * 800}
+    assert relevance.naive_prompt_tokens(None, all_files, {"a.py": all_files["a.py"]}) == 300
+
+
 def test_discover_subsystem_design_docs_finds_all_legacy_subsystems() -> None:
     docs = relevance.discover_subsystem_design_docs()
     assert len(docs) == 6

@@ -1,0 +1,12 @@
+{
+  "call": "list_repo_paths",
+  "args": {
+    "project_id": "202"
+  },
+  "response": [
+    "src/claims_api.py",
+    "src/adjudication.py",
+    "tests/test_claims_api.py",
+    "README.md"
+  ]
+}

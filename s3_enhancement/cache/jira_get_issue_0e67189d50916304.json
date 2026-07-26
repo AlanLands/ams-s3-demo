@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-861"
+  },
+  "response": {
+    "key": "AMS-861",
+    "status": "To Do",
+    "summary": "Fix recurring nightly batch timeout",
+    "issue_type": "Task",
+    "assignee": "Ravi Kumar",
+    "description": "Derived from problem record for repeated incident INC0099."
+  }
+}

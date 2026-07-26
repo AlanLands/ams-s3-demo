@@ -17,7 +17,9 @@ claims record a payable amount. Fixed contract: `ClaimRules.decide/payable`.
 ```bash
 ./demo/reset_s3.sh              # shared state: out/, ticket events, .cache/llm
 ./demo/reset_s3_springdemo.sh   # ClaimsPortal back to pre-CR baseline
-uvicorn api.main:app --reload   # terminal 1 — API :8000
+uvicorn api.main:app --port 8000  # terminal 1 — API :8000 (never --reload:
+                                  # Generate/Apply write .py files, the watcher
+                                  # restarts, and your login session 401s)
 (cd frontend && npm run dev)    # terminal 2 — console :5173
 ./demo/run_s3_springdemo.sh     # terminal 3 — both team consoles :8081/:8082
 ```

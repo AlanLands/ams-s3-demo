@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "203",
+    "ref": "main",
+    "path": "jobs/policy_data_cleanup.py"
+  },
+  "response": "# MapleSure data-maintenance-batch\n# Synthetic demo stub -- nightly/quarterly policy data cleanup job.\n\ndef run_policy_data_cleanup():\n    raise NotImplementedError\n"
+}

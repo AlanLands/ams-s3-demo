@@ -17,9 +17,13 @@ from dataclasses import dataclass
 from common.llm import LLMError, complete, parse_json_response
 from s3_enhancement import relevance, targets
 from s3_enhancement.analyze import EffortEstimate
+from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS, ConversationTurn
 from s3_enhancement.targets import Target
 
-MAX_CLARIFICATION_TURNS = 2
+# Re-exported under this module's original name — `analyze.py`'s ad-hoc
+# clarity check shares the same turn shape (see s3_enhancement/conversation.py)
+# but callers importing `QuickChatTurn` from here are unaffected.
+QuickChatTurn = ConversationTurn
 
 SYSTEM_PROMPT = (
     "You are an AI engineering assistant supporting an application-maintenance "
@@ -31,12 +35,6 @@ SYSTEM_PROMPT = (
     "effort/priority estimate, and whether a concrete code change is "
     "warranted right now versus just an estimate."
 )
-
-
-@dataclass(frozen=True)
-class QuickChatTurn:
-    role: str  # "user" | "assistant"
-    text: str
 
 
 @dataclass(frozen=True)

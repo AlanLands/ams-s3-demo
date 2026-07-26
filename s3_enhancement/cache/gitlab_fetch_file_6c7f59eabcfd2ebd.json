@@ -1,0 +1,9 @@
+{
+  "call": "fetch_file",
+  "args": {
+    "project_id": "203",
+    "ref": "main",
+    "path": "tests/test_jobs.py"
+  },
+  "response": "# Synthetic demo stub test file.\n\ndef test_placeholder():\n    assert True\n"
+}

@@ -97,6 +97,12 @@ export interface TicketModalProps {
   analysisLoading: boolean
   analysisError?: string
   onRunAnalysis: () => void
+  // Set only for an ad-hoc (no-target) ticket whose last analyze-adhoc call
+  // came back needs_clarification: true — the answer box replaces the
+  // run-analysis button until it's answered (see S3.tsx's
+  // handleRunAnalysisForTicket).
+  clarificationQuestion?: string
+  onSubmitClarification: (answer: string) => void
 
   crossTeamImpacts?: CrossTeamImpact[]
   crossTeamTokenPanel?: TokenPanelData
@@ -129,6 +135,8 @@ export default function TicketModal({
   analysisLoading,
   analysisError,
   onRunAnalysis,
+  clarificationQuestion,
+  onSubmitClarification,
   crossTeamImpacts,
   crossTeamTokenPanel,
   crossTeamLoading,
@@ -147,6 +155,14 @@ export default function TicketModal({
   const visibleEvents = events.filter(
     (event) => activityFilter === 'all' || event.actor === activityFilter
   )
+  const [clarificationAnswer, setClarificationAnswer] = useState('')
+
+  function submitClarificationAnswer() {
+    const trimmed = clarificationAnswer.trim()
+    if (!trimmed) return
+    onSubmitClarification(trimmed)
+    setClarificationAnswer('')
+  }
 
   return (
     <div className="ams-modal-backdrop" onClick={onClose}>
@@ -187,18 +203,50 @@ export default function TicketModal({
                     the ticket's own text instead.
                   </p>
                 )}
+                {clarificationQuestion && (
+                  <div className="ams-card" style={{ marginBottom: '0.75rem' }}>
+                    <strong>AI needs one clarification before analyzing</strong>
+                    {/* pre-wrap: an assumptions question (analyze.build_assumption_
+                        question) is a numbered list, not one line. */}
+                    <p style={{ fontSize: '0.88rem', margin: '0.5rem 0', whiteSpace: 'pre-wrap' }}>
+                      {clarificationQuestion}
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <input
+                        className="ams-input"
+                        style={{ flex: 1, minWidth: '200px' }}
+                        value={clarificationAnswer}
+                        onChange={(event) => setClarificationAnswer(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !analysisLoading) submitClarificationAnswer()
+                        }}
+                        placeholder="Your answer…"
+                        disabled={analysisLoading}
+                      />
+                      <button
+                        className="ams-button"
+                        onClick={submitClarificationAnswer}
+                        disabled={analysisLoading || !clarificationAnswer.trim()}
+                      >
+                        {analysisLoading ? 'Submitting…' : 'Submit answer'}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button
-                    className={analysisResult ? 'ams-button-secondary' : 'ams-button'}
-                    onClick={onRunAnalysis}
-                    disabled={analysisLoading}
-                  >
-                    {analysisLoading
-                      ? 'Running…'
-                      : analysisResult
-                        ? 'Re-run AI impact analysis'
-                        : 'Run AI impact analysis'}
-                  </button>
+                  {!clarificationQuestion && (
+                    <button
+                      className={analysisResult ? 'ams-button-secondary' : 'ams-button'}
+                      onClick={onRunAnalysis}
+                      disabled={analysisLoading}
+                    >
+                      {analysisLoading
+                        ? 'Running…'
+                        : analysisResult
+                          ? 'Re-run AI impact analysis'
+                          : 'Run AI impact analysis'}
+                    </button>
+                  )}
                   {analysisResult && !analysisLoading && (
                     <span className="ams-pill ams-pill-general">✓ Analyzed</span>
                   )}
@@ -234,7 +282,32 @@ export default function TicketModal({
                     <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', marginTop: '0.5rem' }}>
                       {analysisResult.impact_analysis}
                     </div>
-                    <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem' }}>
+                    {analysisResult.assumptions.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: '0.6rem',
+                          padding: '0.6rem 0.75rem',
+                          background: 'var(--ams-accent-soft)',
+                          border: '1px solid var(--ams-line)',
+                          borderRadius: 4,
+                        }}
+                      >
+                        {/* Reachable only once the clarification-turn budget is
+                            spent — every assumption is asked about first (see
+                            /s3/analyze). Say why it wasn't asked, so this doesn't
+                            read as the AI choosing to assume. */}
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ams-accent-ink)' }}>
+                          Still unresolved after the clarification limit — proceeding on these
+                          assumptions
+                        </div>
+                        <ul style={{ margin: '0.35rem 0 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                          {analysisResult.assumptions.map((assumption, index) => (
+                            <li key={index}>{assumption}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
                       <div>
                         <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>Effort</div>
                         <div style={{ fontWeight: 700 }}>{analysisResult.effort_estimate.hours_class}</div>
@@ -247,6 +320,16 @@ export default function TicketModal({
                           {analysisResult.effort_estimate.priority_equivalent}
                         </div>
                       </div>
+                      {analysisResult.target_repo && (
+                        <div>
+                          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>
+                            Target repo
+                          </div>
+                          <div style={{ fontWeight: 700 }}>
+                            {analysisResult.target_repo.name ?? analysisResult.target_repo.id}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -352,6 +435,21 @@ export default function TicketModal({
               <dd>{crLabel ? 'PolicyCore' : '—'}</dd>
               <dt>Reporter</dt>
               <dd>{crLabel ? 'MapleSure Product Team' : 'AMS Console (auto-created)'}</dd>
+              <dt>Origin</dt>
+              <dd>
+                {issue.origin === 'problem_record' ? (
+                  <>
+                    Problem record
+                    {issue.problem_id && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)' }}>
+                        {issue.problem_id}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  'Business CR'
+                )}
+              </dd>
             </dl>
           </aside>
         </div>

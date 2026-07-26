@@ -14,23 +14,8 @@ from mockapp.core.claims import submit_claim
 from mockapp.core.db import get_policy, init_db, list_claims, list_endorsements, list_policies
 from mockapp.core.endorsements import submit_endorsement
 
-
 def render() -> None:
-    """Render the full MapleSure portal (everything except page config).
-
-    Split out into a callable so a combined multi-scenario app (see
-    demo/unified_app.py) can embed this scenario without a second
-    st.set_page_config() call, which Streamlit forbids per session.
-    Standalone launches (demo/run_s3.sh) still call st.set_page_config()
-    once, below, before render().
-    """
     init_db()
-
-    # Deliberately a plain st.title(), not page_header(): this view represents
-    # MapleSure's own policy/claims application, not one of our AMS scenario
-    # tools — it should read as "the client's app", not "our AMS console".
-    # inject_theme() still applies the shared fonts/spacing for visual
-    # consistency without the AMS eyebrow banner.
     inject_theme()
     st.title(f"{INSURER_NAME} Policy Portal")
 
@@ -142,6 +127,7 @@ def render() -> None:
                 effective_date = st.date_input("Effective date")
                 contact_phone = st.text_input("Contact phone")
                 contact_email = st.text_input("Contact email")
+                priority = st.selectbox("Priority", ["Standard", "Urgent"])
                 endorsement_submitted = st.form_submit_button("Submit Endorsement Request")
 
                 if endorsement_submitted:
@@ -152,13 +138,14 @@ def render() -> None:
                         effective_date=str(effective_date),
                         contact_phone=contact_phone,
                         contact_email=contact_email,
+                        priority=priority
                     )
                     st.success(
                         f"Endorsement request {new_endorsement.endorsement_number} submitted."
                     )
                     st.rerun()
 
-
 if __name__ == "__main__":
     st.set_page_config(page_title=f"{INSURER_NAME} — Policy Portal", layout="wide")
     render()
+
