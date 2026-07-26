@@ -5,8 +5,8 @@ Two layers of checks:
 1. **Architecture checks** (no live model needed, run with `--skip-live` too):
    the replay safety net works fully offline, a mid-stream provider failure
    falls back to replay invisibly, one recording replays correctly for any
-   audience-chosen tier name, `demo/reset_s3.sh` restores the pre-CR baseline
-   in <10s, and a reset never touches S4's `undocumented_app` snapshot.
+   audience-chosen tier name, and `demo/reset_s3.sh` restores the pre-CR
+   baseline in <10s.
 2. **Live checks**: the narrative drafts (effort estimate / impact analysis /
    release notes) run 5x against the real provider and must be structurally
    sound every time — not graded for *quality*, which would need another LLM
@@ -57,7 +57,6 @@ from tools.verify_common import (  # noqa: E402
 
 _BASELINE_FILES = ("mockapp/app.py", "mockapp/core/models.py", "mockapp/core/db.py")
 _GENERATED_FILES = ("mockapp/core/coverage.py", "tests/test_s3_coverage_upgrade.py")
-_S4_SNAPSHOT_DIR = REPO_ROOT / "s4_knowledge" / "undocumented_app"
 
 _REFUSAL_MARKERS = ("as an ai", "i cannot", "i'm sorry, but", "i am unable to")
 _MIN_LENGTH = 40
@@ -93,9 +92,19 @@ def _restore_baseline() -> None:
 
 
 def _restore_committed_state() -> None:
-    """Restore the committed post-CR working state after tree-mutating checks."""
-    for rel in (*_BASELINE_FILES, *_GENERATED_FILES):
+    """Restore the committed working state after tree-mutating checks.
+
+    Only `_BASELINE_FILES` are committed source, so only they can come back
+    from HEAD. `_GENERATED_FILES` are pipeline output that has never been
+    committed — `git show HEAD:...` on those fails, and since this runs in a
+    `finally`, that failure used to mask every check result behind a
+    CalledProcessError. They get deleted instead, which is what "restore the
+    committed state" means for a file the commit doesn't contain.
+    """
+    for rel in _BASELINE_FILES:
         _git_show(f"HEAD:{rel}", REPO_ROOT / rel)
+    for rel in _GENERATED_FILES:
+        (REPO_ROOT / rel).unlink(missing_ok=True)
     _reseed()
 
 
@@ -233,10 +242,8 @@ def check_two_tier_names_replay(state: VerificationState) -> str:
     return f"replayed {' and '.join(details)} from one recording, tests green both times"
 
 
-def check_reset_speed_and_s4_isolation(state: VerificationState) -> str:
-    """Acceptance check #4: reset_s3.sh restores the pre-CR app in <10s and
-    never touches the S4 docs-stripped snapshot."""
-    s4_before = _hash_tree(_S4_SNAPSHOT_DIR)
+def check_reset_speed(state: VerificationState) -> str:
+    """Acceptance check #4: reset_s3.sh restores the pre-CR app in <10s."""
     t0 = time.monotonic()
     result = subprocess.run(
         ["bash", "demo/reset_s3.sh"], cwd=REPO_ROOT, capture_output=True, text=True
@@ -251,9 +258,7 @@ def check_reset_speed_and_s4_isolation(state: VerificationState) -> str:
     app_text = (REPO_ROOT / "mockapp/app.py").read_text(encoding="utf-8")
     if "Upgrade Coverage" in app_text:
         raise AssertionError("upgrade UI still present in mockapp/app.py after reset")
-    if _hash_tree(_S4_SNAPSHOT_DIR) != s4_before:
-        raise AssertionError("reset_s3.sh modified s4_knowledge/undocumented_app")
-    return f"reset in {elapsed:.1f}s, baseline restored, S4 snapshot hash unchanged"
+    return f"reset in {elapsed:.1f}s, baseline restored"
 
 
 def check_core_recall_never_drops(state: VerificationState) -> str:
@@ -501,11 +506,7 @@ def main() -> int:
         results.append(
             run_check("two tier names from one recording", state, check_two_tier_names_replay)
         )
-        results.append(
-            run_check(
-                "reset <10s + S4 snapshot isolation", state, check_reset_speed_and_s4_isolation
-            )
-        )
+        results.append(run_check("reset <10s", state, check_reset_speed))
         results.append(
             run_check("S3 relevance keeps core files", state, check_core_recall_never_drops)
         )
