@@ -1,5 +1,0 @@
-name: IntegrationBridge partner acknowledgement delay
-keywords: partner, status, message, delayed
-category: Incident
-priority: P3
-why: Matches IntegrationBridge partner message delay incidents routed to Integration Support.

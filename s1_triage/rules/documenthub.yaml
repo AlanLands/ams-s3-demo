@@ -1,5 +1,0 @@
-name: DocumentHub scan handoff token failure
-keywords: document, upload, scan, token
-category: Request
-priority: P3
-why: Matches DocumentHub rows from the claims document upload failure pattern.

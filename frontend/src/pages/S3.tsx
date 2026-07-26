@@ -28,8 +28,8 @@ const AI_LABEL = 'AI suggestion — verify with your specialist before applying.
 // port .env.example documents as MOCKAPP_URL.
 const MOCKAPP_URL = 'http://localhost:8501'
 
-// Demo-only roster for assigning a ticket — mirrors the S1 engineer roster's
-// first few names (s1_triage/roster_auth.py); this page doesn't fetch the
+// Demo-only roster for assigning a ticket — mirrors the shared engineer
+// roster's first few names (common/roster.py); this page doesn't fetch the
 // live roster since a ticket assignee is illustrative here, not a real Jira
 // user lookup (Jira Cloud needs an accountId, which this fictional roster
 // doesn't have — see common/jira_client.py's assignee note).

@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from api.main import app
-from s1_triage.roster_auth import PASSCODE_BY_NAME
+from common.roster import PASSCODE_BY_NAME
 
 
 def _client() -> TestClient:

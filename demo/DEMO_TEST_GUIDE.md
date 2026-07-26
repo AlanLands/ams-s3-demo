@@ -80,7 +80,7 @@ specifically want to test the real API path.
 ### Login roster (all scenarios)
 
 Every console login uses **name + passcode** (`1001 + position in the
-roster`; scheme documented in `s1_triage/roster_auth.py`):
+roster`; scheme documented in `common/roster.py`):
 
 | Name | Passcode | Used as |
 |---|---|---|

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 @dataclass
 class Policy:
     policy_number: str

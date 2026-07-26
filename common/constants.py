@@ -16,9 +16,8 @@ AUTO_SENT_LABEL = "AI auto-sent — data-quality info request (no engineer revie
 # the requestor's own account, no production or business-system change, and
 # the response is a fixed template (no AI judgment call), unlike every other
 # resolution this app drafts. Every other resolution still needs an
-# engineer's approval before anything is sent. See
-# s1_triage/self_service.py's SelfServiceMatch.kind for which specific
-# request type matched — the confirmation text itself names it.
+# engineer's approval before anything is sent. The confirmation text itself
+# names which specific request type matched.
 AUTO_RESOLVED_LABEL = (
     "AI auto-resolved — self-service request (no engineer review; demo exception)."
 )

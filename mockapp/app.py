@@ -14,6 +14,7 @@ from mockapp.core.claims import submit_claim
 from mockapp.core.db import get_policy, init_db, list_claims, list_endorsements, list_policies
 from mockapp.core.endorsements import submit_endorsement
 
+
 def render() -> None:
     init_db()
     inject_theme()

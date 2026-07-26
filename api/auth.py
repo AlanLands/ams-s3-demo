@@ -1,9 +1,7 @@
 """Login/logout/me + the `require_identity` dependency every other router
-depends on. Wraps `s1_triage.roster_auth.authenticate()` unchanged — same
-fictional roster/passcode scheme the Streamlit login gate already used, just
-enforced server-side now: a missing/invalid session cookie 401s before any
-other router's handler body runs, a strictly stronger guarantee than a
-Streamlit rerun's `st.stop()`.
+depends on. Wraps `common.roster.authenticate()` — the fictional
+roster/passcode scheme — and enforces it server-side: a missing/invalid
+session cookie 401s before any other router's handler body runs.
 """
 
 from __future__ import annotations
@@ -12,8 +10,13 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from pydantic import BaseModel
 
 from api.session import SESSION_COOKIE_NAME, create_session, destroy_session, get_session_data
-from s1_triage.engineer_assignment import group_for_engineer
-from s1_triage.roster_auth import MANAGER_NAME, ROSTER, Identity, authenticate
+from common.roster import (
+    MANAGER_NAME,
+    ROSTER,
+    Identity,
+    authenticate,
+    group_for_engineer,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

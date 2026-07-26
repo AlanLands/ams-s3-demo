@@ -8,13 +8,12 @@ five scenarios (S1, S2, S4, S5, S6) are being built elsewhere by the team per th
 shown in a separate walkthrough video — not part of this project.
 
 Code was copied over from `sixFold` as of that date and trimmed to just what S3 needs
-(see Layout below). `s1_triage/` was kept as a dependency purely because the shared
-login/roster auth lives inside it (`roster_auth.py`, `engineer_assignment.py`) — S1
-triage itself is out of scope here. `s2_problem/`, `s4_knowledge/`, `s5_predictive/`,
-`s6_dashboard/`, and `datagen/` were removed along with their routers, frontend pages,
-tests, and scenario-specific tooling; the Streamlit fallback console
-(`demo/unified_app.py`) was also removed since it depended on all six scenarios.
-106 tests pass (`pytest tests/`), ruff clean.
+(see Layout below). All five other scenario packages (`s1_triage/`, `s2_problem/`,
+`s4_knowledge/`, `s5_predictive/`, `s6_dashboard/`) and `datagen/` were removed along
+with their routers, frontend pages, tests, and scenario-specific tooling; the Streamlit
+fallback console (`demo/unified_app.py`) went with them. The only thing salvaged from
+S1 was the shared login roster, which now lives in `common/roster.py`.
+237 tests pass (`pytest tests/`), ruff clean.
 
 ## S3 Enhancement — scope
 
@@ -25,9 +24,8 @@ AI analysis → codegen → tests → docs → release notes.
 
 ```
 common/        llm.py (provider wrapper), schema.py, vectorstore.py, gitlab/
-               servicenow clients — all shared infra, kept in full
-s1_triage/     vendored only for roster_auth.py / engineer_assignment.py (login) —
-               do not build S1 triage features here
+               servicenow clients, roster.py (login roster + passcodes) — all
+               shared infra
 s3_enhancement/  the S3 pipeline: analyze, codegen, testgen, harness, docgen, cr,
                  targets, relevance, repo_match; cache/ (committed replay cache for
                  demo determinism) vs out/ (gitignored, regenerated per run)

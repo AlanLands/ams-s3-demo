@@ -23,13 +23,13 @@ from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError, get_client
 from common.jira_client import JiraError, get_jira_client
 from common.llm import LLMError
+from common.roster import Identity
 from common.ticket_events import (
     distinct_tickets_with_action,
     events_for,
     events_log_marker,
     record_event,
 )
-from s1_triage.roster_auth import Identity
 from s3_enhancement import targets, testrun
 from s3_enhancement.analyze import (
     build_assumption_question,

@@ -1,5 +1,0 @@
-name: Cluster A NightlyBatch heap growth
-keywords: memory, heap, alloc, worker
-category: Batch
-priority: P2
-why: Matches the Cluster A NightlyBatch heap-growth pattern linked to KE0000456 and PRB0001234.

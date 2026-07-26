@@ -51,13 +51,13 @@ def test_complete_logs_telemetry_on_live_call(tmp_path: Path, monkeypatch):
         llm._PROVIDER_CALLERS, "anthropic", lambda prompt, system, json_mode: ("hello", 10, 5)
     )
 
-    result = complete("hi", cache_key="s1_triage:INC000099")
+    result = complete("hi", cache_key="s3_enhancement:INC000099")
 
     assert result == "hello"
     calls = read_calls()
     assert len(calls) == 1
-    assert calls[0]["scenario"] == "s1"
-    assert calls[0]["beat"] == "triage"
+    assert calls[0]["scenario"] == "s3"
+    assert calls[0]["beat"] == "enhancement"
     assert calls[0]["cached"] is False
     assert calls[0]["input_tokens"] == 10
     assert calls[0]["output_tokens"] == 5
@@ -75,8 +75,8 @@ def test_complete_logs_telemetry_on_cache_hit(tmp_path: Path, monkeypatch):
 
     monkeypatch.setitem(llm._PROVIDER_CALLERS, "anthropic", fake_call)
 
-    complete("hi", cache_key="s1_triage:INC000099")
-    complete("hi", cache_key="s1_triage:INC000099")
+    complete("hi", cache_key="s3_enhancement:INC000099")
+    complete("hi", cache_key="s3_enhancement:INC000099")
 
     assert call_count == 1  # second call hit cache, no live call made
     calls = read_calls()
@@ -160,7 +160,7 @@ def test_complete_logs_telemetry_on_failure(tmp_path: Path, monkeypatch):
     monkeypatch.setitem(llm._PROVIDER_CALLERS, "anthropic", failing_call)
 
     with pytest.raises(LLMError):
-        complete("hi", cache_key="s1_triage:INC000099", retries=0)
+        complete("hi", cache_key="s3_enhancement:INC000099", retries=0)
 
     calls = read_calls()
     assert len(calls) == 1

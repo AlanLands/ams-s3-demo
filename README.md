@@ -9,10 +9,6 @@ All data in this repo is synthetic. The demo application belongs to a
 fictional insurer, **MapleSure Insurance**. See `CLAUDE.md` for the full
 project rules (no real client data, no client names, secrets only via `.env`).
 
-`s1_triage/` is vendored only because the shared login/roster auth
-(`s1_triage/roster_auth.py`, `engineer_assignment.py`) lives there — S1
-triage itself is out of scope for this project.
-
 ## Prerequisites
 
 - **Python 3.12+**
@@ -45,7 +41,7 @@ cd frontend && npm run dev
 ```
 
 Open `http://localhost:5173`, log in with a name/passcode from the seeded
-roster (see `s1_triage/roster_auth.py` — the passcode scheme is
+roster (see `common/roster.py` — the passcode scheme is
 `1001 + roster position`, e.g. the first engineer is `1001`), and open the
 S3 console.
 
@@ -89,7 +85,8 @@ confidence check.
 ## Layout
 
 - `common/` — LLM provider wrapper (`llm.py`), vector store (`vectorstore.py`),
-  Jira/GitLab clients, shared constants and telemetry
+  Jira/GitLab clients, the login roster (`roster.py`), shared constants and
+  telemetry
 - `s3_enhancement/` — the S3 pipeline: `analyze.py` (requirement analysis),
   `codegen.py` (code generation), `testgen.py`/`testrun.py` (test generation,
   execution, and mutation-based proof), `docgen.py` (design doc + release
@@ -98,8 +95,6 @@ confidence check.
 - `mockapp/` — the MapleSure policy/claims app S3 targets modify
 - `sandbox/spring-demo/` — the second (Java/Spring Boot) S3 target,
   "ClaimsPortal"
-- `s1_triage/` — vendored only for `roster_auth`/`engineer_assignment`
-  (shared login)
 - `api/`, `frontend/` — FastAPI backend + React console (Login, Home, S3 only)
 - `demo/` — run/reset/cache-warm scripts and presenter notes
 - `tools/` — `verify_s3_live.py` (live-demo rehearsal gate), `cost_dashboard.py`

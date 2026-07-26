@@ -1,5 +1,0 @@
-name: BillingGateway reversal queue delay
-keywords: payment, reversal, queue
-category: Incident
-priority: P2
-why: Matches BillingGateway payment reversal queue delay incidents, including the seeded misroute example.

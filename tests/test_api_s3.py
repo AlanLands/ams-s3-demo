@@ -15,7 +15,7 @@ from api.main import app
 from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError
 from common.llm import LLMError
-from s1_triage.roster_auth import PASSCODE_BY_NAME
+from common.roster import PASSCODE_BY_NAME
 from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS
 
 
