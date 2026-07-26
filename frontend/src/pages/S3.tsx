@@ -24,7 +24,7 @@ import {
 const AI_LABEL = 'AI suggestion — verify with your specialist before applying.'
 
 // The MapleSure mockapp's own Streamlit UI (mockapp/app.py) — launched
-// separately from the AMS console (see demo/run_s4_endorsement.sh), same
+// separately from the AMS console (see demo/run_mockapp.sh), same
 // port .env.example documents as MOCKAPP_URL.
 const MOCKAPP_URL = 'http://localhost:8501'
 

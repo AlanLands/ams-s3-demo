@@ -93,13 +93,16 @@ confidence check.
   notes), `targets.py` (the multi-repo/multi-CR registry), `relevance.py`
   (the file-relevance funnel)
 - `mockapp/` — the MapleSure policy/claims app S3 targets modify
-- `sandbox/spring-demo/` — the second (Java/Spring Boot) S3 target,
-  "ClaimsPortal"
+- `sandbox/spring-demo/` — despite the directory name, a first-class S3 target:
+  the second one, "ClaimsPortal" (Java/Spring Boot). See `sandbox/README.md`
+  for why the path can't simply be renamed
 - `api/`, `frontend/` — FastAPI backend + React console (Login, Home, S3 only)
 - `demo/` — run/reset/cache-warm scripts and presenter notes
 - `tools/` — `verify_s3_live.py` (live-demo rehearsal gate), `cost_dashboard.py`
   (token-cost reporting), `autofix/` (S3-only calibration fix loop)
 - `tests/` — pytest suite covering every module above
+- `docs/` — `design/` (current design notes), `history/` (the original
+  six-scenario planning docs, kept as background only)
 
 ## Documentation
 

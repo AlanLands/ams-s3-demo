@@ -33,14 +33,33 @@ mockapp/       "MapleSure" policy/claims app S3 targets for CRs
 api/           FastAPI backend — auth.py, session.py, routers/s3.py only
 frontend/      React (Vite + TypeScript) console — Login, Home, S3 only
 demo/          S3 run/reset/cache-warm scripts + presenter notes
-sandbox/       side projects; spring-demo/ is also S3's second target —
-               "ClaimsPortal" (Java/Spring Boot, CR-2026-043, ticket AMS-103,
-               target id springdemo-claims-deductible). Its checked-in source
-               is the pre-CR baseline (snapshot in .baseline/); reset with
-               demo/reset_s3_springdemo.sh, run with demo/run_s3_springdemo.sh
+sandbox/       misleading name, only one thing in it: spring-demo/ IS S3's
+               second target — "ClaimsPortal" (Java/Spring Boot, CR-2026-043,
+               ticket AMS-103, target id springdemo-claims-deductible). Its
+               checked-in source is the pre-CR baseline (snapshot in
+               .baseline/); reset with demo/reset_s3_springdemo.sh, run with
+               demo/run_s3_springdemo.sh. Do NOT move it — see below.
 tools/         verify_s3_live.py (live-demo rehearsal gate), autofix/ (S3-only
                calibration fix loop — `--scenario` is fixed to s3)
+docs/          design/ (current design notes), history/ (the original
+               six-scenario SCENARIOS.md + BUILD_PLAN.md — background only)
 ```
+
+## File paths are load-bearing — don't move targets
+
+`s3_enhancement/relevance.py::_document()` folds each file's path into the text
+it scores (`f"{rel_path} {content}"`) — deliberately, since the path carries
+subsystem/filename signal that content alone loses across ~100 similarly-shaped
+decoy files. So a target's directory path is a *scoring input*.
+
+Renaming or moving a target directory changes every embedding, reshuffles which
+files the relevance funnel selects, and desyncs that selection from the
+committed codegen recordings in `s3_enhancement/cache/`. The beat then dies with
+`LLMError: codegen returned unexpected file set` — in replay mode, offline, with
+no live fallback. Verified against `sandbox/spring-demo` on 2026-07-26.
+
+Moving a target is a re-record, not a rename: it needs live codegen + testgen
+runs against the new paths and a fresh `tools/verify_s3_live.py` pass.
 
 ## Hard rules — carried over, still non-negotiable
 
@@ -58,6 +77,7 @@ tools/         verify_s3_live.py (live-demo rehearsal gate), autofix/ (S3-only
 ## Open / TBD
 
 - Demo date and presentation format — TBD (see project owner for latest).
-- `SCENARIOS.md` and `BUILD_PLAN.md` were copied over from the six-scenario repo
-  as-is and describe the *original* full scope — treat them as historical
-  background, not current scope, until revised.
+- `sandbox/` is a misleading directory name for what is really S3's second
+  target. Renaming it is blocked on re-recording the CR-2026-043 replay caches
+  (see "File paths are load-bearing" above) — worth doing when there's time to
+  re-verify the beat live, not before a demo.

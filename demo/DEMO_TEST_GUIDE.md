@@ -42,7 +42,7 @@ specifically want to test the real API path.
 
 ### Known fixes already applied
 
-1. `demo/reset_s4_endorsement.sh` (CR-2026-042 reset) depends on a git tag,
+1. `demo/reset_s3_endorsement.sh` (CR-2026-042 reset) depends on a git tag,
    `s3-endorsement-baseline`, marking the pre-CR-042 commit. That tag had
    never been created, so the script would fail with `FAIL: git tag
    's3-endorsement-baseline' does not exist`.
@@ -110,7 +110,7 @@ uvicorn api.main:app --port 8000
 cd frontend && npm run dev
 
 # terminal 3 — the client's app (Streamlit view of MapleSure mockapp)
-demo/run_s4_endorsement.sh    # despite the name, this just serves mockapp/app.py on :8501
+demo/run_mockapp.sh           # serves mockapp/app.py on :8501
 ```
 
 **Steps:**
@@ -141,11 +141,11 @@ one change.
 
 **Reset:**
 ```bash
-demo/reset_s4_endorsement.sh
+demo/reset_s3_endorsement.sh
 ```
 
 **Run:** same 3 terminals as Scenario 1 (API :8000, console :5173, mockapp
-Streamlit :8501 via `demo/run_s4_endorsement.sh`).
+Streamlit :8501 via `demo/run_mockapp.sh`).
 
 **Steps:**
 1. On :8501, show the "Request a Policy Endorsement" form — 5 fields, no
@@ -160,7 +160,7 @@ Streamlit :8501 via `demo/run_s4_endorsement.sh`).
 6. On :8501 (refresh), submit an endorsement — Priority field now present,
    defaults to Standard, existing submit flow unaffected.
 
-**Reset between rehearsals:** `demo/reset_s4_endorsement.sh`.
+**Reset between rehearsals:** `demo/reset_s3_endorsement.sh`.
 
 ---
 
