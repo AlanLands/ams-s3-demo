@@ -1,11 +1,13 @@
 """Provider-agnostic LLM access. Every LLM call in this repo goes through `complete()`.
 
 Provider selection:
-- `LLM_PROVIDER` env var wins if set ("anthropic", "openai", or "ollama").
+- `LLM_PROVIDER` env var wins if set ("anthropic", "bedrock", "openai", or "ollama").
 - Otherwise auto-detect from which API key is present; if both are present, prefer
-  OpenAI (leadership steer — the end client is planning OpenAI). Ollama is never
-  auto-detected (it has no API key to detect) — set `LLM_PROVIDER=ollama`
-  explicitly to run against a local model (`OLLAMA_BASE_URL`/`OLLAMA_MODEL`).
+  OpenAI (leadership steer — the end client is planning OpenAI). Ollama and Bedrock
+  are never auto-detected (neither has an API key to detect) — set
+  `LLM_PROVIDER=ollama` explicitly to run against a local model
+  (`OLLAMA_BASE_URL`/`OLLAMA_MODEL`), or `LLM_PROVIDER=bedrock` to run Claude via
+  Amazon Bedrock (`AWS_REGION`/`BEDROCK_MODEL`, credentials from the AWS chain).
 
 No provider-specific object, response shape, or parameter is allowed to leak past
 this module — callers only ever see `str` in, `str` out.
@@ -64,8 +66,9 @@ def _resolve_provider() -> str:
     if has_anthropic:
         return "anthropic"
     raise LLMError(
-        "No LLM provider configured: set LLM_PROVIDER ('openai', 'anthropic', or "
-        "'ollama') and, for the hosted providers, the matching API key in .env"
+        "No LLM provider configured: set LLM_PROVIDER ('openai', 'anthropic', "
+        "'bedrock', or 'ollama') and, for the key-authenticated providers, the "
+        "matching API key in .env"
     )
 
 
@@ -124,6 +127,42 @@ def _call_anthropic(prompt: str, system: str | None, json_mode: bool) -> tuple[s
 
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
     model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+    kwargs: dict = {}
+    if system:
+        kwargs["system"] = _anthropic_system_blocks(system)
+    if json_mode:
+        prompt = prompt + "\n\nRespond with valid JSON only, no surrounding prose."
+
+    response = client.messages.create(
+        model=model,
+        max_tokens=2048,
+        messages=[{"role": "user", "content": prompt}],
+        **kwargs,
+    )
+    return response.content[0].text, response.usage.input_tokens, response.usage.output_tokens
+
+
+def _bedrock_client():
+    from anthropic import AnthropicBedrockMantle
+
+    # Mantle is the Messages-API Bedrock endpoint, so the request/response shape
+    # is identical to the direct Anthropic client above — that's why the two
+    # provider bodies stay parallel. (The older `AnthropicBedrock` class is the
+    # legacy bedrock-runtime InvokeModel path, with a different request shape and
+    # ARN-versioned model ids; don't reach for it here.)
+    #
+    # Credentials are resolved by the standard AWS chain — env vars, shared
+    # profile, or the EC2 instance role. On the deployed box the instance role is
+    # the intended path, so nothing secret lands in .env (hard rule 3).
+    return AnthropicBedrockMantle(
+        aws_region=os.environ.get("AWS_REGION"),
+        aws_profile=os.environ.get("AWS_PROFILE"),
+    )
+
+
+def _call_bedrock(prompt: str, system: str | None, json_mode: bool) -> tuple[str, int, int]:
+    client = _bedrock_client()
+    model = _model_for("bedrock")
     kwargs: dict = {}
     if system:
         kwargs["system"] = _anthropic_system_blocks(system)
@@ -259,6 +298,36 @@ def _stream_anthropic(
             usage_out["output_tokens"] = final.usage.output_tokens
 
 
+def _stream_bedrock(
+    prompt: str,
+    system: str | None,
+    json_mode: bool,
+    *,
+    usage_out: dict | None = None,
+) -> Iterator[str]:
+    client = _bedrock_client()
+    model = _model_for("bedrock")
+    kwargs: dict = {}
+    if system:
+        kwargs["system"] = _anthropic_system_blocks(system)
+    if json_mode:
+        prompt = prompt + "\n\nRespond with valid JSON only, no surrounding prose."
+
+    with client.messages.stream(
+        model=model,
+        max_tokens=12000,
+        messages=[{"role": "user", "content": prompt}],
+        **kwargs,
+    ) as stream:
+        for text in stream.text_stream:
+            if text:
+                yield text
+        if usage_out is not None:
+            final = stream.get_final_message()
+            usage_out["input_tokens"] = final.usage.input_tokens
+            usage_out["output_tokens"] = final.usage.output_tokens
+
+
 def _stream_openai(
     prompt: str,
     system: str | None,
@@ -298,15 +367,19 @@ def _stream_openai(
 
 _PROVIDER_CALLERS = {
     "anthropic": _call_anthropic,
+    "bedrock": _call_bedrock,
     "openai": _call_openai,
     "ollama": _call_ollama,
 }
 
 _PROVIDER_STREAMERS = {
     "anthropic": _stream_anthropic,
+    "bedrock": _stream_bedrock,
     "openai": _stream_openai,
     "ollama": _stream_ollama,
 }
+
+_PROVIDER_NAMES = "'openai', 'anthropic', 'bedrock', or 'ollama'"
 
 
 def complete(
@@ -325,9 +398,7 @@ def complete(
     """
     provider = _resolve_provider()
     if provider not in _PROVIDER_CALLERS:
-        raise LLMError(
-            f"Unknown LLM_PROVIDER {provider!r}; expected 'anthropic', 'openai', or 'ollama'"
-        )
+        raise LLMError(f"Unknown LLM_PROVIDER {provider!r}; expected {_PROVIDER_NAMES}")
 
     model = _model_for(provider)
     scenario, beat = scenario_of(cache_key)
@@ -457,9 +528,7 @@ def stream_complete(
 
     provider = _resolve_provider()
     if provider not in _PROVIDER_STREAMERS:
-        raise LLMError(
-            f"Unknown LLM_PROVIDER {provider!r}; expected 'anthropic', 'openai', or 'ollama'"
-        )
+        raise LLMError(f"Unknown LLM_PROVIDER {provider!r}; expected {_PROVIDER_NAMES}")
 
     model = _model_for(provider)
     streamer = _PROVIDER_STREAMERS[provider]
@@ -647,6 +716,10 @@ def parse_json_response(response: str, required_keys: set[str] = frozenset()) ->
 def _model_for(provider: str) -> str:
     if provider == "anthropic":
         return os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+    if provider == "bedrock":
+        # Bedrock ids carry an `anthropic.` provider prefix; the bare first-party
+        # id (`claude-sonnet-5`) 400s there.
+        return os.environ.get("BEDROCK_MODEL", "anthropic.claude-sonnet-5")
     if provider == "ollama":
         return os.environ.get("OLLAMA_MODEL", "llama3.1")
     return os.environ.get("OPENAI_MODEL", "gpt-5")

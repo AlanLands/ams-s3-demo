@@ -1,0 +1,33 @@
+[Unit]
+Description=AMS S3 demo — MapleSure policy/claims mockapp (Streamlit, the CR target)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/ams-s3-demo
+EnvironmentFile=/opt/ams-s3-demo/.env
+Environment=PYTHONPATH=/opt/ams-s3-demo
+Environment=PYTHONUNBUFFERED=1
+
+# baseUrlPath must match the nginx location block (/mockapp/) — without it
+# Streamlit builds absolute asset URLs at / and the page loads blank behind the
+# proxy. Bound to localhost; nginx fronts it.
+ExecStart=/opt/ams-s3-demo/.venv/bin/streamlit run mockapp/app.py \
+    --server.port 8501 \
+    --server.address 127.0.0.1 \
+    --server.baseUrlPath mockapp \
+    --server.headless true \
+    --browser.gatherUsageStats false
+
+Restart=on-failure
+RestartSec=5
+
+# Writes the SQLite policy/claims DB inside the tree — same reasoning as the
+# console unit, no filesystem hardening here.
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

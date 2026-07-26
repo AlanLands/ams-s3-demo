@@ -1,0 +1,35 @@
+[Unit]
+Description=AMS S3 demo — FastAPI console (API + built React SPA)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/ams-s3-demo
+EnvironmentFile=/opt/ams-s3-demo/.env
+Environment=PYTHONPATH=/opt/ams-s3-demo
+Environment=PYTHONUNBUFFERED=1
+
+# Bound to localhost only — nginx is the public entry point.
+#
+# NOTE: no --reload, deliberately. The S3 pipeline writes generated .py files
+# into this tree; with --reload uvicorn watches those same files and restarts
+# itself mid-run, killing the demo beat. See README.md's "--reload caveat".
+#
+# Single worker, deliberately: the pipeline keeps run state on local disk and in
+# the repo working tree, so a second worker would serve inconsistent state.
+ExecStart=/opt/ams-s3-demo/.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8000 --workers 1
+
+Restart=on-failure
+RestartSec=5
+
+# Intentionally NOT hardened with ProtectSystem=strict / ReadOnlyPaths: this app
+# must write generated code into its own working tree and shell out to pytest.
+# Locking the filesystem down breaks the core demo. The isolation boundary here
+# is the instance itself (private subnet + security group), not the unit file.
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
