@@ -1,7 +1,7 @@
 """S3 target registry — the seam that lets S3 scale beyond one repo/one CR.
 
 Every S3 module today (`codegen.py`, `testgen.py`, `harness.py`, `cr.py`,
-`analyze.py`, `docgen.py`) is hardcoded to CR-2026-041 against `mockapp/`: file
+`analyze.py`, `docgen.py`) is hardcoded to CR-2026-041 against `apps/policycore/`: file
 allowlists, the CR template path, and — critically — LLM cache keys are all
 fixed literals. `common/llm.py`'s `complete()`/`stream_complete()` build their
 on-disk cache path from a supplied `cache_key` alone, with no hash of the actual
@@ -185,33 +185,33 @@ MOCKAPP_COVERAGE_UPGRADE = Target(
     source_kind="local",
     display_name="MapleSure mockapp — coverage tier upgrade (CR-2026-041)",
     application_id=applications.POLICY_CORE_ID,
-    root=REPO_ROOT / "mockapp",
-    cr_template_path=REPO_ROOT / "mockapp" / "crs" / "CR-2026-041.md",
+    root=REPO_ROOT / "apps" / "policycore",
+    cr_template_path=REPO_ROOT / "apps" / "policycore" / "crs" / "CR-2026-041.md",
     core_files=(
-        "mockapp/core/models.py",
-        "mockapp/core/db.py",
-        "mockapp/core/coverage.py",
-        "mockapp/app.py",
+        "apps/policycore/core/models.py",
+        "apps/policycore/core/db.py",
+        "apps/policycore/core/coverage.py",
+        "apps/policycore/app.py",
     ),
-    never_extra=frozenset({"mockapp/core/seed.py"}),
+    never_extra=frozenset({"apps/policycore/core/seed.py"}),
     codegen_allowlist=(
-        "mockapp/core/models.py",
-        "mockapp/core/db.py",
-        "mockapp/core/coverage.py",
-        "mockapp/app.py",
+        "apps/policycore/core/models.py",
+        "apps/policycore/core/db.py",
+        "apps/policycore/core/coverage.py",
+        "apps/policycore/app.py",
     ),
     testgen_allowlist=("tests/test_s3_coverage_upgrade.py",),
     harness_expected_files=(
-        "mockapp/core/models.py",
-        "mockapp/core/db.py",
-        "mockapp/core/coverage.py",
-        "mockapp/app.py",
+        "apps/policycore/core/models.py",
+        "apps/policycore/core/db.py",
+        "apps/policycore/core/coverage.py",
+        "apps/policycore/app.py",
         "tests/test_s3_coverage_upgrade.py",
     ),
-    post_apply_command=("{python}", "-m", "mockapp.core.seed"),
+    post_apply_command=("{python}", "-m", "apps.policycore.core.seed"),
     mutations=(
         Mutation(
-            rel_path="mockapp/core/coverage.py",
+            rel_path="apps/policycore/core/coverage.py",
             old_snippet="if new_index <= old_index:",
             new_snippet="if new_index < old_index:",
             description=(
@@ -232,28 +232,28 @@ MOCKAPP_ENDORSEMENT_FIELD_ADD = Target(
     source_kind="local",
     display_name="MapleSure mockapp — endorsement priority field (CR-2026-042)",
     application_id=applications.POLICY_CORE_ID,
-    root=REPO_ROOT / "mockapp",
-    cr_template_path=REPO_ROOT / "mockapp" / "crs" / "CR-2026-042.md",
+    root=REPO_ROOT / "apps" / "policycore",
+    cr_template_path=REPO_ROOT / "apps" / "policycore" / "crs" / "CR-2026-042.md",
     cr_placeholder="",  # this CR has no audience-picked placeholder token
     core_files=(
-        "mockapp/core/models.py",
-        "mockapp/core/db.py",
-        "mockapp/core/endorsements.py",
-        "mockapp/app.py",
+        "apps/policycore/core/models.py",
+        "apps/policycore/core/db.py",
+        "apps/policycore/core/endorsements.py",
+        "apps/policycore/app.py",
     ),
-    never_extra=frozenset({"mockapp/core/seed.py"}),
+    never_extra=frozenset({"apps/policycore/core/seed.py"}),
     codegen_allowlist=(
-        "mockapp/core/models.py",
-        "mockapp/core/db.py",
-        "mockapp/core/endorsements.py",
-        "mockapp/app.py",
+        "apps/policycore/core/models.py",
+        "apps/policycore/core/db.py",
+        "apps/policycore/core/endorsements.py",
+        "apps/policycore/app.py",
     ),
     testgen_allowlist=("tests/test_s3_endorsement_priority.py",),
     harness_expected_files=(),
-    post_apply_command=("{python}", "-m", "mockapp.core.seed"),
+    post_apply_command=("{python}", "-m", "apps.policycore.core.seed"),
     mutations=(
         Mutation(
-            rel_path="mockapp/core/endorsements.py",
+            rel_path="apps/policycore/core/endorsements.py",
             old_snippet='priority: str = "Standard",',
             new_snippet='priority: str = "Urgent",',
             description=(
@@ -270,9 +270,9 @@ register_target(MOCKAPP_ENDORSEMENT_FIELD_ADD)
 
 SPRING_TARGET_ID = "springdemo-claims-deductible"
 
-_SPRING_ROOT = REPO_ROOT / "sandbox" / "spring-demo"
-_SPRING_CLAIMS_SRC = "sandbox/spring-demo/claims-service/src/main/java/com/maplesure/claims"
-_SPRING_POLICY_SRC = "sandbox/spring-demo/policy-service/src/main/java/com/maplesure/policy"
+_SPRING_ROOT = REPO_ROOT / "apps" / "claimsportal"
+_SPRING_CLAIMS_SRC = "apps/claimsportal/claims-service/src/main/java/com/maplesure/claims"
+_SPRING_POLICY_SRC = "apps/claimsportal/policy-service/src/main/java/com/maplesure/policy"
 
 SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
     target_id=SPRING_TARGET_ID,
@@ -289,7 +289,7 @@ SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
         f"{_SPRING_CLAIMS_SRC}/PolicyClient.java",
         f"{_SPRING_CLAIMS_SRC}/ClaimsController.java",
         # Does not exist until the CR creates it — same idiom as
-        # mockapp/core/coverage.py on the default target.
+        # apps/policycore/core/coverage.py on the default target.
         f"{_SPRING_CLAIMS_SRC}/ClaimRules.java",
     ),
     codegen_allowlist=(
@@ -301,7 +301,7 @@ SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
         f"{_SPRING_CLAIMS_SRC}/ClaimRules.java",
     ),
     testgen_allowlist=(
-        "sandbox/spring-demo/claims-service/src/test/java/com/maplesure/claims/"
+        "apps/claimsportal/claims-service/src/test/java/com/maplesure/claims/"
         "ClaimRulesTest.java",
     ),
     harness_expected_files=(),

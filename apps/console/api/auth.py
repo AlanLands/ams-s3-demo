@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from pydantic import BaseModel
 
-from api.session import SESSION_COOKIE_NAME, create_session, destroy_session, get_session_data
+from apps.console.api.session import SESSION_COOKIE_NAME, create_session, destroy_session, get_session_data
 from common.roster import (
     MANAGER_NAME,
     ROSTER,

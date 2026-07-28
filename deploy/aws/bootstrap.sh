@@ -39,18 +39,18 @@ sudo -u "$APP_USER" "$APP_DIR/.venv/bin/pip" install -q --upgrade pip
 sudo -u "$APP_USER" "$APP_DIR/.venv/bin/pip" install -q -r "$APP_DIR/requirements.txt"
 
 echo "==> frontend"
-# frontend/dist is gitignored, so it is NOT in the checkout. Build it locally and
+# apps/console/web/dist is gitignored, so it is NOT in the checkout. Build it locally and
 # rsync it up (preferred — keeps Node off the instance entirely), or install Node
 # here by setting BUILD_FRONTEND_ON_HOST=1.
-if [[ -f "$APP_DIR/frontend/dist/index.html" ]]; then
+if [[ -f "$APP_DIR/apps/console/web/dist/index.html" ]]; then
   echo "    dist present — nothing to do"
 elif [[ "${BUILD_FRONTEND_ON_HOST:-0}" == "1" ]]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y -qq nodejs
   sudo -u "$APP_USER" bash -c "cd '$APP_DIR/frontend' && npm ci && npm run build"
 else
-  echo "    !! frontend/dist missing." >&2
-  echo "    !! Build locally (cd frontend && npm run build) and rsync frontend/dist up," >&2
+  echo "    !! apps/console/web/dist missing." >&2
+  echo "    !! Build locally (cd apps/console/web && npm run build) and rsync apps/console/web/dist up," >&2
   echo "    !! or re-run with BUILD_FRONTEND_ON_HOST=1. Without it the console serves" >&2
   echo "    !! the API only and every page load 404s." >&2
   exit 1

@@ -25,7 +25,7 @@ import {
 
 const AI_LABEL = 'AI suggestion — verify with your specialist before applying.'
 
-// The MapleSure mockapp's own Streamlit UI (mockapp/app.py) — launched
+// The MapleSure mockapp's own Streamlit UI (apps/policycore/app.py) — launched
 // separately from the AMS console (see demo/run_mockapp.sh), same
 // port .env.example documents as MOCKAPP_URL.
 const MOCKAPP_URL = 'http://localhost:8501'
@@ -62,7 +62,7 @@ const TESTER_ROSTER = ['Priya Nair', 'Tom Becker']
 const TICKET_TARGETS: Record<string, { targetId: string | null; tierName: string; crLabel: string }> = {
   'AMS-101': { targetId: null, tierName: 'Elite', crLabel: 'CR-2026-041' },
   'AMS-102': { targetId: 'mockapp-endorsement-field-add', tierName: 'Elite', crLabel: 'CR-2026-042' },
-  // The Spring Boot ClaimsPortal target (sandbox/spring-demo) — S3's proof
+  // The Spring Boot ClaimsPortal target (apps/claimsportal) — S3's proof
   // that the pipeline handles a second repo in a second language. tierName is
   // a required placeholder like AMS-102's; CR-2026-043 has no {{TIER_NAME}}.
   'AMS-103': { targetId: 'springdemo-claims-deductible', tierName: 'Elite', crLabel: 'CR-2026-043' },
@@ -2191,7 +2191,7 @@ export default function S3() {
                     <input
                       className="ams-input"
                       style={{ flex: '1 1 240px' }}
-                      placeholder="Repo-relative file path, e.g. mockapp/core/claims.py"
+                      placeholder="Repo-relative file path, e.g. apps/policycore/core/claims.py"
                       value={newFilePath}
                       onChange={(event) => setNewFilePath(event.target.value)}
                       disabled={addingFile || applied}

@@ -10,12 +10,12 @@ This repo has **one pipeline, three CR scenarios** riding on it:
 |---|--------|----|-----------|---------|--------------------|
 | 1 | AMS-101 | CR-2026-041 | MapleSure mockapp (policy portal) | Python | A new top coverage tier (audience picks the name) |
 | 2 | AMS-102 | CR-2026-042 | MapleSure mockapp (same app) | Python | A "Priority" field on the endorsement request form |
-| 3 | AMS-103 | CR-2026-043 | ClaimsPortal (`sandbox/spring-demo`) | Java / Spring Boot | Per-policy deductible handling, across two microservices |
+| 3 | AMS-103 | CR-2026-043 | ClaimsPortal (`apps/claimsportal`) | Java / Spring Boot | Per-policy deductible handling, across two microservices |
 
 All three run through the same AMS console (FastAPI + React, `api/` +
-`frontend/`) — the ticket you click just determines which registered
+`apps/console/web/`) — the ticket you click just determines which registered
 `target_id` the pipeline analyzes/codegens against (see
-`s3_enhancement/targets.py` and `frontend/src/pages/S3.tsx`'s
+`s3_enhancement/targets.py` and `apps/console/web/src/pages/S3.tsx`'s
 `TICKET_TARGETS` map).
 
 ---
@@ -26,7 +26,7 @@ All three run through the same AMS console (FastAPI + React, `api/` +
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # fill in ANTHROPIC_API_KEY or OPENAI_API_KEY
-cd frontend && npm install && cd ..
+cd apps/console/web && npm install && cd ..
 ```
 
 Sanity check the test suite before doing anything else:
@@ -47,9 +47,9 @@ specifically want to test the real API path.
    never been created, so the script would fail with `FAIL: git tag
    's3-endorsement-baseline' does not exist`.
 2. Bigger gap: the pre-CR-042 baseline itself was incomplete.
-   `mockapp/core/endorsements.py` was committed for CR-2026-042, but the
+   `apps/policycore/core/endorsements.py` was committed for CR-2026-042, but the
    scaffold it depends on — the `Endorsement` model, the `endorsements`
-   table, and the "Request a Policy Endorsement" form in `mockapp/app.py` —
+   table, and the "Request a Policy Endorsement" form in `apps/policycore/app.py` —
    was never added. The module didn't even import
    (`ImportError: cannot import name 'insert_endorsement'`), and there was
    no form to show as the "before" state. The committed codegen replay
@@ -104,13 +104,13 @@ demo/reset_s3.sh
 **Run (3 terminals):**
 ```bash
 # terminal 1 — API
-uvicorn api.main:app --port 8000
+uvicorn apps.console.api.main:app --port 8000
 
 # terminal 2 — console
-cd frontend && npm run dev
+cd apps/console/web && npm run dev
 
 # terminal 3 — the client's app (Streamlit view of MapleSure mockapp)
-demo/run_mockapp.sh           # serves mockapp/app.py on :8501
+demo/run_mockapp.sh           # serves apps/policycore/app.py on :8501
 ```
 
 **Steps:**
@@ -178,10 +178,10 @@ demo/reset_s3_springdemo.sh   # ClaimsPortal back to pre-CR baseline
 **Run (3 terminals):**
 ```bash
 # terminal 1 — API
-uvicorn api.main:app --port 8000
+uvicorn apps.console.api.main:app --port 8000
 
 # terminal 2 — console
-cd frontend && npm run dev
+cd apps/console/web && npm run dev
 
 # terminal 3 — the two Spring Boot services (builds automatically)
 demo/run_s3_springdemo.sh

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from mockapp.core.db import insert_claim, list_claims
-from mockapp.core.models import Claim
+from apps.policycore.core.db import insert_claim, list_claims
+from apps.policycore.core.models import Claim
 
 _CLAIM_PREFIX = "CLM"
 

@@ -1,10 +1,10 @@
 # mockapp — agent-harness instructions for the S3 coverage-upgrade CR
 
-Kept in sync with `mockapp/AGENTS.md` — update both together. This file exists
+Kept in sync with `apps/policycore/AGENTS.md` — update both together. This file exists
 only for the S3 live agent-harness demo beat (`s3_enhancement/harness.py`); it
 does not apply to any other work in this repository.
 
-You are implementing change request `mockapp/crs/CR-2026-041.md` (a new top
+You are implementing change request `apps/policycore/crs/CR-2026-041.md` (a new top
 coverage tier) against this small Python policy/claims mock app for
 MapleSure Insurance, a fictional demo insurer. Follow this contract exactly —
 it is pinned for a live, timed demo and another generated file
@@ -14,13 +14,13 @@ these exact names and wordings.
 ## File scope — hard boundary
 
 You may create or edit **only** these files:
-- `mockapp/core/models.py`
-- `mockapp/core/db.py`
-- `mockapp/core/coverage.py`
-- `mockapp/app.py`
+- `apps/policycore/core/models.py`
+- `apps/policycore/core/db.py`
+- `apps/policycore/core/coverage.py`
+- `apps/policycore/app.py`
 - `tests/test_s3_coverage_upgrade.py`
 
-Do not touch any other file. In particular, `mockapp/core/seed.py` is
+Do not touch any other file. In particular, `apps/policycore/core/seed.py` is
 off-limits — it constructs `Policy(...)` with 6 **positional** arguments
 (`policy_number, holder_name, product_type, premium, start_date, status`), no
 `coverage_tier` argument. You must add `coverage_tier` as the **last** field on
@@ -31,7 +31,7 @@ do not make it a required (no-default) field.
 
 ## Fixed public contract — do not rename or restructure
 
-`mockapp/core/coverage.py`'s public API is a fixed contract other files
+`apps/policycore/core/coverage.py`'s public API is a fixed contract other files
 (including the test file you write, and the S4 talk-to-code demo) depend on by
 these exact names:
 
@@ -59,15 +59,15 @@ rounded to 2 decimals with `round(..., 2)`, and persisted with
 `insert_policy()`.
 
 Existing policy list, policy detail, claim submission, and claim list flows in
-`mockapp/app.py` must keep working.
+`apps/policycore/app.py` must keep working.
 
 ## Style
 
 - Ruff-clean, every line at 100 characters or fewer.
 - Type hints throughout.
 - Preserve existing docstrings, comments, and house style in spirit.
-- `mockapp/core/coverage.py` must have a module docstring matching the plain
-  business-logic tone of `mockapp/core/claims.py` (no Streamlit or CLI
+- `apps/policycore/core/coverage.py` must have a module docstring matching the plain
+  business-logic tone of `apps/policycore/core/claims.py` (no Streamlit or CLI
   concerns in `core/` modules).
 
 ## Before finishing

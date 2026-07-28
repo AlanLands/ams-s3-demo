@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
+from apps.console.api.main import app
 from common.roster import PASSCODE_BY_NAME
 from s3_enhancement import applications, routing, targets
 
@@ -262,8 +262,8 @@ def test_ci_route_skips_the_llm_repo_match_entirely(tmp_path, monkeypatch):
     client = _client()
 
     with patch("s3_enhancement.analyze.complete", side_effect=_adhoc_complete), patch(
-        "api.routers.s3.get_client"
-    ) as gitlab, patch("api.routers.s3.suggest_target_repo") as suggest:
+        "apps.console.api.routers.s3.get_client"
+    ) as gitlab, patch("apps.console.api.routers.s3.suggest_target_repo") as suggest:
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={
@@ -288,12 +288,12 @@ def test_missing_ci_still_reaches_the_llm_repo_match(tmp_path, monkeypatch):
     client = _client()
 
     with patch("s3_enhancement.analyze.complete", side_effect=_adhoc_complete), patch(
-        "api.routers.s3.get_client"
+        "apps.console.api.routers.s3.get_client"
     ) as gitlab:
         gitlab.return_value.list_projects.return_value = [
             {"id": "7", "name": "claims-service", "description": "Claims"}
         ]
-        with patch("api.routers.s3.suggest_target_repo") as suggest:
+        with patch("apps.console.api.routers.s3.suggest_target_repo") as suggest:
             suggest.return_value = None
             response = client.post(
                 "/api/s3/analyze-adhoc",

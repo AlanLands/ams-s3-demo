@@ -1,7 +1,7 @@
 """Streamlit view for the MapleSure policy/claims mock app.
 
 Thin view only — no business logic, no direct sqlite3 calls. Everything
-routes through mockapp/core/ (db.py, claims.py).
+routes through apps/policycore/core/ (db.py, claims.py).
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ import streamlit as st
 
 from common.constants import INSURER_NAME
 from common.ui_theme import inject_theme
-from mockapp.core.claims import submit_claim
-from mockapp.core.db import get_policy, init_db, list_claims, list_endorsements, list_policies
-from mockapp.core.endorsements import submit_endorsement
+from apps.policycore.core.claims import submit_claim
+from apps.policycore.core.db import get_policy, init_db, list_claims, list_endorsements, list_policies
+from apps.policycore.core.endorsements import submit_endorsement
 
 
 def render() -> None:

@@ -23,7 +23,7 @@ AI analysis → codegen → tests → docs → release notes.
 
 - `s3_enhancement/cache/` is the committed replay cache that makes the demo
   deterministic; `s3_enhancement/out/` is gitignored and regenerated per run.
-- `sandbox/` is a misleading name: the only thing in it, `spring-demo/`, IS S3's
+- `apps/` is a misleading name: the only thing in it, `spring-demo/`, IS S3's
   second target — "ClaimsPortal" (Java/Spring Boot, CR-2026-043, ticket AMS-103,
   target id `springdemo-claims-deductible`). Its checked-in source is the pre-CR
   baseline (snapshot in `.baseline/`); reset with `demo/reset_s3_springdemo.sh`,
@@ -40,7 +40,7 @@ Renaming or moving a target directory changes every embedding, reshuffles which
 files the relevance funnel selects, and desyncs that selection from the
 committed codegen recordings in `s3_enhancement/cache/`. The beat then dies with
 `LLMError: codegen returned unexpected file set` — in replay mode, offline, with
-no live fallback. Verified against `sandbox/spring-demo` on 2026-07-26.
+no live fallback. Verified against `apps/claimsportal` on 2026-07-26.
 
 Moving a target is a re-record, not a rename: it needs live codegen + testgen
 runs against the new paths and a fresh `tools/verify_s3_live.py` pass.
@@ -61,7 +61,7 @@ runs against the new paths and a fresh `tools/verify_s3_live.py` pass.
 ## Open / TBD
 
 - Demo date and presentation format — TBD (see project owner for latest).
-- `sandbox/` is a misleading directory name for what is really S3's second
+- `apps/` is a misleading directory name for what is really S3's second
   target. Renaming it is blocked on re-recording the CR-2026-043 replay caches
   (see "File paths are load-bearing" above) — worth doing when there's time to
   re-verify the beat live, not before a demo.

@@ -24,11 +24,11 @@ data/kb_articles/*
 s3_enhancement/out/
 
 # React frontend — build output/deps regenerate via npm install / npm run build.
-# See CLAUDE.md's Working style note: frontend/dist must be built or vendored
+# See CLAUDE.md's Working style note: apps/console/web/dist must be built or vendored
 # ahead of time for the locked-down-environment port, since npm may not be
 # available there.
-frontend/node_modules/
-frontend/dist/
+apps/console/web/node_modules/
+apps/console/web/dist/
 
 # OS / editor noise
 .DS_Store

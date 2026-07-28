@@ -5,10 +5,10 @@ app. Same console, same beats, second repo, second language (Java 21 / Spring
 Boot 3, two Maven microservices), second CR — and the verification step runs
 that stack's own toolchain (`mvn test` / JUnit 5), not pytest.
 
-**Cast**: `sandbox/spring-demo` = "ClaimsPortal". policy-service (:8081, Policy
+**Cast**: `apps/claimsportal` = "ClaimsPortal". policy-service (:8081, Policy
 Team console) serves policies; claims-service (:8082, Claims Team console)
 validates each submitted claim by calling policy-service over REST. CR-2026-043
-(`sandbox/spring-demo/crs/CR-2026-043.md`, Jira AMS-103, assignee Ravi Kumar)
+(`apps/claimsportal/crs/CR-2026-043.md`, Jira AMS-103, assignee Ravi Kumar)
 adds a per-policy deductible: below-deductible claims are rejected, accepted
 claims record a payable amount. Fixed contract: `ClaimRules.decide/payable`.
 
@@ -17,10 +17,10 @@ claims record a payable amount. Fixed contract: `ClaimRules.decide/payable`.
 ```bash
 ./demo/reset_s3.sh              # shared state: out/, ticket events, .cache/llm
 ./demo/reset_s3_springdemo.sh   # ClaimsPortal back to pre-CR baseline
-uvicorn api.main:app --port 8000  # terminal 1 — API :8000 (never --reload:
+uvicorn apps.console.api.main:app --port 8000  # terminal 1 — API :8000 (never --reload:
                                   # Generate/Apply write .py files, the watcher
                                   # restarts, and your login session 401s)
-(cd frontend && npm run dev)    # terminal 2 — console :5173
+(cd apps/console/web && npm run dev)    # terminal 2 — console :5173
 ./demo/run_s3_springdemo.sh     # terminal 3 — both team consoles :8081/:8082
 ```
 

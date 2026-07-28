@@ -1,7 +1,7 @@
 """Data models for the MapleSure policy/claims mock app.
 
 Plain dataclasses only — no persistence or business logic here. Storage lives
-in mockapp/core/db.py.
+in apps/policycore/core/db.py.
 """
 
 from __future__ import annotations

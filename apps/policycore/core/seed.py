@@ -4,13 +4,13 @@ Populates data/mockapp.db with synthetic policies and a handful of existing
 claims. All names below are fake/synthetic — never real people or companies.
 
 Run as:
-    python -m mockapp.core.seed
+    python -m apps.policycore.core.seed
 """
 
 from __future__ import annotations
 
-from mockapp.core.db import init_db, insert_claim, insert_policy, wipe_db
-from mockapp.core.models import Claim, Policy
+from apps.policycore.core.db import init_db, insert_claim, insert_policy, wipe_db
+from apps.policycore.core.models import Claim, Policy
 
 # Synthetic policyholders only — no real people or companies.
 _POLICIES: list[Policy] = [

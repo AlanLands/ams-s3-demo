@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
+from apps.console.api.main import app
 from common.roster import PASSCODE_BY_NAME
 from s3_enhancement import codegen
 from s3_enhancement.codegen import LLMError

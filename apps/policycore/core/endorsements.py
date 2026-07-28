@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from mockapp.core.db import insert_endorsement, list_endorsements
-from mockapp.core.models import Endorsement
+from apps.policycore.core.db import insert_endorsement, list_endorsements
+from apps.policycore.core.models import Endorsement
 
 _ENDORSEMENT_PREFIX = "END"
 

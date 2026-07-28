@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
+from apps.console.api.main import app
 from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError
 from common.llm import LLMError
@@ -409,7 +409,7 @@ def test_analyze_adhoc_asks_about_the_drafts_own_assumptions():
         )
 
     with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect), patch(
-        "api.routers.s3.get_client", side_effect=GitLabError("no token")
+        "apps.console.api.routers.s3.get_client", side_effect=GitLabError("no token")
     ):
         response = client.post(
             "/api/s3/analyze-adhoc",
@@ -659,8 +659,8 @@ def test_analyze_adhoc_asks_repo_confirmation_after_text_clarity_passes():
     ]
 
     with patch("s3_enhancement.analyze.complete", return_value=clear), patch(
-        "api.routers.s3.get_client", return_value=gitlab
-    ), patch("api.routers.s3.suggest_target_repo", return_value=suggestion):
+        "apps.console.api.routers.s3.get_client", return_value=gitlab
+    ), patch("apps.console.api.routers.s3.suggest_target_repo", return_value=suggestion):
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={"cr_text": "Update the coverage limit calculation"},
@@ -689,8 +689,8 @@ def test_analyze_adhoc_includes_high_confidence_target_repo_in_final_result(tmp_
 
     with patch(
         "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
-    ), patch("api.routers.s3.get_client", return_value=gitlab), patch(
-        "api.routers.s3.suggest_target_repo", return_value=suggestion
+    ), patch("apps.console.api.routers.s3.get_client", return_value=gitlab), patch(
+        "apps.console.api.routers.s3.suggest_target_repo", return_value=suggestion
     ):
         response = client.post(
             "/api/s3/analyze-adhoc",
@@ -709,7 +709,7 @@ def test_analyze_adhoc_skips_repo_check_when_gitlab_unavailable():
 
     with patch(
         "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
-    ), patch("api.routers.s3.get_client", side_effect=GitLabError("no token")) as mock_get_client:
+    ), patch("apps.console.api.routers.s3.get_client", side_effect=GitLabError("no token")) as mock_get_client:
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={"cr_text": "BillingGateway needs to handle recalculated premiums."},
@@ -829,7 +829,7 @@ def test_tests_failure_carries_returncode_and_passed_flag():
     )
 
     with (
-        patch("api.routers.s3.generate_tests", return_value=fake_result),
+        patch("apps.console.api.routers.s3.generate_tests", return_value=fake_result),
         patch("s3_enhancement.testrun.subprocess.run") as run,
     ):
         run.return_value.returncode = 1
@@ -852,7 +852,7 @@ def test_run_tests_missing_runner_returns_502():
     detail, not an uncaught FileNotFoundError 500."""
     from fastapi import HTTPException
 
-    from api.routers.s3 import _run_suite_or_502
+    from apps.console.api.routers.s3 import _run_suite_or_502
 
     target = SimpleNamespace(
         test_command=("definitely-not-a-real-binary-xyz", "test"),
@@ -897,7 +897,7 @@ def test_tests_generate_returns_diff_without_running():
     )
 
     with (
-        patch("api.routers.s3.generate_tests", return_value=fake_result),
+        patch("apps.console.api.routers.s3.generate_tests", return_value=fake_result),
         patch("s3_enhancement.testrun.subprocess.run") as run,
     ):
         response = client.post("/api/s3/tests/generate", json={"tier_name": "Elite"})
@@ -914,7 +914,7 @@ def test_tests_generate_returns_diff_without_running():
 def test_tests_run_409s_before_generation():
     client = _client()
 
-    with patch("api.routers.s3.testrun.generated_test_file_exists", return_value=False):
+    with patch("apps.console.api.routers.s3.testrun.generated_test_file_exists", return_value=False):
         response = client.post("/api/s3/tests/run", json={"tier_name": "Elite"})
 
     assert response.status_code == 409
@@ -950,8 +950,8 @@ def test_tests_run_returns_parsed_cases():
     )
 
     with (
-        patch("api.routers.s3.testrun.generated_test_file_exists", return_value=True),
-        patch("api.routers.s3.testrun.run_suite", return_value=fake_run),
+        patch("apps.console.api.routers.s3.testrun.generated_test_file_exists", return_value=True),
+        patch("apps.console.api.routers.s3.testrun.run_suite", return_value=fake_run),
     ):
         response = client.post("/api/s3/tests/run", json={"tier_name": "Elite"})
 
@@ -986,20 +986,20 @@ def test_tests_mutation_returns_verdict_and_reverted_flag():
     )
     fake_mutation = MutationRun(
         description="Weakened the same-tier guard",
-        rel_path="mockapp/core/coverage.py",
-        mutation_diff="--- a/mockapp/core/coverage.py\n+++ b/mockapp/core/coverage.py\n",
+        rel_path="apps/policycore/core/coverage.py",
+        mutation_diff="--- a/apps/policycore/core/coverage.py\n+++ b/apps/policycore/core/coverage.py\n",
         run=fake_run,
         tests_caught_bug=True,
     )
 
-    with patch("api.routers.s3.testrun.run_mutation", return_value=fake_mutation):
+    with patch("apps.console.api.routers.s3.testrun.run_mutation", return_value=fake_mutation):
         response = client.post("/api/s3/tests/mutation", json={"tier_name": "Elite"})
 
     assert response.status_code == 200
     body = response.json()
     assert body["tests_caught_bug"] is True
     assert body["reverted"] is True
-    assert body["file"] == "mockapp/core/coverage.py"
+    assert body["file"] == "apps/policycore/core/coverage.py"
     assert body["cases"][0]["status"] == "failed"
 
 
@@ -1009,7 +1009,7 @@ def test_tests_mutation_409s_when_unavailable():
     client = _client()
 
     with patch(
-        "api.routers.s3.testrun.run_mutation",
+        "apps.console.api.routers.s3.testrun.run_mutation",
         side_effect=MutationError("Generate and run the tests first"),
     ):
         response = client.post("/api/s3/tests/mutation", json={"tier_name": "Elite"})
@@ -1065,7 +1065,7 @@ def test_design_doc_llm_error_returns_502():
 def test_apply_calls_apply_change_with_file_path():
     client = _client()
 
-    with patch("api.routers.s3.apply_change", return_value=["a.py"]) as apply_change:
+    with patch("apps.console.api.routers.s3.apply_change", return_value=["a.py"]) as apply_change:
         response = client.post(
             "/api/s3/apply", json={"proposal_id": "prop-1", "file_path": "a.py"}
         )
@@ -1084,14 +1084,14 @@ def test_apply_calls_apply_change_with_file_path():
 
 
 def test_apply_mockapp_files_runs_post_apply_migration():
-    """Applying files under mockapp/ must rebuild the SQLite schema in a
+    """Applying files under apps/policycore/ must rebuild the SQLite schema in a
     subprocess (the applied CR may have added a column the existing DB
     predates) — the crash-after-apply regression."""
     client = _client()
 
     with (
-        patch("api.routers.s3.apply_change", return_value=["mockapp/core/db.py"]),
-        patch("api.routers.s3.subprocess.run") as run,
+        patch("apps.console.api.routers.s3.apply_change", return_value=["apps/policycore/core/db.py"]),
+        patch("apps.console.api.routers.s3.subprocess.run") as run,
     ):
         run.return_value.returncode = 0
         run.return_value.stdout = ""
@@ -1101,7 +1101,7 @@ def test_apply_mockapp_files_runs_post_apply_migration():
     assert response.status_code == 200
     assert run.call_count == 1
     argv = run.call_args.args[0]
-    assert argv[1:] == ["-m", "mockapp.core.seed"]
+    assert argv[1:] == ["-m", "apps.policycore.core.seed"]
     post_apply = response.json()["post_apply"]
     assert post_apply["ok"] is True
     assert post_apply["steps"][0]["returncode"] == 0
@@ -1117,8 +1117,8 @@ def test_apply_post_apply_failure_carried_in_response(tmp_path, monkeypatch):
     client = _client()
 
     with (
-        patch("api.routers.s3.apply_change", return_value=["mockapp/core/db.py"]),
-        patch("api.routers.s3.subprocess.run") as run,
+        patch("apps.console.api.routers.s3.apply_change", return_value=["apps/policycore/core/db.py"]),
+        patch("apps.console.api.routers.s3.subprocess.run") as run,
     ):
         run.return_value.returncode = 1
         run.return_value.stdout = "Traceback (most recent call last):\nKeyError: 'deductible'"
@@ -1145,8 +1145,8 @@ def test_apply_non_stateful_files_skips_post_apply_migration():
     client = _client()
 
     with (
-        patch("api.routers.s3.apply_change", return_value=["a.py"]),
-        patch("api.routers.s3.subprocess.run") as run,
+        patch("apps.console.api.routers.s3.apply_change", return_value=["a.py"]),
+        patch("apps.console.api.routers.s3.subprocess.run") as run,
     ):
         response = client.post("/api/s3/apply", json={"proposal_id": "prop-1"})
 
@@ -1157,7 +1157,7 @@ def test_apply_non_stateful_files_skips_post_apply_migration():
 def test_apply_llm_error_returns_502():
     client = _client()
 
-    with patch("api.routers.s3.apply_change", side_effect=LLMError("no such proposal")):
+    with patch("apps.console.api.routers.s3.apply_change", side_effect=LLMError("no such proposal")):
         response = client.post("/api/s3/apply", json={"proposal_id": "prop-1"})
 
     assert response.status_code == 502
@@ -1175,7 +1175,7 @@ def test_add_file_returns_diff_and_files_changed():
         scoped_output_tokens=5,
     )
 
-    with patch("api.routers.s3.add_file_to_proposal", return_value=fake_result) as add_file:
+    with patch("apps.console.api.routers.s3.add_file_to_proposal", return_value=fake_result) as add_file:
         response = client.post(
             "/api/s3/add-file",
             json={"proposal_id": "prop-1", "file_path": "a.py", "instruction": "add a field"},
@@ -1192,7 +1192,7 @@ def test_add_file_returns_diff_and_files_changed():
 def test_add_file_llm_error_returns_502():
     client = _client()
 
-    with patch("api.routers.s3.add_file_to_proposal", side_effect=LLMError("nope")):
+    with patch("apps.console.api.routers.s3.add_file_to_proposal", side_effect=LLMError("nope")):
         response = client.post(
             "/api/s3/add-file",
             json={"proposal_id": "prop-1", "file_path": "a.py", "instruction": "add a field"},
@@ -1205,7 +1205,7 @@ def test_add_file_llm_error_returns_502():
 def test_harness_latest_without_run_returns_404():
     client = _client()
 
-    with patch("api.routers.s3.latest_harness_run", return_value=None):
+    with patch("apps.console.api.routers.s3.latest_harness_run", return_value=None):
         response = client.get("/api/s3/harness/latest")
 
     assert response.status_code == 404
@@ -1216,7 +1216,7 @@ def test_gitlab_projects_returns_project_list():
     gitlab = MagicMock()
     gitlab.list_projects.return_value = [{"id": 1, "name": "demo-repo"}]
 
-    with patch("api.routers.s3.get_client", return_value=gitlab):
+    with patch("apps.console.api.routers.s3.get_client", return_value=gitlab):
         response = client.get("/api/s3/gitlab/projects")
 
     assert response.status_code == 200
@@ -1228,7 +1228,7 @@ def test_gitlab_projects_error_returns_502():
     gitlab = MagicMock()
     gitlab.list_projects.side_effect = GitLabError("no token")
 
-    with patch("api.routers.s3.get_client", return_value=gitlab):
+    with patch("apps.console.api.routers.s3.get_client", return_value=gitlab):
         response = client.get("/api/s3/gitlab/projects")
 
     assert response.status_code == 502
@@ -1241,10 +1241,10 @@ def test_gitlab_scope_returns_repo_size_and_selected_files():
     gitlab.list_repo_paths.return_value = ["a.py", "b.py"]
     selection = SimpleNamespace(selected={"a.py": "print(1)"})
 
-    with patch("api.routers.s3.get_client", return_value=gitlab), patch(
-        "api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}
+    with patch("apps.console.api.routers.s3.get_client", return_value=gitlab), patch(
+        "apps.console.api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}
     ), patch(
-        "api.routers.s3.select_relevant_files", return_value=selection
+        "apps.console.api.routers.s3.select_relevant_files", return_value=selection
     ):
         response = client.post("/api/s3/gitlab/projects/1/scope", json={"tier_name": "Elite"})
 
@@ -1268,10 +1268,10 @@ def test_gitlab_scope_auto_picks_repo_and_scopes_it():
         alternates=(),
     )
 
-    with patch("api.routers.s3.get_client", return_value=gitlab), patch(
-        "api.routers.s3.suggest_target_repo", return_value=suggestion
-    ), patch("api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}), patch(
-        "api.routers.s3.select_relevant_files", return_value=selection
+    with patch("apps.console.api.routers.s3.get_client", return_value=gitlab), patch(
+        "apps.console.api.routers.s3.suggest_target_repo", return_value=suggestion
+    ), patch("apps.console.api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}), patch(
+        "apps.console.api.routers.s3.select_relevant_files", return_value=selection
     ):
         response = client.post("/api/s3/gitlab/scope-auto", json={"tier_name": "Elite"})
 
@@ -1297,8 +1297,8 @@ def test_gitlab_scope_auto_asks_for_confirmation_on_low_confidence():
         alternates=(SimpleNamespace(project_id="2", confidence="low", reasoning="also plausible"),),
     )
 
-    with patch("api.routers.s3.get_client", return_value=gitlab), patch(
-        "api.routers.s3.suggest_target_repo", return_value=suggestion
+    with patch("apps.console.api.routers.s3.get_client", return_value=gitlab), patch(
+        "apps.console.api.routers.s3.suggest_target_repo", return_value=suggestion
     ):
         response = client.post("/api/s3/gitlab/scope-auto", json={"tier_name": "Elite"})
 
@@ -1323,11 +1323,11 @@ def test_gitlab_scope_auto_confirmed_project_id_skips_match_and_scopes():
     gitlab.list_repo_paths.return_value = ["a.py"]
     selection = SimpleNamespace(selected={"a.py": "print(1)"})
 
-    with patch("api.routers.s3.get_client", return_value=gitlab), patch(
-        "api.routers.s3.suggest_target_repo"
+    with patch("apps.console.api.routers.s3.get_client", return_value=gitlab), patch(
+        "apps.console.api.routers.s3.suggest_target_repo"
     ) as mock_suggest, patch(
-        "api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}
-    ), patch("api.routers.s3.select_relevant_files", return_value=selection):
+        "apps.console.api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}
+    ), patch("apps.console.api.routers.s3.select_relevant_files", return_value=selection):
         response = client.post(
             "/api/s3/gitlab/scope-auto",
             json={"tier_name": "Elite", "confirmed_project_id": "2"},
@@ -1354,11 +1354,11 @@ def test_gitlab_scope_auto_accepts_free_text_cr_for_adhoc_tickets():
         alternates=(),
     )
 
-    with patch("api.routers.s3.get_client", return_value=gitlab), patch(
-        "api.routers.s3.suggest_target_repo", return_value=suggestion
+    with patch("apps.console.api.routers.s3.get_client", return_value=gitlab), patch(
+        "apps.console.api.routers.s3.suggest_target_repo", return_value=suggestion
     ) as mock_suggest, patch(
-        "api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}
-    ), patch("api.routers.s3.select_relevant_files", return_value=selection):
+        "apps.console.api.routers.s3.discover_gitlab_files", return_value={"a.py": "print(1)"}
+    ), patch("apps.console.api.routers.s3.select_relevant_files", return_value=selection):
         response = client.post(
             "/api/s3/gitlab/scope-auto",
             json={"cr_text": "Coverage limit is wrong for renewal policies"},
@@ -1383,8 +1383,8 @@ def test_gitlab_scope_auto_returns_502_on_llm_error():
     gitlab = MagicMock()
     gitlab.list_projects.return_value = [{"id": 1, "name": "policy-service"}]
 
-    with patch("api.routers.s3.get_client", return_value=gitlab), patch(
-        "api.routers.s3.suggest_target_repo", side_effect=LLMError("no candidates")
+    with patch("apps.console.api.routers.s3.get_client", return_value=gitlab), patch(
+        "apps.console.api.routers.s3.suggest_target_repo", side_effect=LLMError("no candidates")
     ):
         response = client.post("/api/s3/gitlab/scope-auto", json={"tier_name": "Elite"})
 

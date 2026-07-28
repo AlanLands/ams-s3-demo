@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # CR-2026-043 (Spring Boot ClaimsPortal target) between-rehearsals reset.
-# Mirrors demo/reset_s3.sh's job for the mockapp target, but sandbox/spring-demo
+# Mirrors demo/reset_s3.sh's job for the mockapp target, but apps/claimsportal
 # is not git-tracked, so the pre-CR baseline is restored from the committed-in-place
-# snapshot at sandbox/spring-demo/.baseline/ instead of a git tag.
+# snapshot at apps/claimsportal/.baseline/ instead of a git tag.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SPRING=sandbox/spring-demo
+SPRING=apps/claimsportal
 BASELINE_FILES=(
   policy-service/src/main/java/com/maplesure/policy/Policy.java
   policy-service/src/main/java/com/maplesure/policy/PolicyController.java

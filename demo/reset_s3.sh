@@ -5,11 +5,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
-git show s3-baseline:mockapp/app.py > mockapp/app.py
-git show s3-baseline:mockapp/core/models.py > mockapp/core/models.py
-git show s3-baseline:mockapp/core/db.py > mockapp/core/db.py
-rm -f mockapp/core/coverage.py tests/test_s3_coverage_upgrade.py
-python -m mockapp.core.seed
+# Restored from HEAD, not from the `s3-baseline` tag — see the same note in
+# demo/reset_s3_endorsement.sh. The tag predates both the apps/ restructure
+# (its paths are `mockapp/...`, which no longer resolve) and the endorsements
+# table (its `wipe_db()` drops `policies` while `endorsements` still
+# references it, so reseeding fails with a FOREIGN KEY error and the reset
+# can never finish).
+git checkout HEAD -- \
+  apps/policycore/app.py \
+  apps/policycore/core/models.py \
+  apps/policycore/core/db.py
+rm -f apps/policycore/core/coverage.py tests/test_s3_coverage_upgrade.py
+python -m apps.policycore.core.seed
 rm -rf .cache/llm
 # Every staged proposal (Generate/Ask/Apply's working state) and harness run,
 # not just harness subdirs — s3_enhancement/out/ is gitignored/regenerated

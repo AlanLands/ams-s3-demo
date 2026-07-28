@@ -32,7 +32,7 @@ for beat 4 if using the harness path):
    codebase. (live LLM call, read-only)
    Use the transparency panel here: this app is a small ~6-file modern Python
    policy/claims app sitting in front of a ~50-file legacy Java estate
-   (`mockapp/systems/legacy_java_platform/`), mirroring the kind of heterogeneous
+   (`apps/policycore/systems/legacy_java_platform/`), mirroring the kind of heterogeneous
    stack the client runs in AMS — a real system underneath, not a slide.
    Selection runs in two stages, live: first the AI reads each legacy
    subsystem's `DESIGN.md` (billing, underwriting, risk, settlement, audit,
@@ -51,7 +51,7 @@ for beat 4 if using the harness path):
 4. **Money shot.** Either: (a) the Streamlit pipeline generates the change and it
    streams on screen, then the validated files apply to the repo; or (b) switch to
    the second terminal pane and press Enter on `run_s3_harness.sh` — the agent
-   harness reads the CR and `mockapp/CLAUDE.md`'s contract, edits the files itself,
+   harness reads the CR and `apps/policycore/CLAUDE.md`'s contract, edits the files itself,
    and narrates what it's doing live. Either way, back in Streamlit, click "Load
    latest harness run" (harness path only) and check "I've reviewed this AI-generated
    change" before beat 7 unlocks.

@@ -131,7 +131,7 @@ def build_prompt(tier_name: str, cr_text: str) -> str:
 """
 
     context_files = []
-    for rel_path in ("mockapp/core/models.py", "mockapp/core/db.py", "mockapp/core/seed.py"):
+    for rel_path in ("apps/policycore/core/models.py", "apps/policycore/core/db.py", "apps/policycore/core/seed.py"):
         path = REPO_ROOT / rel_path
         content = path.read_text(encoding="utf-8") if path.exists() else ""
         context_files.append(f"--- {rel_path} ---\n{content}")
@@ -153,18 +153,18 @@ do not write fallback/try-except import chains, and do not treat a Policy as a
 dict:
 {chr(10).join(context_files)}
 
-`mockapp.core.coverage` exposes `COVERAGE_TIERS: list[str]`,
+`apps.policycore.core.coverage` exposes `COVERAGE_TIERS: list[str]`,
 `TIER_MULTIPLIERS: dict[str, float]`, and
 `upgrade_coverage(policy_number: str, new_tier: str) -> Policy` (raises
 `ValueError` on unknown tier / downgrade / same-tier / unknown policy).
 The recalculated premium is rounded to 2 decimals — expected values must be
 computed as `round(premium / old_multiplier * new_multiplier, 2)`, never
 compared against an unrounded float.
-`mockapp.core.db.get_policy(policy_number: str) -> Policy | None` and
+`apps.policycore.core.db.get_policy(policy_number: str) -> Policy | None` and
 `list_policies() -> list[Policy]` return `Policy` dataclass instances — access
 fields with plain attribute access (`policy.coverage_tier`, `policy.premium`,
 `policy.policy_number`), never dict-style `policy["..."]` or `.get(...)`.
-`mockapp.core.seed.reseed() -> None` reseeds known synthetic policies
+`apps.policycore.core.seed.reseed() -> None` reseeds known synthetic policies
 (e.g. "POL-10001") at coverage_tier="Standard" — call it directly by that name
 in an autouse fixture, no aliasing needed. An unknown policy number for the
 "unknown policy" test should be an unmistakably invalid string like
@@ -178,8 +178,8 @@ Return structured JSON only with this exact shape:
 }}
 
 Use pytest, reseed the mock app database before each test via an autouse
-fixture, and import directly from mockapp.core.coverage, mockapp.core.db, and
-mockapp.core.seed using the exact names given above. The test file should be
+fixture, and import directly from apps.policycore.core.coverage, apps.policycore.core.db, and
+apps.policycore.core.seed using the exact names given above. The test file should be
 deterministic and have no LLM calls or network access."""
 
 
@@ -199,10 +199,10 @@ def build_endorsement_prompt(cr_text: str, *, target: Target) -> str:
 
     context_files = []
     for rel_path in (
-        "mockapp/core/models.py",
-        "mockapp/core/db.py",
-        "mockapp/core/endorsements.py",
-        "mockapp/core/seed.py",
+        "apps/policycore/core/models.py",
+        "apps/policycore/core/db.py",
+        "apps/policycore/core/endorsements.py",
+        "apps/policycore/core/seed.py",
     ):
         path = REPO_ROOT / rel_path
         content = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -221,14 +221,14 @@ do not write fallback/try-except import chains, and do not treat an
 Endorsement as a dict:
 {chr(10).join(context_files)}
 
-`mockapp.core.endorsements.submit_endorsement(policy_number: str,
+`apps.policycore.core.endorsements.submit_endorsement(policy_number: str,
 endorsement_type: str, requested_change: str, effective_date: str,
 contact_phone: str, contact_email: str, priority: str = "Standard") ->
 Endorsement` is the only function that creates an endorsement.
-`mockapp.core.db.list_endorsements(policy_number: str) -> list[Endorsement]`
+`apps.policycore.core.db.list_endorsements(policy_number: str) -> list[Endorsement]`
 returns `Endorsement` dataclass instances — access fields with plain
 attribute access (`endorsement.priority`), never dict-style access.
-`mockapp.core.seed.reseed() -> None` reseeds known synthetic policies (e.g.
+`apps.policycore.core.seed.reseed() -> None` reseeds known synthetic policies (e.g.
 "POL-10001") — call it directly by that name in an autouse fixture, no
 aliasing needed.
 
@@ -240,8 +240,8 @@ Return structured JSON only with this exact shape:
 }}
 
 Use pytest, reseed the mock app database before each test via an autouse
-fixture, and import directly from mockapp.core.endorsements, mockapp.core.db,
-and mockapp.core.seed using the exact names given above. The test file should
+fixture, and import directly from apps.policycore.core.endorsements, apps.policycore.core.db,
+and apps.policycore.core.seed using the exact names given above. The test file should
 be deterministic and have no LLM calls or network access."""
 
 

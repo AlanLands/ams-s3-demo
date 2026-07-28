@@ -37,8 +37,8 @@ real client in code, data, commits, generated UI, screenshots, or docs.
 
 - Python 3.12+ with type hints and small modules.
 - The console is **React (Vite + TypeScript) over a FastAPI backend** —
-  `frontend/` + `api/`. Streamlit remains only for the *mock client app*
-  (`mockapp/app.py`), which is a separate window the demo shows before/after.
+  `apps/console/web/` + `api/`. Streamlit remains only for the *mock client app*
+  (`apps/policycore/app.py`), which is a separate window the demo shows before/after.
 - Put pipeline, LLM, data, and domain logic in importable Python modules; keep
   `api/` routers thin.
 - All LLM calls must go through `common/llm.py`.
@@ -56,7 +56,7 @@ API keys runs the whole pipeline offline. Two consequences:
   the text it scores. Renaming or moving a target directory changes the
   embeddings, reshuffles file selection, and desyncs it from the committed
   codegen recordings — the beat then fails hard in replay mode. Moving a target
-  is a re-record, not a rename. See `sandbox/README.md`.
+  is a re-record, not a rename. See `apps/README.md`.
 - `common/llm.py`'s `complete()` hashes `cache_key` alone when one is supplied,
   not the prompt. Changing a prompt does **not** invalidate a pinned entry;
   clear `.cache/llm/` when re-testing a changed prompt live.
@@ -72,8 +72,8 @@ API keys runs the whole pipeline offline. Two consequences:
 ## Running the App
 
 ```bash
-uvicorn api.main:app --port 8000     # backend — do NOT use --reload (see README)
-cd frontend && npm run dev           # console on :5173
+uvicorn apps.console.api.main:app --port 8000     # backend — do NOT use --reload (see README)
+cd apps/console/web && npm run dev           # console on :5173
 demo/run_mockapp.sh                  # the client's app on :8501, when a beat needs it
 ```
 

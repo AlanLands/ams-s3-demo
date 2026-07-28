@@ -4,7 +4,7 @@ Where codegen.py/testgen.py concatenate whole mockapp files into one prompt
 and ask for complete-file JSON replacements in a single call, this module
 shells out to a real headless coding-agent CLI (Claude Code `claude -p` or
 Codex CLI `codex exec`) against the actual repo: the harness reads only what
-it needs, edits mockapp/tests itself, and runs pytest itself, while a
+it needs, edits apps/policycore/tests itself, and runs pytest itself, while a
 presenter watches it happen live in a terminal.
 
 This is additive only — codegen.py, testgen.py, analyze.py, docgen.py, and
@@ -103,7 +103,7 @@ def build_prompt(tier_name: str, cr_text: str) -> str:
 
 Audience-selected top tier name: {tier_name}
 
-Follow mockapp/CLAUDE.md (or mockapp/AGENTS.md — they are content-identical)
+Follow apps/policycore/CLAUDE.md (or apps/policycore/AGENTS.md — they are content-identical)
 in this repo exactly. It is the fixed contract for this change: the file
 scope, the exact COVERAGE_TIERS/TIER_MULTIPLIERS/upgrade_coverage API, the
 exact ValueError wordings, and the instruction to run pytest before
@@ -270,9 +270,9 @@ def _run_pytest() -> subprocess.CompletedProcess:
 
 
 def _validate_content(tier_name: str) -> None:
-    coverage_path = REPO_ROOT / "mockapp/core/coverage.py"
+    coverage_path = REPO_ROOT / "apps/policycore/core/coverage.py"
     if not coverage_path.exists():
-        raise HarnessError("harness run did not produce mockapp/core/coverage.py")
+        raise HarnessError("harness run did not produce apps/policycore/core/coverage.py")
     content = coverage_path.read_text(encoding="utf-8")
 
     try:
@@ -314,20 +314,20 @@ def _validate_content(tier_name: str) -> None:
 
 
 def _validate_models_backward_compatible() -> None:
-    """mockapp/core/seed.py is off the harness's file scope and constructs
+    """apps/policycore/core/seed.py is off the harness's file scope and constructs
     Policy(...) with 6 positional args (no coverage_tier) — this must still
     work after the harness's models.py adds coverage_tier, or the app crashes
     on startup. Mirrors codegen.py's _validate_policy_backward_compatible."""
-    models_path = REPO_ROOT / "mockapp/core/models.py"
+    models_path = REPO_ROOT / "apps/policycore/core/models.py"
     models_content = models_path.read_text(encoding="utf-8")
     namespace: dict = {}
     try:
-        exec(compile(models_content, "mockapp/core/models.py", "exec"), namespace)  # noqa: S102
+        exec(compile(models_content, "apps/policycore/core/models.py", "exec"), namespace)  # noqa: S102
         policy_cls = namespace["Policy"]
         policy_cls("POL-TEST", "Test Holder", "Auto", 100.0, "2024-01-01", "Active")
     except Exception as exc:
         raise HarnessError(
-            "harness generated mockapp/core/models.py breaks mockapp/core/seed.py's "
+            "harness generated apps/policycore/core/models.py breaks apps/policycore/core/seed.py's "
             f"existing 6-positional-arg Policy(...) construction: {exc}"
         ) from exc
 

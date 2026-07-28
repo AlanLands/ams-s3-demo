@@ -1,6 +1,6 @@
 # S3's demo beat has the harness/AMS console overwrite mockapp source files
-# (mockapp/app.py, core/coverage.py, core/endorsements.py, ...) on disk while
-# mockapp/app.py is already running as a separate live Streamlit process.
+# (apps/policycore/app.py, core/coverage.py, core/endorsements.py, ...) on disk while
+# apps/policycore/app.py is already running as a separate live Streamlit process.
 # Streamlit's default (runOnSave = false) only shows a dismissable "Source
 # file changed" prompt in the corner instead of re-running — easy to miss
 # live, and the app keeps rendering stale UI (e.g. a just-added form field or

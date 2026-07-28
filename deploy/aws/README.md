@@ -229,21 +229,21 @@ before continuing, or add a Bedrock VPC endpoint.
 
 ## Step 4. Build the frontend locally
 
-`frontend/dist/` is gitignored, so it is **not** in the checkout. Build it here
+`apps/console/web/dist/` is gitignored, so it is **not** in the checkout. Build it here
 and ship the output — this keeps Node off the instance entirely.
 
 ```bash
-cd frontend && npm ci && npm run build && cd ..
+cd apps/console/web && npm ci && npm run build && cd ..
 ```
 
-**Verify:** `ls frontend/dist/index.html` exists.
+**Verify:** `ls apps/console/web/dist/index.html` exists.
 
 ## Step 5. Ship the repo
 
 ```bash
 ssh $INSTANCE 'sudo mkdir -p /opt/ams-s3-demo && sudo chown ubuntu:ubuntu /opt/ams-s3-demo'
 
-rsync -av --exclude .venv --exclude 'frontend/node_modules' \
+rsync -av --exclude .venv --exclude 'apps/console/web/node_modules' \
   ./ "$INSTANCE:/opt/ams-s3-demo/"
 ```
 
@@ -254,7 +254,7 @@ rsync -av --exclude .venv --exclude 'frontend/node_modules' \
 **Verify:**
 
 ```bash
-ssh $INSTANCE 'cd /opt/ams-s3-demo && git tag -l && ls frontend/dist/index.html'
+ssh $INSTANCE 'cd /opt/ams-s3-demo && git tag -l && ls apps/console/web/dist/index.html'
 ```
 
 You must see `s3-baseline` in the tag list and the dist file present.
@@ -390,7 +390,7 @@ the Bedrock path, the proxy, or the warmed cache. Do it here.
 
 Open `http://<public-ip>/` and walk the full script in
 `demo/DEMO_TEST_GUIDE.md`. Check the mockapp at
-`http://<public-ip>/mockapp/` too.
+`http://<public-ip>/apps/policycore/` too.
 
 Watch for any beat that pauses where rehearsal was instant — that is an
 unwarmed cache entry going live. Re-run Step 10 if you see one.
@@ -433,8 +433,8 @@ sudo journalctl -u ams-s3-mockapp -n 100 --no-pager
 ## Deploying a code update
 
 ```bash
-cd frontend && npm run build && cd ..          # if frontend changed
-rsync -av --exclude .venv --exclude 'frontend/node_modules' ./ "$INSTANCE:/opt/ams-s3-demo/"
+cd apps/console/web && npm run build && cd ..          # if frontend changed
+rsync -av --exclude .venv --exclude 'apps/console/web/node_modules' ./ "$INSTANCE:/opt/ams-s3-demo/"
 ssh $INSTANCE 'sudo bash /opt/ams-s3-demo/deploy/aws/bootstrap.sh'
 # then Step 10 (warm) if the cache was cleared
 ```
@@ -445,7 +445,7 @@ ssh $INSTANCE 'sudo bash /opt/ams-s3-demo/deploy/aws/bootstrap.sh'
 |---|---|
 | `AccessDeniedException` from Bedrock | Model access not granted in the Bedrock console (Step 1), or wrong region |
 | 400 on every LLM call | `BEDROCK_MODEL` missing the `anthropic.` prefix |
-| Console 404s on every page | `frontend/dist` not built or not shipped (Steps 4–5) |
+| Console 404s on every page | `apps/console/web/dist` not built or not shipped (Steps 4–5) |
 | Mockapp stuck "connecting" | nginx missing websocket `Upgrade` headers, or `--server.baseUrlPath` not matching the location block |
 | Pipeline hangs during analyze | `GITLAB_MODE` still `live` with no outbound route (Step 6) |
 | `reset_s3.sh` fails on `git show` | `.git` or the `s3-baseline` tag missing — re-ship without excluding `.git` (Step 5) |
@@ -458,7 +458,7 @@ ssh $INSTANCE 'sudo bash /opt/ams-s3-demo/deploy/aws/bootstrap.sh'
 pipeline writes generated `.py` files into its own working tree and shells out
 to `pytest` (`api/routers/s3.py`, `s3_enhancement/testrun.py`). Local state that
 must persist across requests includes the SQLite policy/claims DB
-(`mockapp/core/db.py`), the ChromaDB vector directory (`common/vectorstore.py`),
+(`apps/policycore/core/db.py`), the ChromaDB vector directory (`common/vectorstore.py`),
 the LLM replay cache, and `s3_enhancement/out/`. A second worker or instance
 would serve inconsistent state mid-demo.
 
@@ -473,7 +473,7 @@ instance and its security group, not the unit file.
 |---|---|---|---|
 | FastAPI console | 8000 (localhost) | `ams-s3-console` | `/api/*` and the built React SPA |
 | Streamlit mockapp | 8501 (localhost) | `ams-s3-mockapp` | MapleSure portal — the CR target |
-| nginx | 80 (public) | `nginx` | `/` → console, `/mockapp/` → mockapp |
+| nginx | 80 (public) | `nginx` | `/` → console, `/apps/policycore/` → mockapp |
 
 ## Appendix B — files in this directory
 

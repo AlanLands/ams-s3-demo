@@ -363,7 +363,7 @@ not just the prompt. A generation that quietly drops a required file is rejected
 not shipped. Duo suggests; this one refuses.</p>
 
 <h3>The top-scoring file in the whole corpus is hard-blocked</h3>
-<p>The best line in the deck. <code>mockapp/core/seed.py</code> would score higher
+<p>The best line in the deck. <code>apps/policycore/core/seed.py</code> would score higher
 against this CR than any other candidate — it is the file most densely packed with
 <code>Policy</code> field names. It is also the one file that must never be edited,
 because it constructs <code>Policy(...)</code> with six positional arguments that
@@ -557,7 +557,7 @@ page nobody reads.</em> That is a roadmap conversation, not a weakness.</p>
 <p class="footnote">
 <strong>Method.</strong> All figures produced by running this repository's own
 <code>s3_enhancement/relevance.py</code> against
-<code>mockapp/crs/CR-2026-041.md</code> on 27 July 2026, with the local embedding
+<code>apps/policycore/crs/CR-2026-041.md</code> on 27 July 2026, with the local embedding
 backend active (not the lexical fallback). Token counts use the repository's
 ~4-characters-per-token estimator and are explicitly estimates; a billed figure
 always comes from the provider's reported usage. Scores drift slightly as the

@@ -3,7 +3,7 @@
 # the Policy Team console (:8081) and Claims Team console (:8082) the AI adds
 # deductible handling to. Builds if needed, then runs both until Ctrl-C.
 set -euo pipefail
-cd "$(dirname "$0")/../sandbox/spring-demo"
+cd "$(dirname "$0")/../apps/claimsportal"
 
 # Always rebuild: an existing jar may predate a just-applied S3 change, and
 # serving stale code silently breaks the before/after demo beat. With a warm

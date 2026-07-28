@@ -8,4 +8,4 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
-streamlit run mockapp/app.py --server.port "${PORT:-8501}"
+streamlit run apps/policycore/app.py --server.port "${PORT:-8501}"

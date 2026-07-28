@@ -7,8 +7,8 @@ import pytest
 from common.llm import LLMError
 from s3_enhancement import codegen, design_sync
 
-SETTLEMENT = "mockapp/systems/legacy_java_platform/settlement"
-BILLING = "mockapp/systems/legacy_java_platform/billing"
+SETTLEMENT = "apps/policycore/systems/legacy_java_platform/settlement"
+BILLING = "apps/policycore/systems/legacy_java_platform/billing"
 
 
 # --- stage 1: impact detection (no LLM, no file reads) ----------------------
@@ -19,16 +19,16 @@ def test_demo_crs_touch_no_documented_subsystem() -> None:
     live outside every DESIGN.md-bearing directory, so the feature is a silent
     no-op on stage and never makes a provider call during a demo."""
     for applied in (
-        ["mockapp/core/models.py", "mockapp/core/db.py", "mockapp/core/coverage.py"],
-        ["mockapp/app.py", "mockapp/core/endorsements.py"],
-        ["sandbox/spring-demo/claims-service/src/main/java/com/maplesure/claims/ClaimRules.java"],
+        ["apps/policycore/core/models.py", "apps/policycore/core/db.py", "apps/policycore/core/coverage.py"],
+        ["apps/policycore/app.py", "apps/policycore/core/endorsements.py"],
+        ["apps/claimsportal/claims-service/src/main/java/com/maplesure/claims/ClaimRules.java"],
     ):
         assert design_sync.find_affected_subsystems(applied) == ()
 
 
 def test_detects_the_subsystem_owning_an_applied_file() -> None:
     impacts = design_sync.find_affected_subsystems(
-        [f"{SETTLEMENT}/SettlementHandler01.java", "mockapp/core/db.py"]
+        [f"{SETTLEMENT}/SettlementHandler01.java", "apps/policycore/core/db.py"]
     )
     assert len(impacts) == 1
     assert impacts[0].subsystem == SETTLEMENT
@@ -154,7 +154,7 @@ def test_malformed_model_response_raises() -> None:
 
 def test_no_affected_subsystem_short_circuits_before_any_provider_call() -> None:
     with patch("s3_enhancement.design_sync.complete") as mock_complete:
-        result = design_sync.review_after_apply(["mockapp/core/db.py"])
+        result = design_sync.review_after_apply(["apps/policycore/core/db.py"])
 
     mock_complete.assert_not_called()
     assert result.checked is True

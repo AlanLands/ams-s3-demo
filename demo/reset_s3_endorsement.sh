@@ -6,22 +6,25 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
 
-# Guard first, redirect second: `git show <missing-tag>:file > file` truncates
-# `file` to empty via the shell redirect *before* git show runs and fails —
-# `set -e` then stops the script, but too late to save the file it just
-# emptied. Fail loudly here instead of silently destroying mockapp/ source.
-if ! git rev-parse --verify --quiet "s3-endorsement-baseline" >/dev/null; then
-  echo "FAIL: git tag 's3-endorsement-baseline' does not exist in this repo." >&2
-  echo "Create it once (pinned to the commit with the pre-CR-042 mockapp/" >&2
-  echo "state) before running this script — do not remove this guard." >&2
-  exit 1
-fi
-
-git show s3-endorsement-baseline:mockapp/app.py > mockapp/app.py
-git show s3-endorsement-baseline:mockapp/core/models.py > mockapp/core/models.py
-git show s3-endorsement-baseline:mockapp/core/db.py > mockapp/core/db.py
-git show s3-endorsement-baseline:mockapp/core/endorsements.py > mockapp/core/endorsements.py
+# Restored from HEAD, not from the `s3-endorsement-baseline` tag.
+#
+# Two reasons. The tag predates the apps/ restructure, so every path in it
+# (`mockapp/...`) no longer exists — `git show <tag>:apps/policycore/app.py`
+# fails outright. And the tag's `db.py` predates the endorsements table, so its
+# `wipe_db()` drops `policies` while `endorsements` still references it: once
+# any rehearsal has created that table, reseeding dies on a FOREIGN KEY error
+# and the reset can never complete again.
+#
+# `git checkout` also removes the old hazard this guard existed for:
+# `git show <missing-ref>:file > file` truncates the file via the shell
+# redirect *before* git runs and fails, destroying the source it was meant to
+# restore. `git checkout` writes only on success.
+git checkout HEAD -- \
+  apps/policycore/app.py \
+  apps/policycore/core/models.py \
+  apps/policycore/core/db.py \
+  apps/policycore/core/endorsements.py
 rm -f tests/test_s3_endorsement_priority.py
-python -m mockapp.core.seed
+python -m apps.policycore.core.seed
 rm -rf .cache/llm
 echo "CR-2026-042 source baseline restored, mockapp reseeded, and LLM cache cleared."

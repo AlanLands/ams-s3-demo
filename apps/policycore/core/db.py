@@ -2,7 +2,7 @@
 
 Plain stdlib sqlite3 only — no external DB. Database file lives at
 data/mockapp.db (generated, gitignored — never hand-edit; regenerate via
-mockapp.core.seed).
+apps.policycore.core.seed).
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from mockapp.core.models import Claim, Endorsement, Policy
+from apps.policycore.core.models import Claim, Endorsement, Policy
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = REPO_ROOT / "data"
 DB_PATH = DATA_DIR / "mockapp.db"
 

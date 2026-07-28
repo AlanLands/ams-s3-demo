@@ -27,17 +27,17 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # fill in ANTHROPIC_API_KEY or OPENAI_API_KEY
 
-cd frontend && npm install && cd ..
+cd apps/console/web && npm install && cd ..
 ```
 
 ## Running
 
 ```bash
 # terminal 1 — backend, port 8000 (see the --reload caveat below)
-uvicorn api.main:app --port 8000
+uvicorn apps.console.api.main:app --port 8000
 
 # terminal 2 — frontend dev server, port 5173 (proxies /api to :8000)
-cd frontend && npm run dev
+cd apps/console/web && npm run dev
 ```
 
 Open `http://localhost:5173`, log in with a name/passcode from the seeded
@@ -45,8 +45,8 @@ roster (see `common/roster.py` — the passcode scheme is
 `1001 + roster position`, e.g. the first engineer is `1001`), and open the
 S3 console.
 
-Production build: `cd frontend && npm run build`, then the same
-`uvicorn api.main:app` process serves the built app at `:8000` — one process,
+Production build: `cd apps/console/web && npm run build`, then the same
+`uvicorn apps.console.api.main:app` process serves the built app at `:8000` — one process,
 one port, no separate frontend server needed.
 
 > **Don't use `--reload` while driving S3.** The S3 pipeline writes `.py`
@@ -57,8 +57,8 @@ one port, no separate frontend server needed.
 > `/api/auth/me` once on mount. Two separate stages trigger it:
 >
 > - **Generate** stages the proposal under `s3_enhancement/out/…/staged/`.
-> - **Apply** copies staged files onto the real targets — `mockapp/app.py`,
->   `mockapp/core/*.py`, and a new `tests/test_s3_*.py`.
+> - **Apply** copies staged files onto the real targets — `apps/policycore/app.py`,
+>   `apps/policycore/core/*.py`, and a new `tests/test_s3_*.py`.
 >
 > `--reload-exclude` can't save you: it only helps for `s3_enhancement/out`,
 > and Apply writes to the source dirs you'd never exclude. (It also needs an
@@ -92,11 +92,11 @@ confidence check.
   execution, and mutation-based proof), `docgen.py` (design doc + release
   notes), `targets.py` (the multi-repo/multi-CR registry), `relevance.py`
   (the file-relevance funnel)
-- `mockapp/` — the MapleSure policy/claims app S3 targets modify
-- `sandbox/spring-demo/` — despite the directory name, a first-class S3 target:
-  the second one, "ClaimsPortal" (Java/Spring Boot). See `sandbox/README.md`
+- `apps/policycore/` — the MapleSure policy/claims app S3 targets modify
+- `apps/claimsportal/` — despite the directory name, a first-class S3 target:
+  the second one, "ClaimsPortal" (Java/Spring Boot). See `apps/README.md`
   for why the path can't simply be renamed
-- `api/`, `frontend/` — FastAPI backend + React console (Login, Home, S3 only)
+- `api/`, `apps/console/web/` — FastAPI backend + React console (Login, Home, S3 only)
 - `demo/` — run/reset/cache-warm scripts and presenter notes
 - `tools/` — `verify_s3_live.py` (live-demo rehearsal gate), `cost_dashboard.py`
   (token-cost reporting), `autofix/` (S3-only calibration fix loop)

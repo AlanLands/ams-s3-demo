@@ -12,10 +12,10 @@ EnvironmentFile=/opt/ams-s3-demo/.env
 Environment=PYTHONPATH=/opt/ams-s3-demo
 Environment=PYTHONUNBUFFERED=1
 
-# baseUrlPath must match the nginx location block (/mockapp/) — without it
+# baseUrlPath must match the nginx location block (/apps/policycore/) — without it
 # Streamlit builds absolute asset URLs at / and the page loads blank behind the
 # proxy. Bound to localhost; nginx fronts it.
-ExecStart=/opt/ams-s3-demo/.venv/bin/streamlit run mockapp/app.py \
+ExecStart=/opt/ams-s3-demo/.venv/bin/streamlit run apps/policycore/app.py \
     --server.port 8501 \
     --server.address 127.0.0.1 \
     --server.baseUrlPath mockapp \

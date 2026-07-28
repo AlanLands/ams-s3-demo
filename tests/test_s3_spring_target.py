@@ -58,7 +58,7 @@ def test_spring_target_test_command_is_maven():
 def test_spring_discovery_excludes_maven_target_and_baseline_dirs():
     target = targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE
     files = relevance.discover_files_for_target(target, cr_text="deductible")
-    assert files, "expected java sources under sandbox/spring-demo"
+    assert files, "expected java sources under apps/claimsportal"
     for path in files:
         assert "/.baseline/" not in path, path
         assert "/target/" not in path, path

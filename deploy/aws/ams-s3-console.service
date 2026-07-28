@@ -20,7 +20,7 @@ Environment=PYTHONUNBUFFERED=1
 #
 # Single worker, deliberately: the pipeline keeps run state on local disk and in
 # the repo working tree, so a second worker would serve inconsistent state.
-ExecStart=/opt/ams-s3-demo/.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8000 --workers 1
+ExecStart=/opt/ams-s3-demo/.venv/bin/uvicorn apps.console.api.main:app --host 127.0.0.1 --port 8000 --workers 1
 
 Restart=on-failure
 RestartSec=5

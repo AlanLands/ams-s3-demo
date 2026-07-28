@@ -11,6 +11,6 @@
     "status": "To Do",
     "issue_type": "Task",
     "assignee": "Ravi Kumar",
-    "description": "Add a per-policy deductible to the ClaimsPortal Spring Boot services and apply it during claim intake: policies gain a deductible amount, claims at or below it are rejected as below-deductible, and accepted claims record a payable amount (claim amount minus deductible). See sandbox/spring-demo/crs/CR-2026-043.md for the full contract."
+    "description": "Add a per-policy deductible to the ClaimsPortal Spring Boot services and apply it during claim intake: policies gain a deductible amount, claims at or below it are rejected as below-deductible, and accepted claims record a payable amount (claim amount minus deductible). See apps/claimsportal/crs/CR-2026-043.md for the full contract."
   }
 }

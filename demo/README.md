@@ -12,13 +12,13 @@ them.
 
 | Script | What it does |
 |---|---|
-| `run_s3.sh` | Streamlit S3 console (the legacy view; the React console at `frontend/` + `api/` is the primary surface) |
-| `run_mockapp.sh` | Serves `mockapp/app.py` on :8501 — the "client's app" window for the before/after proof |
+| `run_s3.sh` | Streamlit S3 console (the legacy view; the React console at `apps/console/web/` + `api/` is the primary surface) |
+| `run_mockapp.sh` | Serves `apps/policycore/app.py` on :8501 — the "client's app" window for the before/after proof |
 | `run_s3_springdemo.sh` | Builds and runs the two Spring Boot ClaimsPortal services (:8081, :8082) |
 | `run_s3_harness.sh` | The live agent-harness variant of the codegen beat — see below |
 | `reset_s3.sh` | CR-2026-041 (mockapp coverage tier) back to pre-CR baseline; also clears shared state |
 | `reset_s3_endorsement.sh` | CR-2026-042 (mockapp endorsement Priority field) back to baseline, via the `s3-endorsement-baseline` git tag |
-| `reset_s3_springdemo.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `sandbox/spring-demo/.baseline/` |
+| `reset_s3_springdemo.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `apps/claimsportal/.baseline/` |
 | `warm_s3_cache.sh` | Pre-warms `.cache/llm` for the narrative drafts before presenting |
 | `seed_problem_record_ticket.sh` | Seeds the problem-record intake ticket |
 
@@ -40,7 +40,7 @@ demo/warm_s3_cache.sh   # warms the fixed-key drafts (impact analysis, release n
 Rung 1 of a 3-rung fallback ladder for the codegen+test beat: a real headless
 coding-agent CLI (`claude -p` or `codex exec`, per `AGENT_HARNESS`) edits
 mockapp itself and runs pytest itself, in a second terminal pane the presenter
-opens before the demo starts. `mockapp/CLAUDE.md` / `mockapp/AGENTS.md` pin the
+opens before the demo starts. `apps/policycore/CLAUDE.md` / `apps/policycore/AGENTS.md` pin the
 exact file scope and API contract (mirrored from `codegen.py`'s prompt) as the
 determinism lever. `codegen.py`/`testgen.py` are untouched and remain rung 3,
 reachable via the existing console buttons with zero new code.

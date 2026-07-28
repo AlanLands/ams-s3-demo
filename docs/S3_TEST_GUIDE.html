@@ -130,7 +130,7 @@
   <tr>
     <td class="mono">8000</td><td>FastAPI backend<div class="tiny">the engine — never on screen</div></td>
     <td class="mono">localhost:8000</td>
-    <td class="mono">uvicorn api.main:app --port 8000</td>
+    <td class="mono">uvicorn apps.console.api.main:app --port 8000</td>
   </tr>
   <tr>
     <td class="mono">5173</td><td><strong>AMS Console</strong> — start here<div class="tiny">login, then <code>/s3</code></div></td>
@@ -179,7 +179,7 @@ separate commands above if you want them in independent background terminals.</p
   <em>post-CR</em> app while the source sits at baseline, and both ports answer 200 the whole time.
   Port-is-up is not build-is-current — check the process start time against your reset time.</p>
   <p><strong>Start the portal only via <code>demo/run_mockapp.sh</code>.</strong> The script exports
-  <code>PYTHONPATH="$PWD"</code> first. Streamlit otherwise puts <code>mockapp/</code> on
+  <code>PYTHONPATH="$PWD"</code> first. Streamlit otherwise puts <code>apps/policycore/</code> on
   <code>sys.path</code> instead of the repo root, and the app dies at
   <code>ModuleNotFoundError: No module named 'common'</code>. This one hides: a portal already running from
   a bad launch keeps serving its last good render until something re-executes the script — and a reset
@@ -213,13 +213,13 @@ the endorsement reset must come <em>after</em> <code>reset_s3.sh</code>, because
 mockapp state that leaves both AMS-101 and AMS-102 demo-ready.</p>
 <pre><code>demo/reset_s3.sh              # CR-041 + shared state: .cache/llm, out/, events, Jira caches
 demo/reset_s3_endorsement.sh  # CR-042 baseline  (MUST run after reset_s3.sh)
-demo/reset_s3_springdemo.sh   # CR-043 Java target, from sandbox/spring-demo/.baseline/</code></pre>
+demo/reset_s3_springdemo.sh   # CR-043 Java target, from apps/claimsportal/.baseline/</code></pre>
 <p>Then rebuild the Spring jars and restart all five services. Hard-refresh the browser tab —
 the console caches per-ticket state in <code>localStorage</code> and drops it when the reset marker changes.</p>
 
 <div class="callout">
   <span class="label">Expected after a reset</span>
-  <p><code>git status</code> shows <code>mockapp/{app,core/db,core/endorsements,core/models}.py</code> as
+  <p><code>git status</code> shows <code>apps/policycore/{app,core/db,core/endorsements,core/models}.py</code> as
   modified. That is <strong>correct</strong> — repo HEAD is committed in a post-CR-2026-042 state, so the
   pre-CR baseline necessarily differs from it.</p>
   <p>Resets also clear <code>.cache/llm</code>, so impact analysis, design doc and release notes make live
@@ -272,11 +272,11 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
 
 <h3>Confirm the baseline is genuinely "before"</h3>
 <p>Run after the resets, before you present. Every line must match the comment.</p>
-<pre><code>grep -c 'coverage_tier\|COVERAGE_TIERS' mockapp/app.py    # 0       — no CR-041 yet
-grep -c 'selectbox("Priority"' mockapp/app.py              # 0       — no CR-042 yet
-ls mockapp/core/coverage.py                                # absent
+<pre><code>grep -c 'coverage_tier\|COVERAGE_TIERS' apps/policycore/app.py    # 0       — no CR-041 yet
+grep -c 'selectbox("Priority"' apps/policycore/app.py              # 0       — no CR-042 yet
+ls apps/policycore/core/coverage.py                                # absent
 ls .../com/maplesure/claims/ClaimRules.java                # absent
-ls mockapp/core/endorsements.py                            # PRESENT — CR-042's "before" needs it
+ls apps/policycore/core/endorsements.py                            # PRESENT — CR-042's "before" needs it
 curl -s localhost:8081/api/policies/MS-1004                # no "deductible" key
 ls s3_enhancement/out/ | wc -l                             # 0</code></pre>
 
@@ -320,7 +320,7 @@ listener and you read the wrong process's start time.</p>
     <li>After the second answer it <em>must</em> produce a final analysis — the two-turn cap is hard.</li>
     <li>Activity tab logs: clarification requested ×2 → impact analysis drafted → status In Progress.</li>
     <li>Selection panel reads <span class="pass">Files in this app 8 · used 8</span> and
-        <em>"No subsystem doc matched closely enough"</em> — no <code>mockapp/systems/…</code> entry.</li>
+        <em>"No subsystem doc matched closely enough"</em> — no <code>apps/policycore/systems/…</code> entry.</li>
     <li>Token panel says <em>"no saving over whole-app context here"</em> — the honest branch.</li>
     <li>Six Java files, each with a one-line reason.</li>
     <li>Post-apply link reads <strong>"open the Claims Team console"</strong> → :8082 (not the mockapp portal).</li>
@@ -363,7 +363,7 @@ listener and you read the wrong process's start time.</p>
     <li>Click <strong>AMS-101</strong> → <strong>Run AI impact analysis</strong>.</li>
     <li><strong>Stage 1 · Generate</strong> — type an audience-chosen tier name
         (≤ 24 chars, no quotes or slashes, e.g. <em>Platinum</em>).</li>
-    <li><strong>Apply</strong> → post-apply runs <code>python -m mockapp.core.seed</code>.</li>
+    <li><strong>Apply</strong> → post-apply runs <code>python -m apps.policycore.core.seed</code>.</li>
     <li><strong>Design doc</strong> → <strong>Generate tests → Run</strong> (pytest here, not Maven)
         → <strong>Mutation check</strong> → <strong>Release notes</strong>.</li>
   </ol>
@@ -393,7 +393,7 @@ listener and you read the wrong process's start time.</p>
     <span class="label">Do not click Apply in front of an audience</span>
     <p>The committed CR-042 codegen recording is a <strong>net-deletion recording</strong>: across four files it
     removes 81 lines and adds 12, stripping roughly six function docstrings from
-    <code>mockapp/core/db.py</code> plus many blank lines. The diff a reviewer sees is dominated by deletions
+    <code>apps/policycore/core/db.py</code> plus many blank lines. The diff a reviewer sees is dominated by deletions
     unrelated to the CR.</p>
     <p>Viewing the diff to <em>demonstrate</em> the problem is fine. The fix is a live re-record against
     <code>s3-endorsement-baseline</code>. The CR-041 and CR-043 recordings are clean.</p>
@@ -424,7 +424,7 @@ listener and you read the wrong process's start time.</p>
     <tr><td><strong>Ask</strong> → <em>"rename that variable to X"</em></td>
         <td>Returns a revised file; still staged, still not applied</td></tr>
     <tr><td><strong>Ask</strong> a pure question</td><td>Answers in prose and changes <strong>no</strong> code</td></tr>
-    <tr><td><strong>Add to proposal</strong> → <code>mockapp/core/claims.py</code> + an instruction</td>
+    <tr><td><strong>Add to proposal</strong> → <code>apps/policycore/core/claims.py</code> + an instruction</td>
         <td>File joins the same reviewed diff</td></tr>
     <tr><td><strong>Apply</strong> a single file</td><td>Others stay pending; re-applying is a no-op</td></tr>
   </table>
@@ -569,13 +569,13 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   <tr>
     <td class="mono">1</td>
     <td>CR-2026-042 codegen recording is a net-deletion recording — strips ~6 function docstrings from
-        <code>mockapp/core/db.py</code></td>
+        <code>apps/policycore/core/db.py</code></td>
     <td>AMS-102 diff is dominated by unrelated deletions</td>
     <td><strong>Open</strong> — needs a live re-record</td>
   </tr>
   <tr>
     <td class="mono">2</td>
-    <td>Subsystem screening was hardcoded to <code>mockapp/</code>, so the Spring target was scored against
+    <td>Subsystem screening was hardcoded to <code>apps/policycore/</code>, so the Spring target was scored against
         mockapp's decoy subsystems</td>
     <td>Panel wrongly reported <code>legacy_java_platform/settlement</code> 0.49 for AMS-103</td>
     <td><span class="pass">Fixed</span> — target-scoped, 2 regression tests</td>

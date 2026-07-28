@@ -37,8 +37,8 @@ There is currently no recall check at the subsystem level at all.
 ## Scope note — why this is not a demo problem
 
 In today's corpus, `DESIGN.md` files exist **only** for the six decoy
-`mockapp/systems/legacy_java_platform/*` subsystems. All three demo CRs change
-code in `mockapp/core/` and `sandbox/spring-demo/`, neither of which sits under
+`apps/policycore/systems/legacy_java_platform/*` subsystems. All three demo CRs change
+code in `apps/policycore/core/` and `apps/claimsportal/`, neither of which sits under
 a documented subsystem. Nothing would need updating on stage. The gap is real
 in production, moot in the demo.
 
@@ -110,7 +110,7 @@ forever.
 
 The UI path is genuinely untested against a real end-to-end run, because no
 current CR touches a documented subsystem. To exercise it you would need a CR
-that changes a file under `mockapp/systems/legacy_java_platform/*` — all of
+that changes a file under `apps/policycore/systems/legacy_java_platform/*` — all of
 which are decoys today.
 
 ## Why it is worth doing beyond correctness

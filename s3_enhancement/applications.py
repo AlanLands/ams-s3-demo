@@ -24,7 +24,7 @@ Two things this deliberately encodes:
   questions is the point; conflating them is how automation gets pointed at
   the wrong repo.
 
-- **A CI identifies an application, not a change.** `mockapp/` hosts two
+- **A CI identifies an application, not a change.** `apps/policycore/` hosts two
   registered targets (CR-2026-041 and CR-2026-042); both belong to the one
   `POLICY_CORE` application. So routing narrows a ticket to an application and
   its candidate targets, and the CR text picks which change within it — a CI
@@ -131,7 +131,7 @@ POLICY_CORE = Application(
     jira_project_key="AMS",
     component_team="App Support — PolicyCore",
     tech_stack="Python / FastAPI + SQLite",
-    repo_path="mockapp",
+    repo_path="apps/policycore",
 )
 register_application(POLICY_CORE)
 
@@ -148,7 +148,7 @@ CLAIMS_PORTAL = Application(
     jira_project_key="AMS",
     component_team="App Support — ClaimsPortal",
     tech_stack="Java 17 / Spring Boot",
-    repo_path="sandbox/spring-demo",
+    repo_path="apps/claimsportal",
 )
 register_application(CLAIMS_PORTAL)
 

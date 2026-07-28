@@ -21,11 +21,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from api import auth
-from api.routers import s3
+from apps.console.api import auth
+from apps.console.api.routers import s3
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
+CONSOLE_ROOT = Path(__file__).resolve().parents[1]
+FRONTEND_DIST = CONSOLE_ROOT / "web" / "dist"
 
 app = FastAPI(title="MapleSure AMS Console API")
 

@@ -25,9 +25,9 @@ same pipeline against two different applications in two different languages:
 
 | Ticket | CR | Target app | Language | What the CR does |
 |---|---|---|---|---|
-| AMS-101 | CR-2026-041 | `mockapp/` (MapleSure portal) | Python | Add a coverage-tier upgrade capability (audience picks the tier name live) |
-| AMS-102 | CR-2026-042 | `mockapp/` | Python | Add a `priority` field to the endorsement form |
-| AMS-103 | CR-2026-043 | `sandbox/spring-demo/` (ClaimsPortal) | Java / Spring Boot | Add deductible handling to claims decisioning |
+| AMS-101 | CR-2026-041 | `apps/policycore/` (MapleSure portal) | Python | Add a coverage-tier upgrade capability (audience picks the tier name live) |
+| AMS-102 | CR-2026-042 | `apps/policycore/` | Python | Add a `priority` field to the endorsement form |
+| AMS-103 | CR-2026-043 | `apps/claimsportal/` (ClaimsPortal) | Java / Spring Boot | Add deductible handling to claims decisioning |
 
 The point of AMS-103 is architectural, not narrative: it proves the pipeline is not welded
 to one repo, one language, or one test runner.
@@ -80,8 +80,8 @@ graph TB
   end
 
   subgraph Targets
-    MA["mockapp/<br/>Streamlit portal + SQLite"]
-    SP["sandbox/spring-demo/<br/>2 Maven services"]
+    MA["apps/policycore/<br/>Streamlit portal + SQLite"]
+    SP["apps/claimsportal/<br/>2 Maven services"]
   end
 
   UI -->|"/api/*, httponly cookie"| API --> AUTH --> R
@@ -96,9 +96,9 @@ graph TB
   TGT -.->|config| REL & CG & TG & TR
 ```
 
-**Deployment:** `npm run build` emits `frontend/dist/`; `api/main.py` serves it as static
+**Deployment:** `npm run build` emits `apps/console/web/dist/`; `api/main.py` serves it as static
 files with an SPA history fallback, so production is literally
-`uvicorn api.main:app --port 8000` — one process, one port. AWS EC2 bootstrap lives in
+`uvicorn apps.console.api.main:app --port 8000` — one process, one port. AWS EC2 bootstrap lives in
 `deploy/aws/`, where `LLM_PROVIDER=bedrock` uses the instance role rather than a key in
 `.env`.
 
@@ -148,7 +148,7 @@ content alone loses across ~100 similarly-shaped decoy files. Renaming or moving
 directory changes every embedding, reshuffles the selection, and desyncs it from the
 committed codegen recordings — the beat then dies with
 `LLMError: codegen returned unexpected file set`, in replay mode, offline, with no live
-fallback. **Moving a target is a re-record, not a rename.** (This is why `sandbox/` still
+fallback. **Moving a target is a re-record, not a rename.** (This is why `apps/` still
 has its misleading name.)
 
 ---
@@ -158,7 +158,7 @@ has its misleading name.)
 This is the heart of the technical story: *how does the AI decide which part of a large
 codebase a change request touches, without reading all of it?*
 
-`mockapp/` contains **56 discoverable source files** — 6 real Python files and 50 Java
+`apps/policycore/` contains **56 discoverable source files** — 6 real Python files and 50 Java
 "decoy" files spread across 6 fictional legacy subsystems, each with its own `DESIGN.md`.
 The funnel's job is to get from 56 to 4 without ever opening the 50.
 
@@ -203,7 +203,7 @@ for whichever backend actually served the request.
 | Stage | Constant | Embedding floor | TF-IDF floor | Measured decoy ceiling |
 |---|---|---|---|---|
 | Subsystem screen | `_SUBSYSTEM_*_MIN_SCORE_DEFAULT` | **0.45** | 0.05 | 0.336 (settlement, the closest decoy) vs ≤0.012 TF-IDF |
-| File ranking | `_FILE_*_MIN_SCORE_DEFAULT` | **0.55** | 0.15 | 0.4501 (`mockapp/core/claims.py` — domain-adjacent, not the subject) |
+| File ranking | `_FILE_*_MIN_SCORE_DEFAULT` | **0.55** | 0.15 | 0.4501 (`apps/policycore/core/claims.py` — domain-adjacent, not the subject) |
 
 Both floors sit **above** the empirically measured decoy ceiling with margin, but are a
 genuinely low bar otherwise: a subsystem or file that shares real terms with the CR clears
@@ -227,15 +227,15 @@ Stage 1 — subsystem scores (embedding cosine, floor 0.45):
   → in_scope = ()  · screened_out = all 6  · 50 Java files never opened
 
 Stage 2 — file scores over what survived (floor 0.55):
-  mockapp/core/claims.py        0.4448   ✗ below floor (domain-adjacent, not the subject)
-  mockapp/core/endorsements.py  0.3796   ✗
+  apps/policycore/core/claims.py        0.4448   ✗ below floor (domain-adjacent, not the subject)
+  apps/policycore/core/endorsements.py  0.3796   ✗
   → extra_files = ()
 
 selected = the 4 core files:
-  mockapp/core/models.py · mockapp/core/db.py · mockapp/core/coverage.py · mockapp/app.py
+  apps/policycore/core/models.py · apps/policycore/core/db.py · apps/policycore/core/coverage.py · apps/policycore/app.py
 ```
 
-Note `mockapp/core/coverage.py` **does not exist yet** — the CR creates it. It's still a
+Note `apps/policycore/core/coverage.py` **does not exist yet** — the CR creates it. It's still a
 core file, passed to the prompt with empty content, and still required back in the response.
 
 ### 4.3 Screening is scoped to the target's own root
@@ -243,7 +243,7 @@ core file, passed to the prompt with empty content, and still required back in t
 `discover_subsystem_design_docs(root)` globs `root`, and every caller with a
 `Target` in hand passes `design_doc_root=target.root` through
 `select_relevant_files`. Only the target-less callers (tests, `tools/`, the legacy
-Streamlit console — all inherently mockapp-scoped) fall back to `mockapp/`.
+Streamlit console — all inherently mockapp-scoped) fall back to `apps/policycore/`.
 
 This matters because a root with no design docs must yield `{}`, which
 `screen_subsystems` turns into an empty screen that excludes nothing. The Spring
@@ -251,12 +251,12 @@ ClaimsPortal target has no `DESIGN.md` anywhere, so its screen is correctly empt
 and the UI says "no subsystem doc matched closely enough — this change used the
 CR's fixed core file list directly".
 
-*Fixed 2026-07-27.* Screening previously globbed `mockapp/` unconditionally, so
+*Fixed 2026-07-27.* Screening previously globbed `apps/policycore/` unconditionally, so
 the Spring target was scored against mockapp's decoy subsystems and the panel
-reported `mockapp/systems/legacy_java_platform/settlement` (0.49) as the part of
+reported `apps/policycore/systems/legacy_java_platform/settlement` (0.49) as the part of
 the repo the change was matched to — for a change that never touched mockapp.
-Selection itself was unaffected (a `mockapp/systems/…/` prefix never matches a
-`sandbox/spring-demo/…` path), but the reported answer was wrong on stage.
+Selection itself was unaffected (a `apps/policycore/systems/…/` prefix never matches a
+`apps/claimsportal/…` path), but the reported answer was wrong on stage.
 `test_non_mockapp_target_is_never_screened_against_mockapp_subsystems` locks it in.
 
 ### 4.4 Two escape hatches that override scoring
@@ -265,7 +265,7 @@ Selection itself was unaffected (a `mockapp/systems/…/` prefix never matches a
   required back in the model's response (`verify_core_recall`, enforced in
   `codegen._validate_file_set`). This is the safety net that keeps the demo from flaking on
   the files the CR is actually about.
-- **`never_extra`** — structurally off-limits regardless of score. `mockapp/core/seed.py`
+- **`never_extra`** — structurally off-limits regardless of score. `apps/policycore/core/seed.py`
   scores *highest* of any candidate (it's the file most densely full of `Policy` field
   names) but constructs `Policy(...)` with 6 fixed positional args, so it must never be
   editable. It still counts toward `candidate_pool_size` for an honest "size of this app"
@@ -548,7 +548,7 @@ sequenceDiagram
 
   D->>API: POST /s3/apply {proposal_id, file_path?}
   API->>FS: copy staged → repo (the ONLY writer)
-  API->>FS: post_apply_command subprocess (e.g. python -m mockapp.core.seed)
+  API->>FS: post_apply_command subprocess (e.g. python -m apps.policycore.core.seed)
   API-->>D: applied_files + post_apply {ok, steps[]}
 ```
 
@@ -759,7 +759,7 @@ content validator branch in `codegen._validate_content`; confirm the runner emit
 - Codegen prompts and validators are per-CR business logic — three targets means three
   prompt builders and three validators. This is the main thing that would need real work to
   scale to a 30-repo estate.
-- `sandbox/` is a misleading directory name for what is really S3's second target. Renaming
+- `apps/` is a misleading directory name for what is really S3's second target. Renaming
   is blocked on re-recording the CR-2026-043 replay caches (see §3) — worth doing when
   there's time to re-verify the beat live, not before a demo.
 - Sessions are single-process and in-memory; a multi-worker deployment needs a shared store.

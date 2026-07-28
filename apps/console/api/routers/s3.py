@@ -17,8 +17,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.auth import require_identity, require_session_id
-from api.session import get_session_data
+from apps.console.api.auth import require_identity, require_session_id
+from apps.console.api.session import get_session_data
 from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError, get_client
 from common.jira_client import JiraError, get_jira_client
@@ -994,7 +994,11 @@ def _run_post_apply(applied_files: list[str], ticket_number: str | None) -> dict
     CR broke the app — reaches the caller with its traceback instead of
     dying silently in a discarded subprocess result.
     """
-    repo_root = Path(__file__).resolve().parents[2]
+    # Anchored on the target registry rather than counted parent hops: this
+    # module has already moved once (api/ -> apps/console/api/), and a stale
+    # hop count fails silently by matching no target root at all, which looks
+    # like "the migration step just didn't run".
+    repo_root = targets.REPO_ROOT
     steps = []
     for command in targets.post_apply_commands_for(applied_files, repo_root):
         argv = [sys.executable if part == "{python}" else part for part in command]

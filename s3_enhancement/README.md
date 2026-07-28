@@ -5,14 +5,14 @@ name, and the AMS console generates a real policy-portal enhancement plus tests.
 
 ## Scripted Demo Order
 
-1. **CR text** (`mockapp/crs/CR-2026-041.md`) - rendered by
+1. **CR text** (`apps/policycore/crs/CR-2026-041.md`) - rendered by
    `s3_enhancement.cr.render_cr(tier_name)` with the chosen tier name.
 2. **AI impact analysis and effort estimate** (`s3_enhancement/analyze.py`) -
    short `complete()` calls using the generic `.cache/llm` store.
 3. **AI code generation** (`s3_enhancement/codegen.py`) - streamed full-file JSON
    for exactly four allowlisted files:
-   `mockapp/core/models.py`, `mockapp/core/db.py`,
-   `mockapp/core/coverage.py`, and `mockapp/app.py`.
+   `apps/policycore/core/models.py`, `apps/policycore/core/db.py`,
+   `apps/policycore/core/coverage.py`, and `apps/policycore/app.py`.
 4. **AI test generation** (`s3_enhancement/testgen.py`) - streamed full-file JSON
    for `tests/test_s3_coverage_upgrade.py`.
 5. **Tests green** - the S3 console runs

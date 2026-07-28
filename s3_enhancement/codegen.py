@@ -635,7 +635,7 @@ Rules:
 - Return every listed file, each as a complete replacement, not a patch or diff.
 - "reason" is one short sentence (plain English, no code) a reviewer can read
   at a glance to know why that specific file is part of this change.
-- mockapp/core/coverage.py's public API is a fixed contract other generated
+- apps/policycore/core/coverage.py's public API is a fixed contract other generated
   modules (tests) depend on by these exact names — do not rename or restructure
   them:
   - `COVERAGE_TIERS: list[str]` — ordered lowest to highest, exactly
@@ -659,8 +659,8 @@ Rules:
 - Keep every line at 100 characters or fewer (this repo's ruff line-length
   limit) — wrap long f-strings, SQL column lists, and comments rather than
   exceeding it.
-- mockapp/core/coverage.py must have a module docstring matching the plain
-  business-logic tone of mockapp/core/claims.py.
+- apps/policycore/core/coverage.py must have a module docstring matching the plain
+  business-logic tone of apps/policycore/core/claims.py.
 - upgrade_coverage(policy_number, new_tier) must reject unknown tiers, same-tier
   changes, downgrades, and unknown policies with ValueError. Exact error
   wording is a fixed contract (S4's talk-to-code demo cites it):
@@ -672,7 +672,7 @@ Rules:
   rounded to 2 decimals with round(..., 2), and persisted with insert_policy().
 - Existing policy list, policy detail, claim submission, and claim list flows
   must keep working.
-- mockapp/core/seed.py is NOT one of the files you may change, and it
+- apps/policycore/core/seed.py is NOT one of the files you may change, and it
   constructs `Policy(...)` with 6 **positional** arguments in the field order
   shown above (policy_number, holder_name, product_type, premium, start_date,
   status) — no `coverage_tier` argument. You MUST add `coverage_tier` as the
@@ -718,17 +718,17 @@ Rules:
 - "reason" is one short sentence (plain English, no code) a reviewer can read
   at a glance to know why that specific file is part of this change.
 - Add a `priority: str = "Standard"` field to the `Endorsement` dataclass in
-  mockapp/core/models.py — it must be the LAST field on the dataclass, after
+  apps/policycore/core/models.py — it must be the LAST field on the dataclass, after
   `filed_at`, with a default value of exactly `"Standard"`. Do not insert it
   earlier in the field order and do not make it a required (no-default) field.
-- mockapp/core/db.py: add a `priority` column to the `endorsements` table
+- apps/policycore/core/db.py: add a `priority` column to the `endorsements` table
   schema (`TEXT NOT NULL DEFAULT 'Standard'`), thread it through
   `_row_to_endorsement()` and `insert_endorsement()`'s column list and
   parameters.
-- mockapp/core/endorsements.py: `submit_endorsement(...)` gains a
+- apps/policycore/core/endorsements.py: `submit_endorsement(...)` gains a
   `priority: str = "Standard"` keyword parameter (last parameter, defaulted)
   and passes it through to the `Endorsement` it constructs.
-- mockapp/app.py: the "Request a Policy Endorsement" form gains a "Priority"
+- apps/policycore/app.py: the "Request a Policy Endorsement" form gains a "Priority"
   selectbox with choices exactly `["Standard", "Urgent"]` (in that order, so
   "Standard" is the default selection), and passes the selected value to
   `submit_endorsement(...)`.
@@ -901,7 +901,7 @@ def _validate_file_set(files: dict[str, str], selection: relevance.SelectionResu
         )
     for rel_path, content in files.items():
         _validate_content(rel_path, content)
-    _validate_policy_backward_compatible(files["mockapp/core/models.py"])
+    _validate_policy_backward_compatible(files["apps/policycore/core/models.py"])
 
 
 def _validate_endorsement_file_set(
@@ -916,7 +916,7 @@ def _validate_endorsement_file_set(
         )
     for rel_path, content in files.items():
         _validate_content(rel_path, content)
-    _validate_endorsement_priority_field(files["mockapp/core/models.py"])
+    _validate_endorsement_priority_field(files["apps/policycore/core/models.py"])
 
 
 def _validate_spring_file_set(
@@ -969,9 +969,9 @@ def _validate_endorsement_priority_field(models_content: str) -> None:
     default — otherwise existing endorsement submissions with no priority
     chosen would break (CR-2026-042's explicit acceptance criterion)."""
     try:
-        tree = ast.parse(models_content, filename="mockapp/core/models.py")
+        tree = ast.parse(models_content, filename="apps/policycore/core/models.py")
     except SyntaxError as exc:
-        raise LLMError(f"S3 generated invalid Python for mockapp/core/models.py: {exc}") from exc
+        raise LLMError(f"S3 generated invalid Python for apps/policycore/core/models.py: {exc}") from exc
 
     endorsement_cls = next(
         (
@@ -983,7 +983,7 @@ def _validate_endorsement_priority_field(models_content: str) -> None:
     )
     if endorsement_cls is None:
         raise LLMError(
-            "S3 generated mockapp/core/models.py is missing the Endorsement dataclass"
+            "S3 generated apps/policycore/core/models.py is missing the Endorsement dataclass"
         )
 
     field_stmts = [
@@ -1005,17 +1005,17 @@ def _validate_endorsement_priority_field(models_content: str) -> None:
 
 
 def _validate_policy_backward_compatible(models_content: str) -> None:
-    """mockapp/core/seed.py is off the allowlist and constructs `Policy(...)`
+    """apps/policycore/core/seed.py is off the allowlist and constructs `Policy(...)`
     with 6 positional args (no coverage_tier) — this must still work after the
     generated models.py adds coverage_tier, or the app crashes on startup."""
     namespace: dict = {}
     try:
-        exec(compile(models_content, "mockapp/core/models.py", "exec"), namespace)  # noqa: S102
+        exec(compile(models_content, "apps/policycore/core/models.py", "exec"), namespace)  # noqa: S102
         policy_cls = namespace["Policy"]
         policy_cls("POL-TEST", "Test Holder", "Auto", 100.0, "2024-01-01", "Active")
     except Exception as exc:
         raise LLMError(
-            "S3 generated mockapp/core/models.py breaks mockapp/core/seed.py's "
+            "S3 generated apps/policycore/core/models.py breaks apps/policycore/core/seed.py's "
             f"existing 6-positional-arg Policy(...) construction: {exc}"
         ) from exc
 
@@ -1054,7 +1054,7 @@ def _validate_content(rel_path: str, content: str) -> None:
     if _SECRET_RE.search(content):
         raise LLMError(f"S3 generated secret-shaped content in {rel_path}")
 
-    if rel_path == "mockapp/core/coverage.py":
+    if rel_path == "apps/policycore/core/coverage.py":
         top_level_names = {
             node.id
             for node in ast.walk(tree)
@@ -1067,7 +1067,7 @@ def _validate_content(rel_path: str, content: str) -> None:
         missing = [name for name in _REQUIRED_COVERAGE_SYMBOLS if name not in top_level_names]
         if missing:
             raise LLMError(
-                f"S3 generated mockapp/core/coverage.py is missing required public "
+                f"S3 generated apps/policycore/core/coverage.py is missing required public "
                 f"symbol(s) {missing} — got {sorted(top_level_names)}"
             )
 

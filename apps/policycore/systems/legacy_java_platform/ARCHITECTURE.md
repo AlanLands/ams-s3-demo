@@ -2,7 +2,7 @@
 
 This directory documents the legacy Java estate that sits behind MapleSure's
 policy and claims operations. The modern policy/claims portal
-(`mockapp/app.py`, `mockapp/core/`) is a newer Python front-end layered on top
+(`apps/policycore/app.py`, `apps/policycore/core/`) is a newer Python front-end layered on top
 of this platform; it owns policy records, coverage tiers, and claim intake
 directly and does not call into these subsystems.
 
@@ -23,7 +23,7 @@ Each subsystem's design doc states what it owns and, just as importantly, what
 it does **not** own. Change requests are routed to a subsystem only if the
 request touches something in its "owns" list. A change to policy coverage
 tiers, premiums, or the policy/claims portal itself does not touch any of the
-six subsystems above — it belongs entirely to `mockapp/core/` — so an impact
+six subsystems above — it belongs entirely to `apps/policycore/core/` — so an impact
 analysis over this platform should read as "not relevant" across the board for
 that class of change.
 

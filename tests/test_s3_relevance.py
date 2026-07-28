@@ -1,6 +1,6 @@
 """Tests for s3_enhancement/relevance.py's scoped file-selection logic.
 
-Runs against the real mockapp/ tree (including the mockapp/systems/ decoy
+Runs against the real apps/policycore/ tree (including the apps/policycore/systems/ decoy
 padding), not a fixture — the whole point of this module is to prove
 selection behaves correctly at the actual demo-day scale.
 """
@@ -27,7 +27,7 @@ def test_canonical_cr_selects_only_core_files() -> None:
     assert set(selection.selected) == set(relevance.CORE_FILES)
     assert selection.extra_files == ()
     for decoy_path in selection.selected:
-        assert "mockapp/systems/" not in decoy_path
+        assert "apps/policycore/systems/" not in decoy_path
 
 
 def test_canonical_cr_selection_is_deterministic_across_runs() -> None:
@@ -42,11 +42,11 @@ def test_canonical_cr_selection_is_deterministic_across_runs() -> None:
 
 
 def test_core_files_included_even_when_missing_on_disk() -> None:
-    all_files = {"mockapp/core/models.py": "class Policy: ...", "mockapp/systems/x.py": "x = 1"}
+    all_files = {"apps/policycore/core/models.py": "class Policy: ...", "apps/policycore/systems/x.py": "x = 1"}
     selection = relevance.select_relevant_files("some CR text", all_files)
 
-    assert selection.selected["mockapp/core/coverage.py"] == ""
-    assert selection.selected["mockapp/core/models.py"] == "class Policy: ..."
+    assert selection.selected["apps/policycore/core/coverage.py"] == ""
+    assert selection.selected["apps/policycore/core/models.py"] == "class Policy: ..."
 
 
 def test_verify_core_recall_passes_on_a_full_selection() -> None:
@@ -57,7 +57,7 @@ def test_verify_core_recall_passes_on_a_full_selection() -> None:
 
 
 def test_verify_core_recall_raises_on_incomplete_file_set() -> None:
-    incomplete = {"mockapp/core/models.py": "...", "mockapp/core/db.py": "..."}
+    incomplete = {"apps/policycore/core/models.py": "...", "apps/policycore/core/db.py": "..."}
     with pytest.raises(Exception, match="missing required core file"):
         relevance.verify_core_recall(incomplete)
 
@@ -104,7 +104,7 @@ def test_naive_prompt_tokens_falls_back_when_usage_is_unknown() -> None:
 def test_discover_subsystem_design_docs_finds_all_legacy_subsystems() -> None:
     docs = relevance.discover_subsystem_design_docs()
     assert len(docs) == 6
-    assert all(name.startswith("mockapp/systems/") for name in docs)
+    assert all(name.startswith("apps/policycore/systems/") for name in docs)
 
 
 def test_canonical_cr_screens_out_every_legacy_subsystem() -> None:
@@ -119,7 +119,7 @@ def test_canonical_cr_screens_out_every_legacy_subsystem() -> None:
 def test_design_docs_are_scoped_to_the_root_they_are_asked_for() -> None:
     """A root with no DESIGN.md yields no docs — not mockapp's.
 
-    `discover_subsystem_design_docs` used to glob `mockapp/` unconditionally,
+    `discover_subsystem_design_docs` used to glob `apps/policycore/` unconditionally,
     so any target rooted elsewhere was screened against mockapp's decoy
     subsystems.
     """
@@ -144,7 +144,7 @@ def test_non_mockapp_target_is_never_screened_against_mockapp_subsystems() -> No
     assert screen.in_scope == ()
     assert screen.screened_out == ()
     assert screen.scores == {}
-    assert all(path.startswith("sandbox/spring-demo/") for path in selection.selected)
+    assert all(path.startswith("apps/claimsportal/") for path in selection.selected)
 
 
 def test_select_relevant_files_never_opens_a_screened_out_subsystems_files() -> None:
@@ -157,7 +157,7 @@ def test_select_relevant_files_never_opens_a_screened_out_subsystems_files() -> 
         relevance.discover_subsystem_design_docs()
     )
     for decoy_path in selection.scores:
-        assert "mockapp/systems/" not in decoy_path
+        assert "apps/policycore/systems/" not in decoy_path
 
 
 def test_screen_subsystems_with_no_design_docs_screens_nothing() -> None:
