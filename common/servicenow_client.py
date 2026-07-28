@@ -51,6 +51,12 @@ class SnRecord:
     opened_at: str
     linked_records: list[str] = field(default_factory=list)
     work_notes: list[SnWorkNote] = field(default_factory=list)
+    # Application context, as ServiceNow carries it. Optional because records
+    # written before routing existed have neither field, and both must keep
+    # loading — an empty CI is a routable state (it falls back to the LLM
+    # repo match), not a corrupt record. See s3_enhancement/routing.py.
+    ci: str = ""
+    business_service: str = ""
 
 
 def _mode() -> str:
@@ -104,11 +110,17 @@ def _to_record(raw: dict) -> SnRecord:
         opened_at=raw["opened_at"],
         linked_records=list(raw.get("linked_records", [])),
         work_notes=[SnWorkNote(**note) for note in raw.get("work_notes", [])],
+        ci=raw.get("ci", ""),
+        business_service=raw.get("business_service", ""),
     )
 
 
 def create_problem(
-    number: str, short_description: str, affected_incidents: list[str]
+    number: str,
+    short_description: str,
+    affected_incidents: list[str],
+    ci: str = "",
+    business_service: str = "",
 ) -> SnRecord:
     """Create (or return the already-created) problem record.
 
@@ -135,6 +147,8 @@ def create_problem(
                 text=f"Problem record created; {len(affected_incidents)} incidents linked.",
             )
         ],
+        ci=ci,
+        business_service=business_service,
     )
     records[number] = asdict(record)
     _save_store(records)
@@ -148,7 +162,12 @@ def create_problem(
     return record
 
 
-def ensure_incident(number: str, short_description: str = "") -> SnRecord:
+def ensure_incident(
+    number: str,
+    short_description: str = "",
+    ci: str = "",
+    business_service: str = "",
+) -> SnRecord:
     """Return the incident record, creating a thin one if it doesn't exist yet.
 
     S1 write-back targets incidents that originate in incidents.csv, not in
@@ -165,6 +184,8 @@ def ensure_incident(number: str, short_description: str = "") -> SnRecord:
         short_description=short_description,
         state="In Progress",
         opened_at=_now(),
+        ci=ci,
+        business_service=business_service,
     )
     records[number] = asdict(record)
     _save_store(records)

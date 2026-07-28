@@ -8,6 +8,8 @@ import {
   s3Api,
   type AnalyzeResponse,
   type CrossTeamImpact,
+  type DesignDocFinding,
+  type DesignSyncResponse,
   type EffortEstimate,
   type GenerateResponse,
   type JiraIssue,
@@ -27,6 +29,20 @@ const AI_LABEL = 'AI suggestion — verify with your specialist before applying.
 // separately from the AMS console (see demo/run_mockapp.sh), same
 // port .env.example documents as MOCKAPP_URL.
 const MOCKAPP_URL = 'http://localhost:8501'
+
+// Where an applied change can actually be seen running, per target. Keyed by
+// target id so the post-apply "go look at it" link names the app the change
+// landed in — not always the mockapp portal. The Spring ClaimsPortal target
+// serves its own consoles from two Maven services (demo/run_s3_springdemo.sh:
+// policy-service :8081, claims-service :8082); CR-2026-043 changes claim
+// intake, so the claims console is the one worth opening.
+const TARGET_APPS: Record<string, { url: string; label: string }> = {
+  'springdemo-claims-deductible': {
+    url: 'http://localhost:8082/',
+    label: 'open the Claims Team console',
+  },
+}
+const DEFAULT_TARGET_APP = { url: MOCKAPP_URL, label: 'open the policy portal' }
 
 // Demo-only roster for assigning a ticket — mirrors the shared engineer
 // roster's first few names (common/roster.py); this page doesn't fetch the
@@ -73,6 +89,10 @@ interface PersistedTicketState {
   collapsedFiles?: Record<string, boolean>
   applied?: boolean
   appliedFiles?: Record<string, boolean>
+  // `{path: reason}` — persisted so a rejection survives a reload, like every
+  // other review decision on the proposal. The server is still the authority:
+  // the next apply/reject response overwrites this.
+  rejectedFiles?: Record<string, string>
   postApplyFailure?: PostApplyResult | null
   fileChats?: Record<string, FileChatTurn[]>
   // Downstream-stage artifacts persist per ticket so the QA hand-off works
@@ -455,7 +475,24 @@ export default function S3() {
   const [applyError, setApplyError] = useState<string | null>(null)
   const [appliedFiles, setAppliedFiles] = useState<Record<string, boolean>>({})
   const [applyingFile, setApplyingFile] = useState<string | null>(null)
+  // `{path: reason}` for files the developer turned down. Server-owned — the
+  // apply/reject responses carry it back, so this never drifts from what the
+  // apply endpoint will actually honour.
+  const [rejectedFiles, setRejectedFiles] = useState<Record<string, string>>({})
+  const [rejectingFile, setRejectingFile] = useState<string | null>(null)
+  // Path whose reason box is open; '' is a valid reason (rejecting without
+  // explaining is allowed), so this can't be inferred from the reason text.
+  const [rejectPromptFor, setRejectPromptFor] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [revertingFile, setRevertingFile] = useState<string | null>(null)
+  const [reverting, setReverting] = useState(false)
   const [postApplyFailure, setPostApplyFailure] = useState<PostApplyResult | null>(null)
+  // Design-doc drift found after Apply. Runs automatically — never a button the
+  // developer has to know to press — and stays null whenever the change touched
+  // no documented subsystem, which is the case for every current demo CR.
+  const [designSync, setDesignSync] = useState<DesignSyncResponse | null>(null)
+  const [designDocApplying, setDesignDocApplying] = useState<string | null>(null)
+  const [designDocApplied, setDesignDocApplied] = useState<Record<string, boolean>>({})
   const [fixingCrash, setFixingCrash] = useState(false)
   const [fixCrashError, setFixCrashError] = useState<string | null>(null)
 
@@ -566,6 +603,8 @@ export default function S3() {
     setApplied(false)
     setApplyError(null)
     setAppliedFiles({})
+    setRejectedFiles({})
+    setRejectPromptFor(null)
     setPostApplyFailure(null)
     setFixCrashError(null)
     setDesignDoc(null)
@@ -669,17 +708,54 @@ export default function S3() {
       const failure = result.post_apply && !result.post_apply.ok ? result.post_apply : null
       setApplied(true)
       setAppliedFiles(nextAppliedFiles)
+      setRejectedFiles(result.rejected_files)
       setPostApplyFailure(failure)
       setFixCrashError(null)
       saveTicketState(activeTicketKey, {
         applied: true,
         appliedFiles: nextAppliedFiles,
+        rejectedFiles: result.rejected_files,
         postApplyFailure: failure,
       })
+      void runDesignSync(generated.proposal_id, result.applied_files, activeTicketKey)
     } catch (err) {
       setApplyError(err instanceof ApiError ? err.message : 'Apply failed.')
     } finally {
       setApplying(false)
+    }
+  }
+
+  // Deliberately fire-and-forget, after Apply has already been recorded as
+  // succeeded: a doc check that is slow, unreachable or broken must never be
+  // able to fail the apply beat. The endpoint itself answers checked:false
+  // rather than erroring, so this catch is only for transport failures.
+  async function runDesignSync(proposalId: string, appliedPaths: string[], ticketKey: string) {
+    const active = TICKET_TARGETS[ticketKey]
+    try {
+      const result = await s3Api.designSync(
+        proposalId,
+        appliedPaths,
+        ticketKey,
+        active?.targetId ?? undefined,
+      )
+      setDesignSync(result.findings.length > 0 ? result : null)
+    } catch {
+      setDesignSync(null)
+    }
+  }
+
+  // A flagged design doc is an ordinary staged proposal, so it applies through
+  // the same endpoint as the code change — no second apply path exists.
+  async function handleApplyDesignDoc(finding: DesignDocFinding) {
+    if (!activeTicketKey || !finding.proposal_id) return
+    setDesignDocApplying(finding.proposal_id)
+    try {
+      await s3Api.apply(finding.proposal_id, activeTicketKey)
+      setDesignDocApplied((prev) => ({ ...prev, [finding.proposal_id]: true }))
+    } catch {
+      // Left un-applied and still visible; the developer can retry.
+    } finally {
+      setDesignDocApplying(null)
     }
   }
 
@@ -724,14 +800,99 @@ export default function S3() {
     setApplyingFile(path)
     setApplyError(null)
     try {
-      await s3Api.apply(generated.proposal_id, activeTicketKey, path)
+      const result = await s3Api.apply(generated.proposal_id, activeTicketKey, path)
       const nextAppliedFiles = { ...appliedFiles, [path]: true }
       setAppliedFiles(nextAppliedFiles)
-      saveTicketState(activeTicketKey, { appliedFiles: nextAppliedFiles })
+      setRejectedFiles(result.rejected_files)
+      saveTicketState(activeTicketKey, {
+        appliedFiles: nextAppliedFiles,
+        rejectedFiles: result.rejected_files,
+      })
     } catch (err) {
       setApplyError(err instanceof ApiError ? err.message : 'Apply failed.')
     } finally {
       setApplyingFile(null)
+    }
+  }
+
+  async function handleRejectFile(path: string) {
+    if (!generated || !activeTicketKey) return
+    setRejectingFile(path)
+    setApplyError(null)
+    try {
+      const result = await s3Api.reject(
+        generated.proposal_id,
+        path,
+        rejectReason,
+        activeTicketKey
+      )
+      setRejectedFiles(result.rejected_files)
+      saveTicketState(activeTicketKey, { rejectedFiles: result.rejected_files })
+      setRejectPromptFor(null)
+      setRejectReason('')
+    } catch (err) {
+      setApplyError(err instanceof ApiError ? err.message : 'Reject failed.')
+    } finally {
+      setRejectingFile(null)
+    }
+  }
+
+  async function handleClearRejection(path: string) {
+    if (!generated || !activeTicketKey) return
+    setRejectingFile(path)
+    try {
+      const result = await s3Api.clearRejection(generated.proposal_id, path, activeTicketKey)
+      setRejectedFiles(result.rejected_files)
+      saveTicketState(activeTicketKey, { rejectedFiles: result.rejected_files })
+    } catch (err) {
+      setApplyError(err instanceof ApiError ? err.message : 'Could not undo the rejection.')
+    } finally {
+      setRejectingFile(null)
+    }
+  }
+
+  // Revert writes to the working tree exactly as Apply does, so it re-runs the
+  // post-apply migration for the same reason: the running app has to stay
+  // consistent with the files on disk.
+  async function handleRevertFile(path: string) {
+    if (!generated || !activeTicketKey) return
+    setRevertingFile(path)
+    setApplyError(null)
+    try {
+      const result = await s3Api.revert(generated.proposal_id, activeTicketKey, path)
+      const nextAppliedFiles = { ...appliedFiles }
+      for (const reverted of result.reverted_files) delete nextAppliedFiles[reverted]
+      setAppliedFiles(nextAppliedFiles)
+      setPostApplyFailure(result.post_apply && !result.post_apply.ok ? result.post_apply : null)
+      saveTicketState(activeTicketKey, { appliedFiles: nextAppliedFiles })
+    } catch (err) {
+      setApplyError(err instanceof ApiError ? err.message : 'Revert failed.')
+    } finally {
+      setRevertingFile(null)
+    }
+  }
+
+  async function handleRevertAll() {
+    if (!generated || !activeTicketKey) return
+    setReverting(true)
+    setApplyError(null)
+    try {
+      const result = await s3Api.revert(generated.proposal_id, activeTicketKey)
+      setApplied(false)
+      setAppliedFiles({})
+      setPostApplyFailure(result.post_apply && !result.post_apply.ok ? result.post_apply : null)
+      // The design-doc drift panel described the applied state; once that's
+      // undone it is describing something that is no longer on disk.
+      setDesignSync(null)
+      saveTicketState(activeTicketKey, {
+        applied: false,
+        appliedFiles: {},
+        postApplyFailure: null,
+      })
+    } catch (err) {
+      setApplyError(err instanceof ApiError ? err.message : 'Revert failed.')
+    } finally {
+      setReverting(false)
     }
   }
 
@@ -1095,7 +1256,16 @@ export default function S3() {
           crText = [issue?.summary, issue?.description].filter(Boolean).join('\n\n').trim()
           if (!crText) return
         }
-        const adhocResult = await s3Api.analyzeAdhoc(crText, ticketKey, !pendingQuestion)
+        // The ticket's own ServiceNow context, when it arrived with any —
+        // present, it routes deterministically and the server skips the LLM
+        // repo match entirely (see api/routers/s3.py's analyze_adhoc).
+        const issueForRouting = (boardIssues || []).find(
+          (candidate) => candidate.key === ticketKey
+        )
+        const adhocResult = await s3Api.analyzeAdhoc(crText, ticketKey, !pendingQuestion, {
+          ci: issueForRouting?.ci,
+          businessService: issueForRouting?.business_service,
+        })
         if (adhocResult.needs_clarification) {
           setTicketClarificationQuestion((prev) => ({
             ...prev,
@@ -1115,6 +1285,7 @@ export default function S3() {
           assumptions: adhocResult.assumptions || [],
           effort_estimate: adhocResult.effort_estimate as EffortEstimate,
           target_repo: adhocResult.target_repo,
+          routing: adhocResult.routing,
         }
       }
       setTicketAnalysis((prev) => ({ ...prev, [ticketKey]: result }))
@@ -1215,6 +1386,7 @@ export default function S3() {
           setCollapsedFiles({})
           setApplied(false)
           setAppliedFiles({})
+          setRejectedFiles({})
           setPostApplyFailure(null)
         }
         try {
@@ -1270,6 +1442,8 @@ export default function S3() {
     setCollapsedFiles(persisted.collapsedFiles ?? {})
     setApplied(persisted.applied ?? false)
     setAppliedFiles(persisted.appliedFiles ?? {})
+    setRejectedFiles(persisted.rejectedFiles ?? {})
+    setRejectPromptFor(null)
     setPostApplyFailure(persisted.postApplyFailure ?? null)
     setFixCrashError(null)
     setPerFileChat(persisted.fileChats ?? {})
@@ -1304,6 +1478,11 @@ export default function S3() {
     new Set([...filePaths, ...diffFiles.map((file) => file.path)])
   ).filter((path) => diffByPath.has(path))
   const activeLinked = activeTicketKey ? TICKET_TARGETS[activeTicketKey] : undefined
+  // Which running app an applied change should send the reviewer to. Falls back
+  // to the mockapp portal for the two mockapp targets (and for a ticket with no
+  // linked target at all, where nothing is applyable anyway).
+  const targetApp =
+    (activeLinked?.targetId ? TARGET_APPS[activeLinked.targetId] : undefined) ?? DEFAULT_TARGET_APP
   const analysisDoneForActive = activeTicketKey ? !!ticketAnalysis[activeTicketKey] : false
   const activeIssue = activeTicketKey
     ? (boardIssues || []).find((issue) => issue.key === activeTicketKey)
@@ -1796,6 +1975,32 @@ export default function S3() {
                           {fileReasons[path]}
                         </p>
                       )}
+                      {path in rejectedFiles && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '0.5rem',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            margin: '0.4rem 0.7rem',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          <span className="ams-pill ams-pill-preview">Rejected</span>
+                          <span style={{ color: 'var(--ams-ink-soft)' }}>
+                            {rejectedFiles[path]
+                              ? rejectedFiles[path]
+                              : 'No reason given. Excluded from Apply.'}
+                          </span>
+                          <button
+                            className="ams-button-secondary"
+                            onClick={() => handleClearRejection(path)}
+                            disabled={rejectingFile === path}
+                          >
+                            {rejectingFile === path ? 'Undoing…' : 'Undo reject'}
+                          </button>
+                        </div>
+                      )}
                       {!collapsed && (
                         <>
                           <div className="ams-diff-body">
@@ -1900,18 +2105,73 @@ export default function S3() {
                             >
                               {revisingFile === path ? 'Asking…' : 'Ask'}
                             </button>
-                            <button
-                              className="ams-button-secondary"
-                              onClick={() => handleApplyFile(path)}
-                              disabled={applied || appliedFiles[path] || applyingFile === path}
-                            >
-                              {appliedFiles[path]
-                                ? '✓ Applied'
-                                : applyingFile === path
-                                  ? 'Applying…'
-                                  : 'Apply this file'}
-                            </button>
+                            {!(path in rejectedFiles) && (
+                              <button
+                                className="ams-button-secondary"
+                                onClick={() => handleApplyFile(path)}
+                                disabled={applied || appliedFiles[path] || applyingFile === path}
+                              >
+                                {appliedFiles[path]
+                                  ? '✓ Applied'
+                                  : applyingFile === path
+                                    ? 'Applying…'
+                                    : 'Apply this file'}
+                              </button>
+                            )}
+                            {/* Revert is offered only for a file actually
+                                written to the tree — there is nothing to put
+                                back otherwise. */}
+                            {appliedFiles[path] && (
+                              <button
+                                className="ams-button-secondary"
+                                onClick={() => handleRevertFile(path)}
+                                disabled={revertingFile === path}
+                              >
+                                {revertingFile === path ? 'Reverting…' : 'Revert this file'}
+                              </button>
+                            )}
+                            {!appliedFiles[path] && !applied && !(path in rejectedFiles) && (
+                              <button
+                                className="ams-button-secondary"
+                                onClick={() => {
+                                  setRejectPromptFor(path)
+                                  setRejectReason('')
+                                }}
+                                disabled={rejectingFile === path || rejectPromptFor === path}
+                              >
+                                Reject
+                              </button>
+                            )}
                           </div>
+                          {rejectPromptFor === path && (
+                            <div className="ams-diff-ask">
+                              <input
+                                className="ams-input"
+                                style={{ flex: 1 }}
+                                placeholder={`Why reject ${path}? (optional)`}
+                                value={rejectReason}
+                                onChange={(event) => setRejectReason(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') handleRejectFile(path)
+                                }}
+                                autoFocus
+                              />
+                              <button
+                                className="ams-button-secondary"
+                                onClick={() => handleRejectFile(path)}
+                                disabled={rejectingFile === path}
+                              >
+                                {rejectingFile === path ? 'Rejecting…' : 'Confirm reject'}
+                              </button>
+                              <button
+                                className="ams-button-secondary"
+                                onClick={() => setRejectPromptFor(null)}
+                                disabled={rejectingFile === path}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -1957,10 +2217,36 @@ export default function S3() {
                   )}
                 </div>
 
-                <div style={{ marginTop: '1rem' }}>
+                <div
+                  style={{
+                    marginTop: '1rem',
+                    display: 'flex',
+                    gap: '0.5rem',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                  }}
+                >
                   <button className="ams-button" onClick={handleApply} disabled={applying || applied}>
                     {applied ? '✓ Applied to repo' : applying ? 'Applying…' : 'Apply to repo'}
                   </button>
+                  {/* Undo for a change already written to the working tree.
+                      Before this existed the only way back was a full demo
+                      reset, which discards every other beat's state too. */}
+                  {(applied || Object.keys(appliedFiles).length > 0) && (
+                    <button
+                      className="ams-button-secondary"
+                      onClick={handleRevertAll}
+                      disabled={reverting}
+                    >
+                      {reverting ? 'Reverting…' : 'Revert all'}
+                    </button>
+                  )}
+                  {Object.keys(rejectedFiles).length > 0 && !applied && (
+                    <span style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)' }}>
+                      {Object.keys(rejectedFiles).length} rejected file
+                      {Object.keys(rejectedFiles).length === 1 ? '' : 's'} will be skipped.
+                    </span>
+                  )}
                 </div>
                 {applyError && <p style={{ color: 'var(--ams-error)' }}>{applyError}</p>}
                 {applied && postApplyFailure && (
@@ -2004,12 +2290,77 @@ export default function S3() {
                 {applied && !postApplyFailure && (
                   <p style={{ color: 'var(--ams-success)', fontSize: '0.85rem' }}>
                     Applied. The app now has this capability —{' '}
-                    <a href={MOCKAPP_URL} target="_blank" rel="noopener noreferrer">
-                      open the policy portal
+                    <a href={targetApp.url} target="_blank" rel="noopener noreferrer">
+                      {targetApp.label}
                     </a>{' '}
                     to try it.
                   </p>
                 )}
+                {applied &&
+                  designSync?.findings
+                    .filter((finding) => !finding.still_accurate)
+                    .map((finding) => (
+                      <div
+                        key={finding.design_doc}
+                        className="ams-card"
+                        style={{ marginTop: '0.75rem' }}
+                      >
+                        <p style={{ fontSize: '0.8rem', margin: 0, opacity: 0.7 }}>
+                          {designSync.label}
+                        </p>
+                        <p style={{ fontSize: '0.85rem', marginTop: '0.4rem' }}>
+                          This change touched <code>{finding.subsystem}</code>, and its design
+                          document no longer describes it accurately: {finding.reason} That
+                          document&rsquo;s scope keywords decide whether this subsystem is
+                          considered relevant to future change requests, so leaving it stale
+                          causes retrieval mistakes later.
+                        </p>
+                        {finding.proposal_id ? (
+                          designDocApplied[finding.proposal_id] ? (
+                            <p
+                              style={{ color: 'var(--ams-success)', fontSize: '0.85rem' }}
+                            >
+                              Applied — <code>{finding.design_doc}</code> now matches the code.
+                            </p>
+                          ) : (
+                            <>
+                              {parseDiff(finding.diff_text).map((file) => (
+                                <div key={file.path} className="ams-diff-file">
+                                  <div className="ams-diff-file-header">
+                                    <span>{file.path}</span>
+                                  </div>
+                                  <div className="ams-diff-body">
+                                    {file.lines.map((line, index) => (
+                                      <div
+                                        key={index}
+                                        className={`ams-diff-line${line.type !== 'context' ? ` ams-diff-line-${line.type}` : ''}`}
+                                      >
+                                        {line.text}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                              <button
+                                type="button"
+                                className="ams-button"
+                                disabled={designDocApplying === finding.proposal_id}
+                                onClick={() => void handleApplyDesignDoc(finding)}
+                              >
+                                {designDocApplying === finding.proposal_id
+                                  ? 'Applying…'
+                                  : `Apply ${finding.design_doc}`}
+                              </button>
+                            </>
+                          )
+                        ) : (
+                          <p style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+                            No replacement text was produced — update{' '}
+                            <code>{finding.design_doc}</code> by hand.
+                          </p>
+                        )}
+                      </div>
+                    ))}
               </>
             ) : (
               <div className="ams-card" style={{ marginTop: '0.75rem' }}>

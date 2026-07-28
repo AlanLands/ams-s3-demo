@@ -30,7 +30,7 @@ from common.ticket_events import (
     events_log_marker,
     record_event,
 )
-from s3_enhancement import targets, testrun
+from s3_enhancement import applications, routing, targets, testrun
 from s3_enhancement.analyze import (
     build_assumption_question,
     check_cr_clarity,
@@ -44,11 +44,17 @@ from s3_enhancement.analyze import (
 from s3_enhancement.codegen import (
     add_file_to_proposal,
     apply_change,
+    clear_rejection,
     propose_change,
+    reject_file,
+    rejected_files,
+    revertable_files,
+    revert_change,
     revise_change,
 )
 from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS, clarification_turns_used
 from s3_enhancement.cr import render_cr, sanitize_tier_name
+from s3_enhancement.design_sync import review_after_apply
 from s3_enhancement.docgen import draft_design_doc, draft_release_notes
 from s3_enhancement.harness import latest_harness_run
 from s3_enhancement.quick_chat import QuickChatTurn, continue_session
@@ -93,6 +99,10 @@ class AdhocAnalyzeRequest(BaseModel):
     cr_text: str
     ticket_number: str | None = None
     reset_clarification: bool = False
+    # ServiceNow application context, when the ticket carries it. Present ->
+    # the deterministic route wins and the LLM repo match is skipped entirely.
+    ci: str | None = None
+    business_service: str | None = None
 
 
 def _cr_text_or_400(tier_name: str, *, target: Target | None = None) -> str:
@@ -178,6 +188,45 @@ def _describe_repo_match(match: RepoMatch, projects: list[dict]) -> dict:
     }
 
 
+def _route_dict(decision: routing.RouteDecision) -> dict:
+    """Shape a routing decision for the console.
+
+    `method` and `automation_available` are kept as distinct fields rather than
+    collapsed into one status string: "we know which team owns this" and "we
+    can generate code for it" are separate claims, and the console renders them
+    differently (see s3_enhancement/routing.py).
+    """
+    application = decision.application
+    return {
+        "method": decision.method,
+        "routed": decision.routed,
+        "matched_on": decision.matched_on,
+        "needs_ai_fallback": decision.needs_ai_fallback,
+        "automation_available": decision.automation_available,
+        "application": (
+            {
+                "app_id": application.app_id,
+                "display_name": application.display_name,
+                "business_service": application.business_service,
+                "jira_project_key": application.jira_project_key,
+                "component_team": application.component_team,
+                "tech_stack": application.tech_stack,
+                "repo_path": application.repo_path,
+            }
+            if application
+            else None
+        ),
+        "suggested_assignee": decision.suggested_assignee,
+        "candidate_targets": [
+            {
+                "target_id": target_id,
+                "display_name": targets.get_target(target_id).display_name,
+            }
+            for target_id in decision.candidate_target_ids
+        ],
+    }
+
+
 def _ask_clarifying_question(
     session: dict,
     session_key: str,
@@ -215,19 +264,114 @@ def _full_cr_text(latest: str, history: list[QuickChatTurn]) -> str:
     return "\n".join(parts)
 
 
+def _parse_detail_fields(detail: str) -> dict[str, str]:
+    """Parse a `k=v;k=v` event detail.
+
+    Tolerates the single-field form (`problem_id=PRB0012345`) that events
+    written before application context existed use — those are already in
+    rehearsal logs, and the board reads them on every call.
+    """
+    fields: dict[str, str] = {}
+    for part in detail.split(";"):
+        name, sep, value = part.partition("=")
+        if sep:
+            fields[name.strip()] = value.strip()
+    return fields
+
+
 def _origin_fields(key: str) -> dict:
     """A ticket's intake origin — "problem_record" (created by
     /jira/problem-record-ticket, tagged with the problem_id it was derived
-    from) or "business_cr" (everything else: the fixed CR demo tickets and
+    from, and with the ServiceNow application context that came with it) or
+    "business_cr" (everything else: the fixed CR demo tickets and
     human-confirmed cross-team tickets). Both origins converge on the
     identical downstream flow; this is presentational only, read from the
-    same ticket-events log every other workflow milestone already uses."""
+    same ticket-events log every other workflow milestone already uses.
+
+    `ci`/`business_service` are what the routing tier consumes
+    (s3_enhancement/routing.py). They are absent for tickets that arrived
+    without application context, which is a routable state — the console
+    falls back to the AI repo match — not a missing-data error.
+    """
+    # Last matching event wins, not the first. Normally there is exactly one,
+    # but re-running demo/seed_problem_record_ticket.py with a different
+    # SEED_CI against the same events log appends a second — and the intent
+    # there is plainly to re-route the ticket, not to keep the stale CI.
+    latest: dict[str, str] | None = None
     for event in events_for(key):
         if event.get("action") == "problem_record_ticket_created":
-            detail = event.get("detail", "")
-            problem_id = detail.split("problem_id=", 1)[1] if "problem_id=" in detail else ""
-            return {"origin": "problem_record", "problem_id": problem_id}
-    return {"origin": "business_cr"}
+            latest = _parse_detail_fields(event.get("detail", ""))
+    if latest is None:
+        return {"origin": "business_cr"}
+    return {
+        "origin": "problem_record",
+        "problem_id": latest.get("problem_id", ""),
+        "ci": latest.get("ci", ""),
+        "business_service": latest.get("business_service", ""),
+    }
+
+
+class RouteRequest(BaseModel):
+    # ServiceNow application context. Both optional: a ticket that carries
+    # neither is exactly the case the LLM fallback exists for, and must not be
+    # a 422 — "unroutable" is an answer this endpoint returns, not an error.
+    ci: str | None = None
+    business_service: str | None = None
+    ticket_number: str | None = None
+
+
+@router.post("/route")
+def route(payload: RouteRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Resolve a ticket's application from its CI, before any automation runs.
+
+    The deterministic tier only. When this answers `needs_ai_fallback: true`,
+    the console's next step is `/analyze-adhoc`, whose existing
+    `repo_match` path guesses the repo from the ticket text and asks the
+    developer to confirm anything below high confidence.
+
+    Deliberately not folded into `/analyze`: routing decides *whether the
+    right repo is even in this console*, which is a question that has to be
+    answerable before an analysis is commissioned against a target.
+    """
+    decision = routing.route_ticket(
+        ci=payload.ci, business_service=payload.business_service
+    )
+
+    if payload.ticket_number:
+        detail = (
+            f"{decision.application.display_name} "
+            f"({decision.application.component_team}) via {decision.method}"
+            if decision.routed
+            else "no CI match — falling back to AI repo match"
+        )
+        record_event(payload.ticket_number, "system", "ticket_routed", detail=detail)
+
+    return _route_dict(decision)
+
+
+@router.get("/applications")
+def list_applications(identity: Identity = Depends(require_identity)) -> dict:
+    """The routing registry, for the console's Applications panel — every
+    application S3 can route a ticket to, automatable or not."""
+    return {
+        "applications": [
+            {
+                "app_id": app.app_id,
+                "display_name": app.display_name,
+                "business_service": app.business_service,
+                "ci_names": list(app.ci_names),
+                "jira_project_key": app.jira_project_key,
+                "component_team": app.component_team,
+                "tech_stack": app.tech_stack,
+                "repo_path": app.repo_path,
+                "automation_available": bool(
+                    app.automation_available
+                    and targets.targets_for_application(app.app_id)
+                ),
+            }
+            for app in applications.all_applications()
+        ]
+    }
 
 
 @router.get("/reset-marker")
@@ -354,7 +498,9 @@ def analyze(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     all_files = discover_files_for_target(target, cr_text)
-    selection = select_relevant_files(cr_text, all_files, core_files=target.core_files)
+    selection = select_relevant_files(
+        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+    )
     if payload.ticket_number:
         record_event(
             payload.ticket_number,
@@ -439,11 +585,21 @@ def analyze_adhoc(
 
     full_cr_text = _full_cr_text(cr_text, history)
 
+    # Deterministic routing first. When the ticket names a CI the registry
+    # knows, the answer is already settled: no model call, no confirmation
+    # turn, and the LLM repo match below is skipped rather than run and
+    # discarded — the cost saving is the point of the tier, not a side effect.
+    route_decision = routing.route_ticket(
+        ci=payload.ci, business_service=payload.business_service
+    )
+
     target_repo: dict | None = None
-    try:
-        projects = get_client().list_projects()
-    except GitLabError:
-        projects = None
+    projects = None
+    if route_decision.needs_ai_fallback:
+        try:
+            projects = get_client().list_projects()
+        except GitLabError:
+            projects = None
 
     if projects:
         try:
@@ -503,6 +659,7 @@ def analyze_adhoc(
             "reasoning": effort.reasoning,
         },
         "target_repo": target_repo,
+        "routing": _route_dict(route_decision),
     }
 
 
@@ -520,7 +677,9 @@ def cross_team_impact(payload: TierRequest, identity: Identity = Depends(require
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     all_files = discover_files_for_target(target, cr_text)
-    selection = select_relevant_files(cr_text, all_files, core_files=target.core_files)
+    selection = select_relevant_files(
+        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+    )
     if payload.ticket_number:
         record_event(
             payload.ticket_number,
@@ -592,6 +751,11 @@ class ProblemRecordTicketRequest(BaseModel):
     # modal can show the linkage the team asked for.
     problem_id: str
     assignee: str | None = None
+    # ServiceNow application context carried from the problem record, so the
+    # derived ticket can be routed deterministically (see /s3/route). Optional:
+    # a problem record without a CI still creates a perfectly valid ticket.
+    ci: str | None = None
+    business_service: str | None = None
 
 
 @router.post("/jira/problem-record-ticket")
@@ -618,13 +782,32 @@ def create_problem_record_ticket(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     new_key = str(issue.get("key", ""))
-    record_event(
-        new_key,
-        "system",
-        "problem_record_ticket_created",
-        detail=f"problem_id={payload.problem_id}",
-    )
-    return {"label": AI_SUGGESTION_LABEL, "issue": {**issue, **_origin_fields(new_key)}}
+    detail = f"problem_id={payload.problem_id}"
+    if payload.ci:
+        detail += f";ci={payload.ci}"
+    if payload.business_service:
+        detail += f";business_service={payload.business_service}"
+    record_event(new_key, "system", "problem_record_ticket_created", detail=detail)
+
+    # Record the routing decision as its own event, so the Activity feed shows
+    # the ticket reaching a team before any AI step runs against it.
+    decision = routing.route_ticket(ci=payload.ci, business_service=payload.business_service)
+    if decision.routed:
+        record_event(
+            new_key,
+            "system",
+            "ticket_routed",
+            detail=(
+                f"{decision.application.display_name} "
+                f"({decision.component_team}) via {decision.method}"
+            ),
+        )
+
+    return {
+        "label": AI_SUGGESTION_LABEL,
+        "issue": {**issue, **_origin_fields(new_key)},
+        "routing": _route_dict(decision),
+    }
 
 
 class AssignTicketRequest(BaseModel):
@@ -714,6 +897,13 @@ class ApplyRequest(BaseModel):
     ticket_number: str | None = None
 
 
+class DesignSyncRequest(BaseModel):
+    proposal_id: str
+    applied_files: list[str] = []
+    ticket_number: str | None = None
+    target_id: str | None = None
+
+
 class AddFileRequest(BaseModel):
     proposal_id: str
     file_path: str
@@ -738,7 +928,9 @@ def generate(payload: TierRequest, identity: Identity = Depends(require_identity
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     all_files = discover_files_for_target(target, cr_text)
-    selection = select_relevant_files(cr_text, all_files, core_files=target.core_files)
+    selection = select_relevant_files(
+        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+    )
     if payload.ticket_number:
         record_event(
             payload.ticket_number,
@@ -860,6 +1052,164 @@ def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity))
         "proposal_id": payload.proposal_id,
         "applied_files": applied_files,
         "post_apply": post_apply,
+        "rejected_files": rejected_files(payload.proposal_id),
+        "revertable_files": revertable_files(payload.proposal_id),
+    }
+
+
+class RejectRequest(BaseModel):
+    proposal_id: str
+    file_path: str
+    # Why the developer turned this file down. Free text, optional — an
+    # unexplained rejection is still a decision worth recording, and demanding
+    # a justification would just produce empty ones.
+    reason: str = ""
+    ticket_number: str | None = None
+
+
+@router.post("/reject")
+def reject(payload: RejectRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Reject one file of a staged proposal, with an optional reason.
+
+    The counterpart to per-file Apply: it excludes the file from a subsequent
+    whole-proposal apply *and* writes the decision to the ticket's audit trail,
+    so "the developer declined this change, and why" is recoverable later
+    rather than being indistinguishable from "nobody got to it".
+    """
+    try:
+        rejections = reject_file(payload.proposal_id, payload.file_path, payload.reason)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if payload.ticket_number:
+        detail = payload.file_path
+        if payload.reason.strip():
+            detail += f" — {payload.reason.strip()}"
+        record_event(payload.ticket_number, "human", "code_change_rejected", detail=detail)
+
+    return {"proposal_id": payload.proposal_id, "rejected_files": rejections}
+
+
+class ClearRejectionRequest(BaseModel):
+    proposal_id: str
+    file_path: str
+    ticket_number: str | None = None
+
+
+@router.post("/reject/clear")
+def clear_reject(
+    payload: ClearRejectionRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Undo a rejection, putting the file back in play before anything is
+    applied — the developer is allowed to change their mind."""
+    rejections = clear_rejection(payload.proposal_id, payload.file_path)
+
+    if payload.ticket_number:
+        record_event(
+            payload.ticket_number,
+            "human",
+            "code_change_rejection_cleared",
+            detail=payload.file_path,
+        )
+
+    return {"proposal_id": payload.proposal_id, "rejected_files": rejections}
+
+
+class RevertRequest(BaseModel):
+    proposal_id: str
+    # If set, revert only this one applied file; otherwise revert everything
+    # this proposal applied.
+    file_path: str | None = None
+    ticket_number: str | None = None
+
+
+@router.post("/revert")
+def revert(payload: RevertRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Put the working tree back the way it was before this proposal was
+    applied — file-by-file or wholesale.
+
+    Apply writes to the real repo, so before this the only undo was a full
+    demo reset, which discards every other beat's state too. The post-apply
+    migration re-runs afterwards for the same reason it runs on apply: the
+    working tree changed, and the running app has to stay consistent with it.
+    """
+    try:
+        reverted_files = revert_change(payload.proposal_id, payload.file_path)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    post_apply = _run_post_apply(reverted_files, payload.ticket_number)
+
+    if payload.ticket_number:
+        record_event(
+            payload.ticket_number,
+            "human",
+            "code_change_reverted",
+            detail=payload.file_path or payload.proposal_id,
+        )
+
+    return {
+        "proposal_id": payload.proposal_id,
+        "reverted_files": reverted_files,
+        "post_apply": post_apply,
+        "revertable_files": revertable_files(payload.proposal_id),
+    }
+
+
+@router.post("/design-sync")
+def design_sync(
+    payload: DesignSyncRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """After an Apply, check whether the change left any subsystem's DESIGN.md
+    describing something that is no longer true.
+
+    Called automatically by the console once Apply succeeds — deliberately not
+    a button the developer has to know to press, and deliberately a second call
+    rather than part of `/apply`, so a slow or unreachable model can never delay
+    or fail the apply beat itself.
+
+    Returns `checked: false` (never a 5xx) when the review could not run. A doc
+    that needs updating comes back with its own `proposal_id`, which the
+    existing `/apply` endpoint applies like any other proposal.
+    """
+    target = targets.get_target(payload.target_id)
+    result = review_after_apply(
+        payload.applied_files, proposal_id=payload.proposal_id, target=target
+    )
+
+    if payload.ticket_number:
+        for finding in result.stale_docs:
+            record_event(
+                payload.ticket_number,
+                "ai",
+                "design_doc_update_suggested",
+                detail=f"{finding.design_doc}: {finding.reason}",
+            )
+
+    return {
+        "label": AI_SUGGESTION_LABEL,
+        "checked": result.checked,
+        "unavailable_reason": result.unavailable_reason,
+        "affected_subsystems": [
+            {
+                "subsystem": impact.subsystem,
+                "design_doc": impact.design_doc,
+                "applied_files": list(impact.applied_files),
+            }
+            for impact in result.impacts
+        ],
+        "findings": [
+            {
+                "subsystem": finding.subsystem,
+                "design_doc": finding.design_doc,
+                "applied_files": list(finding.applied_files),
+                "still_accurate": finding.still_accurate,
+                "reason": finding.reason,
+                "proposal_id": finding.proposal_id,
+                "diff_text": finding.diff_text,
+            }
+            for finding in result.findings
+        ],
     }
 
 

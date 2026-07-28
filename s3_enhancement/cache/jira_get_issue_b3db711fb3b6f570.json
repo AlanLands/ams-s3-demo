@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-664"
+  },
+  "response": {
+    "key": "AMS-664",
+    "status": "To Do",
+    "summary": "Something vague",
+    "issue_type": "Task",
+    "assignee": null,
+    "description": ""
+  }
+}

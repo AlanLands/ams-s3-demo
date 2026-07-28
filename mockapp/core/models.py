@@ -19,6 +19,7 @@ class Policy:
     status: str  # "Active" | "Lapsed" | "Cancelled"
     coverage_tier: str = "Standard"
 
+
 @dataclass
 class Claim:
     claim_number: str
@@ -28,6 +29,7 @@ class Claim:
     status: str  # "Submitted" | "Under Review" | "Approved" | "Denied"
     filed_at: str  # ISO datetime string
     notes: str = ""
+
 
 @dataclass
 class Endorsement:
@@ -39,4 +41,3 @@ class Endorsement:
     contact_phone: str
     contact_email: str
     filed_at: str  # ISO datetime string
-    priority: str = "Standard"

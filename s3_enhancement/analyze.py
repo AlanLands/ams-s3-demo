@@ -119,7 +119,9 @@ def _read_codebase_context(cr_text: str, *, target: Target | None = None) -> str
     """Read the target's source files relevant to this CR, as prompt context."""
     target = target or targets.get_target(None)
     all_files = relevance.discover_files_for_target(target, cr_text)
-    selection = relevance.select_relevant_files(cr_text, all_files, core_files=target.core_files)
+    selection = relevance.select_relevant_files(
+        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+    )
     sections = [
         f"--- {rel_path} ---\n{content}"
         for rel_path, content in selection.selected.items()

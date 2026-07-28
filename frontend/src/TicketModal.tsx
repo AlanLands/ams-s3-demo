@@ -5,6 +5,7 @@ import type {
   AnalyzeResponse,
   CrossTeamImpact,
   JiraIssue,
+  RouteDecision,
   TicketEvent,
   TokenPanel as TokenPanelData,
 } from './api_s3'
@@ -82,6 +83,72 @@ function CrossTeamImpactRow({
             </>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+// How the ticket reached its owning application, shown above the analysis.
+//
+// The distinction this panel exists to make: a CI match is a CMDB lookup, not
+// a model output, and it must not be rendered in the same voice as an AI
+// suggestion. Only the fallback path carries the AI label — claiming the
+// deterministic route "as AI" would overstate what the system did, and
+// claiming the AI guess as deterministic would understate the risk.
+function RoutingPanel({ decision }: { decision: RouteDecision }) {
+  if (!decision.routed || !decision.application) {
+    return (
+      <div className="ams-card" style={{ marginTop: '0.75rem' }}>
+        <div style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)' }}>Routing</div>
+        <div style={{ fontSize: '0.85rem', marginTop: '0.3rem' }}>
+          This ticket carried no Configuration Item, so there is nothing to route on
+          deterministically — the AI repo match below decides instead, and asks you to
+          confirm anything it isn't sure about.
+        </div>
+      </div>
+    )
+  }
+
+  const app = decision.application
+  return (
+    <div className="ams-card" style={{ marginTop: '0.75rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="ams-pill ams-pill-general">{app.display_name}</span>
+        <span style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)' }}>
+          Routed by {decision.method === 'ci' ? 'CI' : 'business service'} “
+          {decision.matched_on}” — no AI involved
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>Component team</div>
+          <div style={{ fontWeight: 700 }}>{app.component_team}</div>
+        </div>
+        <div>
+          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>Jira project</div>
+          <div style={{ fontWeight: 700 }}>{app.jira_project_key}</div>
+        </div>
+        <div>
+          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>Tech stack</div>
+          <div style={{ fontWeight: 700 }}>{app.tech_stack}</div>
+        </div>
+        {decision.suggested_assignee && (
+          <div>
+            <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>On call</div>
+            <div style={{ fontWeight: 700 }}>{decision.suggested_assignee}</div>
+          </div>
+        )}
+      </div>
+      {decision.automation_available ? (
+        <p style={{ fontSize: '0.85rem', margin: '0.6rem 0 0', color: 'var(--ams-ink-soft)' }}>
+          Repo <code>{app.repo_path}</code> — {decision.candidate_targets.length} change
+          {decision.candidate_targets.length === 1 ? '' : 's'} available to run against it.
+        </p>
+      ) : (
+        <p style={{ fontSize: '0.85rem', margin: '0.6rem 0 0', color: 'var(--ams-ink-soft)' }}>
+          Routed to the owning team. This console has no repo for {app.display_name}, so no
+          code will be generated for it here.
+        </p>
       )}
     </div>
   )
@@ -276,6 +343,7 @@ export default function TicketModal({
                 {analysisError && (
                   <p style={{ color: 'var(--ams-error)', marginTop: '0.5rem' }}>{analysisError}</p>
                 )}
+                {analysisResult?.routing && <RoutingPanel decision={analysisResult.routing} />}
                 {analysisResult && (
                   <div className="ams-card" style={{ marginTop: '0.75rem' }}>
                     <strong>{analysisResult.label}</strong>

@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-292"
+  },
+  "response": {
+    "key": "AMS-292",
+    "status": "To Do",
+    "summary": "Claim payout ignores the deductible",
+    "issue_type": "Task",
+    "assignee": null,
+    "description": ""
+  }
+}

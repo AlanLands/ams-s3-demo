@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from s3_enhancement import cr, relevance
+from s3_enhancement import cr, relevance, targets
 
 
 def test_discover_mockapp_files_returns_the_full_candidate_pool() -> None:
@@ -114,6 +114,37 @@ def test_canonical_cr_screens_out_every_legacy_subsystem() -> None:
 
     assert screen.in_scope == ()
     assert len(screen.screened_out) == len(docs)
+
+
+def test_design_docs_are_scoped_to_the_root_they_are_asked_for() -> None:
+    """A root with no DESIGN.md yields no docs — not mockapp's.
+
+    `discover_subsystem_design_docs` used to glob `mockapp/` unconditionally,
+    so any target rooted elsewhere was screened against mockapp's decoy
+    subsystems.
+    """
+    spring_root = targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE.root
+    assert spring_root is not None
+    assert relevance.discover_subsystem_design_docs(spring_root) == {}
+
+
+def test_non_mockapp_target_is_never_screened_against_mockapp_subsystems() -> None:
+    """The UI's "which part of the repo the AI matched this change to" panel
+    reads straight off this screen, so a mockapp subsystem showing up as
+    in-scope for the Spring target is a wrong answer on stage, not cosmetic.
+    """
+    target = targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE
+    cr_text = cr.render_cr("Elite", target=target)
+    all_files = relevance.discover_files_for_target(target, cr_text)
+    selection = relevance.select_relevant_files(
+        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+    )
+
+    screen = selection.subsystem_screen
+    assert screen.in_scope == ()
+    assert screen.screened_out == ()
+    assert screen.scores == {}
+    assert all(path.startswith("sandbox/spring-demo/") for path in selection.selected)
 
 
 def test_select_relevant_files_never_opens_a_screened_out_subsystems_files() -> None:

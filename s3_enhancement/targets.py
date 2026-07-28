@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from s3_enhancement import applications
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Legacy cache-key literals, preserved verbatim so the default target's cache
@@ -83,6 +85,14 @@ class Target:
     target_id: str
     source_kind: Literal["local", "gitlab"]
     display_name: str
+
+    # Application (ServiceNow CI) this target's code belongs to, as an
+    # `applications.Application.app_id`. Several targets can share one
+    # application — a CI identifies the app, and the CR text picks the change
+    # within it (see s3_enhancement/applications.py). Empty means the target
+    # predates the routing registry and is reachable only by explicit
+    # target_id, never by CI.
+    application_id: str = ""
 
     # "local" source
     root: Path | None = None
@@ -155,6 +165,14 @@ def register_target(target: Target) -> None:
             f"cache_namespace {target.cache_namespace!r} is already used by "
             f"target {_NAMESPACES[target.cache_namespace]!r}"
         )
+    if target.application_id:
+        try:
+            applications.get_application(target.application_id)
+        except KeyError:
+            raise ValueError(
+                f"target {target.target_id!r} names unknown application "
+                f"{target.application_id!r}"
+            ) from None
     _REGISTRY[target.target_id] = target
     if target.cache_namespace:
         _NAMESPACES[target.cache_namespace] = target.target_id
@@ -166,6 +184,7 @@ MOCKAPP_COVERAGE_UPGRADE = Target(
     target_id=DEFAULT_TARGET_ID,
     source_kind="local",
     display_name="MapleSure mockapp — coverage tier upgrade (CR-2026-041)",
+    application_id=applications.POLICY_CORE_ID,
     root=REPO_ROOT / "mockapp",
     cr_template_path=REPO_ROOT / "mockapp" / "crs" / "CR-2026-041.md",
     core_files=(
@@ -212,6 +231,7 @@ MOCKAPP_ENDORSEMENT_FIELD_ADD = Target(
     target_id=ENDORSEMENT_TARGET_ID,
     source_kind="local",
     display_name="MapleSure mockapp — endorsement priority field (CR-2026-042)",
+    application_id=applications.POLICY_CORE_ID,
     root=REPO_ROOT / "mockapp",
     cr_template_path=REPO_ROOT / "mockapp" / "crs" / "CR-2026-042.md",
     cr_placeholder="",  # this CR has no audience-picked placeholder token
@@ -258,6 +278,7 @@ SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
     target_id=SPRING_TARGET_ID,
     source_kind="local",
     display_name="ClaimsPortal (Spring Boot) — claims deductible handling (CR-2026-043)",
+    application_id=applications.CLAIMS_PORTAL_ID,
     root=_SPRING_ROOT,
     cr_template_path=_SPRING_ROOT / "crs" / "CR-2026-043.md",
     cr_placeholder="",  # like CR-2026-042, no audience-picked placeholder token
@@ -315,6 +336,14 @@ def all_targets() -> tuple[Target, ...]:
     root, so the migration step runs for any current or future CR without
     the API needing to be told the target explicitly."""
     return tuple(_REGISTRY.values())
+
+
+def targets_for_application(app_id: str) -> tuple[Target, ...]:
+    """Every registered target belonging to one application, in registration
+    order. Routing narrows a ticket to an application; this is the candidate
+    set of changes S3 could run against it. Empty means the application is
+    routable but has no automation (see applications.Application)."""
+    return tuple(t for t in _REGISTRY.values() if t.application_id == app_id)
 
 
 def post_apply_commands_for(applied_files: list[str], repo_root: Path) -> list[tuple[str, ...]]:

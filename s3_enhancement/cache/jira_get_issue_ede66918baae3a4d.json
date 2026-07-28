@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-753"
+  },
+  "response": {
+    "key": "AMS-753",
+    "status": "To Do",
+    "summary": "Recurring nightly batch timeout in BillingGateway",
+    "issue_type": "Task",
+    "assignee": "Ravi Kumar",
+    "description": "Derived from a problem record raised after repeated incidents on the nightly premium recalculation job \u2014 see the incident-reduction pipeline's problem-record queue for the underlying pattern."
+  }
+}

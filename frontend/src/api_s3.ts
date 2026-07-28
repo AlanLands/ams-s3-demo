@@ -35,6 +35,45 @@ export interface TargetRepo {
   confidence: string
 }
 
+export interface RoutedApplication {
+  app_id: string
+  display_name: string
+  business_service: string
+  jira_project_key: string
+  component_team: string
+  tech_stack: string
+  // Empty for applications this console can route to but has no code for.
+  repo_path: string
+}
+
+// How a ticket reached its application. 'ci' and 'business_service' are
+// deterministic CMDB lookups with no model call; 'unrouted' means the ticket
+// carried no usable application context and the AI repo-match tier should run
+// instead (see s3_enhancement/routing.py).
+export type RouteMethod = 'ci' | 'business_service' | 'unrouted'
+
+export interface RouteDecision {
+  method: RouteMethod
+  routed: boolean
+  // The ticket field value that produced the match, for display.
+  matched_on: string
+  needs_ai_fallback: boolean
+  // Deliberately separate from `routed`: an application can have a known
+  // owning team and still have no repo S3 can generate against, in which case
+  // the ticket is routed correctly and automation stays off.
+  automation_available: boolean
+  application: RoutedApplication | null
+  suggested_assignee: string
+  candidate_targets: { target_id: string; display_name: string }[]
+}
+
+export interface ApplicationsResponse {
+  applications: (RoutedApplication & {
+    ci_names: string[]
+    automation_available: boolean
+  })[]
+}
+
 export interface AnalyzeResponse {
   label: string
   impact_analysis: string
@@ -51,6 +90,8 @@ export interface AnalyzeResponse {
   // this CR is for, once confident enough to stop asking (see
   // AdhocAnalyzeResponse.target_repo and analyze-adhoc's clarification gate).
   target_repo?: TargetRepo | null
+  // How the ticket reached its application, when it carried CI context.
+  routing?: RouteDecision
 }
 
 // Raw wire shape of POST /analyze — unlike AnalyzeResponse (used for
@@ -116,6 +157,44 @@ export interface ApplyResponse {
   proposal_id: string
   applied_files: string[]
   post_apply?: PostApplyResult | null
+  // `{path: reason}` for files the developer turned down — excluded from an
+  // apply-all. Returned on every apply so the console's per-file state stays
+  // in sync with the server's, rather than being tracked only client-side.
+  rejected_files: Record<string, string>
+  // Files this proposal has written and can still put back.
+  revertable_files: string[]
+}
+
+export interface RejectResponse {
+  proposal_id: string
+  rejected_files: Record<string, string>
+}
+
+export interface RevertResponse {
+  proposal_id: string
+  reverted_files: string[]
+  post_apply?: PostApplyResult | null
+  revertable_files: string[]
+}
+
+export interface DesignDocFinding {
+  subsystem: string
+  design_doc: string
+  applied_files: string[]
+  still_accurate: boolean
+  reason: string
+  // Present only when the doc needs updating AND a replacement was produced —
+  // it addresses an ordinary staged proposal, applied via the same apply().
+  proposal_id: string
+  diff_text: string
+}
+
+export interface DesignSyncResponse {
+  label: string
+  checked: boolean
+  unavailable_reason: string
+  affected_subsystems: { subsystem: string; design_doc: string; applied_files: string[] }[]
+  findings: DesignDocFinding[]
 }
 
 export interface AddFileResponse {
@@ -281,6 +360,10 @@ export interface JiraIssue {
   origin?: 'business_cr' | 'problem_record'
   // Present only when origin is 'problem_record'.
   problem_id?: string
+  // ServiceNow application context, when the ticket arrived with it. Drives
+  // deterministic routing; absent means the AI repo-match tier decides.
+  ci?: string
+  business_service?: string
 }
 
 export interface JiraBoardResponse {
@@ -314,8 +397,11 @@ export interface AdhocAnalyzeResponse {
   assumptions?: string[]
   effort_estimate?: EffortEstimate
   // AI's best guess at the target repo once confident enough to stop
-  // asking — null when no GitLab connection was available to check against.
+  // asking — null when no GitLab connection was available to check against,
+  // and skipped entirely when `routing` already settled it deterministically.
   target_repo?: TargetRepo | null
+  // Deterministic CI routing, run before the AI repo match.
+  routing?: RouteDecision
 }
 
 export interface QuickChatResponse {
@@ -369,15 +455,36 @@ export const s3Api = {
   // question instead of an analysis; resubmit with the engineer's answer as
   // `crText` (server keeps the transcript, same as quickImpactChat below).
   // `resetClarification` clears that server-side history before this call.
-  analyzeAdhoc: (crText: string, ticketNumber?: string, resetClarification = false) =>
+  analyzeAdhoc: (
+    crText: string,
+    ticketNumber?: string,
+    resetClarification = false,
+    application?: { ci?: string; businessService?: string }
+  ) =>
     request<AdhocAnalyzeResponse>('/api/s3/analyze-adhoc', {
       method: 'POST',
       body: JSON.stringify({
         cr_text: crText,
         ticket_number: ticketNumber ?? null,
         reset_clarification: resetClarification,
+        ci: application?.ci ?? null,
+        business_service: application?.businessService ?? null,
       }),
     }),
+  // Deterministic tier only — resolves a ticket's CI to its owning team, Jira
+  // project and repo with no model call. `needs_ai_fallback` in the response
+  // means the ticket carried no usable CI and analyzeAdhoc's repo-match gate
+  // should decide instead.
+  route: (ci?: string, businessService?: string, ticketNumber?: string) =>
+    request<RouteDecision>('/api/s3/route', {
+      method: 'POST',
+      body: JSON.stringify({
+        ci: ci ?? null,
+        business_service: businessService ?? null,
+        ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  applications: () => request<ApplicationsResponse>('/api/s3/applications'),
   generate: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
     request<GenerateResponse>('/api/s3/generate', {
       method: 'POST',
@@ -399,6 +506,53 @@ export const s3Api = {
         proposal_id: proposalId,
         file_path: filePath ?? null,
         ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  // Turn one file down, with an optional reason. Recorded to the ticket's
+  // audit trail and enforced: apply-all skips it afterwards.
+  reject: (proposalId: string, filePath: string, reason: string, ticketNumber?: string) =>
+    request<RejectResponse>('/api/s3/reject', {
+      method: 'POST',
+      body: JSON.stringify({
+        proposal_id: proposalId,
+        file_path: filePath,
+        reason,
+        ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  clearRejection: (proposalId: string, filePath: string, ticketNumber?: string) =>
+    request<RejectResponse>('/api/s3/reject/clear', {
+      method: 'POST',
+      body: JSON.stringify({
+        proposal_id: proposalId,
+        file_path: filePath,
+        ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  // Put the working tree back as it was before this proposal was applied.
+  // Omit filePath to revert everything it applied.
+  revert: (proposalId: string, ticketNumber?: string, filePath?: string) =>
+    request<RevertResponse>('/api/s3/revert', {
+      method: 'POST',
+      body: JSON.stringify({
+        proposal_id: proposalId,
+        file_path: filePath ?? null,
+        ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  designSync: (
+    proposalId: string,
+    appliedFiles: string[],
+    ticketNumber?: string,
+    targetId?: string,
+  ) =>
+    request<DesignSyncResponse>('/api/s3/design-sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        proposal_id: proposalId,
+        applied_files: appliedFiles,
+        ticket_number: ticketNumber ?? null,
+        target_id: targetId ?? null,
       }),
     }),
   addFile: (proposalId: string, filePath: string, instruction: string, ticketNumber?: string) =>

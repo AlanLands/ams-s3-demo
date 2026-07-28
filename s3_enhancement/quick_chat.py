@@ -55,7 +55,9 @@ def _read_codebase_context(message: str, *, target: Target) -> str:
     """Scoped codebase context — same discovery/selection path analyze.py's
     fixed-CR impact analysis uses, never a raw whole-repo dump."""
     all_files = relevance.discover_files_for_target(target, message)
-    selection = relevance.select_relevant_files(message, all_files, core_files=target.core_files)
+    selection = relevance.select_relevant_files(
+        message, all_files, core_files=target.core_files, design_doc_root=target.root
+    )
     return "\n\n".join(
         f"--- {rel_path} ---\n{content}" for rel_path, content in selection.selected.items()
     )

@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AMS S3 — How Context Is Chosen, and How It Differs from GitLab Duo</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm; }
+
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #5c5c5c;
+    --ink-faint: #8a8a8a;
+    --line: #d8d8d8;
+    --accent: #8b1e2d;
+    --accent-soft: #f6ecee;
+    --ok: #1c6b3c;
+    --warn: #8a5a00;
+    --warn-soft: #fdf6e6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    /* Data-viz roles. --mark-kept is validated for the light chart surface
+       (lightness band, chroma floor, 3:1 contrast); --mark-cut is a deliberate
+       neutral — "excluded" is a recessive state, not a competing identity.
+       The pair separates at CVD dE 8.8 / normal-vision 17.1, and every mark is
+       direct-labelled, so identity never rests on colour alone. */
+    --surface-1: #fcfcfb;
+    --mark-kept: #a83244;
+    --mark-cut: #6b7280;
+    --grid: #e6e6e4;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font: 10.5pt/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    margin: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1 { font-size: 21pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
+  h2 {
+    font-size: 13pt; margin: 0 0 3mm; padding-bottom: 1.5mm;
+    border-bottom: 2px solid var(--accent); letter-spacing: -0.2pt;
+  }
+  h3 { font-size: 10.5pt; margin: 4.5mm 0 1.5mm; }
+  /* A heading must never be the last thing on a page — keep it with what it introduces. */
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  code { background: #f2f2f2; padding: 0.5pt 2pt; border-radius: 2px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3.5mm; font-size: 9.5pt; }
+  th, td { text-align: left; padding: 1.6mm 2mm; border-bottom: 0.5pt solid var(--line); vertical-align: top; }
+  th { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.4pt; color: var(--ink-soft); border-bottom: 1pt solid var(--ink-soft); }
+  td.mono { font-family: var(--mono); font-size: 9pt; line-height: 1.5; }
+
+  ol, ul { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.5mm; }
+
+  section { break-inside: auto; }
+  .section { margin-bottom: 6mm; }
+
+  /* --- cover ------------------------------------------------------------ */
+  .cover { border-bottom: 3pt solid var(--accent); padding-bottom: 4mm; margin-bottom: 5mm; }
+  .kicker { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.6pt; color: var(--accent); font-weight: 700; margin-bottom: 2mm; }
+  .subtitle { font-size: 11pt; color: var(--ink-soft); margin: 0; }
+  .meta { font-size: 8.5pt; color: var(--ink-soft); margin-top: 3mm; }
+
+  /* --- blocks ----------------------------------------------------------- */
+  .callout {
+    background: var(--accent-soft); border-left: 2.5pt solid var(--accent);
+    padding: 3mm 3.5mm; margin: 3mm 0; break-inside: avoid;
+  }
+  .callout .lead { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; color: var(--accent); font-weight: 700; margin-bottom: 1.5mm; }
+  .callout p:last-child { margin-bottom: 0; }
+  .say { font-size: 11pt; line-height: 1.45; font-style: italic; }
+
+  .caution {
+    background: var(--warn-soft); border-left: 2.5pt solid var(--warn);
+    padding: 3mm 3.5mm; margin: 3mm 0; break-inside: avoid; font-size: 9.5pt;
+  }
+  .caution .lead { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; color: var(--warn); font-weight: 700; margin-bottom: 1.5mm; }
+  .caution p:last-child { margin-bottom: 0; }
+
+  figure { margin: 3mm 0 4mm; break-inside: avoid; page-break-inside: avoid; }
+  figcaption {
+    font-size: 8.5pt; color: var(--ink-soft); margin-top: 1.5mm;
+    padding-top: 1.2mm; border-top: 0.5pt solid var(--line);
+  }
+  figcaption strong { color: var(--ink); }
+  .fig-title { font-size: 9.5pt; font-weight: 700; margin-bottom: 0.5mm; }
+  .fig-sub { font-size: 8.5pt; color: var(--ink-soft); margin-bottom: 2mm; }
+  svg { display: block; width: 100%; height: auto; }
+
+  .legend { display: flex; gap: 5mm; font-size: 8.5pt; color: var(--ink-soft); margin: 1.5mm 0 0; flex-wrap: wrap; }
+  .legend span { display: flex; align-items: center; gap: 1.4mm; }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .swatch-line { width: 14px; height: 0; border-top: 1.5pt dashed var(--accent); flex: none; }
+
+  .two-col { display: flex; gap: 5mm; }
+  .two-col > div { flex: 1; }
+
+  /* No letter-spacing here: at 8pt uppercase it opens "DUO" into "DU O". */
+  .verdict { font-size: 8pt; font-weight: 700; text-transform: uppercase; }
+  .v-us { color: var(--accent); }
+  .v-duo { color: var(--ink-soft); }
+
+  .pagebreak { break-before: page; page-break-before: always; }
+
+  .footnote { font-size: 8.5pt; color: var(--ink-soft); border-top: 0.5pt solid var(--line); padding-top: 2mm; margin-top: 4mm; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="kicker">AMS Scenario 3 — Enhancement · Technical Brief</div>
+  <h1>How the AI chooses what it reads</h1>
+  <p class="subtitle">The relevance funnel behind S3, the numbers that justify it,
+    and an honest comparison with GitLab Duo.</p>
+  <p class="meta">MapleSure Insurance demo build · All figures measured live against
+    CR-2026-041 on 27 July 2026 · Local embedding backend</p>
+</div>
+
+<div class="callout">
+  <div class="lead">If you are asked "how does it rank?" — say this</div>
+  <p class="say">"We never paste the repo into the prompt. First we score each
+  subsystem's own design document against the change request and discard whole
+  subsystems that don't match — the AI reads the architecture docs before it opens
+  a single source file. Then we rank only what survived, and send a handful. On this
+  change request that's 4 files out of 56, and the console shows you every score
+  and everything we threw away."</p>
+</div>
+
+<section class="section">
+<h2>The funnel, with real counts</h2>
+
+<figure>
+  <div class="fig-title">Figure 1 · What happens to 56 files</div>
+  <div class="fig-sub">CR-2026-041 (new top coverage tier) against the MapleSure mockapp target.</div>
+  <svg viewBox="0 0 700 268" role="img"
+       aria-label="Flow diagram: 56 discovered files reduce to 4 files sent to the model. 50 Java files are cut at stage 1 by subsystem screening. Of 6 Python files, 1 is structurally blocked, 2 are scored and both fall below the floor, and 3 core files plus 1 not-yet-existing core file are sent.">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8a8a"/>
+      </marker>
+    </defs>
+
+    <!-- stage headers -->
+    <text x="0"   y="12" font-size="9" font-weight="700" fill="#1a1a1a">DISCOVERED</text>
+    <text x="196" y="12" font-size="9" font-weight="700" fill="#1a1a1a">STAGE 1 — SUBSYSTEM SCREEN</text>
+    <text x="454" y="12" font-size="9" font-weight="700" fill="#1a1a1a">STAGE 2 — FILE RANK</text>
+    <line x1="0" y1="18" x2="700" y2="18" stroke="#e6e6e4" stroke-width="1"/>
+
+    <!-- col 1: discovered -->
+    <rect x="0" y="34" width="150" height="52" rx="4" fill="#f4f4f2" stroke="#d8d8d8"/>
+    <text x="12" y="60" font-size="21" font-weight="700" fill="#1a1a1a">56</text>
+    <text x="47" y="60" font-size="9.5" fill="#5c5c5c">source files</text>
+    <text x="12" y="76" font-size="8.5" fill="#8a8a8a">50 Java · 6 Python</text>
+
+    <!-- arrows into stage 1 -->
+    <line x1="150" y1="60" x2="192" y2="60" stroke="#8a8a8a" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+    <!-- col 2: screening -->
+    <rect x="196" y="30" width="230" height="60" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
+    <text x="208" y="48" font-size="9" fill="#5c5c5c">6 subsystem DESIGN.md scored</text>
+    <text x="208" y="66" font-size="15" font-weight="700" fill="#6b7280">6 of 6</text>
+    <text x="262" y="66" font-size="9.5" fill="#5c5c5c">screened out</text>
+    <text x="208" y="82" font-size="8.5" fill="#8a8a8a">top score 0.339 · floor 0.45</text>
+
+    <!-- cut path -->
+    <line x1="311" y1="90" x2="311" y2="126" stroke="#8a8a8a" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="196" y="130" width="230" height="34" rx="4" fill="#f4f4f2" stroke="#d8d8d8" stroke-dasharray="3 2"/>
+    <text x="208" y="152" font-size="9.5" fill="#5c5c5c"><tspan font-size="13" font-weight="700" fill="#6b7280">50</tspan> Java files never opened</text>
+
+    <!-- survivors down to python -->
+    <line x1="426" y1="60" x2="450" y2="60" stroke="#8a8a8a" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+    <!-- col 3: stage 2 -->
+    <rect x="454" y="30" width="246" height="60" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
+    <text x="466" y="48" font-size="9" fill="#5c5c5c">2 remaining files scored</text>
+    <text x="466" y="66" font-size="15" font-weight="700" fill="#6b7280">0 of 2</text>
+    <text x="512" y="66" font-size="9.5" fill="#5c5c5c">cleared the floor</text>
+    <text x="466" y="82" font-size="8.5" fill="#8a8a8a">best 0.458 · floor 0.55</text>
+
+    <line x1="577" y1="90" x2="577" y2="126" stroke="#8a8a8a" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="454" y="130" width="246" height="34" rx="4" fill="#f4f4f2" stroke="#d8d8d8" stroke-dasharray="3 2"/>
+    <text x="466" y="152" font-size="9.5" fill="#5c5c5c"><tspan font-size="13" font-weight="700" fill="#6b7280">2</tspan> below floor · <tspan font-size="13" font-weight="700" fill="#6b7280">1</tspan> hard-blocked</text>
+
+    <!-- bottom: the contract lane -->
+    <line x1="0" y1="182" x2="700" y2="182" stroke="#e6e6e4" stroke-width="1"/>
+    <text x="0" y="200" font-size="9" font-weight="700" fill="#8b1e2d">THE CONTRACT LANE — BYPASSES SCORING ENTIRELY</text>
+
+    <rect x="0" y="210" width="700" height="52" rx="4" fill="#f6ecee" stroke="#a83244" stroke-width="1.2"/>
+    <text x="14" y="238" font-size="21" font-weight="700" fill="#a83244">4</text>
+    <text x="40" y="238" font-size="10" font-weight="700" fill="#1a1a1a">files sent to the model</text>
+    <text x="14" y="254" font-size="8.5" fill="#5c5c5c">app.py · core/db.py · core/models.py — always included, never scored — plus core/coverage.py, sent empty because the CR creates it</text>
+  </svg>
+  <figcaption><strong>The ranker's job on this CR is exclusion, not selection.</strong>
+    Nothing cleared the floor; the four files that went were the ones the target's
+    core-file contract guarantees. That is the design working as intended — ranking
+    decides what <em>else</em> the model may see, and it declined to add anything.</figcaption>
+</figure>
+</section>
+
+<section class="section">
+<h2>Why the thresholds are defensible</h2>
+
+<p>The floors are not taste. They sit above the highest score any known-irrelevant
+file or subsystem actually achieves, measured against this corpus — so a decoy
+would have to beat its own ceiling by a wide margin to get in.</p>
+
+<figure>
+  <div class="fig-title">Figure 2 · Measured cosine similarity vs. the cut-off</div>
+  <div class="fig-sub">Every scored item on this change request. Same unit and scale in both panels; each panel carries its own floor.</div>
+  <svg viewBox="0 0 700 340" role="img"
+       aria-label="Two-panel bar chart of cosine similarity scores. Panel A, six subsystem design docs, scores from 0.090 to 0.339, all below the 0.45 floor. Panel B, two candidate files, 0.458 and 0.388, both below the 0.55 floor.">
+    <!-- ============ PANEL A ============ -->
+    <text x="0" y="12" font-size="9.5" font-weight="700" fill="#1a1a1a">A · Subsystem design docs</text>
+    <text x="150" y="12" font-size="8.5" fill="#8a8a8a">scored before any source file is opened</text>
+
+    <!-- grid -->
+    <g stroke="#e6e6e4" stroke-width="1">
+      <line x1="168" y1="22" x2="168" y2="170"/>
+      <line x1="255" y1="22" x2="255" y2="170"/>
+      <line x1="341" y1="22" x2="341" y2="170"/>
+      <line x1="428" y1="22" x2="428" y2="170"/>
+      <line x1="515" y1="22" x2="515" y2="170"/>
+      <line x1="601" y1="22" x2="601" y2="170"/>
+    </g>
+
+    <!-- floor 0.45 -> 168 + 0.45*866.67*0.6 ... recomputed: scale 520px per 0.6 -->
+    <line x1="558" y1="22" x2="558" y2="170" stroke="#8b1e2d" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="562" y="32" font-size="8.5" font-weight="700" fill="#8b1e2d">floor 0.45</text>
+
+    <!-- bars: x0=168, scale = 520/0.6 = 866.67 px per unit -->
+    <!-- settlement 0.3386 -> 293.5 -->
+    <text x="164" y="43" font-size="8.5" fill="#5c5c5c" text-anchor="end">settlement</text>
+    <rect x="168" y="33" width="293" height="13" rx="4" fill="#6b7280"/>
+    <text x="468" y="43" font-size="8.5" font-weight="700" fill="#1a1a1a">0.339</text>
+
+    <!-- underwriting 0.2802 -> 242.8 -->
+    <text x="164" y="65" font-size="8.5" fill="#5c5c5c" text-anchor="end">underwriting</text>
+    <rect x="168" y="55" width="243" height="13" rx="4" fill="#6b7280"/>
+    <text x="418" y="65" font-size="8.5" font-weight="700" fill="#1a1a1a">0.280</text>
+
+    <!-- risk 0.2725 -> 236.2 -->
+    <text x="164" y="87" font-size="8.5" fill="#5c5c5c" text-anchor="end">risk</text>
+    <rect x="168" y="77" width="236" height="13" rx="4" fill="#6b7280"/>
+    <text x="411" y="87" font-size="8.5" font-weight="700" fill="#1a1a1a">0.273</text>
+
+    <!-- audit 0.2570 -> 222.7 -->
+    <text x="164" y="109" font-size="8.5" fill="#5c5c5c" text-anchor="end">audit</text>
+    <rect x="168" y="99" width="223" height="13" rx="4" fill="#6b7280"/>
+    <text x="398" y="109" font-size="8.5" font-weight="700" fill="#1a1a1a">0.257</text>
+
+    <!-- billing 0.1898 -> 164.5 -->
+    <text x="164" y="131" font-size="8.5" fill="#5c5c5c" text-anchor="end">billing</text>
+    <rect x="168" y="121" width="165" height="13" rx="4" fill="#6b7280"/>
+    <text x="340" y="131" font-size="8.5" font-weight="700" fill="#1a1a1a">0.190</text>
+
+    <!-- reporting 0.0895 -> 77.6 -->
+    <text x="164" y="153" font-size="8.5" fill="#5c5c5c" text-anchor="end">reporting</text>
+    <rect x="168" y="143" width="78" height="13" rx="4" fill="#6b7280"/>
+    <text x="253" y="153" font-size="8.5" font-weight="700" fill="#1a1a1a">0.090</text>
+
+    <!-- axis A -->
+    <line x1="168" y1="170" x2="688" y2="170" stroke="#8a8a8a" stroke-width="1"/>
+    <g font-size="8" fill="#8a8a8a" text-anchor="middle">
+      <text x="168" y="182">0</text>
+      <text x="255" y="182">0.10</text>
+      <text x="341" y="182">0.20</text>
+      <text x="428" y="182">0.30</text>
+      <text x="515" y="182">0.40</text>
+      <text x="601" y="182">0.50</text>
+      <text x="688" y="182">0.60</text>
+    </g>
+
+    <!-- margin annotation -->
+    <line x1="461" y1="196" x2="558" y2="196" stroke="#8b1e2d" stroke-width="1"/>
+    <line x1="461" y1="192" x2="461" y2="200" stroke="#8b1e2d" stroke-width="1"/>
+    <line x1="558" y1="192" x2="558" y2="200" stroke="#8b1e2d" stroke-width="1"/>
+    <text x="509" y="192" font-size="8" font-weight="700" fill="#8b1e2d" text-anchor="middle">0.111 headroom</text>
+
+    <!-- ============ PANEL B ============ -->
+    <text x="0" y="232" font-size="9.5" font-weight="700" fill="#1a1a1a">B · Candidate files</text>
+    <text x="150" y="232" font-size="8.5" fill="#8a8a8a">the survivors of stage 1, scored on path + content</text>
+
+    <g stroke="#e6e6e4" stroke-width="1">
+      <line x1="168" y1="242" x2="168" y2="300"/>
+      <line x1="255" y1="242" x2="255" y2="300"/>
+      <line x1="341" y1="242" x2="341" y2="300"/>
+      <line x1="428" y1="242" x2="428" y2="300"/>
+      <line x1="515" y1="242" x2="515" y2="300"/>
+      <line x1="601" y1="242" x2="601" y2="300"/>
+    </g>
+
+    <!-- floor 0.55 -> 168 + 476.7 = 644.7 -->
+    <line x1="645" y1="242" x2="645" y2="300" stroke="#8b1e2d" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="641" y="252" font-size="8.5" font-weight="700" fill="#8b1e2d" text-anchor="end">floor 0.55</text>
+
+    <!-- claims.py 0.4581 -> 397 -->
+    <text x="164" y="263" font-size="8.5" fill="#5c5c5c" text-anchor="end">core/claims.py</text>
+    <rect x="168" y="253" width="397" height="13" rx="4" fill="#6b7280"/>
+    <text x="572" y="263" font-size="8.5" font-weight="700" fill="#1a1a1a">0.458</text>
+
+    <!-- endorsements.py 0.3880 -> 336 -->
+    <text x="164" y="285" font-size="8.5" fill="#5c5c5c" text-anchor="end">core/endorsements.py</text>
+    <rect x="168" y="275" width="336" height="13" rx="4" fill="#6b7280"/>
+    <text x="511" y="285" font-size="8.5" font-weight="700" fill="#1a1a1a">0.388</text>
+
+    <line x1="168" y1="300" x2="688" y2="300" stroke="#8a8a8a" stroke-width="1"/>
+    <g font-size="8" fill="#8a8a8a" text-anchor="middle">
+      <text x="168" y="312">0</text>
+      <text x="255" y="312">0.10</text>
+      <text x="341" y="312">0.20</text>
+      <text x="428" y="312">0.30</text>
+      <text x="515" y="312">0.40</text>
+      <text x="601" y="312">0.50</text>
+      <text x="688" y="312">0.60</text>
+    </g>
+
+    <line x1="565" y1="326" x2="645" y2="326" stroke="#8b1e2d" stroke-width="1"/>
+    <line x1="565" y1="322" x2="565" y2="330" stroke="#8b1e2d" stroke-width="1"/>
+    <line x1="645" y1="322" x2="645" y2="330" stroke="#8b1e2d" stroke-width="1"/>
+    <text x="605" y="322" font-size="8" font-weight="700" fill="#8b1e2d" text-anchor="middle">0.092 headroom</text>
+  </svg>
+  <div class="legend">
+    <span><i class="swatch" style="background:#6b7280"></i> below floor — excluded</span>
+    <span><i class="swatch-line"></i> cut-off for this stage</span>
+    <span>cosine similarity, 0–1 · higher is more relevant</span>
+  </div>
+  <figcaption><strong>The gap is the argument.</strong> <code>core/claims.py</code> is
+    the hardest case in the corpus — same insurance vocabulary as the CR, genuinely
+    adjacent, but not what the change is about. It scores 0.458 against a 0.55 floor.
+    The nearest decoy subsystem, <em>settlement</em>, tops out at 0.339 against 0.45.
+    Both are comfortably clear, and <code>tests/test_s3_relevance.py</code> asserts
+    they stay that way.</figcaption>
+</figure>
+
+<div class="caution">
+  <div class="lead">Answer if challenged on the numbers</div>
+  <p>These floors are calibrated to <em>this</em> corpus, and the brief says so.
+  The honest claim is that the <strong>mechanism</strong> generalises and the
+  <strong>constants</strong> get re-measured per repository — the same way you'd
+  re-tune any detector. Do not claim the numbers transfer.</p>
+</div>
+</section>
+
+<section class="section pagebreak">
+<h2>Two guardrails that are not ranking at all</h2>
+
+<p>Worth separating, because they answer the question relevance scoring cannot:
+<em>what if the ranker is wrong?</em></p>
+
+<h3>Core files bypass scoring entirely</h3>
+<p>The files a CR provably needs are declared per target and always included —
+and, more importantly, <strong>required back in the model's response</strong>.
+<code>verify_core_recall()</code> runs against the LLM's actual returned file set,
+not just the prompt. A generation that quietly drops a required file is rejected,
+not shipped. Duo suggests; this one refuses.</p>
+
+<h3>The top-scoring file in the whole corpus is hard-blocked</h3>
+<p>The best line in the deck. <code>mockapp/core/seed.py</code> would score higher
+against this CR than any other candidate — it is the file most densely packed with
+<code>Policy</code> field names. It is also the one file that must never be edited,
+because it constructs <code>Policy(...)</code> with six positional arguments that
+the whole demo depends on. So it is excluded structurally, by
+<code>NEVER_EXTRA</code>, regardless of score.</p>
+
+<div class="callout">
+  <div class="lead">Say it like this</div>
+  <p class="say">"The highest-relevance file in the repository is one we refuse to
+  let the model touch. Relevance and safety are different questions, and we answer
+  them separately."</p>
+</div>
+</section>
+
+<section class="section">
+<h2>What scoping actually costs — and saves</h2>
+
+<figure>
+  <div class="fig-title">Figure 3 · File payload sent to the model</div>
+  <div class="fig-sub">Estimated tokens of file content, CR-2026-041. Prompt scaffolding is identical on both sides and excluded.</div>
+  <svg viewBox="0 0 700 132" role="img"
+       aria-label="Two bars comparing file payload. Whole app: 13,765 estimated tokens. Scoped selection: 3,873 estimated tokens, a 3.6 times reduction.">
+    <text x="164" y="36" font-size="9" fill="#5c5c5c" text-anchor="end">whole app in prompt</text>
+    <rect x="168" y="24" width="520" height="18" rx="4" fill="#6b7280"/>
+    <text x="680" y="37" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="end">13,765</text>
+    <text x="164" y="52" font-size="8" fill="#8a8a8a" text-anchor="end">56 files</text>
+
+    <text x="164" y="82" font-size="9" fill="#5c5c5c" text-anchor="end">scoped selection</text>
+    <rect x="168" y="70" width="146" height="18" rx="4" fill="#a83244"/>
+    <text x="322" y="83" font-size="9.5" font-weight="700" fill="#1a1a1a">3,873</text>
+    <text x="164" y="98" font-size="8" fill="#8a8a8a" text-anchor="end">4 files</text>
+
+    <line x1="168" y1="108" x2="688" y2="108" stroke="#e6e6e4" stroke-width="1"/>
+    <text x="168" y="124" font-size="9" fill="#5c5c5c"><tspan font-weight="700" fill="#a83244">3.6× smaller</tspan> — 71.9% of the file payload never reaches the model</text>
+  </svg>
+  <figcaption><strong>Use the real multiple, not a rounder one.</strong> 3.6× is
+    what this CR measures, because the four files that <em>do</em> go are the large
+    ones. The compelling number is not the ratio — it is that the ratio
+    <em>widens as the repository grows</em>, since the selection stays at a handful
+    while the denominator climbs.</figcaption>
+</figure>
+
+<div class="caution">
+  <div class="lead">Do not oversell this slide</div>
+  <p>On the Spring ClaimsPortal target the pool is 8 files and scoping has nothing
+  to remove — selection is the whole repo. If someone asks whether it always saves
+  tokens, the answer is no: <strong>on a small codebase it saves nothing, and that
+  is correct behaviour.</strong> The funnel earns its keep at scale, not on a toy.</p>
+</div>
+
+<h3>Large repositories add a cheaper tier first</h3>
+<p>For a GitLab-backed target the funnel gains a stage that runs <em>before</em>
+any content is fetched: list every path (cheap), rank the bare path segments against
+the CR with TF-IDF, keep the top 20, and only then fetch those files' contents. A
+twenty-repository account never costs more than a handful of small HTTP GETs,
+whatever any individual repo's size.</p>
+<p>Note the deliberate asymmetry, because it reads as an inconsistency if unexplained:
+path pre-ranking uses TF-IDF, <em>not</em> embeddings. A string like
+<code>src billing export py</code> is not natural language, and a sentence-embedding
+model is the wrong instrument for it. Prose gets embeddings; path tokens get
+lexical matching.</p>
+</section>
+
+<section class="section">
+<h2>Against GitLab Duo — where we are genuinely stronger</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:22%">Dimension</th>
+      <th style="width:39%">This build</th>
+      <th style="width:32%">GitLab Duo</th>
+      <th style="width:7%">Edge</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Auditability of retrieval</strong></td>
+      <td>Candidate pool size, every per-file score, and the complete screened-out
+        list are rendered in the console for each run.</td>
+      <td>Retrieval is opaque. You see the answer, not the shortlist or why.</td>
+      <td class="verdict v-us">Ours</td>
+    </tr>
+    <tr>
+      <td><strong>What drives selection</strong></td>
+      <td>Your own <code>DESIGN.md</code> scope declarations screen first. Documented
+        architecture boundaries become the AI's boundaries.</td>
+      <td>Code and embedding similarity. Your architecture docs are not a control surface.</td>
+      <td class="verdict v-us">Ours</td>
+    </tr>
+    <tr>
+      <td><strong>Output enforcement</strong></td>
+      <td>Core-file recall, exact API names, error-message wording and
+        backward-compat are validated against the model's response; violations are
+        rejected.</td>
+      <td>Suggestion-shaped. Review is the human's job.</td>
+      <td class="verdict v-us">Ours</td>
+    </tr>
+    <tr>
+      <td><strong>Runs air-gapped</strong></td>
+      <td>Local embedding model, no API key, no network at index or query time;
+        lexical fallback if the vector store is unavailable.</td>
+      <td>SaaS-first. Self-managed exists but the AI path still reaches out.</td>
+      <td class="verdict v-us">Ours</td>
+    </tr>
+    <tr>
+      <td><strong>Cost transparency</strong></td>
+      <td>Scoped-vs-naive token panel on every beat.</td>
+      <td>Seat-priced; per-change context cost is not surfaced.</td>
+      <td class="verdict v-us">Ours</td>
+    </tr>
+    <tr>
+      <td><strong>Repository scale</strong></td>
+      <td>Thresholds hand-measured against a 56-file corpus. Re-calibration is a
+        real per-repo task.</td>
+      <td>Continuous indexing across large real repositories, maintained for you.</td>
+      <td class="verdict v-duo">Duo</td>
+    </tr>
+    <tr>
+      <td><strong>Developer surface</strong></td>
+      <td>A standalone console. One workflow, deliberately.</td>
+      <td>In the IDE, in merge requests, in CI, where developers already are.</td>
+      <td class="verdict v-duo">Duo</td>
+    </tr>
+    <tr>
+      <td><strong>Zero-setup value</strong></td>
+      <td>Stage 1 does nothing without <code>DESIGN.md</code> files; undocumented
+        repos fall back to stage 2 alone.</td>
+      <td>Works on any repo on day one, no documentation prerequisite.</td>
+      <td class="verdict v-duo">Duo</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="lead">The positioning line</div>
+  <p class="say">"Duo is the better general-purpose assistant, and we would not try
+  to out-build it. What we've built is the governed path: every file the model saw,
+  every file it was denied, and a generation that gets rejected when it breaks the
+  contract. In a regulated change process that difference is the product."</p>
+</div>
+
+<h3>The prerequisite, framed correctly</h3>
+<p>The <code>DESIGN.md</code> dependency will come up. Do not defend it as free —
+frame it as the mechanism: <em>this approach rewards teams who document their
+boundaries, and turns those documents into an enforced control rather than a wiki
+page nobody reads.</em> That is a roadmap conversation, not a weakness.</p>
+</section>
+
+<section class="section">
+<h2>Likely questions, short answers</h2>
+
+<table>
+  <thead>
+    <tr><th style="width:38%">Question</th><th>Answer</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>"How did you pick 0.55?"</td>
+      <td>Measured. The closest irrelevant file scores 0.458; the floor sits above
+        it with headroom, and a test asserts it.</td>
+    </tr>
+    <tr>
+      <td>"What if it excludes something needed?"</td>
+      <td>Required files never go through ranking — they are contractual, and their
+        presence is verified in the model's <em>output</em>.</td>
+    </tr>
+    <tr>
+      <td>"Does this scale to our monorepo?"</td>
+      <td>The funnel does; the constants get re-measured. For GitLab targets the
+        path pre-rank means repo size costs almost nothing.</td>
+    </tr>
+    <tr>
+      <td>"Why not just use a bigger context window?"</td>
+      <td>Cost and precision. More irrelevant context measurably degrades edit
+        accuracy — and you still cannot show anyone <em>why</em> a file was used.</td>
+    </tr>
+    <tr>
+      <td>"Is the embedding model sending our code anywhere?"</td>
+      <td>No. It runs locally, on the machine, with no API key and no network call
+        at index or query time.</td>
+    </tr>
+    <tr>
+      <td>"Why did nothing get selected on this run?"</td>
+      <td>Because nothing deserved to. The four contract files were sufficient —
+        exclusion is the ranker doing its job.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="footnote">
+<strong>Method.</strong> All figures produced by running this repository's own
+<code>s3_enhancement/relevance.py</code> against
+<code>mockapp/crs/CR-2026-041.md</code> on 27 July 2026, with the local embedding
+backend active (not the lexical fallback). Token counts use the repository's
+~4-characters-per-token estimator and are explicitly estimates; a billed figure
+always comes from the provider's reported usage. Scores drift slightly as the
+corpus changes — re-run before quoting these in a later deck. Chart colours were
+validated for the light print surface; the neutral grey marking excluded items is
+a deliberate recessive encoding, and every bar carries a direct numeric label so
+nothing depends on colour alone.
+</p>
+</section>
+
+</body>
+</html>

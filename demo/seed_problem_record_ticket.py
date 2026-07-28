@@ -26,6 +26,15 @@ DESCRIPTION = (
 )
 PROBLEM_ID = "PRB0012345"
 
+# ServiceNow application context carried on the problem record. The default
+# routes to App Support — BillingGateway, an application this console has no
+# repo for: the ticket reaches the right team and automation stays off, which
+# is the boundary worth showing. Override to demo the other half —
+# `SEED_CI=ClaimsPortal` routes to a team *and* offers the CR to run against
+# it (see s3_enhancement/applications.py for the registry).
+CI = os.environ.get("SEED_CI", "BillingGateway")
+BUSINESS_SERVICE = os.environ.get("SEED_BUSINESS_SERVICE", "Premium Billing")
+
 
 def main() -> None:
     with httpx.Client(base_url=API_BASE, timeout=15.0) as client:
@@ -41,14 +50,29 @@ def main() -> None:
                 "description": DESCRIPTION,
                 "problem_id": PROBLEM_ID,
                 "assignee": LOGIN_NAME,
+                "ci": CI,
+                "business_service": BUSINESS_SERVICE,
             },
         )
         response.raise_for_status()
-        issue = response.json()["issue"]
+        body = response.json()
+        issue = body["issue"]
         print(
             f"Created {issue['key']} tagged origin=problem_record "
             f"(problem_id={PROBLEM_ID}), assigned to {LOGIN_NAME}."
         )
+
+        routing = body.get("routing") or {}
+        application = routing.get("application")
+        if application:
+            print(
+                f"  Routed by {routing['method']} '{routing['matched_on']}' -> "
+                f"{application['display_name']} / {application['component_team']} "
+                f"/ {application['jira_project_key']} "
+                f"(automation {'available' if routing['automation_available'] else 'not available'})"
+            )
+        else:
+            print(f"  CI {CI!r} matched no registered application — AI repo match will decide.")
 
 
 if __name__ == "__main__":

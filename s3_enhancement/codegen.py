@@ -115,7 +115,7 @@ def _propose_change_once(
 ) -> CodegenResult:
     all_files = relevance.discover_files_for_target(target, cr_text)
     selection = relevance.select_relevant_files(
-        cr_text, all_files, core_files=target.core_files
+        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
     )
     if target.cache_namespace == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace:
         prompt = build_endorsement_prompt(cr_text, selection=selection)
@@ -191,6 +191,77 @@ def _staged_files_on_disk(staged_dir: Path) -> dict[str, str]:
     }
 
 
+def stage_files_as_proposal(files: dict[str, str]) -> tuple[str, str]:
+    """Stage arbitrary `{repo_relative_path: content}` as a reviewable proposal
+    and return `(proposal_id, diff_text)`.
+
+    The seam that lets a non-codegen producer put a change through the same
+    review gate the AI's code proposals use — `design_sync.py` stages a
+    rewritten `DESIGN.md` this way, so it renders and applies via the existing
+    diff/`apply_change()` path instead of needing a second apply mechanism.
+
+    Deliberately does not touch the relevance funnel or any replay cache: a
+    proposal staged here is independent of the codegen file-set contract that
+    `_validate_file_set` enforces (see design_sync's module docstring for why
+    combining them would break the committed recordings).
+    """
+    staged_dir = _stage_files(files)
+    diff_text = _write_diff(staged_dir, files)
+    return staged_dir.parent.name, diff_text
+
+
+def _rejections_path(proposal_id: str) -> Path:
+    return OUT_ROOT / proposal_id / "rejections.json"
+
+
+def rejected_files(proposal_id: str) -> dict[str, str]:
+    """`{rel_path: reason}` for every file the developer has rejected on this
+    proposal. Empty when nothing has been rejected."""
+    path = _rejections_path(proposal_id)
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def reject_file(proposal_id: str, file_path: str, reason: str = "") -> dict[str, str]:
+    """Record that the developer rejected one file of a staged proposal.
+
+    A rejection is a decision worth keeping, not just the absence of an apply.
+    Before this existed, "I don't want this file" and "I haven't looked at this
+    file yet" were the same state on disk, which is precisely the distinction
+    an auditor asks about after the fact. `apply_change` then refuses to
+    include a rejected file, so "reject" is enforcement rather than a label.
+
+    Reversible via `clear_rejection` — a rejection is the developer's call and
+    they are allowed to change their mind before anything is applied.
+    """
+    staged_dir = OUT_ROOT / proposal_id / "staged"
+    if not staged_dir.is_dir():
+        raise LLMError(f"No staged proposal found for proposal_id {proposal_id!r}")
+    staged = _staged_files_on_disk(staged_dir)
+    if file_path not in staged:
+        raise LLMError(
+            f"{file_path!r} is not part of staged proposal {proposal_id!r}: "
+            f"{sorted(staged)}"
+        )
+    rejections = rejected_files(proposal_id)
+    rejections[file_path] = reason.strip()
+    _rejections_path(proposal_id).write_text(
+        json.dumps(rejections, indent=2), encoding="utf-8"
+    )
+    return rejections
+
+
+def clear_rejection(proposal_id: str, file_path: str) -> dict[str, str]:
+    """Un-reject a file. No-op if it wasn't rejected."""
+    rejections = rejected_files(proposal_id)
+    rejections.pop(file_path, None)
+    _rejections_path(proposal_id).write_text(
+        json.dumps(rejections, indent=2), encoding="utf-8"
+    )
+    return rejections
+
+
 def apply_change(proposal_id: str, file_path: str | None = None) -> list[str]:
     """Apply a previously staged proposal to the working tree.
 
@@ -204,20 +275,139 @@ def apply_change(proposal_id: str, file_path: str | None = None) -> list[str]:
     safe to call again later for the remaining files, or with no `file_path`
     to apply everything at once; re-applying an already-applied file is a
     no-op copy.
+
+    Rejected files (see `reject_file`) are excluded from a whole-proposal
+    apply, and naming one explicitly is an error rather than an override —
+    "apply everything" must never quietly resurrect a change the developer
+    already turned down.
+
+    Every file's pre-apply state is backed up first, so `revert_change` can
+    put it back.
     """
     staged_dir = OUT_ROOT / proposal_id / "staged"
     if not staged_dir.is_dir():
         raise LLMError(f"No staged proposal found for proposal_id {proposal_id!r}")
     files = _staged_files_on_disk(staged_dir)
+    rejections = rejected_files(proposal_id)
     if file_path is not None:
         if file_path not in files:
             raise LLMError(
                 f"{file_path!r} is not part of staged proposal {proposal_id!r}: "
                 f"{sorted(files)}"
             )
+        if file_path in rejections:
+            raise LLMError(
+                f"{file_path!r} was rejected on proposal {proposal_id!r}; "
+                f"clear the rejection before applying it"
+            )
         files = {file_path: files[file_path]}
+    else:
+        files = {path: body for path, body in files.items() if path not in rejections}
+    _backup_before_apply(proposal_id, files)
     _apply_staged_files(staged_dir, files)
     return sorted(files)
+
+
+def _backup_dir(proposal_id: str) -> Path:
+    return OUT_ROOT / proposal_id / "backup"
+
+
+def _absent_manifest_path(proposal_id: str) -> Path:
+    """Files that did not exist before this proposal was applied.
+
+    Tracked separately because "no backup content" is ambiguous on its own —
+    it could mean a brand-new file or a file whose backup failed to write. A
+    revert has to delete the former and must never delete the latter.
+    """
+    return _backup_dir(proposal_id) / "_absent.json"
+
+
+def _backup_before_apply(proposal_id: str, files: dict[str, str]) -> None:
+    """Snapshot the working-tree state of `files` before they're overwritten.
+
+    First apply of a given file wins: applying, revising, and applying again
+    must still revert to the state before *any* of it, not to the intermediate
+    version the first apply produced.
+    """
+    backup_dir = _backup_dir(proposal_id)
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    absent_path = _absent_manifest_path(proposal_id)
+    absent: list[str] = (
+        json.loads(absent_path.read_text(encoding="utf-8")) if absent_path.is_file() else []
+    )
+
+    for rel_path in files:
+        backup_target = backup_dir / rel_path
+        if backup_target.exists() or rel_path in absent:
+            continue  # already snapshotted by an earlier apply
+        source = REPO_ROOT / rel_path
+        if source.exists():
+            backup_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, backup_target)
+        else:
+            absent.append(rel_path)
+
+    absent_path.write_text(json.dumps(sorted(set(absent)), indent=2), encoding="utf-8")
+
+
+def revertable_files(proposal_id: str) -> list[str]:
+    """Files this proposal has applied and can still put back."""
+    backup_dir = _backup_dir(proposal_id)
+    if not backup_dir.is_dir():
+        return []
+    absent_path = _absent_manifest_path(proposal_id)
+    absent: list[str] = (
+        json.loads(absent_path.read_text(encoding="utf-8")) if absent_path.is_file() else []
+    )
+    backed_up = [
+        str(path.relative_to(backup_dir))
+        for path in sorted(backup_dir.rglob("*"))
+        if path.is_file() and path != absent_path
+    ]
+    return sorted(set(backed_up) | set(absent))
+
+
+def revert_change(proposal_id: str, file_path: str | None = None) -> list[str]:
+    """Undo an applied proposal, restoring the working tree to its pre-apply
+    state — the counterpart to `apply_change`, file-by-file or whole.
+
+    Apply writes to the real repo, so without this the only undo was a full
+    demo reset (`demo/reset_s3.sh`), which throws away every other beat's state
+    too. Reverting a file the proposal *created* deletes it, which is the
+    correct inverse of having created it.
+
+    Idempotent: reverting an already-reverted file restores the same backup
+    again. The backup is deliberately not cleared, so a mis-click on Revert
+    can be followed by Apply and then Revert again.
+    """
+    backup_dir = _backup_dir(proposal_id)
+    available = revertable_files(proposal_id)
+    if not available:
+        raise LLMError(
+            f"Nothing to revert for proposal {proposal_id!r} — it has not been applied"
+        )
+    if file_path is not None:
+        if file_path not in available:
+            raise LLMError(
+                f"{file_path!r} has not been applied from proposal {proposal_id!r}: "
+                f"{available}"
+            )
+        targets_to_revert = [file_path]
+    else:
+        targets_to_revert = available
+
+    absent_path = _absent_manifest_path(proposal_id)
+    absent: list[str] = (
+        json.loads(absent_path.read_text(encoding="utf-8")) if absent_path.is_file() else []
+    )
+
+    for rel_path in targets_to_revert:
+        live = REPO_ROOT / rel_path
+        if rel_path in absent:
+            live.unlink(missing_ok=True)
+            continue
+        shutil.copyfile(backup_dir / rel_path, live)
+    return sorted(targets_to_revert)
 
 
 def revise_change(
@@ -400,7 +590,7 @@ def build_prompt(
         target = target or targets.get_target(None)
         all_files = relevance.discover_files_for_target(target, cr_text)
         selection = relevance.select_relevant_files(
-            cr_text, all_files, core_files=target.core_files
+            cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
         )
 
     mode = os.environ.get("LLM_MODE", "replay").lower()

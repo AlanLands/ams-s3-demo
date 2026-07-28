@@ -13,37 +13,21 @@ Code was copied over from `sixFold` as of that date and trimmed to just what S3 
 with their routers, frontend pages, tests, and scenario-specific tooling; the Streamlit
 fallback console (`demo/unified_app.py`) went with them. The only thing salvaged from
 S1 was the shared login roster, which now lives in `common/roster.py`.
-237 tests pass (`pytest tests/`), ruff clean.
 
 ## S3 Enhancement — scope
 
 Small CR on the "MapleSure Insurance" demo app (add a policy/claim capability):
 AI analysis → codegen → tests → docs → release notes.
 
-## Layout
+## Layout — two things `ls` won't tell you
 
-```
-common/        llm.py (provider wrapper), schema.py, vectorstore.py, gitlab/
-               servicenow clients, roster.py (login roster + passcodes) — all
-               shared infra
-s3_enhancement/  the S3 pipeline: analyze, codegen, testgen, harness, docgen, cr,
-                 targets, relevance, repo_match; cache/ (committed replay cache for
-                 demo determinism) vs out/ (gitignored, regenerated per run)
-mockapp/       "MapleSure" policy/claims app S3 targets for CRs
-api/           FastAPI backend — auth.py, session.py, routers/s3.py only
-frontend/      React (Vite + TypeScript) console — Login, Home, S3 only
-demo/          S3 run/reset/cache-warm scripts + presenter notes
-sandbox/       misleading name, only one thing in it: spring-demo/ IS S3's
-               second target — "ClaimsPortal" (Java/Spring Boot, CR-2026-043,
-               ticket AMS-103, target id springdemo-claims-deductible). Its
-               checked-in source is the pre-CR baseline (snapshot in
-               .baseline/); reset with demo/reset_s3_springdemo.sh, run with
-               demo/run_s3_springdemo.sh. Do NOT move it — see below.
-tools/         verify_s3_live.py (live-demo rehearsal gate), autofix/ (S3-only
-               calibration fix loop — `--scenario` is fixed to s3)
-docs/          design/ (current design notes), history/ (the original
-               six-scenario SCENARIOS.md + BUILD_PLAN.md — background only)
-```
+- `s3_enhancement/cache/` is the committed replay cache that makes the demo
+  deterministic; `s3_enhancement/out/` is gitignored and regenerated per run.
+- `sandbox/` is a misleading name: the only thing in it, `spring-demo/`, IS S3's
+  second target — "ClaimsPortal" (Java/Spring Boot, CR-2026-043, ticket AMS-103,
+  target id `springdemo-claims-deductible`). Its checked-in source is the pre-CR
+  baseline (snapshot in `.baseline/`); reset with `demo/reset_s3_springdemo.sh`,
+  run with `demo/run_s3_springdemo.sh`. Do NOT move it — see below.
 
 ## File paths are load-bearing — don't move targets
 

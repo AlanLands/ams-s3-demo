@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AMS S3 — Test &amp; Demo Guide</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #5c5c5c;
+    --line: #d8d8d8;
+    --accent: #8b1e2d;
+    --accent-soft: #f6ecee;
+    --ok: #1c6b3c;
+    --warn: #8a5a00;
+    --warn-soft: #fdf6e6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font: 10.5pt/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    margin: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1 { font-size: 22pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
+  h2 {
+    font-size: 13pt; margin: 0 0 3mm; padding-bottom: 1.5mm;
+    border-bottom: 2px solid var(--accent); letter-spacing: -0.2pt;
+  }
+  h3 { font-size: 11pt; margin: 5mm 0 2mm; }
+  p { margin: 0 0 2.5mm; }
+
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  code { background: #f2f2f2; padding: 0.5pt 2pt; border-radius: 2px; }
+  pre {
+    font-family: var(--mono); font-size: 8.5pt; line-height: 1.45;
+    background: #f7f7f7; border-left: 2.5pt solid var(--line);
+    padding: 2.5mm 3mm; margin: 2mm 0 3mm; overflow-x: auto; white-space: pre-wrap;
+  }
+  pre code { background: none; padding: 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3.5mm; font-size: 9.5pt; }
+  th, td { text-align: left; padding: 1.6mm 2mm; border-bottom: 0.5pt solid var(--line); vertical-align: top; }
+  th { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.4pt; color: var(--ink-soft); border-bottom: 1pt solid var(--ink-soft); }
+  /* Match the body line-height so a mono cell's first line sits on the same
+     baseline as the prose cell beside it, rather than riding high. */
+  td.mono, th.mono { font-family: var(--mono); font-size: 9pt; line-height: 1.5; }
+
+  ol, ul { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.5mm; }
+
+  /* --- cover ------------------------------------------------------------ */
+  .cover { border-bottom: 3pt solid var(--accent); padding-bottom: 4mm; margin-bottom: 6mm; }
+  .kicker { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.6pt; color: var(--accent); font-weight: 700; margin-bottom: 2mm; }
+  .subtitle { font-size: 11pt; color: var(--ink-soft); margin: 0; }
+  .meta { font-size: 8.5pt; color: var(--ink-soft); margin-top: 3mm; }
+
+  /* --- blocks ----------------------------------------------------------- */
+  .scenario { break-inside: avoid; page-break-inside: avoid; margin-bottom: 7mm; }
+  .scenario-head { display: flex; align-items: baseline; gap: 3mm; margin-bottom: 1mm; }
+  .num {
+    font-family: var(--mono); font-size: 9pt; font-weight: 700; color: #fff;
+    background: var(--accent); padding: 0.8mm 2.2mm; border-radius: 2px; flex: none;
+  }
+  .scenario-title { font-size: 12pt; font-weight: 700; letter-spacing: -0.2pt; }
+  .who {
+    font-size: 8.5pt; color: var(--ink-soft); margin: 0 0 2.5mm;
+    padding-left: 1mm; border-left: 2pt solid var(--line);
+    padding-top: 0.5mm; padding-bottom: 0.5mm;
+  }
+  .who strong { color: var(--ink); }
+
+  .check { list-style: none; padding-left: 0; margin: 2mm 0 3mm; }
+  .check li {
+    position: relative; padding-left: 6mm; font-size: 9.5pt;
+  }
+  .check li::before {
+    content: "☐"; position: absolute; left: 0; top: -0.3mm;
+    font-size: 11pt; color: var(--accent);
+  }
+  .pass { color: var(--ok); font-weight: 600; }
+
+  .callout {
+    border: 0.75pt solid var(--line); border-left: 3pt solid var(--accent);
+    background: var(--accent-soft); padding: 2.5mm 3mm; margin: 3mm 0; font-size: 9.5pt;
+    break-inside: avoid;
+  }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .callout .label {
+    font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1pt;
+    font-weight: 700; color: var(--accent); display: block; margin-bottom: 1mm;
+  }
+  .callout.warn .label { color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .page-break { break-before: page; page-break-before: always; }
+  .tiny { font-size: 8pt; color: var(--ink-soft); margin-top: 0.5mm; }
+  td.before { background: #f6f6f5; }
+  td.after { background: var(--accent-soft); }
+  .statecol { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.4pt; }
+  .footer-note { font-size: 8.5pt; color: var(--ink-soft); border-top: 0.5pt solid var(--line); padding-top: 2.5mm; margin-top: 6mm; }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="kicker">MapleSure Insurance · AMS Console</div>
+  <h1>S3 Enhancement Delivery</h1>
+  <p class="subtitle">Test &amp; demo guide — all scenarios</p>
+  <p class="meta">
+    Generated 27 July 2026 · repo <span class="mono">ams-s3-demo</span> ·
+    branch <span class="mono">deploy-bedrock-aws</span><br>
+    Companion docs: <span class="mono">docs/design/S3_DESIGN.md</span> (technical design) ·
+    <span class="mono">demo/DEMO_TEST_GUIDE.md</span> (presenter script)
+  </p>
+</header>
+
+<h2>Environment</h2>
+
+<p>Five services make up the full demo environment. All five must be running before you start.</p>
+
+<table>
+  <tr><th class="mono">Port</th><th>Service</th><th class="mono">URL</th><th>Start command (terminal by terminal)</th></tr>
+  <tr>
+    <td class="mono">8000</td><td>FastAPI backend<div class="tiny">the engine — never on screen</div></td>
+    <td class="mono">localhost:8000</td>
+    <td class="mono">uvicorn api.main:app --port 8000</td>
+  </tr>
+  <tr>
+    <td class="mono">5173</td><td><strong>AMS Console</strong> — start here<div class="tiny">login, then <code>/s3</code></div></td>
+    <td class="mono">localhost:5173</td>
+    <td class="mono">cd frontend &amp;&amp; npm run dev</td>
+  </tr>
+  <tr>
+    <td class="mono">8501</td><td>MapleSure portal (CR-041 / CR-042 target)<div class="tiny">"the client's app"</div></td>
+    <td class="mono">localhost:8501</td>
+    <td class="mono">demo/run_mockapp.sh</td>
+  </tr>
+  <tr>
+    <td class="mono">8081</td><td>Spring Policy Team console (CR-043)</td>
+    <td class="mono">localhost:8081</td>
+    <td class="mono">mvn -q package -DskipTests<br>java -jar policy-service/target/*.jar</td>
+  </tr>
+  <tr>
+    <td class="mono">8082</td><td>Spring Claims Team console (CR-043)</td>
+    <td class="mono">localhost:8082</td>
+    <td class="mono">mvn -q package -DskipTests<br>java -jar claims-service/target/*.jar</td>
+  </tr>
+</table>
+
+<p>Both Spring services together, built and launched in one foreground terminal:
+<code>demo/run_s3_springdemo.sh</code>. It traps <code>kill 0</code> on exit, so use the two
+separate commands above if you want them in independent background terminals.</p>
+
+<h3>Direct URLs for showing raw data</h3>
+<table>
+  <tr><th class="mono">URL</th><th>Shows</th></tr>
+  <tr><td class="mono">localhost:8000/docs</td><td>OpenAPI browser for the whole S3 API</td></tr>
+  <tr><td class="mono">localhost:8081/api/policies</td><td>All ClaimsPortal policies as JSON</td></tr>
+  <tr><td class="mono">localhost:8081/api/policies/MS-1004</td><td>One policy — the clearest place to show <code>deductible</code> appearing</td></tr>
+  <tr><td class="mono">localhost:8082/api/claims</td><td>Submitted claims with decision and <code>payableAmount</code></td></tr>
+</table>
+
+<div class="callout warn">
+  <span class="label">Three things that will bite you</span>
+  <p><strong>Never run uvicorn with <code>--reload</code>.</strong> The pipeline writes <code>.py</code> files
+  into the tree uvicorn watches; the reload wipes the in-memory session store and every request then 401s
+  while the UI still looks logged in.</p>
+  <p><strong>The Spring jars serve whatever was last compiled.</strong> A reset deletes both
+  <code>target/</code> directories, and an Apply changes the source — either way you must
+  <code>mvn -q package -DskipTests</code> in each service and relaunch before :8081/:8082 reflect reality.
+  A JVM already running holds its jar open and survives the reset entirely: it keeps serving the
+  <em>post-CR</em> app while the source sits at baseline, and both ports answer 200 the whole time.
+  Port-is-up is not build-is-current — check the process start time against your reset time.</p>
+  <p><strong>Start the portal only via <code>demo/run_mockapp.sh</code>.</strong> The script exports
+  <code>PYTHONPATH="$PWD"</code> first. Streamlit otherwise puts <code>mockapp/</code> on
+  <code>sys.path</code> instead of the repo root, and the app dies at
+  <code>ModuleNotFoundError: No module named 'common'</code>. This one hides: a portal already running from
+  a bad launch keeps serving its last good render until something re-executes the script — and a reset
+  rewriting <code>app.py</code> is exactly that, so the error surfaces <em>during the reset</em> and looks
+  like the reset broke it. It didn't.</p>
+</div>
+
+<h3>Logins</h3>
+<p>Fictional roster; passcode is <code>1001 + roster position</code>.</p>
+<table>
+  <tr><th>Name</th><th class="mono">Passcode</th><th>Role in these tests</th></tr>
+  <tr><td>Ravi Kumar</td><td class="mono">1001</td><td>Developer — owns AMS-102, AMS-103</td></tr>
+  <tr><td>Elena Cruz</td><td class="mono">1002</td><td>Second engineer — owns AMS-098</td></tr>
+  <tr><td>Priya Nair</td><td class="mono">1003</td><td>Tester — owns AMS-101; QA hand-off target</td></tr>
+  <tr><td>Tom Becker</td><td class="mono">1004</td><td>Second tester</td></tr>
+  <tr><td>Manager</td><td class="mono">9000</td><td>Manager view</td></tr>
+</table>
+
+<h3>Seeded board</h3>
+<table>
+  <tr><th>Ticket</th><th>CR</th><th>Status</th><th>Assignee</th><th>Target</th><th>Language</th></tr>
+  <tr><td class="mono">AMS-101</td><td class="mono">CR-2026-041</td><td>QA</td><td>Priya Nair</td><td>mockapp — coverage tier</td><td>Python</td></tr>
+  <tr><td class="mono">AMS-102</td><td class="mono">CR-2026-042</td><td>In Progress</td><td>Ravi Kumar</td><td>mockapp — endorsement priority</td><td>Python</td></tr>
+  <tr><td class="mono">AMS-103</td><td class="mono">CR-2026-043</td><td>To Do</td><td>Ravi Kumar</td><td>spring-demo — claims deductible</td><td>Java</td></tr>
+  <tr><td class="mono">AMS-098</td><td>—</td><td>Done</td><td>Elena Cruz</td><td>none (ad-hoc path)</td><td>—</td></tr>
+</table>
+
+<h3>Reset between runs</h3>
+<p>The pipeline mutates real files. Stop the services first, then run all three in <strong>this order</strong> —
+the endorsement reset must come <em>after</em> <code>reset_s3.sh</code>, because it restores the superset
+mockapp state that leaves both AMS-101 and AMS-102 demo-ready.</p>
+<pre><code>demo/reset_s3.sh              # CR-041 + shared state: .cache/llm, out/, events, Jira caches
+demo/reset_s3_endorsement.sh  # CR-042 baseline  (MUST run after reset_s3.sh)
+demo/reset_s3_springdemo.sh   # CR-043 Java target, from sandbox/spring-demo/.baseline/</code></pre>
+<p>Then rebuild the Spring jars and restart all five services. Hard-refresh the browser tab —
+the console caches per-ticket state in <code>localStorage</code> and drops it when the reset marker changes.</p>
+
+<div class="callout">
+  <span class="label">Expected after a reset</span>
+  <p><code>git status</code> shows <code>mockapp/{app,core/db,core/endorsements,core/models}.py</code> as
+  modified. That is <strong>correct</strong> — repo HEAD is committed in a post-CR-2026-042 state, so the
+  pre-CR baseline necessarily differs from it.</p>
+  <p>Resets also clear <code>.cache/llm</code>, so impact analysis, design doc and release notes make live
+  provider calls again (~10–20 s each on first click). Codegen and testgen always replay — instant and
+  free. Run <code>demo/warm_s3_cache.sh</code> if you want the narrative beats instant too.</p>
+</div>
+
+<h3>Before → after: what changes on screen</h3>
+
+<p>The "show the client their own app changing" moment for each scenario. Have this open while presenting.</p>
+
+<table>
+  <tr>
+    <th style="width:13%">Scenario</th>
+    <th style="width:19%">Where to look</th>
+    <th style="width:26%" class="statecol">Before — baseline</th>
+    <th style="width:30%" class="statecol">After apply</th>
+    <th style="width:12%">To see it</th>
+  </tr>
+  <tr>
+    <td class="mono">AMS-101<div class="tiny">CR-2026-041</div></td>
+    <td>Portal :8501<div class="tiny">Policy Detail</div></td>
+    <td class="before">No coverage tier anywhere in the app.</td>
+    <td class="after">Tier per policy (Standard / Premium / <em>the name the audience picked</em>), upgrade control on the detail view, premium recalculates and persists.</td>
+    <td>Browser refresh</td>
+  </tr>
+  <tr>
+    <td class="mono">AMS-102<div class="tiny">CR-2026-042</div></td>
+    <td>Portal :8501<div class="tiny">Request a Policy Endorsement</div></td>
+    <td class="before">Exactly 5 fields — endorsement type, description, effective date, contact phone, contact email.</td>
+    <td class="after">A 6th field, <strong>Priority</strong> (Standard / Urgent, defaults Standard). Existing submit flow unchanged.</td>
+    <td>Browser refresh</td>
+  </tr>
+  <tr>
+    <td class="mono">AMS-103<div class="tiny">CR-2026-043</div></td>
+    <td>Claims :8082<div class="tiny">and Policy :8081</div></td>
+    <td class="before">Policies carry no deductible. An <strong>$80 claim on MS-1004 → ACCEPTED</strong>.</td>
+    <td class="after">Policies gain a deductible (MS-1001 500, MS-1002 1000, MS-1003 500, MS-1004 100). The same <strong>$80 claim on MS-1004 → REJECTED_BELOW_DEDUCTIBLE</strong>. A <strong>$1,200 claim on MS-1001 → ACCEPTED, <code>payableAmount</code> 700</strong>.</td>
+    <td><strong>Rebuild + restart both jars</strong></td>
+  </tr>
+</table>
+
+<div class="callout warn">
+  <span class="label">The easiest way to make a working demo look broken</span>
+  <p>The two Python scenarios need only a browser refresh — Streamlit re-executes <code>app.py</code> on
+  each run. <strong>Scenario 3 does not.</strong> The running JVMs serve whatever was compiled, so a
+  just-applied CR is invisible on :8081/:8082 until you rebuild. Apply the change, switch to :8082, and
+  nothing has changed. Ctrl-C both Spring terminals, then <code>demo/run_s3_springdemo.sh</code>.</p>
+</div>
+
+<h3>Confirm the baseline is genuinely "before"</h3>
+<p>Run after the resets, before you present. Every line must match the comment.</p>
+<pre><code>grep -c 'coverage_tier\|COVERAGE_TIERS' mockapp/app.py    # 0       — no CR-041 yet
+grep -c 'selectbox("Priority"' mockapp/app.py              # 0       — no CR-042 yet
+ls mockapp/core/coverage.py                                # absent
+ls .../com/maplesure/claims/ClaimRules.java                # absent
+ls mockapp/core/endorsements.py                            # PRESENT — CR-042's "before" needs it
+curl -s localhost:8081/api/policies/MS-1004                # no "deductible" key
+ls s3_enhancement/out/ | wc -l                             # 0</code></pre>
+
+<p>Then confirm all five services are up <em>and fresh</em> — every start time must be later than your
+last reset:</p>
+<pre><code>for p in 8000 5173 8501 8081 8082; do
+  pid=$(lsof -ti tcp:$p -sTCP:LISTEN | head -1)
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:$p/)
+  printf "%-5s http=%-3s pid=%-6s %s\n" "$p" "$code" "${pid:-DOWN}" \
+    "$(ps -o lstart= -p ${pid:-0} 2>/dev/null)"
+done</code></pre>
+<p>Use <code>-sTCP:LISTEN</code>. Without it a Chrome tab connected to :5173 matches before the real
+listener and you read the wrong process's start time.</p>
+
+<div class="page-break"></div>
+
+<h2>Scenarios</h2>
+
+<!-- 1 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">01</span>
+    <span class="scenario-title">AMS-103 — Java / Spring, full pipeline</span>
+  </div>
+  <p class="who"><strong>Start as:</strong> Ravi Kumar (1001) → hand off to Priya Nair (1003) ·
+  <strong>Time:</strong> ~15 min · <strong>Best single end-to-end run</strong></p>
+
+  <ol>
+    <li>Open :5173 → <em>Open application</em> → click <strong>AMS-103</strong>.</li>
+    <li><strong>Run AI impact analysis.</strong> It asks up to two clarifying questions — a gap question,
+        then an assumption question. Answer each in the same box.</li>
+    <li>Close the modal → <strong>Stage 1 · Generate the change</strong>.</li>
+    <li><strong>Apply to repo.</strong></li>
+    <li><strong>Stage 2 · Draft design doc</strong> → <strong>Assign tester &amp; move to QA</strong> (Priya Nair).</li>
+    <li>Log out → log in as <strong>Priya Nair</strong> → open AMS-103 → <strong>Stage 3 · Generate tests</strong>
+        → <strong>Run tests</strong> (real Maven; first run pulls dependencies, allow a minute).</li>
+    <li><strong>Prove the tests catch bugs</strong> → <strong>Stage 4 · Draft release notes</strong> → mark Done.</li>
+  </ol>
+
+  <ul class="check">
+    <li>After the second answer it <em>must</em> produce a final analysis — the two-turn cap is hard.</li>
+    <li>Activity tab logs: clarification requested ×2 → impact analysis drafted → status In Progress.</li>
+    <li>Selection panel reads <span class="pass">Files in this app 8 · used 8</span> and
+        <em>"No subsystem doc matched closely enough"</em> — no <code>mockapp/systems/…</code> entry.</li>
+    <li>Token panel says <em>"no saving over whole-app context here"</em> — the honest branch.</li>
+    <li>Six Java files, each with a one-line reason.</li>
+    <li>Post-apply link reads <strong>"open the Claims Team console"</strong> → :8082 (not the mockapp portal).</li>
+    <li>On disk: <code>ClaimRules.java</code> created, <code>deductible</code> present in <code>Policy.java</code>.</li>
+    <li>Stage 3 was <em>locked</em> for Ravi — the developer cannot verify their own change.</li>
+    <li>Per-case checklist parsed from Surefire XML, all green.</li>
+    <li>Mutation flips <code>&lt;=</code> to <code>&lt;</code>; the "claim at exactly the deductible" test goes red;
+        file auto-restored (<code>git diff</code> on <code>ClaimRules.java</code> is clean afterwards).</li>
+  </ul>
+
+  <div class="callout warn">
+    <span class="label">:8081 will not change — by design</span>
+    <p>CR-2026-043 line 50 states <em>"Both team consoles must keep rendering without changes to their
+    HTML"</em>, and no <code>.html</code> is in the target's codegen allowlist. The policy console's table has
+    no Deductible column, so it looks identical after the CR. The change <em>is</em> there —
+    <code>GET :8081/api/policies</code> now returns <code>"deductible":500</code>.</p>
+    <p><strong>The visible proof is on :8082.</strong> Rebuild the jars, then submit a claim against
+    MS-1001 (limit 25 000, deductible 500):</p>
+  </div>
+
+  <table>
+    <tr><th>Claim amount</th><th>Before the CR</th><th>After the CR</th></tr>
+    <tr><td class="mono">400</td><td>ACCEPTED</td><td class="pass">REJECTED_BELOW_DEDUCTIBLE</td></tr>
+    <tr><td class="mono">500 — exactly the deductible</td><td>ACCEPTED</td><td class="pass">REJECTED_BELOW_DEDUCTIBLE</td></tr>
+    <tr><td class="mono">1 200</td><td>ACCEPTED</td><td>ACCEPTED — payable 700 now recorded</td></tr>
+    <tr><td class="mono">99 000</td><td>REJECTED_OVER_LIMIT</td><td>REJECTED_OVER_LIMIT</td></tr>
+  </table>
+</section>
+
+<!-- 2 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">02</span>
+    <span class="scenario-title">AMS-101 — the scoring showcase</span>
+  </div>
+  <p class="who"><strong>As:</strong> Priya Nair (1003) — the ticket is seeded to her, already in QA,
+  so she runs the whole flow · <strong>Time:</strong> ~10 min</p>
+
+  <ol>
+    <li>Click <strong>AMS-101</strong> → <strong>Run AI impact analysis</strong>.</li>
+    <li><strong>Stage 1 · Generate</strong> — type an audience-chosen tier name
+        (≤ 24 chars, no quotes or slashes, e.g. <em>Platinum</em>).</li>
+    <li><strong>Apply</strong> → post-apply runs <code>python -m mockapp.core.seed</code>.</li>
+    <li><strong>Design doc</strong> → <strong>Generate tests → Run</strong> (pytest here, not Maven)
+        → <strong>Mutation check</strong> → <strong>Release notes</strong>.</li>
+  </ol>
+
+  <ul class="check">
+    <li>Panel reads <span class="pass">Files in this app 56 · used 4</span>.</li>
+    <li>Expand "6 other subsystems screened out" → bar chart, struck through:
+        settlement 0.33, underwriting 0.29, audit 0.29, risk 0.28, billing 0.20, reporting 0.10 —
+        all under the 0.45 floor. <strong>50 Java decoy files never opened.</strong></li>
+    <li>Token panel shows a real multiplier against whole-app context.</li>
+    <li>Your chosen tier name appears verbatim in the generated <code>coverage.py</code> —
+        one recording serves any name.</li>
+    <li>Refresh <strong>:8501</strong> → the portal now has the coverage-upgrade control.</li>
+    <li>Mutation weakens the same-tier guard <code>&lt;=</code> → <code>&lt;</code>; the suite goes red, then reverts.</li>
+  </ul>
+</section>
+
+<!-- 3 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">03</span>
+    <span class="scenario-title">AMS-102 — endorsement priority</span>
+  </div>
+  <p class="who"><strong>As:</strong> Ravi Kumar (1001) → hand off to a tester · Same step sequence as Scenario 01</p>
+
+  <div class="callout warn">
+    <span class="label">Do not click Apply in front of an audience</span>
+    <p>The committed CR-042 codegen recording is a <strong>net-deletion recording</strong>: across four files it
+    removes 81 lines and adds 12, stripping roughly six function docstrings from
+    <code>mockapp/core/db.py</code> plus many blank lines. The diff a reviewer sees is dominated by deletions
+    unrelated to the CR.</p>
+    <p>Viewing the diff to <em>demonstrate</em> the problem is fine. The fix is a live re-record against
+    <code>s3-endorsement-baseline</code>. The CR-041 and CR-043 recordings are clean.</p>
+  </div>
+
+  <ul class="check">
+    <li>Diff shows only three files with pending changes — the fourth returned byte-identical and was dropped.</li>
+    <li>If applied: <strong>:8501</strong> endorsement form gains a <em>Priority</em> dropdown
+        (Standard / Urgent, Standard default).</li>
+  </ul>
+</section>
+
+<div class="page-break"></div>
+
+<!-- 4 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">04</span>
+    <span class="scenario-title">The review loop</span>
+  </div>
+  <p class="who"><strong>Where:</strong> any ticket, Stage 1, after Generate and before Apply</p>
+
+  <table>
+    <tr><th>Action</th><th>Expected</th></tr>
+    <tr><td><strong>Show diff</strong> on a file</td><td>Per-file unified diff, collapsible</td></tr>
+    <tr><td><strong>Ask about this file</strong> → <em>"why did you remove the docstring?"</em></td>
+        <td>Answers <strong>from its own diff</strong> — admits the removal instead of denying it</td></tr>
+    <tr><td><strong>Ask</strong> → <em>"rename that variable to X"</em></td>
+        <td>Returns a revised file; still staged, still not applied</td></tr>
+    <tr><td><strong>Ask</strong> a pure question</td><td>Answers in prose and changes <strong>no</strong> code</td></tr>
+    <tr><td><strong>Add to proposal</strong> → <code>mockapp/core/claims.py</code> + an instruction</td>
+        <td>File joins the same reviewed diff</td></tr>
+    <tr><td><strong>Apply</strong> a single file</td><td>Others stay pending; re-applying is a no-op</td></tr>
+  </table>
+
+  <ul class="check">
+    <li>Throughout: <code>git status</code> stays clean until Apply. Nothing reaches the repo before then.</li>
+  </ul>
+</section>
+
+<!-- 5 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">05</span>
+    <span class="scenario-title">Cross-team impact &amp; the dependency gate</span>
+  </div>
+  <p class="who"><strong>Needs two logins</strong> · Ravi Kumar (1001) + whoever the new ticket is assigned to</p>
+
+  <ol>
+    <li>As Ravi, open AMS-102 or AMS-103 → <strong>Check for other teams affected</strong>.</li>
+    <li>Confirm a suggested team → a linked Jira ticket is created and assigned.</li>
+    <li>Log in as that assignee → open their ticket → <strong>Mark as Done</strong>.</li>
+    <li>Log back in as Ravi.</li>
+  </ol>
+
+  <ul class="check">
+    <li>After step 2, Stage 1 is blocked: <em>"Waiting on 1 other team to finish their ticket."</em></li>
+    <li>After step 3, the gate clears for Ravi — state comes from the append-only events log,
+        not the browser, which is why it crosses separate logins.</li>
+    <li>No ticket is ever created without a human confirming it.</li>
+  </ul>
+</section>
+
+<!-- 6 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">06</span>
+    <span class="scenario-title">Ad-hoc ticket &amp; the clarity gate</span>
+  </div>
+  <p class="who"><strong>As:</strong> Elena Cruz (1002) · <strong>Ticket:</strong> AMS-098 — no linked CR,
+  so it routes to the ad-hoc path</p>
+
+  <ul class="check">
+    <li>Runs with <strong>no codebase context</strong> — correctly shows no file-selection panel.</li>
+    <li>Three gates share one two-question budget: overall vagueness → a specific missing detail →
+        repo identity.</li>
+    <li>A repo match below <em>high</em> confidence asks <em>"is this the right repo?"</em> rather than
+        scoping against a guess.</li>
+    <li>If GitLab is unreachable the repo check is skipped silently and analysis proceeds.</li>
+  </ul>
+</section>
+
+<!-- 7 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">07</span>
+    <span class="scenario-title">Quick-impact chat</span>
+  </div>
+  <p class="who"><strong>Where:</strong> "Quick question" box at the top of the S3 page · any login</p>
+
+  <p>Try: <em>"how long would it take to add a vehicle-swap endorsement?"</em></p>
+  <ul class="check">
+    <li>Asks at most <strong>two</strong> clarifying questions, then must deliver a final answer.</li>
+    <li>Final answer carries impact analysis + hour class + P-level + whether a code change is warranted.</li>
+    <li><strong>Clear</strong> resets the server-side transcript.</li>
+  </ul>
+</section>
+
+<!-- 8 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">08</span>
+    <span class="scenario-title">Problem-record intake — the second CR flavour</span>
+  </div>
+  <p class="who"><strong>Run:</strong> <code>demo/seed_problem_record_ticket.sh</code> (API must be running)</p>
+
+  <ul class="check">
+    <li>A new ticket appears on the board tagged <strong>origin: problem record</strong> with its
+        <code>PRB…</code> id.</li>
+    <li>It runs the identical downstream flow — only the origin tag differs, which is the point:
+        repeated incidents → problem record → CR converges on the same pipeline.</li>
+  </ul>
+</section>
+
+<!-- 9 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">09</span>
+    <span class="scenario-title">GitLab repo scoping — API only, no UI</span>
+  </div>
+
+<pre><code>C=$(mktemp); curl -s -c $C -X POST localhost:8000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Ravi Kumar","passcode":"1001"}' &gt;/dev/null
+
+curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
+  -H 'Content-Type: application/json' \
+  -d '{"tier_name":"Elite"}' | python -m json.tool</code></pre>
+
+  <ul class="check">
+    <li>The AI picks a repo from names and descriptions alone, returning confidence, reasoning and alternates.</li>
+    <li>Below <em>high</em> confidence it returns <code>needs_clarification</code> instead of guessing.</li>
+    <li><code>repo_size</code> vs <code>files_reached_llm</code> shows the funnel economics — only a
+        shortlist is ever fetched, so cost stays flat regardless of repo size.</li>
+    <li>Nothing is ever written back to GitLab.</li>
+  </ul>
+</section>
+
+<!-- 10 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">10</span>
+    <span class="scenario-title">Resilience &amp; regression</span>
+  </div>
+
+<pre><code>.venv/bin/python -m pytest tests/ -q                    # 239 pass
+.venv/bin/ruff check .                                  # clean
+.venv/bin/python tools/verify_s3_live.py --skip-live    # offline architecture gate</code></pre>
+
+  <ul class="check">
+    <li>Replay works with networking stubbed out entirely.</li>
+    <li>A mid-stream provider failure falls back to replay invisibly.</li>
+    <li>One recording replays correctly for two different tier names.</li>
+    <li>Reset restores baseline in under 10 s.</li>
+    <li>Core recall never drops a required file; decoy subsystems are never selected.</li>
+  </ul>
+
+  <div class="callout">
+    <span class="label">Demo-day rule</span>
+    <p><code>tools/verify_s3_live.py --gate 10</code> runs ten real codegen + testgen + pytest cycles from
+    baseline. A cycle passes only if the <strong>live</strong> path succeeded — no silent replay fallback —
+    and the generated tests ran green. <strong>Require ≥ 9/10, otherwise present in
+    <code>LLM_MODE=replay</code> without hesitation.</strong></p>
+  </div>
+</section>
+
+<div class="page-break"></div>
+
+<h2>Known issues</h2>
+
+<table>
+  <tr><th>#</th><th>Issue</th><th>Impact</th><th>Status</th></tr>
+  <tr>
+    <td class="mono">1</td>
+    <td>CR-2026-042 codegen recording is a net-deletion recording — strips ~6 function docstrings from
+        <code>mockapp/core/db.py</code></td>
+    <td>AMS-102 diff is dominated by unrelated deletions</td>
+    <td><strong>Open</strong> — needs a live re-record</td>
+  </tr>
+  <tr>
+    <td class="mono">2</td>
+    <td>Subsystem screening was hardcoded to <code>mockapp/</code>, so the Spring target was scored against
+        mockapp's decoy subsystems</td>
+    <td>Panel wrongly reported <code>legacy_java_platform/settlement</code> 0.49 for AMS-103</td>
+    <td><span class="pass">Fixed</span> — target-scoped, 2 regression tests</td>
+  </tr>
+  <tr>
+    <td class="mono">3</td>
+    <td>Post-apply link always pointed at the mockapp portal</td>
+    <td>AMS-103 sent reviewers to the wrong app</td>
+    <td><span class="pass">Fixed</span> — per-target app map</td>
+  </tr>
+  <tr>
+    <td class="mono">4</td>
+    <td>AMS-103's Jira card shows <code>APPLICATION: PolicyCore</code> though it is a ClaimsPortal CR</td>
+    <td>Cosmetic inconsistency in seeded data</td>
+    <td>Open — low priority</td>
+  </tr>
+  <tr>
+    <td class="mono">5</td>
+    <td>Gap gate occasionally asks about a detail the CR already states
+        (e.g. the deductible's data type)</td>
+    <td>One wasted clarification turn</td>
+    <td>Open — prompt tuning</td>
+  </tr>
+  <tr>
+    <td class="mono">6</td>
+    <td>After QA hand-off the console silently re-targets another ticket, since the handed-off one
+        leaves the developer's filtered board</td>
+    <td>Disorienting mid-demo</td>
+    <td>Open — low priority</td>
+  </tr>
+  <tr>
+    <td class="mono">7</td>
+    <td>Spring consoles show no deductible column; <code>payableAmount</code> is not rendered either</td>
+    <td>No visual before/after on :8081</td>
+    <td>By design — CR forbids HTML changes</td>
+  </tr>
+</table>
+
+<h2>Troubleshooting</h2>
+
+<table>
+  <tr><th>Symptom</th><th>Cause and fix</th></tr>
+  <tr>
+    <td>UI looks logged in but every action 401s</td>
+    <td>Backend restarted (or was run with <code>--reload</code>) and cleared the in-memory session.
+        Log out and back in; restart uvicorn without <code>--reload</code>.</td>
+  </tr>
+  <tr>
+    <td>:8081 or :8082 refuses to connect</td>
+    <td>No jar — a reset deleted <code>target/</code>. Run <code>mvn -q package -DskipTests</code> in each
+        service, then relaunch.</td>
+  </tr>
+  <tr>
+    <td>Applied a CR but the Spring console is unchanged</td>
+    <td>Stale jar. Rebuild and relaunch both services.</td>
+  </tr>
+  <tr>
+    <td>A stage will not open</td>
+    <td>Not a bug — the grey hint under it names the missing precondition (analysis not run, change not
+        applied, ticket not in QA, or you are not the assigned tester).</td>
+  </tr>
+  <tr>
+    <td>Console shows results for a ticket you just reset</td>
+    <td><code>localStorage</code> cache. Hard-refresh the tab; the reset marker makes the console drop it.</td>
+  </tr>
+  <tr>
+    <td>Mutation check returns 409</td>
+    <td>Generated code drifted from the recording, so no seeded snippet matched. Re-run generate/apply,
+        or re-record. It fails loudly rather than mutating blind.</td>
+  </tr>
+  <tr>
+    <td>Analysis is slow on first click</td>
+    <td>Expected — <code>.cache/llm</code> was cleared by the reset. Run
+        <code>demo/warm_s3_cache.sh</code> to pre-warm.</td>
+  </tr>
+</table>
+
+<p class="footer-note">
+  All data in this demo is synthetic and the insurer is fictional. No real client data, client names,
+  or credentials appear anywhere in this repo — see <span class="mono">CLAUDE.md</span> for the full
+  project rules.
+</p>
+
+</body>
+</html>

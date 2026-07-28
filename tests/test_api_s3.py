@@ -1076,6 +1076,10 @@ def test_apply_calls_apply_change_with_file_path():
         "proposal_id": "prop-1",
         "applied_files": ["a.py"],
         "post_apply": {"ok": True, "steps": []},
+        # Both empty for a proposal that exists only as a mock — the console
+        # reads them to sync its per-file Rejected/Revert state after an apply.
+        "rejected_files": {},
+        "revertable_files": [],
     }
 
 

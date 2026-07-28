@@ -218,19 +218,40 @@ _SCOPE_KEYWORDS_RE = re.compile(r"^## Scope keywords\s*\n(.*?)(?=\n## |\Z)", re.
 _DESIGN_DOC_NAME = "DESIGN.md"
 
 
-def discover_subsystem_design_docs() -> dict[str, str]:
-    """Read every `DESIGN.md` under `mockapp/systems/`, keyed by the
-    "mockapp/..."-relative path of its parent (subsystem) directory.
+def discover_subsystem_design_docs(root: Path = MOCKAPP_ROOT) -> dict[str, str]:
+    """Read every `DESIGN.md` under `root`, keyed by the repo-relative path of
+    its parent (subsystem) directory.
 
     Each doc's "## Scope keywords" section (short, deliberately written in
     that subsystem's own domain vocabulary rather than the CR's) is what
     `screen_subsystems` actually scores — falling back to the whole doc if a
     design doc omits that section, since a doc without declared keywords
     should still be considered, not silently skipped.
+
+    `root` defaults to `mockapp/` — today's one design-doc-bearing target —
+    but MUST be the scoring target's own root whenever there is one (see
+    `select_relevant_files`'s `design_doc_root`). Globbing mockapp/
+    unconditionally meant a target rooted anywhere else (the Spring
+    ClaimsPortal) got screened against mockapp's decoy subsystems, and the
+    UI's "which part of the repo the AI matched this change to" panel then
+    named a mockapp legacy subsystem for a change that never touched
+    mockapp. A root with no design docs correctly yields `{}`, which
+    `screen_subsystems` turns into an empty screen that excludes nothing.
+
+    Keys are relative to this repo's root, matching the "mockapp/..."
+    convention the rest of this module uses; for a `root` outside the repo
+    (a synthetic target rooted elsewhere, as in tests) they're relative to
+    `root` itself instead — same fallback as `discover_mockapp_files`.
     """
+    key_base = REPO_ROOT if root.is_relative_to(REPO_ROOT) else root
     docs: dict[str, str] = {}
-    for path in sorted(MOCKAPP_ROOT.rglob(_DESIGN_DOC_NAME)):
-        rel_dir = path.parent.relative_to(REPO_ROOT).as_posix()
+    for path in sorted(root.rglob(_DESIGN_DOC_NAME)):
+        # Same exclusions as the source glob: a design doc inside a target's
+        # pristine `.baseline/` snapshot is a copy of one already counted,
+        # not a second subsystem.
+        if any(part in _EXCLUDED_DIR_NAMES for part in path.parts):
+            continue
+        rel_dir = path.parent.relative_to(key_base).as_posix()
         docs[rel_dir] = _extract_scope_keywords(path.read_text(encoding="utf-8"))
     return docs
 
@@ -365,6 +386,7 @@ def select_relevant_files(
     max_extra: int = 4,
     min_score: float | None = None,
     design_docs: dict[str, str] | None = None,
+    design_doc_root: Path | None = None,
 ) -> SelectionResult:
     """Screen subsystems by design doc, then rank the surviving mockapp/
     files by semantic similarity to the CR text (embeddings by default,
@@ -377,12 +399,23 @@ def select_relevant_files(
     corpus's decoy ceiling for that backend but below genuinely relevant
     files, so a real signal is never mistaken for noise.
 
-    `design_docs` defaults to `discover_subsystem_design_docs()` — passed
-    explicitly by callers that already loaded it once (e.g. the UI panel)
-    to avoid re-reading the same handful of small files repeatedly.
+    `design_docs` defaults to whatever `discover_subsystem_design_docs()`
+    finds under `design_doc_root` — passed explicitly by callers that already
+    loaded it once (e.g. the UI panel) to avoid re-reading the same handful
+    of small files repeatedly, or as `{}` by callers that have none at all
+    (the GitLab path).
+
+    `design_doc_root` MUST be the scoring target's own root
+    (`Target.root`) whenever the caller has a target in hand; it falls back
+    to `mockapp/` only for the target-less callers (tests, tools, the legacy
+    Streamlit console) that are inherently scoped to mockapp. Screening a
+    non-mockapp target against mockapp's subsystem docs is a reporting bug,
+    not a no-op — see `discover_subsystem_design_docs`.
     """
     if design_docs is None:
-        design_docs = discover_subsystem_design_docs()
+        design_docs = discover_subsystem_design_docs(
+            MOCKAPP_ROOT if design_doc_root is None else design_doc_root
+        )
     subsystem_screen = screen_subsystems(cr_text, design_docs)
     screened_out_prefixes = tuple(f"{name}/" for name in subsystem_screen.screened_out)
 
