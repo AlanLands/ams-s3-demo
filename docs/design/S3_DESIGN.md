@@ -148,8 +148,13 @@ content alone loses across ~100 similarly-shaped decoy files. Renaming or moving
 directory changes every embedding, reshuffles the selection, and desyncs it from the
 committed codegen recordings — the beat then dies with
 `LLMError: codegen returned unexpected file set`, in replay mode, offline, with no live
-fallback. **Moving a target is a re-record, not a rename.** (This is why `apps/` still
-has its misleading name.)
+fallback. **Moving a target is a path-rewrite across code and recordings, not a rename.**
+
+Done once, for the `apps/` restructure on 2026-07-28. The recordings carry target paths
+twice — as the returned file keys, and inside the generated code's own `import`
+statements — so both had to be rewritten together. Both targets were then re-verified
+generate → apply → revert. A live re-record was not required, which is a weaker
+constraint than this section previously assumed.
 
 ---
 
@@ -759,9 +764,6 @@ content validator branch in `codegen._validate_content`; confirm the runner emit
 - Codegen prompts and validators are per-CR business logic — three targets means three
   prompt builders and three validators. This is the main thing that would need real work to
   scale to a 30-repo estate.
-- `apps/` is a misleading directory name for what is really S3's second target. Renaming
-  is blocked on re-recording the CR-2026-043 replay caches (see §3) — worth doing when
-  there's time to re-verify the beat live, not before a demo.
 - Sessions are single-process and in-memory; a multi-worker deployment needs a shared store.
 - `MODEL_PRICING_USD_PER_1M` is empty by design; cost totals read as unset until real rates
   are supplied.
