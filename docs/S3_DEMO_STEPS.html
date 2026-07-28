@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AMS S3 — Demo Run Steps</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #5c5c5c;
+    --line: #d8d8d8;
+    --accent: #8b1e2d;
+    --accent-soft: #f6ecee;
+    --ok: #1c6b3c;
+    --warn: #8a5a00;
+    --warn-soft: #fdf6e6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font: 10.5pt/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    margin: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1 { font-size: 22pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
+  h2 {
+    font-size: 13pt; margin: 0 0 3mm; padding-bottom: 1.5mm;
+    border-bottom: 2px solid var(--accent); letter-spacing: -0.2pt;
+  }
+  h3 { font-size: 11pt; margin: 5mm 0 2mm; }
+  p { margin: 0 0 2.5mm; }
+
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  code { background: #f2f2f2; padding: 0.5pt 2pt; border-radius: 2px; }
+  pre {
+    font-family: var(--mono); font-size: 8.5pt; line-height: 1.45;
+    background: #f7f7f7; border-left: 2.5pt solid var(--line);
+    padding: 2.5mm 3mm; margin: 2mm 0 3mm; overflow-x: auto; white-space: pre-wrap;
+  }
+  pre code { background: none; padding: 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3.5mm; font-size: 9.5pt; }
+  th, td { text-align: left; padding: 1.6mm 2mm; border-bottom: 0.5pt solid var(--line); vertical-align: top; }
+  th { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.4pt; color: var(--ink-soft); border-bottom: 1pt solid var(--ink-soft); }
+  /* Match the body line-height so a mono cell's first line sits on the same
+     baseline as the prose cell beside it, rather than riding high. */
+  td.mono, th.mono { font-family: var(--mono); font-size: 9pt; line-height: 1.5; }
+
+  ol, ul { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.5mm; }
+
+  /* --- cover ------------------------------------------------------------ */
+  .cover { border-bottom: 3pt solid var(--accent); padding-bottom: 4mm; margin-bottom: 6mm; }
+  .kicker { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.6pt; color: var(--accent); font-weight: 700; margin-bottom: 2mm; }
+  .subtitle { font-size: 11pt; color: var(--ink-soft); margin: 0; }
+  .meta { font-size: 8.5pt; color: var(--ink-soft); margin-top: 3mm; }
+
+  /* --- blocks ----------------------------------------------------------- */
+  .scenario { break-inside: avoid; page-break-inside: avoid; margin-bottom: 7mm; }
+  .scenario-head { display: flex; align-items: baseline; gap: 3mm; margin-bottom: 1mm; }
+  .num {
+    font-family: var(--mono); font-size: 9pt; font-weight: 700; color: #fff;
+    background: var(--accent); padding: 0.8mm 2.2mm; border-radius: 2px; flex: none;
+  }
+  .scenario-title { font-size: 12pt; font-weight: 700; letter-spacing: -0.2pt; }
+  .who {
+    font-size: 8.5pt; color: var(--ink-soft); margin: 0 0 2.5mm;
+    padding-left: 1mm; border-left: 2pt solid var(--line);
+    padding-top: 0.5mm; padding-bottom: 0.5mm;
+  }
+  .who strong { color: var(--ink); }
+
+  .check { list-style: none; padding-left: 0; margin: 2mm 0 3mm; }
+  .check li {
+    position: relative; padding-left: 6mm; font-size: 9.5pt;
+  }
+  .check li::before {
+    content: "☐"; position: absolute; left: 0; top: -0.3mm;
+    font-size: 11pt; color: var(--accent);
+  }
+  .pass { color: var(--ok); font-weight: 600; }
+
+  .callout {
+    border: 0.75pt solid var(--line); border-left: 3pt solid var(--accent);
+    background: var(--accent-soft); padding: 2.5mm 3mm; margin: 3mm 0; font-size: 9.5pt;
+    break-inside: avoid;
+  }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .callout .label {
+    font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1pt;
+    font-weight: 700; color: var(--accent); display: block; margin-bottom: 1mm;
+  }
+  .callout.warn .label { color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .page-break { break-before: page; page-break-before: always; }
+  .tiny { font-size: 8pt; color: var(--ink-soft); margin-top: 0.5mm; }
+  td.before { background: #f6f6f5; }
+  td.after { background: var(--accent-soft); }
+  .statecol { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.4pt; }
+  .footer-note { font-size: 8.5pt; color: var(--ink-soft); border-top: 0.5pt solid var(--line); padding-top: 2.5mm; margin-top: 6mm; }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="kicker">MapleSure Insurance · AMS Console</div>
+  <h1>S3 Demo — Run Steps</h1>
+  <p class="subtitle">Standing the demo up from a clean checkout, in any sandbox</p>
+  <p class="meta">
+    Generated 28 July 2026 · repo <span class="mono">ams-s3-demo</span> ·
+    branch <span class="mono">restructure-apps-and-custom-llm</span><br>
+    Companion docs: <span class="mono">apps/README.md</span> (what each application is) ·
+    <span class="mono">demo/README.md</span> (presenter scripts) ·
+    <span class="mono">docs/design/S3_DESIGN.md</span> (technical design)
+  </p>
+</header>
+
+<h2>1 · What you are standing up</h2>
+
+<p>Four applications, each started by its own script under <span class="mono">apps/</span>,
+plus the S3 tooling that drives them. You do <strong>not</strong> need all four for every
+beat — the table says which.</p>
+
+<table>
+  <tr><th class="mono">#</th><th>Application</th><th class="mono">Start</th><th class="mono">Port</th><th>Needed for</th></tr>
+  <tr>
+    <td class="mono">1</td><td><strong>Console</strong><div class="tiny">FastAPI + React. The screen you present from.</div></td>
+    <td class="mono">apps/run-console.sh</td><td class="mono">8000<br>5173</td><td>Every beat</td>
+  </tr>
+  <tr>
+    <td class="mono">2</td><td><strong>PolicyCore</strong><div class="tiny">The client's policy portal (Streamlit). The window the audience watches change.</div></td>
+    <td class="mono">apps/run-policycore.sh</td><td class="mono">8501</td><td>CR-2026-041<br>CR-2026-042</td>
+  </tr>
+  <tr>
+    <td class="mono">3</td><td><strong>Policy-Service</strong><div class="tiny">ClaimsPortal policy side (Spring Boot).</div></td>
+    <td class="mono">apps/run-policy-service.sh</td><td class="mono">8081</td><td>CR-2026-043</td>
+  </tr>
+  <tr>
+    <td class="mono">4</td><td><strong>Claims-Service</strong><div class="tiny">ClaimsPortal claims side (Spring Boot). Start after #3.</div></td>
+    <td class="mono">apps/run-claims-service.sh</td><td class="mono">8082</td><td>CR-2026-043</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <span class="label">Open this one</span>
+  <p>The console UI is <span class="mono">http://localhost:5173</span>, not :8000. Port 8000
+  is the API the UI talks to.</p>
+</div>
+
+<h2>2 · Prerequisites</h2>
+
+<table>
+  <tr><th>Tool</th><th class="mono">Version</th><th>Needed for</th><th class="mono">Check</th></tr>
+  <tr><td>Python</td><td class="mono">3.12+</td><td>Console API, PolicyCore, S3 tooling</td><td class="mono">python3 --version</td></tr>
+  <tr><td>Node.js</td><td class="mono">18+</td><td>Console UI</td><td class="mono">node --version</td></tr>
+  <tr><td>Java JDK</td><td class="mono">17+</td><td>Apps 3 and 4 only</td><td class="mono">java -version</td></tr>
+  <tr><td>Maven</td><td class="mono">3.9+</td><td>Apps 3 and 4 only</td><td class="mono">mvn -version</td></tr>
+</table>
+
+<p>Skip Java and Maven entirely if you are only demoing the PolicyCore CRs.</p>
+
+<h2>3 · First-time setup from base packages</h2>
+
+<p>From the repository root. Run once per machine.</p>
+
+<pre><code># 1. Python environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Console UI dependencies
+cd apps/console/web && npm install && cd ../../..
+
+# 3. Configuration
+cp .env.example .env
+#    then edit .env — see section 4
+
+# 4. Seed the PolicyCore database
+python -m apps.policycore.core.seed
+
+# 5. Confirm the install
+python -m pytest -q          # expect: 309 passed</code></pre>
+
+<div class="callout">
+  <span class="label">Sanity check</span>
+  <p>If <span class="mono">pytest</span> passes, the wiring is correct. It exercises the
+  routing registry, the code-review flow, and both replay targets without needing an LLM
+  or any of the four applications running.</p>
+</div>
+
+<h2>4 · Pointing it at your LLM</h2>
+
+<p>Edit <span class="mono">.env</span>. Pick <em>one</em> provider block.</p>
+
+<h3>Self-hosted / custom model (most sandboxes)</h3>
+
+<p>For any endpoint that speaks the OpenAI chat API — an internal gateway, vLLM, LiteLLM,
+TGI, LM Studio:</p>
+
+<pre><code>LLM_PROVIDER=custom
+CUSTOM_LLM_BASE_URL=https://llm.internal.example/v1
+CUSTOM_LLM_MODEL=llama-3.3-70b
+CUSTOM_LLM_API_KEY=            # optional — blank is fine if your gateway does no auth</code></pre>
+
+<div class="callout warn">
+  <span class="label">The base URL is used exactly as written</span>
+  <p>Include the version segment your gateway expects — usually <span class="mono">/v1</span>.
+  Nothing is appended or rewritten, so a wrong URL gives a clean 404 rather than a
+  confusing one. The client requests
+  <span class="mono">&lt;CUSTOM_LLM_BASE_URL&gt;/chat/completions</span>.</p>
+</div>
+
+<p>Verify the endpoint is reachable before demo day:</p>
+
+<pre><code>python -c "
+from common.llm import complete
+print(complete('Reply with the single word: ready'))
+"</code></pre>
+
+<h3>Other providers</h3>
+
+<table>
+  <tr><th>Provider</th><th class="mono">LLM_PROVIDER</th><th>Also set</th></tr>
+  <tr><td>Anthropic</td><td class="mono">anthropic</td><td class="mono">ANTHROPIC_API_KEY, ANTHROPIC_MODEL</td></tr>
+  <tr><td>OpenAI</td><td class="mono">openai</td><td class="mono">OPENAI_API_KEY, OPENAI_MODEL</td></tr>
+  <tr><td>Claude via Bedrock</td><td class="mono">bedrock</td><td class="mono">AWS_REGION, BEDROCK_MODEL</td></tr>
+  <tr><td>Ollama (local)</td><td class="mono">ollama</td><td class="mono">OLLAMA_BASE_URL, OLLAMA_MODEL</td></tr>
+</table>
+
+<h3>Replay mode — why the demo survives a bad network</h3>
+
+<p>The default is <span class="mono">LLM_MODE=replay</span>. The code-generation and
+test-generation beats are served entirely from committed recordings in
+<span class="mono">s3_enhancement/cache/</span> and never call your model at all. That is
+what makes the demo deterministic.</p>
+
+<div class="callout warn">
+  <span class="label">Sharp edge — read this one</span>
+  <p>The <em>narrative</em> beats (impact analysis, effort estimate, release notes,
+  design doc) go through a different cache that does <strong>not</strong> honour
+  <span class="mono">LLM_MODE</span>. On a cache miss they call your endpoint live, even in
+  replay mode. Always run <span class="mono">demo/warm_s3_cache.sh</span> before presenting
+  — otherwise a slow or unreachable model stalls a beat mid-demo.</p>
+</div>
+
+<h2>5 · Reset before every rehearsal or demo</h2>
+
+<p>The demo mutates real source files and the SQLite database. Reset returns everything to
+the pre-CR baseline. Run all three, <strong>in this order</strong> — the endorsement reset
+must come after <span class="mono">reset_s3.sh</span>, because that script reseeds the
+database the endorsement baseline then builds on.</p>
+
+<pre><code>demo/reset_s3.sh              # CR-2026-041 (PolicyCore coverage tier) + shared state
+demo/reset_s3_endorsement.sh  # CR-2026-042 (PolicyCore endorsement priority)
+demo/reset_s3_springdemo.sh   # CR-2026-043 (ClaimsPortal deductible)
+demo/warm_s3_cache.sh         # ALWAYS last — reset_s3.sh wipes .cache/llm</code></pre>
+
+<p>Expected final lines:</p>
+
+<pre><code>S3 source baseline restored, mockapp reseeded, LLM cache cleared, and ticket timeline cleared.
+CR-2026-042 source baseline restored, mockapp reseeded, and LLM cache cleared.
+Spring demo (ClaimsPortal) source baseline restored; generated files and build output removed.</code></pre>
+
+<h2>6 · Start the applications</h2>
+
+<p>One terminal per application. For the PolicyCore CRs you need only the first two.</p>
+
+<pre><code>apps/run-console.sh           # terminal 1 — API :8000 + UI :5173
+apps/run-policycore.sh        # terminal 2 — portal :8501
+
+# only for the ClaimsPortal CR (CR-2026-043):
+apps/run-policy-service.sh    # terminal 3 — :8081  (start before claims)
+apps/run-claims-service.sh    # terminal 4 — :8082</code></pre>
+
+<p>Then open <span class="mono">http://localhost:5173</span> and log in. Any roster name
+works; passcodes are in <span class="mono">common/roster.py</span>.</p>
+
+<table>
+  <tr><th>Login</th><th class="mono">Passcode</th><th>Role</th></tr>
+  <tr><td>Ravi Kumar</td><td class="mono">1001</td><td>Engineer — App Support, PolicyCore</td></tr>
+  <tr><td>Priya Nair</td><td class="mono">1003</td><td>Engineer — App Support, ClaimsPortal</td></tr>
+  <tr><td>Manager</td><td class="mono">9000</td><td>Manager view</td></tr>
+</table>
+
+<h2>7 · Optional — seed the routing beat</h2>
+
+<p>With the console API already running, this creates a ticket that carries a ServiceNow
+Configuration Item, so the console can route it to an owning team before any AI step runs.</p>
+
+<pre><code># Default: routes to BillingGateway — an application with an owning team and
+# NO repo here. Routing succeeds; automation correctly stays off.
+demo/seed_problem_record_ticket.sh
+
+# The other half: routes to a team AND offers the CR to run against it.
+SEED_CI=ClaimsPortal SEED_BUSINESS_SERVICE="Claims Management" \
+  demo/seed_problem_record_ticket.sh</code></pre>
+
+<p>Re-running with a different <span class="mono">SEED_CI</span> re-routes the same ticket;
+you do not need to reset between the two.</p>
+
+<h2>8 · The demo flow</h2>
+
+<table>
+  <tr><th class="mono">#</th><th>Beat</th><th>What to say it proves</th></tr>
+  <tr><td class="mono">1</td><td>Open the ticket; routing panel appears above the analysis</td>
+      <td>The CI resolved to an application, owning team and repo by table lookup — no model call, nothing to confirm</td></tr>
+  <tr><td class="mono">2</td><td>Impact analysis + effort estimate</td>
+      <td>Vague tickets get a clarifying question first, rather than a confident guess</td></tr>
+  <tr><td class="mono">3</td><td>Generate code</td>
+      <td>Only the files the relevance funnel selected are sent — the token panel shows scoped vs naive cost</td></tr>
+  <tr><td class="mono">4</td><td><strong>Review file by file</strong>: Ask, Apply this file, Reject</td>
+      <td>Developers accept or reject one file at a time; a rejection records a reason to the ticket's audit trail and is excluded from Apply</td></tr>
+  <tr><td class="mono">5</td><td>Apply, then look at PolicyCore on :8501</td>
+      <td>The client's running application changed</td></tr>
+  <tr><td class="mono">6</td><td><strong>Revert</strong> (per file or all)</td>
+      <td>Anything applied can be undone without a full demo reset</td></tr>
+  <tr><td class="mono">7</td><td>Generate tests, run them, then the seeded-bug check</td>
+      <td>The generated tests actually catch a deliberately introduced bug</td></tr>
+  <tr><td class="mono">8</td><td>Design doc + release notes</td>
+      <td>Documentation drift is detected automatically after Apply, not by remembering to press a button</td></tr>
+</table>
+
+<h2>9 · Troubleshooting</h2>
+
+<table>
+  <tr><th>Symptom</th><th>Cause and fix</th></tr>
+  <tr>
+    <td><span class="mono">FOREIGN KEY constraint failed</span> during a reset or seed</td>
+    <td>An old baseline whose <span class="mono">wipe_db()</span> predates the endorsements
+        table. Fixed in the current scripts. If you hit it on an older checkout:
+        <span class="mono">rm -f data/mockapp.db</span> then re-run the reset.</td>
+  </tr>
+  <tr>
+    <td><span class="mono">codegen returned unexpected file set</span></td>
+    <td>A target directory under <span class="mono">apps/</span> was renamed or moved. The
+        replay recordings contain the exact paths. Restore the directory name — see the
+        warning in <span class="mono">apps/README.md</span>.</td>
+  </tr>
+  <tr>
+    <td>A beat hangs, or fails mentioning your LLM URL</td>
+    <td>A narrative beat missed its cache and called your model. Run
+        <span class="mono">demo/warm_s3_cache.sh</span>. Confirm the endpoint with the
+        one-liner in section 4.</td>
+  </tr>
+  <tr>
+    <td>Applied change crashed the portal</td>
+    <td>Expected and handled — the console shows the migration traceback with a one-click
+        fix. You can also press <strong>Revert all</strong>.</td>
+  </tr>
+  <tr>
+    <td>Console UI loads but every call 401s</td>
+    <td>Not logged in, or the API on :8000 is not running. Check terminal 1.</td>
+  </tr>
+  <tr>
+    <td>Claims-Service errors on a claim</td>
+    <td>Policy-Service on :8081 is not up. Claims calls policy over HTTP; start #3 first.</td>
+  </tr>
+  <tr>
+    <td>Port already in use</td>
+    <td><span class="mono">lsof -ti:8000 | xargs kill</span> (repeat per port). Note that
+        <span class="mono">--reload</span> is deliberately not used on the API: the reloader
+        restarts mid-beat when codegen writes to the tree.</td>
+  </tr>
+</table>
+
+<h2>10 · Pre-demo checklist</h2>
+
+<ul class="check">
+  <li><span class="mono">python -m pytest -q</span> passes</li>
+  <li><span class="mono">.env</span> has your provider block filled in, and the section-4 one-liner returned a reply</li>
+  <li>All three reset scripts ran clean, in order</li>
+  <li><span class="mono">demo/warm_s3_cache.sh</span> ran <em>after</em> the resets</li>
+  <li>Console reachable at <span class="mono">:5173</span>; you are logged in</li>
+  <li>PolicyCore reachable at <span class="mono">:8501</span> in a second window</li>
+  <li>For the ClaimsPortal CR: :8081 and :8082 both responding</li>
+  <li>You have walked beats 1–8 once, end to end, on this machine</li>
+</ul>
+
+<p class="footer-note">
+  Generated for the sandbox hand-over. The four applications live under
+  <span class="mono">apps/</span>; the AI pipeline that drives them is in
+  <span class="mono">s3_enhancement/</span>, shared clients in <span class="mono">common/</span>,
+  and presenter scripts in <span class="mono">demo/</span>. Do not rename directories under
+  <span class="mono">apps/</span> — see <span class="mono">apps/README.md</span>.
+</p>
+
+</body>
+</html>
