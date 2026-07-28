@@ -1,13 +1,17 @@
 """Provider-agnostic LLM access. Every LLM call in this repo goes through `complete()`.
 
 Provider selection:
-- `LLM_PROVIDER` env var wins if set ("anthropic", "bedrock", "openai", or "ollama").
+- `LLM_PROVIDER` env var wins if set ("anthropic", "bedrock", "openai", "ollama",
+  or "custom").
 - Otherwise auto-detect from which API key is present; if both are present, prefer
   OpenAI (leadership steer — the end client is planning OpenAI). Ollama and Bedrock
   are never auto-detected (neither has an API key to detect) — set
   `LLM_PROVIDER=ollama` explicitly to run against a local model
   (`OLLAMA_BASE_URL`/`OLLAMA_MODEL`), or `LLM_PROVIDER=bedrock` to run Claude via
-  Amazon Bedrock (`AWS_REGION`/`BEDROCK_MODEL`, credentials from the AWS chain).
+  Amazon Bedrock (`AWS_REGION`/`BEDROCK_MODEL`, credentials from the AWS chain),
+  or `LLM_PROVIDER=custom` to point at any OpenAI-compatible endpoint the hosting
+  team runs themselves (`CUSTOM_LLM_BASE_URL`/`CUSTOM_LLM_MODEL`/`CUSTOM_LLM_API_KEY`)
+  — the path for a sandbox with its own models and no vendor key to detect.
 
 No provider-specific object, response shape, or parameter is allowed to leak past
 this module — callers only ever see `str` in, `str` out.
@@ -67,8 +71,10 @@ def _resolve_provider() -> str:
         return "anthropic"
     raise LLMError(
         "No LLM provider configured: set LLM_PROVIDER ('openai', 'anthropic', "
-        "'bedrock', or 'ollama') and, for the key-authenticated providers, the "
-        "matching API key in .env"
+        "'bedrock', 'ollama', or 'custom') and, for the key-authenticated "
+        "providers, the matching API key in .env. For a self-hosted "
+        "OpenAI-compatible endpoint use LLM_PROVIDER=custom with "
+        "CUSTOM_LLM_BASE_URL and CUSTOM_LLM_MODEL."
     )
 
 
@@ -199,6 +205,113 @@ def _call_openai(prompt: str, system: str | None, json_mode: bool) -> tuple[str,
         usage.prompt_tokens if usage else 0,
         usage.completion_tokens if usage else 0,
     )
+
+
+class _CustomLLMConfigError(LLMError):
+    """Raised when LLM_PROVIDER=custom is selected without a base URL.
+
+    Its own type so the message can say exactly which variable is missing —
+    a team pointing this at their own gateway gets one line to fix, not a
+    generic provider error.
+    """
+
+
+def _custom_client():
+    """Client for any OpenAI-compatible endpoint — an internal gateway, vLLM,
+    LiteLLM, TGI, or anything else that speaks the OpenAI chat API.
+
+    This exists because the sandbox this demo is deployed into runs its own
+    models: there is no public API key to detect and no fixed vendor to hard
+    code, only a URL the hosting team supplies. Reusing the pinned `openai`
+    client keeps it dependency-free, which the locked-down-environment rule
+    (CLAUDE.md #4) requires.
+
+    `CUSTOM_LLM_BASE_URL` must be the full OpenAI-compatible root, including
+    the version segment the gateway expects (usually `/v1`). It is not
+    guessed at or appended to: gateways differ on whether `/v1` is present,
+    and silently rewriting the operator's URL turns a clear 404 into a
+    confusing one.
+    """
+    from openai import OpenAI
+
+    base_url = os.environ.get("CUSTOM_LLM_BASE_URL", "").strip()
+    if not base_url:
+        raise _CustomLLMConfigError(
+            "LLM_PROVIDER=custom requires CUSTOM_LLM_BASE_URL — the full "
+            "OpenAI-compatible endpoint, e.g. "
+            "https://llm.internal.example/v1 (include the /v1 if your "
+            "gateway expects it). Set it in .env"
+        )
+    # Many self-hosted gateways ignore auth entirely, but the client requires
+    # some value — send a placeholder rather than failing on an unset key.
+    api_key = os.environ.get("CUSTOM_LLM_API_KEY") or "not-required"
+    return OpenAI(base_url=base_url.rstrip("/"), api_key=api_key)
+
+
+def _custom_model() -> str:
+    model = os.environ.get("CUSTOM_LLM_MODEL", "").strip()
+    if not model:
+        raise _CustomLLMConfigError(
+            "LLM_PROVIDER=custom requires CUSTOM_LLM_MODEL — the model name "
+            "your endpoint serves, e.g. llama-3.3-70b. Set it in .env"
+        )
+    return model
+
+
+def _call_custom(prompt: str, system: str | None, json_mode: bool) -> tuple[str, int, int]:
+    client = _custom_client()
+    model = _custom_model()
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    kwargs: dict = {}
+    if json_mode:
+        # Same belt-and-braces as the Ollama path: self-hosted models are far
+        # likelier than the hosted vendors to wrap JSON in prose, and not every
+        # gateway honours response_format.
+        kwargs["response_format"] = {"type": "json_object"}
+        prompt = prompt + "\n\nRespond with valid JSON only, no surrounding prose."
+    messages.append({"role": "user", "content": prompt})
+
+    response = client.chat.completions.create(model=model, messages=messages, **kwargs)
+    usage = response.usage
+    return (
+        response.choices[0].message.content or "",
+        usage.prompt_tokens if usage else 0,
+        usage.completion_tokens if usage else 0,
+    )
+
+
+def _stream_custom(
+    prompt: str,
+    system: str | None,
+    json_mode: bool,
+    *,
+    usage_out: dict | None = None,
+) -> Iterator[str]:
+    client = _custom_client()
+    model = _custom_model()
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    kwargs: dict = {}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+        prompt = prompt + "\n\nRespond with valid JSON only, no surrounding prose."
+    messages.append({"role": "user", "content": prompt})
+
+    stream = client.chat.completions.create(model=model, messages=messages, stream=True, **kwargs)
+    for event in stream:
+        delta = event.choices[0].delta.content if event.choices else None
+        # No stream_options={"include_usage": True}: not every gateway
+        # implements it, and requesting it outright 400s on some. When usage
+        # does arrive, use it; otherwise stream_complete estimates from length.
+        usage = getattr(event, "usage", None)
+        if usage_out is not None and usage is not None:
+            usage_out["input_tokens"] = usage.prompt_tokens
+            usage_out["output_tokens"] = usage.completion_tokens
+        if delta:
+            yield delta
 
 
 def _ollama_client():
@@ -370,6 +483,7 @@ _PROVIDER_CALLERS = {
     "bedrock": _call_bedrock,
     "openai": _call_openai,
     "ollama": _call_ollama,
+    "custom": _call_custom,
 }
 
 _PROVIDER_STREAMERS = {
@@ -377,9 +491,10 @@ _PROVIDER_STREAMERS = {
     "bedrock": _stream_bedrock,
     "openai": _stream_openai,
     "ollama": _stream_ollama,
+    "custom": _stream_custom,
 }
 
-_PROVIDER_NAMES = "'openai', 'anthropic', 'bedrock', or 'ollama'"
+_PROVIDER_NAMES = "'openai', 'anthropic', 'bedrock', 'ollama', or 'custom'"
 
 
 def complete(
@@ -722,4 +837,8 @@ def _model_for(provider: str) -> str:
         return os.environ.get("BEDROCK_MODEL", "anthropic.claude-sonnet-5")
     if provider == "ollama":
         return os.environ.get("OLLAMA_MODEL", "llama3.1")
+    if provider == "custom":
+        # Unset is legal here: _model_for only labels telemetry, and the real
+        # call raises a precise config error via _custom_model().
+        return os.environ.get("CUSTOM_LLM_MODEL", "custom")
     return os.environ.get("OPENAI_MODEL", "gpt-5")
