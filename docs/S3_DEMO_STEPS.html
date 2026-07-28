@@ -114,69 +114,114 @@
   <h1>S3 Demo — Run Steps</h1>
   <p class="subtitle">Standing the demo up from a clean checkout, in any sandbox</p>
   <p class="meta">
-    Generated 28 July 2026 · repo <span class="mono">ams-s3-demo</span> ·
-    branch <span class="mono">restructure-apps-and-custom-llm</span><br>
+    Generated from <span class="mono">demo/DEMO_STEPS.md</span> ·
+    repo <span class="mono">ams-s3-demo</span><br>
     Companion docs: <span class="mono">apps/README.md</span> (what each application is) ·
-    <span class="mono">demo/README.md</span> (presenter scripts) ·
-    <span class="mono">docs/design/S3_DESIGN.md</span> (technical design)
+    <span class="mono">demo/DEMO_TEST_GUIDE.md</span> (per-scenario rehearsal script)
   </p>
 </header>
 
-<h2>1 · What you are standing up</h2>
-
-<p>Four applications, each started by its own script under <span class="mono">apps/</span>,
-plus the S3 tooling that drives them. You do <strong>not</strong> need all four for every
-beat — the table says which.</p>
-
+<p>How to stand this demo up from a clean checkout, in any sandbox. Written for
+someone who has never run it before — if you already know the repo, you want
+<code>demo/DEMO_TEST_GUIDE.md</code> instead, which is the per-scenario rehearsal script.</p>
+<hr />
+<h2>1. What you are standing up</h2>
+<p>Four applications, each started by its own script under <code>apps/</code>, plus the S3
+tooling that drives them. You do <strong>not</strong> need all four for every beat.</p>
 <table>
-  <tr><th class="mono">#</th><th>Application</th><th class="mono">Start</th><th class="mono">Port</th><th>Needed for</th></tr>
-  <tr>
-    <td class="mono">1</td><td><strong>Console</strong><div class="tiny">FastAPI + React. The screen you present from.</div></td>
-    <td class="mono">apps/run-console.sh</td><td class="mono">8000<br>5173</td><td>Every beat</td>
-  </tr>
-  <tr>
-    <td class="mono">2</td><td><strong>PolicyCore</strong><div class="tiny">The client's policy portal (Streamlit). The window the audience watches change.</div></td>
-    <td class="mono">apps/run-policycore.sh</td><td class="mono">8501</td><td>CR-2026-041<br>CR-2026-042</td>
-  </tr>
-  <tr>
-    <td class="mono">3</td><td><strong>Policy-Service</strong><div class="tiny">ClaimsPortal policy side (Spring Boot).</div></td>
-    <td class="mono">apps/run-policy-service.sh</td><td class="mono">8081</td><td>CR-2026-043</td>
-  </tr>
-  <tr>
-    <td class="mono">4</td><td><strong>Claims-Service</strong><div class="tiny">ClaimsPortal claims side (Spring Boot). Start after #3.</div></td>
-    <td class="mono">apps/run-claims-service.sh</td><td class="mono">8082</td><td>CR-2026-043</td>
-  </tr>
+<thead>
+<tr>
+<th>#</th>
+<th>Application</th>
+<th>Start</th>
+<th>Port</th>
+<th>Needed for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Console</strong> — FastAPI + React. The screen you present from.</td>
+<td><code>apps/run-console.sh</code></td>
+<td>8000 + 5173</td>
+<td>Every beat</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>PolicyCore</strong> — the client's policy portal (Streamlit). The window the audience watches change.</td>
+<td><code>apps/run-policycore.sh</code></td>
+<td>8501</td>
+<td>CR-2026-041, CR-2026-042</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Policy-Service</strong> — ClaimsPortal policy side (Spring Boot).</td>
+<td><code>apps/run-policy-service.sh</code></td>
+<td>8081</td>
+<td>CR-2026-043</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Claims-Service</strong> — ClaimsPortal claims side (Spring Boot). Start after #3.</td>
+<td><code>apps/run-claims-service.sh</code></td>
+<td>8082</td>
+<td>CR-2026-043</td>
+</tr>
+</tbody>
 </table>
-
-<div class="callout">
-  <span class="label">Open this one</span>
-  <p>The console UI is <span class="mono">http://localhost:5173</span>, not :8000. Port 8000
-  is the API the UI talks to.</p>
-</div>
-
-<h2>2 · Prerequisites</h2>
-
+<div class="callout"><span class="label">Open this one</span><p>The console UI is <code>http://localhost:5173</code>, not <code>:8000</code>.
+Port 8000 is the API the UI talks to.</p></div>
+<p>See <code>apps/README.md</code> for what each folder is and how it maps to a ServiceNow
+application.</p>
+<hr />
+<h2>2. Prerequisites</h2>
 <table>
-  <tr><th>Tool</th><th class="mono">Version</th><th>Needed for</th><th class="mono">Check</th></tr>
-  <tr><td>Python</td><td class="mono">3.12+</td><td>Console API, PolicyCore, S3 tooling</td><td class="mono">python3 --version</td></tr>
-  <tr><td>Node.js</td><td class="mono">18+</td><td>Console UI</td><td class="mono">node --version</td></tr>
-  <tr><td>Java JDK</td><td class="mono">17+</td><td>Apps 3 and 4 only</td><td class="mono">java -version</td></tr>
-  <tr><td>Maven</td><td class="mono">3.9+</td><td>Apps 3 and 4 only</td><td class="mono">mvn -version</td></tr>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Version</th>
+<th>Needed for</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python</td>
+<td>3.12+</td>
+<td>Console API, PolicyCore, S3 tooling</td>
+<td><code>python3 --version</code></td>
+</tr>
+<tr>
+<td>Node.js</td>
+<td>18+</td>
+<td>Console UI</td>
+<td><code>node --version</code></td>
+</tr>
+<tr>
+<td>Java JDK</td>
+<td>17+</td>
+<td>Apps 3 and 4 only</td>
+<td><code>java -version</code></td>
+</tr>
+<tr>
+<td>Maven</td>
+<td>3.9+</td>
+<td>Apps 3 and 4 only</td>
+<td><code>mvn -version</code></td>
+</tr>
+</tbody>
 </table>
-
 <p>Skip Java and Maven entirely if you are only demoing the PolicyCore CRs.</p>
-
-<h2>3 · First-time setup from base packages</h2>
-
+<hr />
+<h2>3. First-time setup from base packages</h2>
 <p>From the repository root. Run once per machine.</p>
-
-<pre><code># 1. Python environment
+<pre><code class="language-bash"># 1. Python environment
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
 # 2. Console UI dependencies
-cd apps/console/web && npm install && cd ../../..
+cd apps/console/web &amp;&amp; npm install &amp;&amp; cd ../../..
 
 # 3. Configuration
 cp .env.example .env
@@ -186,210 +231,254 @@ cp .env.example .env
 python -m apps.policycore.core.seed
 
 # 5. Confirm the install
-python -m pytest -q          # expect: 309 passed</code></pre>
-
-<div class="callout">
-  <span class="label">Sanity check</span>
-  <p>If <span class="mono">pytest</span> passes, the wiring is correct. It exercises the
-  routing registry, the code-review flow, and both replay targets without needing an LLM
-  or any of the four applications running.</p>
-</div>
-
-<h2>4 · Pointing it at your LLM</h2>
-
-<p>Edit <span class="mono">.env</span>. Pick <em>one</em> provider block.</p>
-
+python -m pytest -q          # expect: 309 passed
+</code></pre>
+<div class="callout"><span class="label">Sanity check</span><p>If <code>pytest</code> passes, the wiring is correct. It exercises
+the routing registry, the code-review flow and both replay targets without
+needing an LLM or any of the four applications running.</p></div>
+<hr />
+<h2>4. Pointing it at your LLM</h2>
+<p>Edit <code>.env</code>. Pick <em>one</em> provider block.</p>
 <h3>Self-hosted / custom model (most sandboxes)</h3>
-
-<p>For any endpoint that speaks the OpenAI chat API — an internal gateway, vLLM, LiteLLM,
-TGI, LM Studio:</p>
-
-<pre><code>LLM_PROVIDER=custom
+<p>For any endpoint that speaks the OpenAI chat API — an internal gateway, vLLM,
+LiteLLM, TGI, LM Studio:</p>
+<pre><code class="language-bash">LLM_PROVIDER=custom
 CUSTOM_LLM_BASE_URL=https://llm.internal.example/v1
 CUSTOM_LLM_MODEL=llama-3.3-70b
-CUSTOM_LLM_API_KEY=            # optional — blank is fine if your gateway does no auth</code></pre>
-
-<div class="callout warn">
-  <span class="label">The base URL is used exactly as written</span>
-  <p>Include the version segment your gateway expects — usually <span class="mono">/v1</span>.
-  Nothing is appended or rewritten, so a wrong URL gives a clean 404 rather than a
-  confusing one. The client requests
-  <span class="mono">&lt;CUSTOM_LLM_BASE_URL&gt;/chat/completions</span>.</p>
-</div>
-
+CUSTOM_LLM_API_KEY=            # optional — blank is fine if your gateway does no auth
+</code></pre>
+<div class="callout warn"><span class="label">The base URL is used exactly as written</span><p>Include the version segment
+your gateway expects, usually <code>/v1</code>. Nothing is appended or rewritten, so a
+wrong URL gives a clean 404 rather than a confusing one. The client requests
+<code>&lt;CUSTOM_LLM_BASE_URL&gt;/chat/completions</code>.</p></div>
 <p>Verify the endpoint is reachable before demo day:</p>
-
-<pre><code>python -c "
+<pre><code class="language-bash">python -c &quot;
 from common.llm import complete
 print(complete('Reply with the single word: ready'))
-"</code></pre>
-
+&quot;
+</code></pre>
 <h3>Other providers</h3>
-
 <table>
-  <tr><th>Provider</th><th class="mono">LLM_PROVIDER</th><th>Also set</th></tr>
-  <tr><td>Anthropic</td><td class="mono">anthropic</td><td class="mono">ANTHROPIC_API_KEY, ANTHROPIC_MODEL</td></tr>
-  <tr><td>OpenAI</td><td class="mono">openai</td><td class="mono">OPENAI_API_KEY, OPENAI_MODEL</td></tr>
-  <tr><td>Claude via Bedrock</td><td class="mono">bedrock</td><td class="mono">AWS_REGION, BEDROCK_MODEL</td></tr>
-  <tr><td>Ollama (local)</td><td class="mono">ollama</td><td class="mono">OLLAMA_BASE_URL, OLLAMA_MODEL</td></tr>
+<thead>
+<tr>
+<th>Provider</th>
+<th><code>LLM_PROVIDER</code></th>
+<th>Also set</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Anthropic</td>
+<td><code>anthropic</code></td>
+<td><code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_MODEL</code></td>
+</tr>
+<tr>
+<td>OpenAI</td>
+<td><code>openai</code></td>
+<td><code>OPENAI_API_KEY</code>, <code>OPENAI_MODEL</code></td>
+</tr>
+<tr>
+<td>Claude via Bedrock</td>
+<td><code>bedrock</code></td>
+<td><code>AWS_REGION</code>, <code>BEDROCK_MODEL</code></td>
+</tr>
+<tr>
+<td>Ollama (local)</td>
+<td><code>ollama</code></td>
+<td><code>OLLAMA_BASE_URL</code>, <code>OLLAMA_MODEL</code></td>
+</tr>
+</tbody>
 </table>
-
 <h3>Replay mode — why the demo survives a bad network</h3>
-
-<p>The default is <span class="mono">LLM_MODE=replay</span>. The code-generation and
-test-generation beats are served entirely from committed recordings in
-<span class="mono">s3_enhancement/cache/</span> and never call your model at all. That is
-what makes the demo deterministic.</p>
-
-<div class="callout warn">
-  <span class="label">Sharp edge — read this one</span>
-  <p>The <em>narrative</em> beats (impact analysis, effort estimate, release notes,
-  design doc) go through a different cache that does <strong>not</strong> honour
-  <span class="mono">LLM_MODE</span>. On a cache miss they call your endpoint live, even in
-  replay mode. Always run <span class="mono">demo/warm_s3_cache.sh</span> before presenting
-  — otherwise a slow or unreachable model stalls a beat mid-demo.</p>
-</div>
-
-<h2>5 · Reset before every rehearsal or demo</h2>
-
-<p>The demo mutates real source files and the SQLite database. Reset returns everything to
-the pre-CR baseline. Run all three, <strong>in this order</strong> — the endorsement reset
-must come after <span class="mono">reset_s3.sh</span>, because that script reseeds the
-database the endorsement baseline then builds on.</p>
-
-<pre><code>demo/reset_s3.sh              # CR-2026-041 (PolicyCore coverage tier) + shared state
+<p>The default is <code>LLM_MODE=replay</code>. The code-generation and test-generation
+beats are served entirely from committed recordings in
+<code>s3_enhancement/cache/</code> and never call your model at all. That is what makes
+the demo deterministic.</p>
+<div class="callout warn"><span class="label">Sharp edge — read this one.</span><p>  The <em>narrative</em> beats (impact analysis,
+effort estimate, release notes, design doc) go through a different cache
+that does <strong>not</strong> honour <code>LLM_MODE</code>. On a cache miss they call your endpoint
+live, even in replay mode. Always run <code>demo/warm_s3_cache.sh</code> before
+presenting — otherwise a slow or unreachable model stalls a beat mid-demo.</p></div>
+<hr />
+<h2>5. Reset before every rehearsal or demo</h2>
+<p>The demo mutates real source files and the SQLite database. Reset returns
+everything to the pre-CR baseline. Run all three <strong>in this order</strong> — the
+endorsement reset must come after <code>reset_s3.sh</code>, because that script reseeds
+the database the endorsement baseline then builds on.</p>
+<pre><code class="language-bash">demo/reset_s3.sh              # CR-2026-041 (PolicyCore coverage tier) + shared state
 demo/reset_s3_endorsement.sh  # CR-2026-042 (PolicyCore endorsement priority)
 demo/reset_s3_springdemo.sh   # CR-2026-043 (ClaimsPortal deductible)
-demo/warm_s3_cache.sh         # ALWAYS last — reset_s3.sh wipes .cache/llm</code></pre>
-
+demo/warm_s3_cache.sh         # ALWAYS last — reset_s3.sh wipes .cache/llm
+</code></pre>
 <p>Expected final lines:</p>
-
-<pre><code>S3 source baseline restored, mockapp reseeded, LLM cache cleared, and ticket timeline cleared.
+<pre><code class="language-text">S3 source baseline restored, mockapp reseeded, LLM cache cleared, and ticket timeline cleared.
 CR-2026-042 source baseline restored, mockapp reseeded, and LLM cache cleared.
-Spring demo (ClaimsPortal) source baseline restored; generated files and build output removed.</code></pre>
-
-<h2>6 · Start the applications</h2>
-
-<p>One terminal per application. For the PolicyCore CRs you need only the first two.</p>
-
-<pre><code>apps/run-console.sh           # terminal 1 — API :8000 + UI :5173
+Spring demo (ClaimsPortal) source baseline restored; generated files and build output removed.
+</code></pre>
+<hr />
+<h2>6. Start the applications</h2>
+<p>One terminal per application. For the PolicyCore CRs you need only the first
+two.</p>
+<pre><code class="language-bash">apps/run-console.sh           # terminal 1 — API :8000 + UI :5173
 apps/run-policycore.sh        # terminal 2 — portal :8501
 
 # only for the ClaimsPortal CR (CR-2026-043):
 apps/run-policy-service.sh    # terminal 3 — :8081  (start before claims)
-apps/run-claims-service.sh    # terminal 4 — :8082</code></pre>
-
-<p>Then open <span class="mono">http://localhost:5173</span> and log in. Any roster name
-works; passcodes are in <span class="mono">common/roster.py</span>.</p>
-
+apps/run-claims-service.sh    # terminal 4 — :8082
+</code></pre>
+<p>Then open <code>http://localhost:5173</code> and log in. Any roster name works; passcodes
+are in <code>common/roster.py</code>.</p>
 <table>
-  <tr><th>Login</th><th class="mono">Passcode</th><th>Role</th></tr>
-  <tr><td>Ravi Kumar</td><td class="mono">1001</td><td>Engineer — App Support, PolicyCore</td></tr>
-  <tr><td>Priya Nair</td><td class="mono">1003</td><td>Engineer — App Support, ClaimsPortal</td></tr>
-  <tr><td>Manager</td><td class="mono">9000</td><td>Manager view</td></tr>
+<thead>
+<tr>
+<th>Login</th>
+<th>Passcode</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ravi Kumar</td>
+<td>1001</td>
+<td>Engineer — App Support, PolicyCore</td>
+</tr>
+<tr>
+<td>Priya Nair</td>
+<td>1003</td>
+<td>Engineer — App Support, ClaimsPortal</td>
+</tr>
+<tr>
+<td>Manager</td>
+<td>9000</td>
+<td>Manager view</td>
+</tr>
+</tbody>
 </table>
-
-<h2>7 · Optional — seed the routing beat</h2>
-
-<p>With the console API already running, this creates a ticket that carries a ServiceNow
-Configuration Item, so the console can route it to an owning team before any AI step runs.</p>
-
-<pre><code># Default: routes to BillingGateway — an application with an owning team and
+<hr />
+<h2>7. Optional — seed the routing beat</h2>
+<p>With the console API already running, this creates a ticket that carries a
+ServiceNow Configuration Item, so the console can route it to an owning team
+before any AI step runs.</p>
+<pre><code class="language-bash"># Default: routes to BillingGateway — an application with an owning team and
 # NO repo here. Routing succeeds; automation correctly stays off.
 demo/seed_problem_record_ticket.sh
 
 # The other half: routes to a team AND offers the CR to run against it.
-SEED_CI=ClaimsPortal SEED_BUSINESS_SERVICE="Claims Management" \
-  demo/seed_problem_record_ticket.sh</code></pre>
-
-<p>Re-running with a different <span class="mono">SEED_CI</span> re-routes the same ticket;
-you do not need to reset between the two.</p>
-
-<h2>8 · The demo flow</h2>
-
+SEED_CI=ClaimsPortal SEED_BUSINESS_SERVICE=&quot;Claims Management&quot; \
+  demo/seed_problem_record_ticket.sh
+</code></pre>
+<p>Re-running with a different <code>SEED_CI</code> re-routes the same ticket; you do not
+need to reset between the two.</p>
+<hr />
+<h2>8. The demo flow</h2>
 <table>
-  <tr><th class="mono">#</th><th>Beat</th><th>What to say it proves</th></tr>
-  <tr><td class="mono">1</td><td>Open the ticket; routing panel appears above the analysis</td>
-      <td>The CI resolved to an application, owning team and repo by table lookup — no model call, nothing to confirm</td></tr>
-  <tr><td class="mono">2</td><td>Impact analysis + effort estimate</td>
-      <td>Vague tickets get a clarifying question first, rather than a confident guess</td></tr>
-  <tr><td class="mono">3</td><td>Generate code</td>
-      <td>Only the files the relevance funnel selected are sent — the token panel shows scoped vs naive cost</td></tr>
-  <tr><td class="mono">4</td><td><strong>Review file by file</strong>: Ask, Apply this file, Reject</td>
-      <td>Developers accept or reject one file at a time; a rejection records a reason to the ticket's audit trail and is excluded from Apply</td></tr>
-  <tr><td class="mono">5</td><td>Apply, then look at PolicyCore on :8501</td>
-      <td>The client's running application changed</td></tr>
-  <tr><td class="mono">6</td><td><strong>Revert</strong> (per file or all)</td>
-      <td>Anything applied can be undone without a full demo reset</td></tr>
-  <tr><td class="mono">7</td><td>Generate tests, run them, then the seeded-bug check</td>
-      <td>The generated tests actually catch a deliberately introduced bug</td></tr>
-  <tr><td class="mono">8</td><td>Design doc + release notes</td>
-      <td>Documentation drift is detected automatically after Apply, not by remembering to press a button</td></tr>
+<thead>
+<tr>
+<th>#</th>
+<th>Beat</th>
+<th>What to say it proves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Open the ticket; routing panel appears above the analysis</td>
+<td>The CI resolved to an application, owning team and repo by table lookup — no model call, nothing to confirm</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Impact analysis + effort estimate</td>
+<td>Vague tickets get a clarifying question first, rather than a confident guess</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Generate code</td>
+<td>Only the files the relevance funnel selected are sent — the token panel shows scoped vs naive cost</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Review file by file</strong>: Ask, Apply this file, Reject</td>
+<td>Developers accept or reject one file at a time; a rejection records a reason to the ticket's audit trail and is excluded from Apply</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Apply, then look at PolicyCore on :8501</td>
+<td>The client's running application changed</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Revert</strong> (per file or all)</td>
+<td>Anything applied can be undone without a full demo reset</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Generate tests, run them, then the seeded-bug check</td>
+<td>The generated tests actually catch a deliberately introduced bug</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Design doc + release notes</td>
+<td>Documentation drift is detected automatically after Apply, not by remembering to press a button</td>
+</tr>
+</tbody>
 </table>
-
-<h2>9 · Troubleshooting</h2>
-
+<p>For the full per-scenario talk track and the fallback ladder, see
+<code>demo/DEMO_TEST_GUIDE.md</code>.</p>
+<hr />
+<h2>9. Troubleshooting</h2>
 <table>
-  <tr><th>Symptom</th><th>Cause and fix</th></tr>
-  <tr>
-    <td><span class="mono">FOREIGN KEY constraint failed</span> during a reset or seed</td>
-    <td>An old baseline whose <span class="mono">wipe_db()</span> predates the endorsements
-        table. Fixed in the current scripts. If you hit it on an older checkout:
-        <span class="mono">rm -f data/mockapp.db</span> then re-run the reset.</td>
-  </tr>
-  <tr>
-    <td><span class="mono">codegen returned unexpected file set</span></td>
-    <td>A target directory under <span class="mono">apps/</span> was renamed or moved. The
-        replay recordings contain the exact paths. Restore the directory name — see the
-        warning in <span class="mono">apps/README.md</span>.</td>
-  </tr>
-  <tr>
-    <td>A beat hangs, or fails mentioning your LLM URL</td>
-    <td>A narrative beat missed its cache and called your model. Run
-        <span class="mono">demo/warm_s3_cache.sh</span>. Confirm the endpoint with the
-        one-liner in section 4.</td>
-  </tr>
-  <tr>
-    <td>Applied change crashed the portal</td>
-    <td>Expected and handled — the console shows the migration traceback with a one-click
-        fix. You can also press <strong>Revert all</strong>.</td>
-  </tr>
-  <tr>
-    <td>Console UI loads but every call 401s</td>
-    <td>Not logged in, or the API on :8000 is not running. Check terminal 1.</td>
-  </tr>
-  <tr>
-    <td>Claims-Service errors on a claim</td>
-    <td>Policy-Service on :8081 is not up. Claims calls policy over HTTP; start #3 first.</td>
-  </tr>
-  <tr>
-    <td>Port already in use</td>
-    <td><span class="mono">lsof -ti:8000 | xargs kill</span> (repeat per port). Note that
-        <span class="mono">--reload</span> is deliberately not used on the API: the reloader
-        restarts mid-beat when codegen writes to the tree.</td>
-  </tr>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause and fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FOREIGN KEY constraint failed</code> during a reset or seed</td>
+<td>An old baseline whose <code>wipe_db()</code> predates the endorsements table. Fixed in the current scripts. If you hit it on an older checkout: <code>rm -f data/mockapp.db</code>, then re-run the reset.</td>
+</tr>
+<tr>
+<td><code>codegen returned unexpected file set</code></td>
+<td>A target directory under <code>apps/</code> was renamed or moved. The replay recordings contain the exact paths. Restore the directory name — see the warning in <code>apps/README.md</code>.</td>
+</tr>
+<tr>
+<td>A beat hangs, or fails mentioning your LLM URL</td>
+<td>A narrative beat missed its cache and called your model. Run <code>demo/warm_s3_cache.sh</code>. Confirm the endpoint with the one-liner in section 4.</td>
+</tr>
+<tr>
+<td>Applied change crashed the portal</td>
+<td>Expected and handled — the console shows the migration traceback with a one-click fix. You can also press <strong>Revert all</strong>.</td>
+</tr>
+<tr>
+<td>Console UI loads but every call 401s</td>
+<td>Not logged in, or the API on :8000 is not running. Check terminal 1.</td>
+</tr>
+<tr>
+<td>Claims-Service errors on a claim</td>
+<td>Policy-Service on :8081 is not up. Claims calls policy over HTTP; start #3 first.</td>
+</tr>
+<tr>
+<td>Port already in use</td>
+<td><code>lsof -ti:8000 | xargs kill</code> (repeat per port). Note that <code>--reload</code> is deliberately not used on the API: the reloader restarts mid-beat when codegen writes to the tree.</td>
+</tr>
+</tbody>
 </table>
-
-<h2>10 · Pre-demo checklist</h2>
-
+<hr />
+<h2>10. Pre-demo checklist</h2>
 <ul class="check">
-  <li><span class="mono">python -m pytest -q</span> passes</li>
-  <li><span class="mono">.env</span> has your provider block filled in, and the section-4 one-liner returned a reply</li>
-  <li>All three reset scripts ran clean, in order</li>
-  <li><span class="mono">demo/warm_s3_cache.sh</span> ran <em>after</em> the resets</li>
-  <li>Console reachable at <span class="mono">:5173</span>; you are logged in</li>
-  <li>PolicyCore reachable at <span class="mono">:8501</span> in a second window</li>
-  <li>For the ClaimsPortal CR: :8081 and :8082 both responding</li>
-  <li>You have walked beats 1–8 once, end to end, on this machine</li>
+<li><code>python -m pytest -q</code> passes</li>
+<li><code>.env</code> has your provider block filled in, and the section-4 one-liner returned a reply</li>
+<li>All three reset scripts ran clean, in order</li>
+<li><code>demo/warm_s3_cache.sh</code> ran <em>after</em> the resets</li>
+<li>Console reachable at <code>:5173</code>; you are logged in</li>
+<li>PolicyCore reachable at <code>:8501</code> in a second window</li>
+<li>For the ClaimsPortal CR: <code>:8081</code> and <code>:8082</code> both responding</li>
+<li>You have walked beats 1–8 once, end to end, on this machine</li>
 </ul>
-
-<p class="footer-note">
-  Generated for the sandbox hand-over. The four applications live under
-  <span class="mono">apps/</span>; the AI pipeline that drives them is in
-  <span class="mono">s3_enhancement/</span>, shared clients in <span class="mono">common/</span>,
-  and presenter scripts in <span class="mono">demo/</span>. Do not rename directories under
-  <span class="mono">apps/</span> — see <span class="mono">apps/README.md</span>.
-</p>
+<p class="footer-note">The four applications live under <code>apps/</code>; the AI pipeline that drives them is
+in <code>s3_enhancement/</code>, shared clients in <code>common/</code>, and presenter scripts in
+<code>demo/</code>. Do not rename directories under <code>apps/</code> — see <code>apps/README.md</code>.</p>
 
 </body>
 </html>

@@ -37,10 +37,10 @@ real client in code, data, commits, generated UI, screenshots, or docs.
 
 - Python 3.12+ with type hints and small modules.
 - The console is **React (Vite + TypeScript) over a FastAPI backend** —
-  `apps/console/web/` + `api/`. Streamlit remains only for the *mock client app*
+  `apps/console/web/` + `apps/console/api/`. Streamlit remains only for the *mock client app*
   (`apps/policycore/app.py`), which is a separate window the demo shows before/after.
 - Put pipeline, LLM, data, and domain logic in importable Python modules; keep
-  `api/` routers thin.
+  `apps/console/api/` routers thin.
 - All LLM calls must go through `common/llm.py`.
 - `LLM_PROVIDER` switches provider (Anthropic / OpenAI / Ollama / Bedrock).
   Do not let provider-specific behavior leak outside `common/llm.py`.

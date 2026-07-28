@@ -12,7 +12,7 @@ This repo has **one pipeline, three CR scenarios** riding on it:
 | 2 | AMS-102 | CR-2026-042 | MapleSure mockapp (same app) | Python | A "Priority" field on the endorsement request form |
 | 3 | AMS-103 | CR-2026-043 | ClaimsPortal (`apps/claimsportal`) | Java / Spring Boot | Per-policy deductible handling, across two microservices |
 
-All three run through the same AMS console (FastAPI + React, `api/` +
+All three run through the same AMS console (FastAPI + React, `apps/console/api/` +
 `apps/console/web/`) — the ticket you click just determines which registered
 `target_id` the pipeline analyzes/codegens against (see
 `s3_enhancement/targets.py` and `apps/console/web/src/pages/S3.tsx`'s
@@ -26,13 +26,13 @@ All three run through the same AMS console (FastAPI + React, `api/` +
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # fill in ANTHROPIC_API_KEY or OPENAI_API_KEY
-cd apps/console/web && npm install && cd ..
+cd apps/console/web && npm install && cd ../../..
 ```
 
 Sanity check the test suite before doing anything else:
 
 ```bash
-python -m pytest tests/ -q   # expect all green (194 passed as of this writing)
+python -m pytest tests/ -q   # expect all green (309 passed as of this writing)
 ```
 
 `.env` defaults to `LLM_MODE=replay`, so every generative step below works

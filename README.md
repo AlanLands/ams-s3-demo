@@ -96,7 +96,7 @@ confidence check.
 - `apps/claimsportal/` — despite the directory name, a first-class S3 target:
   the second one, "ClaimsPortal" (Java/Spring Boot). See `apps/README.md`
   for why the path can't simply be renamed
-- `api/`, `apps/console/web/` — FastAPI backend + React console (Login, Home, S3 only)
+- `apps/console/api/`, `apps/console/web/` — FastAPI backend + React console (Login, Home, S3 only)
 - `demo/` — run/reset/cache-warm scripts and presenter notes
 - `tools/` — `verify_s3_live.py` (live-demo rehearsal gate), `cost_dashboard.py`
   (token-cost reporting), `autofix/` (S3-only calibration fix loop)
