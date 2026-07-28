@@ -19,15 +19,29 @@ S1 was the shared login roster, which now lives in `common/roster.py`.
 Small CR on the "MapleSure Insurance" demo app (add a policy/claim capability):
 AI analysis → codegen → tests → docs → release notes.
 
-## Layout — two things `ls` won't tell you
+## Layout — things `ls` won't tell you
 
+- `apps/` holds the four *running* applications, one launch script each (see
+  `apps/README.md`). Everything else at the root is tooling, not an app:
+  `s3_enhancement/` is the AI pipeline, `common/` the shared clients, `demo/`
+  the presenter scripts.
+- `apps/policycore/` (was `mockapp/`) is the MapleSure portal AND S3's first
+  target — CR-2026-041 and CR-2026-042. Its Python package moved with it, so
+  imports are `apps.policycore.core.*`.
+- `apps/claimsportal/` (was `sandbox/spring-demo/`) is S3's second target —
+  "ClaimsPortal" (Java/Spring Boot, CR-2026-043, ticket AMS-103, target id
+  `springdemo-claims-deductible`). It is one folder holding two services
+  because CR-2026-043 edits files in both, so S3 treats it as a single target
+  root; they still start as two processes. Checked-in source is the pre-CR
+  baseline (snapshot in `.baseline/`); reset with `demo/reset_s3_springdemo.sh`.
+- `apps/console/` is the console: `api/` (FastAPI, run as
+  `uvicorn apps.console.api.main:app`) and `web/` (React, was `frontend/`).
 - `s3_enhancement/cache/` is the committed replay cache that makes the demo
   deterministic; `s3_enhancement/out/` is gitignored and regenerated per run.
-- `apps/` is a misleading name: the only thing in it, `spring-demo/`, IS S3's
-  second target — "ClaimsPortal" (Java/Spring Boot, CR-2026-043, ticket AMS-103,
-  target id `springdemo-claims-deductible`). Its checked-in source is the pre-CR
-  baseline (snapshot in `.baseline/`); reset with `demo/reset_s3_springdemo.sh`,
-  run with `demo/run_s3_springdemo.sh`. Do NOT move it — see below.
+- The demo reset scripts restore from `HEAD`, **not** from the `s3-baseline` /
+  `s3-endorsement-baseline` tags. Those tags predate both this layout and the
+  endorsements table, and restoring from them breaks reseeding with a FOREIGN
+  KEY error that cannot be recovered without deleting `data/mockapp.db`.
 
 ## File paths are load-bearing — don't move targets
 
@@ -40,10 +54,15 @@ Renaming or moving a target directory changes every embedding, reshuffles which
 files the relevance funnel selects, and desyncs that selection from the
 committed codegen recordings in `s3_enhancement/cache/`. The beat then dies with
 `LLMError: codegen returned unexpected file set` — in replay mode, offline, with
-no live fallback. Verified against `apps/claimsportal` on 2026-07-26.
+no live fallback. Verified against the Spring target on 2026-07-26.
 
-Moving a target is a re-record, not a rename: it needs live codegen + testgen
-runs against the new paths and a fresh `tools/verify_s3_live.py` pass.
+Moving a target is a path-rewrite across code *and* the committed recordings,
+not a `mv`. Done once, on 2026-07-28, for the `apps/` restructure: the
+recordings carry these paths both as file keys and inside the generated code's
+own `import` statements, so both had to be rewritten together, and both
+targets were re-verified generate → apply → revert afterwards. A live
+re-record was NOT needed. If you move one again, expect the same two-part
+rewrite plus a fresh end-to-end pass.
 
 ## Hard rules — carried over, still non-negotiable
 
@@ -61,7 +80,10 @@ runs against the new paths and a fresh `tools/verify_s3_live.py` pass.
 ## Open / TBD
 
 - Demo date and presentation format — TBD (see project owner for latest).
-- `apps/` is a misleading directory name for what is really S3's second
-  target. Renaming it is blocked on re-recording the CR-2026-043 replay caches
-  (see "File paths are load-bearing" above) — worth doing when there's time to
-  re-verify the beat live, not before a demo.
+- The directory-naming problem is resolved: the four applications moved under
+  `apps/` on 2026-07-28 (see Layout above). No re-record was required.
+- `deploy/aws/` lost three uncommitted files on 2026-07-28 —
+  `ams-s3-claims.service`, `ams-s3-policy.service`, `rebuild-spring.sh`. They
+  were never committed, so they are unrecoverable; the systemd units still in
+  the folder also predate the `apps/` restructure and will need their paths
+  updated before the next EC2 deploy.
