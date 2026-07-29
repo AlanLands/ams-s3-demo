@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import FileSelectionPanel from './FileSelectionPanel'
 import TokenPanel from './TokenPanel'
 import type {
@@ -15,6 +15,172 @@ const ASSIGNEE_ROSTER = ['Ravi Kumar', 'Elena Cruz', 'Priya Nair']
 function initials(name: string | null | undefined): string {
   if (!name) return '?'
   return name.trim().charAt(0).toUpperCase()
+}
+
+// The CR files in */crs/*.md all share one shape: a title line, a run of
+// "Key: Value" header lines, then "Section:" headings over hard-wrapped
+// prose or "- " bullets. Rendering that raw (white-space: pre-wrap) turned
+// the description into a wall of text where the headings, the metadata and
+// the acceptance criteria all read at the same weight. Parsing the shape
+// back out costs ~60 lines and makes the panel skimmable at demo distance.
+//
+// Anything that doesn't match the shape falls through to a paragraph, so an
+// ad-hoc ticket description still renders sensibly.
+type CrBlock =
+  | { kind: 'meta'; rows: { label: string; value: string }[] }
+  | { kind: 'heading'; text: string }
+  | { kind: 'para'; text: string }
+  | { kind: 'list'; items: string[] }
+
+const META_LINE = /^([A-Za-z][A-Za-z0-9 /()-]{0,30}):[ \t]+(\S.*)$/
+const TITLE_LINE = /^[A-Z]+-\d{4}-\d+\s*:/
+
+function unwrap(lines: string[]): string {
+  return lines.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+// One group = one blank-line-separated block of the source text.
+function parseGroup(group: string[]): CrBlock[] {
+  const metaRows = group.map((line) => line.match(META_LINE)).filter(Boolean)
+  if (metaRows.length === group.length && group.length >= 2) {
+    return [
+      {
+        kind: 'meta',
+        rows: metaRows.map((match) => ({ label: match![1], value: match![2] })),
+      },
+    ]
+  }
+
+  const blocks: CrBlock[] = []
+  let body = group
+  // A lone "Description:" / "Acceptance criteria:" line heads the block.
+  if (/^[A-Za-z][^:]{0,40}:$/.test(group[0])) {
+    const text = group[0].replace(/:$/, '')
+    // The panel is already titled "Description" — don't say it twice.
+    if (text.toLowerCase() !== 'description') blocks.push({ kind: 'heading', text })
+    body = group.slice(1)
+  }
+  if (body.length === 0) return blocks
+
+  if (body.some((line) => /^[-*]\s+/.test(line))) {
+    const items: string[] = []
+    let pending: string[] = []
+    for (const line of body) {
+      if (/^[-*]\s+/.test(line)) {
+        if (pending.length) items.push(unwrap(pending))
+        pending = [line.replace(/^[-*]\s+/, '')]
+      } else if (pending.length) {
+        pending.push(line.trim())
+      } else {
+        blocks.push({ kind: 'para', text: line.trim() })
+      }
+    }
+    if (pending.length) items.push(unwrap(pending))
+    blocks.push({ kind: 'list', items })
+    return blocks
+  }
+
+  blocks.push({ kind: 'para', text: unwrap(body) })
+  return blocks
+}
+
+function parseCrText(raw: string, summary: string): CrBlock[] {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n')
+  let start = 0
+  while (start < lines.length && !lines[start].trim()) start += 1
+  // The first line is the CR title, which the <h2> above already shows.
+  const first = (lines[start] ?? '').trim()
+  if (first && (first === summary.trim() || TITLE_LINE.test(first))) start += 1
+
+  const blocks: CrBlock[] = []
+  let group: string[] = []
+  for (const line of lines.slice(start)) {
+    if (line.trim()) {
+      group.push(line)
+    } else if (group.length) {
+      blocks.push(...parseGroup(group))
+      group = []
+    }
+  }
+  if (group.length) blocks.push(...parseGroup(group))
+  return blocks
+}
+
+// Read one "Key: Value" header off the CR. The Details rail used to hardcode
+// PolicyCore / MapleSure Product Team, which was simply wrong on the
+// ClaimsPortal CR — the CR states both, so read them from it.
+function crMeta(text: string, label: string): string | null {
+  for (const block of parseCrText(text, '')) {
+    if (block.kind !== 'meta') continue
+    const row = block.rows.find((candidate) => candidate.label.toLowerCase() === label.toLowerCase())
+    if (row) return row.value
+  }
+  return null
+}
+
+// "PolicyCore (policy/claims portal)" -> "PolicyCore": the parenthetical is
+// prose for the description panel, too long for a 250px rail.
+function shortAppName(value: string): string {
+  return value.split(' (')[0].trim()
+}
+
+// Long CRs pushed the "Run AI impact analysis" button below the fold, which
+// is the one control the demo always reaches for next. Collapse the long
+// ones behind a fade instead of making the presenter scroll past them.
+const COLLAPSE_OVER_CHARS = 900
+
+function CrDescription({ text, summary }: { text: string; summary: string | null }) {
+  const blocks = useMemo(() => parseCrText(text, summary ?? ''), [text, summary])
+  const collapsible = text.length > COLLAPSE_OVER_CHARS
+  const [expanded, setExpanded] = useState(false)
+  const collapsed = collapsible && !expanded
+
+  return (
+    <div className="ams-cr">
+      <div className={`ams-cr-body${collapsed ? ' ams-cr-body-collapsed' : ''}`}>
+        {blocks.map((block, index) => {
+          if (block.kind === 'meta') {
+            return (
+              <dl className="ams-cr-meta" key={index}>
+                {block.rows.map((row) => (
+                  <div className="ams-cr-meta-row" key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )
+          }
+          if (block.kind === 'heading') {
+            return (
+              <h4 className="ams-cr-heading" key={index}>
+                {block.text}
+              </h4>
+            )
+          }
+          if (block.kind === 'list') {
+            return (
+              <ul className="ams-cr-list" key={index}>
+                {block.items.map((item, itemIndex) => (
+                  <li key={itemIndex}>{item}</li>
+                ))}
+              </ul>
+            )
+          }
+          return (
+            <p className="ams-cr-para" key={index}>
+              {block.text}
+            </p>
+          )
+        })}
+      </div>
+      {collapsible && (
+        <button className="ams-cr-toggle" onClick={() => setExpanded(!expanded)}>
+          {expanded ? 'Show less' : 'Show full change request'}
+        </button>
+      )}
+    </div>
+  )
 }
 
 function CrossTeamImpactRow({
@@ -224,6 +390,18 @@ export default function TicketModal({
   )
   const [clarificationAnswer, setClarificationAnswer] = useState('')
 
+  const application = crMeta(crText, 'Application')
+  const crApplication = application ? shortAppName(application) : null
+  const crReporter = crMeta(crText, 'Requested by')
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   function submitClarificationAnswer() {
     const trimmed = clarificationAnswer.trim()
     if (!trimmed) return
@@ -238,6 +416,7 @@ export default function TicketModal({
           <div className="ams-modal-breadcrumb">
             {crLabel && <>{crLabel} / </>}
             <strong>{issue.key}</strong>
+            <span className="ams-modal-status">{issue.status || 'To Do'}</span>
           </div>
           <button className="ams-modal-close" onClick={onClose} aria-label="Close">
             ×
@@ -251,9 +430,7 @@ export default function TicketModal({
             <div className="ams-modal-section">
               <div className="ams-modal-section-title">Description</div>
               {crText || issue.description ? (
-                <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.88rem' }}>
-                  {crText || issue.description}
-                </div>
+                <CrDescription text={crText || issue.description || ''} summary={issue.summary} />
               ) : (
                 <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)' }}>
                   No description on file for this ticket.
@@ -484,41 +661,56 @@ export default function TicketModal({
           </div>
 
           <aside className="ams-modal-details">
-            <div className="ams-modal-section-title">Details</div>
-            <dl>
-              <dt>Status</dt>
-              <dd>{issue.status || 'To Do'}</dd>
-              <dt>Assignee</dt>
-              <dd style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                {issue.assignee ? (
-                  <>
-                    <span className="ams-avatar">{initials(issue.assignee)}</span>
-                    {issue.assignee}
-                  </>
-                ) : (
-                  'Unassigned'
-                )}
-              </dd>
-              <dt>Application</dt>
-              <dd>{crLabel ? 'PolicyCore' : '—'}</dd>
-              <dt>Reporter</dt>
-              <dd>{crLabel ? 'MapleSure Product Team' : 'AMS Console (auto-created)'}</dd>
-              <dt>Origin</dt>
-              <dd>
-                {issue.origin === 'problem_record' ? (
-                  <>
-                    Problem record
-                    {issue.problem_id && (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)' }}>
-                        {issue.problem_id}
-                      </div>
+            <div className="ams-modal-details-inner">
+              <div className="ams-modal-section-title">Details</div>
+              <dl>
+                <div className="ams-modal-detail-row">
+                  <dt>Status</dt>
+                  <dd>{issue.status || 'To Do'}</dd>
+                </div>
+                <div className="ams-modal-detail-row">
+                  <dt>Assignee</dt>
+                  <dd style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    {issue.assignee ? (
+                      <>
+                        <span className="ams-avatar">{initials(issue.assignee)}</span>
+                        {issue.assignee}
+                      </>
+                    ) : (
+                      'Unassigned'
                     )}
-                  </>
-                ) : (
-                  'Business CR'
-                )}
-              </dd>
-            </dl>
+                  </dd>
+                </div>
+                <div className="ams-modal-detail-row">
+                  <dt>Application</dt>
+                  <dd>{crApplication ?? (crLabel ? 'PolicyCore' : '—')}</dd>
+                </div>
+                <div className="ams-modal-detail-row">
+                  <dt>Reporter</dt>
+                  <dd>
+                    {crReporter ??
+                      (crLabel ? 'MapleSure Product Team' : 'AMS Console (auto-created)')}
+                  </dd>
+                </div>
+                <div className="ams-modal-detail-row">
+                  <dt>Origin</dt>
+                  <dd>
+                    {issue.origin === 'problem_record' ? (
+                      <>
+                        Problem record
+                        {issue.problem_id && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)' }}>
+                            {issue.problem_id}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      'Business CR'
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </aside>
         </div>
       </div>

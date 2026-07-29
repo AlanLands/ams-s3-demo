@@ -435,9 +435,23 @@ a:hover {
 .ams-modal-breadcrumb {
   font-size: 0.85rem;
   color: var(--ams-ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 .ams-modal-breadcrumb strong {
   color: var(--ams-ink);
+}
+.ams-modal-status {
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--ams-accent-soft);
+  color: var(--ams-accent-ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .ams-modal-close {
   border: none;
@@ -453,18 +467,26 @@ a:hover {
   background: var(--ams-surface);
   color: var(--ams-ink);
 }
+/* Grid, not flex: a stretched flex item takes the *container's* height, so
+   the details rail's background stopped mid-panel as soon as the body
+   scrolled. A grid row sizes to the taller column, so the rail runs the
+   full height of the content. */
 .ams-modal-body {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
   overflow-y: auto;
 }
 .ams-modal-main {
-  flex: 1;
   min-width: 0;
   padding: 1.25rem 1.25rem 2rem;
 }
 .ams-modal-main h2 {
-  font-size: 1.3rem;
-  margin-bottom: 1rem;
+  font-size: 1.35rem;
+  line-height: 1.3;
+  margin-bottom: 1.1rem;
+  /* Hold the title to a readable measure — CR summaries run long and a
+     full-width 700px line is hard to scan from the back of a room. */
+  max-width: 40ch;
 }
 .ams-modal-section {
   margin-top: 1.75rem;
@@ -478,29 +500,137 @@ a:hover {
   margin-bottom: 0.6rem;
 }
 .ams-modal-details {
-  width: 250px;
-  flex-shrink: 0;
   border-left: 1px solid var(--ams-line);
   padding: 1.25rem 1.1rem;
   background: var(--ams-surface);
 }
+@media (max-width: 900px) {
+  .ams-modal-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ams-modal-details {
+    border-left: none;
+    border-top: 1px solid var(--ams-line);
+  }
+  .ams-modal-details-inner {
+    position: static;
+  }
+}
+/* The body scrolls as one column, so pin the details rail to the top of it —
+   status and assignee stay readable while you scroll a long analysis. */
+.ams-modal-details-inner {
+  position: sticky;
+  top: 0;
+}
 .ams-modal-details dl {
   margin: 0;
 }
+.ams-modal-detail-row {
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--ams-line);
+}
+.ams-modal-detail-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
 .ams-modal-details dt {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--ams-ink-soft);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-top: 1rem;
-}
-.ams-modal-details dt:first-child {
-  margin-top: 0;
+  letter-spacing: 0.05em;
 }
 .ams-modal-details dd {
-  margin: 0.2rem 0 0;
+  margin: 0.25rem 0 0;
   font-size: 0.88rem;
   font-weight: 600;
+}
+
+/* Parsed change-request body (see TicketModal's CrDescription). */
+.ams-cr-body {
+  font-size: 0.88rem;
+}
+.ams-cr-body-collapsed {
+  max-height: 19rem;
+  overflow: hidden;
+  /* Fade the cut edge rather than slicing a line in half, so it reads as
+     "there is more" and not as a rendering bug. */
+  mask-image: linear-gradient(to bottom, #000 74%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent 100%);
+}
+.ams-cr-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: 6px;
+}
+.ams-cr-meta-row dt {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ams-ink-soft);
+}
+.ams-cr-meta-row dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.ams-cr-heading {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ams-accent-ink);
+  margin: 1.15rem 0 0.4rem;
+}
+.ams-cr-body > *:first-child {
+  margin-top: 0;
+}
+/* Prose is held to a readable measure; the metadata card above is not, so it
+   can lay out three or four columns across the full panel width. */
+.ams-cr-para {
+  margin: 0 0 0.7rem;
+  line-height: 1.6;
+  max-width: 68ch;
+}
+.ams-cr-list {
+  list-style: none;
+  margin: 0 0 0.7rem;
+  padding: 0;
+  max-width: 68ch;
+}
+.ams-cr-list li {
+  position: relative;
+  padding-left: 1.1rem;
+  margin-bottom: 0.45rem;
+  line-height: 1.55;
+}
+.ams-cr-list li::before {
+  content: '';
+  position: absolute;
+  left: 0.1rem;
+  top: 0.55em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ams-accent);
+}
+.ams-cr-toggle {
+  margin-top: 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ams-accent);
+  cursor: pointer;
+}
+.ams-cr-toggle:hover {
+  text-decoration: underline;
 }
 .ams-modal-link {
   color: var(--ams-info);
