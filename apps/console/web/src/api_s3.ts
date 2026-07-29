@@ -2,7 +2,7 @@
 // Mirrors the api/routers/s3.py response shapes exactly — no client-side
 // business logic, same "thin view" convention as api.ts's s1Api/s2Api.
 
-import { request } from './api'
+import { ApiError, request } from './api'
 
 export interface SubsystemScreen {
   in_scope: string[]
@@ -252,6 +252,63 @@ export interface TestsRunResponse {
   cases: TestCaseResult[]
 }
 
+// One planned check, before any test code exists. Editable by the tester —
+// the console treats this as a draft document, not a server-owned record.
+export interface TestScenario {
+  id: string
+  title: string
+  kind: 'positive' | 'negative' | 'boundary' | 'regression'
+  acceptance_criteria: string[]
+  preconditions: string
+  test_data: string
+  steps: string[]
+  expected: string
+}
+
+export interface AcceptanceCriterion {
+  id: string
+  text: string
+  is_regression: boolean
+}
+
+export interface ScenariosResponse {
+  label: string
+  scenarios: TestScenario[]
+  criteria: AcceptanceCriterion[]
+  uncovered_criteria: string[]
+  token_panel: TokenPanel
+}
+
+export interface ScenarioApprovalResponse {
+  scenarios: TestScenario[]
+  uncovered_criteria: string[]
+  approved_by: string
+}
+
+export type TraceStatus = 'passed' | 'failed' | 'not_automated' | 'no_scenario' | 'not_run'
+
+export interface TraceabilityRow {
+  criterion_id: string
+  criterion_text: string
+  is_regression: boolean
+  scenario_ids: string[]
+  test_names: string[]
+  status: TraceStatus
+  covered_by: 'generated' | 'regression' | ''
+}
+
+export interface TraceabilityResponse {
+  rows: TraceabilityRow[]
+  summary: Record<TraceStatus | 'total', number>
+}
+
+// The target app's checked-in, pre-existing suite. No `label` — nothing here
+// is AI output, and labelling a human-authored regression run as an AI
+// suggestion would be a lie the rest of this console is careful not to tell.
+export interface RegressionRunResponse extends Omit<TestsRunResponse, 'label'> {
+  suite_paths: string[]
+}
+
 // The "prove the tests catch bugs" beat: a seeded bug is injected, the suite
 // re-run, and the working tree reverted server-side before this returns.
 export interface MutationCheckResponse extends TestsRunResponse {
@@ -270,6 +327,49 @@ export interface ReleaseNotesResponse {
 export interface DesignDocResponse {
   label: string
   design_doc: string
+  // Inline SVG change map, derived server-side from the changed-file set —
+  // see s3_enhancement/diagram.py. Not model output.
+  diagram_svg: string
+  diagram_caption: string
+  changed_files: string[]
+}
+
+export interface ReleaseNoteSet {
+  changelog: string
+  ops_note: string
+  whats_new: string
+}
+
+export interface PlanStep {
+  order: number
+  kind: 'deploy' | 'migrate' | 'verify' | 'rollback'
+  title: string
+  detail: string
+  command: string
+}
+
+// Derived from the change's own service graph — see s3_enhancement/release.py.
+// No model call, so it arrives with the notes rather than behind its own button.
+export interface DeploymentPlan {
+  steps: PlanStep[]
+  rollback: PlanStep[]
+  service_order: string[]
+  order_reason: string
+}
+
+export interface ReleaseNotesResponse2 {
+  label: string
+  notes: ReleaseNoteSet
+  plan: DeploymentPlan
+  token_panel: TokenPanel
+}
+
+export interface ReleaseAttachResponse {
+  attached: boolean
+  simulated: boolean
+  filename: string
+  size_bytes: number
+  detail: string
 }
 
 export interface HarnessStatus {
@@ -565,22 +665,56 @@ export const s3Api = {
         ticket_number: ticketNumber ?? null,
       }),
     }),
-  designDoc: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
+  designDoc: (
+    tierName: string,
+    targetId?: string | null,
+    ticketNumber?: string,
+    downstreamApps?: string[]
+  ) =>
     request<DesignDocResponse>('/api/s3/design-doc', {
       method: 'POST',
       body: JSON.stringify({
         tier_name: tierName,
         target_id: targetId ?? null,
         ticket_number: ticketNumber ?? null,
+        downstream_apps: downstreamApps ?? [],
       }),
     }),
+  // Returns a file, not JSON, so it bypasses `request` — which parses every
+  // response as JSON and would choke on PDF bytes. Errors still surface as
+  // ApiError so the 503 "no chromium" fallback can be caught by status.
+  designDocDocument: async (
+    tierName: string,
+    format: 'pdf' | 'html',
+    targetId?: string | null,
+    ticketNumber?: string,
+    downstreamApps?: string[]
+  ): Promise<Blob> => {
+    const response = await fetch('/api/s3/design-doc/document', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        downstream_apps: downstreamApps ?? [],
+        format,
+      }),
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      throw new ApiError(response.status, body.detail ?? response.statusText)
+    }
+    return response.blob()
+  },
   tests: (tierName: string, targetId?: string | null) =>
     request<TestsResponse>('/api/s3/tests', {
       method: 'POST',
       body: JSON.stringify({ tier_name: tierName, target_id: targetId ?? null }),
     }),
-  testsGenerate: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
-    request<TestsGenerateResponse>('/api/s3/tests/generate', {
+  testsScenarios: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
+    request<ScenariosResponse>('/api/s3/tests/scenarios', {
       method: 'POST',
       body: JSON.stringify({
         tier_name: tierName,
@@ -588,8 +722,66 @@ export const s3Api = {
         ticket_number: ticketNumber ?? null,
       }),
     }),
+  testsScenariosApprove: (
+    tierName: string,
+    scenarios: TestScenario[],
+    targetId?: string | null,
+    ticketNumber?: string
+  ) =>
+    request<ScenarioApprovalResponse>('/api/s3/tests/scenarios/approve', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        scenarios,
+      }),
+    }),
+  testsTraceability: (
+    tierName: string,
+    scenarios: TestScenario[],
+    generatedCases: TestCaseResult[],
+    regressionCases: TestCaseResult[],
+    targetId?: string | null,
+    ticketNumber?: string
+  ) =>
+    request<TraceabilityResponse>('/api/s3/tests/traceability', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        scenarios,
+        generated_cases: generatedCases,
+        regression_cases: regressionCases,
+      }),
+    }),
+  testsGenerate: (
+    tierName: string,
+    targetId?: string | null,
+    ticketNumber?: string,
+    scenarios?: TestScenario[] | null
+  ) =>
+    request<TestsGenerateResponse>('/api/s3/tests/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        scenarios: scenarios ?? null,
+      }),
+    }),
   testsRun: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
     request<TestsRunResponse>('/api/s3/tests/run', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  testsRegression: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
+    request<RegressionRunResponse>('/api/s3/tests/regression', {
       method: 'POST',
       body: JSON.stringify({
         tier_name: tierName,
@@ -606,6 +798,41 @@ export const s3Api = {
         ticket_number: ticketNumber ?? null,
       }),
     }),
+  releaseNoteSet: (
+    tierName: string,
+    targetId?: string | null,
+    ticketNumber?: string,
+    downstreamApps?: string[]
+  ) =>
+    request<ReleaseNotesResponse2>('/api/s3/release/notes', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        downstream_apps: downstreamApps ?? [],
+      }),
+    }),
+  releaseRecordAttach: (body: Record<string, unknown>) =>
+    request<ReleaseAttachResponse>('/api/s3/release/attach', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  // File download, so it bypasses `request` for the same reason the design
+  // doc export does — `request` parses every response as JSON.
+  releaseRecord: async (body: Record<string, unknown>): Promise<Blob> => {
+    const response = await fetch('/api/s3/release/record', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}))
+      throw new ApiError(response.status, errorBody.detail ?? response.statusText)
+    }
+    return response.blob()
+  },
   releaseNotes: (tierName: string, targetId?: string | null) =>
     request<ReleaseNotesResponse>('/api/s3/release-notes', {
       method: 'POST',

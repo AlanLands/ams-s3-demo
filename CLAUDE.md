@@ -38,6 +38,13 @@ AI analysis → codegen → tests → docs → release notes.
   `uvicorn apps.console.api.main:app`) and `web/` (React, was `frontend/`).
 - `s3_enhancement/cache/` is the committed replay cache that makes the demo
   deterministic; `s3_enhancement/out/` is gitignored and regenerated per run.
+- `tests/` holds both the pipeline's own tests **and** the target apps'
+  checked-in regression suite (`test_regression_policycore.py`). The
+  regression suites are deliberately outside every target root: anything
+  ending `.py`/`.java` under a target root joins the codegen candidate pool
+  (see below). The Java one is the exception and lives at
+  `apps/claimsportal/policy-service/src/test/` — safe only because
+  `relevance.py` now excludes `test`/`tests` directories from discovery.
 - The demo reset scripts restore from `HEAD`, **not** from the `s3-baseline` /
   `s3-endorsement-baseline` tags. Those tags predate both this layout and the
   endorsements table, and restoring from them breaks reseeding with a FOREIGN
@@ -63,6 +70,60 @@ own `import` statements, so both had to be rewritten together, and both
 targets were re-verified generate → apply → revert afterwards. A live
 re-record was NOT needed. If you move one again, expect the same two-part
 rewrite plus a fresh end-to-end pass.
+
+## Release artifacts
+
+`s3_enhancement/release.py` holds the deployment plan and the release record.
+The plan is **derived** — deploy order comes from the change map's service
+graph (callee before caller), the migration step from the target's
+`post_apply_command`, verification from its regression suite. No LLM.
+
+The release record is an assembly of what the run produced, and its
+"Not evidenced by this release" block is load-bearing: a release document
+that only lists successes is marketing. `unproven_claims()` is what keeps it
+honest — extend that when you add evidence, not just the happy path.
+
+Approvals in the record come from `common/ticket_events.py` server-side, never
+from the client posting them. `POST /s3/release/attach` really uploads only
+when `JIRA_MODE` is not `replay`; under the demo default it records the intent
+and reports `simulated: true`. Don't "fix" that into a fake success.
+
+Release notes are now three audience-specific fields (`draft_release_note_set`,
+cache beat `release_note_set`). The older single-blob `draft_release_notes`
+still exists for the legacy `/release-notes` endpoint and the rehearsal
+scripts — the two must keep separate cache keys, or replay hands JSON to a
+caller expecting prose.
+
+## Two things in the QA hand-off are deliberately not AI output
+
+`s3_enhancement/diagram.py` (the design doc's change map) and
+`s3_enhancement/acceptance.py` (the traceability matrix's criteria column) are
+both pure functions of data already on hand — the changed-file set and the CR
+text. No LLM call, so no cache key, no warming, and nothing to go wrong on a
+cache miss. Keep it that way: the moment either becomes model output it needs
+a replay recording and can be confidently wrong on stage. The diagram's
+provenance caption (`diagram.caption_for`) exists to say so in the document,
+and only claims the parts a given diagram actually contains.
+
+PDF export renders server-side through Playwright's chromium
+(`s3_enhancement/designdoc.py`). Chromium is an optional runtime dependency:
+missing browser → `PdfUnavailableError` → HTTP 503 → the console falls back to
+browser print. Do not turn that 503 into a 500.
+
+## The regression suites are the AI's blind spot on purpose
+
+`Target.regression_paths` / `regression_command` name a checked-in,
+human-authored suite per target. Nothing in the pipeline may write to those
+paths — `tests/test_s3_testrun.py` asserts they never appear in a
+`testgen_allowlist` or `codegen_allowlist`, and that assertion is the whole
+value of the beat. If you ever need S3 to generate into one of them, you have
+removed the only independent check that a CR broke nothing.
+
+Two rules for anything added to them: it must pass **before and after** every
+CR (they are invariants, not assertions about the change under test), and it
+must stay out of the target roots for the corpus reason above. Both suites
+were verified pre-CR, post-CR, and against three injected breakages on
+2026-07-29.
 
 ## Hard rules — carried over, still non-negotiable
 

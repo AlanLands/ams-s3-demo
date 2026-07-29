@@ -47,6 +47,8 @@ _LEGACY_CACHE_KEYS: dict[str, str] = {
     # just following the same naming convention for the default target.
     "cross_team_impact": "s3_cross_team_impact:coverage_upgrade:v1",
     "design_doc": "s3_design_doc:coverage_upgrade:v1",
+    "test_scenarios": "s3_test_scenarios:coverage_upgrade:v1",
+    "release_note_set": "s3_release_note_set:coverage_upgrade:v1",
 }
 _LEGACY_STREAM_CACHE_KEYS: dict[str, str] = {
     "codegen": "s3_codegen",
@@ -132,11 +134,27 @@ class Target:
     test_command: tuple[str, ...] = ()
     test_cwd: Path | None = None
 
+    # The target app's checked-in, human-authored regression suite — the tests
+    # that existed *before* this CR and must still pass after it. Deliberately
+    # separate from testgen_allowlist: nothing in the S3 pipeline may write to
+    # these paths, which is what makes "the pre-existing tests still pass" a
+    # result rather than a promise. `regression_paths` is the pytest form;
+    # `regression_command`/`regression_cwd` mirror test_command/test_cwd for a
+    # target whose regression suite runs under another runner. Empty means the
+    # target has no regression suite and the console hides the beat.
+    regression_paths: tuple[str, ...] = ()
+    regression_command: tuple[str, ...] = ()
+    regression_cwd: Path | None = None
+
     # Seeded bugs for the /s3/tests/mutation beat, tried in declaration order
     # (see Mutation). Empty means the beat is unavailable for this target.
     mutations: tuple[Mutation, ...] = ()
 
     cache_namespace: str = ""
+
+    @property
+    def has_regression_suite(self) -> bool:
+        return bool(self.regression_paths or self.regression_command)
 
     def cache_key(self, beat: str) -> str:
         """Cache key for `common.llm.complete()`'s hash-keyed narrative cache."""
@@ -201,6 +219,7 @@ MOCKAPP_COVERAGE_UPGRADE = Target(
         "apps/policycore/app.py",
     ),
     testgen_allowlist=("tests/test_s3_coverage_upgrade.py",),
+    regression_paths=("tests/test_regression_policycore.py",),
     harness_expected_files=(
         "apps/policycore/core/models.py",
         "apps/policycore/core/db.py",
@@ -249,6 +268,7 @@ MOCKAPP_ENDORSEMENT_FIELD_ADD = Target(
         "apps/policycore/app.py",
     ),
     testgen_allowlist=("tests/test_s3_endorsement_priority.py",),
+    regression_paths=("tests/test_regression_policycore.py",),
     harness_expected_files=(),
     post_apply_command=("{python}", "-m", "apps.policycore.core.seed"),
     mutations=(
@@ -308,6 +328,12 @@ SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
     language="java",
     test_command=("mvn", "-q", "-Dtest=ClaimRulesTest", "test"),
     test_cwd=_SPRING_ROOT / "claims-service",
+    # policy-service, not claims-service: CR-2026-043 edits both, and the
+    # regression risk that matters is the existing policy lookup API the
+    # claims side binds to over HTTP. The generated ClaimRulesTest covers the
+    # new deductible rules; this covers what was already there.
+    regression_command=("mvn", "-q", "-Dtest=PolicyApiRegressionTest", "test"),
+    regression_cwd=_SPRING_ROOT / "policy-service",
     mutations=(
         Mutation(
             rel_path=f"{_SPRING_CLAIMS_SRC}/ClaimRules.java",

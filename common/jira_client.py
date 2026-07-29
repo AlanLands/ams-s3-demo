@@ -258,8 +258,12 @@ class JiraClient:
         """Attach a file (e.g. a before/after screenshot PNG) to an issue."""
         call_name = "attach_file"
         args = {"key": key, "filename": filename}
-        content_digest = hashlib.sha256(content).hexdigest()[:16]
-        path = _cache_path(call_name, f"{key}|{filename}|{content_digest}")
+        # Keyed by ticket and filename only. The content digest used to be in
+        # the key, which makes a recording unreplayable for any generated
+        # attachment: a rendered PDF embeds a creation timestamp, so its bytes
+        # differ every run and the lookup could never hit. Two attachments of
+        # the same filename to the same ticket are the same demo beat.
+        path = _cache_path(call_name, f"{key}|{filename}")
         mode = _jira_mode()
         if mode == "replay":
             response = _read_cache(path)

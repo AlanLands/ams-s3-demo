@@ -3,6 +3,8 @@ import { ApiError } from '../api'
 import { useAuth } from '../AuthContext'
 import FileSelectionPanel from '../FileSelectionPanel'
 import TicketModal from '../TicketModal'
+import { DeploymentPlanPanel, ReleaseNotes } from '../ReleasePanel'
+import ScenarioPlan, { TraceabilityMatrix } from '../TestPlanPanel'
 import TokenPanel from '../TokenPanel'
 import {
   s3Api,
@@ -14,6 +16,13 @@ import {
   type GenerateResponse,
   type JiraIssue,
   type MutationCheckResponse,
+  type DeploymentPlan,
+  type RegressionRunResponse,
+  type ReleaseAttachResponse,
+  type ReleaseNoteSet,
+  type ScenariosResponse,
+  type TestScenario,
+  type TraceabilityResponse,
   type PostApplyResult,
   type QuickChatResponse,
   type TestCaseResult,
@@ -100,12 +109,29 @@ interface PersistedTicketState {
   // the tester logs in later and continues from tests without re-running
   // the developer's stages.
   designDoc?: string
+  // The change map is derived server-side from the changed-file set, so
+  // it is cheap to rebuild — persisted only so a reload shows the same
+  // document the tester was looking at, not because it is expensive.
+  designDiagram?: string
+  designDiagramCaption?: string
   // The three-beat tests stage: reviewable generated tests, the parsed run,
   // and the seeded-bug "prove the tests catch bugs" check.
+  // The test plan is persisted alongside the artifacts it produced: a
+  // tester who edited the scenarios, then logged back in, must not find
+  // their edits gone while the suite generated from them is still here.
+  scenarioDraft?: ScenariosResponse
+  scenarios?: TestScenario[]
+  scenariosApprovedBy?: string
+  traceability?: TraceabilityResponse
   testsGenerated?: TestsGenerateResponse
   testsRun?: TestsRunResponse
+  regressionRun?: RegressionRunResponse
   mutationCheck?: MutationCheckResponse
-  releaseNotes?: string
+  // The three-audience notes and the derived plan. Persisted together
+  // because the release stage is the one a presenter is most likely to
+  // reload into part-way through.
+  releaseNoteSet?: ReleaseNoteSet
+  deploymentPlan?: DeploymentPlan
 }
 
 function loadTicketState(ticketKey: string): PersistedTicketState {
@@ -170,14 +196,6 @@ function renderInlineBold(text: string): ReactNode[] {
     .map((part, index) => (index % 2 === 1 ? <strong key={index}>{part}</strong> : part))
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-}
-
 function downloadFile(filename: string, mime: string, content: string): void {
   const url = URL.createObjectURL(new Blob([content], { type: mime }))
   const anchor = document.createElement('a')
@@ -187,46 +205,13 @@ function downloadFile(filename: string, mime: string, content: string): void {
   URL.revokeObjectURL(url)
 }
 
-function buildDesignDocHtml(text: string, crLabel: string, ticketKey: string): string {
-  const inline = (value: string) =>
-    escapeHtml(value).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  const body: string[] = []
-  let openList = false
-  for (const block of parseDocBlocks(text)) {
-    if (block.type === 'bullet' && !openList) {
-      body.push('<ul>')
-      openList = true
-    } else if (block.type !== 'bullet' && openList) {
-      body.push('</ul>')
-      openList = false
-    }
-    if (block.type === 'heading') body.push(`<h2>${inline(block.text)}</h2>`)
-    else if (block.type === 'bullet') body.push(`<li>${inline(block.text)}</li>`)
-    else body.push(`<p>${inline(block.text)}</p>`)
-  }
-  if (openList) body.push('</ul>')
-  const date = new Date().toLocaleDateString('en-CA', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-  return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(crLabel)} — Design Document</title>
-<style>
-  body { font-family: Georgia, 'Times New Roman', serif; max-width: 760px; margin: 3rem auto; padding: 0 1.5rem; color: #1e293b; line-height: 1.55; }
-  .letterhead { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 3px double #94a3b8; padding-bottom: .6rem; }
-  .letterhead .org { font-size: 1.15rem; font-weight: 700; letter-spacing: .02em; }
-  .letterhead .kind { font-size: .8rem; color: #64748b; text-transform: uppercase; letter-spacing: .1em; }
-  .meta { font-size: .85rem; color: #475569; margin: .8rem 0 1.6rem; }
-  h2 { font-size: 1.05rem; margin: 1.4rem 0 .4rem; border-bottom: 1px solid #e2e8f0; padding-bottom: .2rem; }
-  .label { margin-top: 2.2rem; font-size: .75rem; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: .6rem; }
-</style></head><body>
-<div class="letterhead"><span class="org">MapleSure Insurance</span><span class="kind">Internal Design Document</span></div>
-<div class="meta">${escapeHtml(crLabel)} · Ticket ${escapeHtml(ticketKey)} · ${date} · Engineering → QA hand-off</div>
-${body.join('\n')}
-<div class="label">${escapeHtml(AI_LABEL)}</div>
-</body></html>
-`
+function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
 }
 
 // Backend equivalent of the above: demo/reset_s3.sh clears the server's
@@ -363,7 +348,13 @@ function TestCaseTable({ cases }: { cases: TestCaseResult[] }) {
   )
 }
 
-function RunSummaryLine({ run }: { run: TestsRunResponse }) {
+// Structural, not nominal: the regression run carries no AI `label`, and this
+// line only ever reads the three counters.
+function RunSummaryLine({
+  run,
+}: {
+  run: Pick<TestsRunResponse, 'passed' | 'summary' | 'duration_s'>
+}) {
   const parts: string[] = [`${run.summary.passed} passed`]
   if (run.summary.failed) parts.push(`${run.summary.failed} failed`)
   if (run.summary.errors) parts.push(`${run.summary.errors} errored`)
@@ -502,6 +493,9 @@ export default function S3() {
   const [addFileError, setAddFileError] = useState<string | null>(null)
 
   const [designDoc, setDesignDoc] = useState<string | null>(null)
+  const [designDiagram, setDesignDiagram] = useState<string | null>(null)
+  const [designDiagramCaption, setDesignDiagramCaption] = useState<string | null>(null)
+  const [exportingDoc, setExportingDoc] = useState<string | null>(null)
   const [qaTester, setQaTester] = useState<string>(TESTER_ROSTER[0])
   const [handingOff, setHandingOff] = useState(false)
   const [handoffError, setHandoffError] = useState<string | null>(null)
@@ -513,12 +507,26 @@ export default function S3() {
   const [generatingTests, setGeneratingTests] = useState(false)
   const [testsRun, setTestsRun] = useState<TestsRunResponse | null>(null)
   const [runningTests, setRunningTests] = useState(false)
+  const [scenarioDraft, setScenarioDraft] = useState<ScenariosResponse | null>(null)
+  const [scenarios, setScenarios] = useState<TestScenario[]>([])
+  const [scenariosApprovedBy, setScenariosApprovedBy] = useState<string | null>(null)
+  const [draftingScenarios, setDraftingScenarios] = useState(false)
+  const [approvingScenarios, setApprovingScenarios] = useState(false)
+  const [traceability, setTraceability] = useState<TraceabilityResponse | null>(null)
+  const [buildingMatrix, setBuildingMatrix] = useState(false)
+  const [regressionRun, setRegressionRun] = useState<RegressionRunResponse | null>(null)
+  const [runningRegression, setRunningRegression] = useState(false)
   const [mutationCheck, setMutationCheck] = useState<MutationCheckResponse | null>(null)
   const [mutating, setMutating] = useState(false)
   const [testError, setTestError] = useState<string | null>(null)
 
-  const [releaseNotes, setReleaseNotes] = useState<string | null>(null)
   const [draftingNotes, setDraftingNotes] = useState(false)
+  const [releaseNoteSet, setReleaseNoteSet] = useState<ReleaseNoteSet | null>(null)
+  const [deploymentPlan, setDeploymentPlan] = useState<DeploymentPlan | null>(null)
+  const [exportingRecord, setExportingRecord] = useState(false)
+  const [attachingRecord, setAttachingRecord] = useState(false)
+  const [attachResult, setAttachResult] = useState<ReleaseAttachResponse | null>(null)
+  const [releaseError, setReleaseError] = useState<string | null>(null)
 
   const [openStage, setOpenStage] = useState<Stage | null>(null)
 
@@ -932,6 +940,146 @@ export default function S3() {
     }
   }
 
+  async function handleDraftScenarios() {
+    if (!activeTicketKey) return
+    const active = TICKET_TARGETS[activeTicketKey]
+    setDraftingScenarios(true)
+    setTestError(null)
+    try {
+      const result = await s3Api.testsScenarios(
+        active?.tierName ?? 'Elite',
+        active?.targetId,
+        activeTicketKey
+      )
+      setScenarioDraft(result)
+      setScenarios(result.scenarios)
+      // A fresh draft is not an approved plan, and anything derived from the
+      // old one is now stale.
+      setScenariosApprovedBy(null)
+      setTraceability(null)
+      saveTicketState(activeTicketKey, {
+        scenarioDraft: result,
+        scenarios: result.scenarios,
+        scenariosApprovedBy: undefined,
+        traceability: undefined,
+      })
+    } catch (err) {
+      setTestError(err instanceof ApiError ? err.message : 'Scenario drafting failed.')
+    } finally {
+      setDraftingScenarios(false)
+    }
+  }
+
+  function handleScenariosChange(next: TestScenario[]) {
+    if (!activeTicketKey) return
+    setScenarios(next)
+    // Editing after approval withdraws the approval — the signature was on
+    // the previous list, not this one.
+    setScenariosApprovedBy(null)
+    saveTicketState(activeTicketKey, { scenarios: next, scenariosApprovedBy: undefined })
+  }
+
+  async function handleApproveScenarios() {
+    if (!activeTicketKey) return
+    const active = TICKET_TARGETS[activeTicketKey]
+    setApprovingScenarios(true)
+    setTestError(null)
+    try {
+      const result = await s3Api.testsScenariosApprove(
+        active?.tierName ?? 'Elite',
+        scenarios,
+        active?.targetId,
+        activeTicketKey
+      )
+      setScenariosApprovedBy(result.approved_by)
+      setScenarioDraft((current) =>
+        current ? { ...current, uncovered_criteria: result.uncovered_criteria } : current
+      )
+      saveTicketState(activeTicketKey, { scenariosApprovedBy: result.approved_by })
+    } catch (err) {
+      setTestError(err instanceof ApiError ? err.message : 'Could not approve the plan.')
+    } finally {
+      setApprovingScenarios(false)
+    }
+  }
+
+  async function handleBuildTraceability() {
+    if (!activeTicketKey) return
+    const active = TICKET_TARGETS[activeTicketKey]
+    setBuildingMatrix(true)
+    setTestError(null)
+    try {
+      const result = await s3Api.testsTraceability(
+        active?.tierName ?? 'Elite',
+        scenarios,
+        testsRun?.cases ?? [],
+        regressionRun?.cases ?? [],
+        active?.targetId,
+        activeTicketKey
+      )
+      setTraceability(result)
+      saveTicketState(activeTicketKey, { traceability: result })
+    } catch (err) {
+      setTestError(err instanceof ApiError ? err.message : 'Could not build the matrix.')
+    } finally {
+      setBuildingMatrix(false)
+    }
+  }
+
+  // PDF is rendered server-side (headless Chromium via Playwright). A
+  // machine without that browser installed answers 503, which is not an
+  // error worth surfacing — the browser in front of the user can print the
+  // same document to PDF itself, so fall back to that instead.
+  async function handleExportDesignDoc(format: 'pdf' | 'html') {
+    if (!activeTicketKey) return
+    const active = TICKET_TARGETS[activeTicketKey]
+    setExportingDoc(format)
+    setDesignDocError(null)
+    try {
+      const blob = await s3Api.designDocDocument(
+        active?.tierName ?? 'Elite',
+        format,
+        active?.targetId,
+        activeTicketKey,
+        (ticketCrossTeam[activeTicketKey] ?? []).map((impact) => impact.app_name)
+      )
+      downloadBlob(`${TICKET_TARGETS[activeTicketKey]?.crLabel ?? 'design'}-design-doc.${format}`, blob)
+    } catch (err) {
+      if (format === 'pdf' && err instanceof ApiError && err.status === 503) {
+        printDesignDoc()
+        return
+      }
+      setDesignDocError(err instanceof ApiError ? err.message : 'Could not export the document.')
+    } finally {
+      setExportingDoc(null)
+    }
+  }
+
+  // Fallback path: open the already-rendered document in its own window and
+  // let the browser print it. Uses the same HTML the server would have sent.
+  async function printDesignDoc() {
+    if (!activeTicketKey) return
+    const active = TICKET_TARGETS[activeTicketKey]
+    try {
+      const blob = await s3Api.designDocDocument(
+        active?.tierName ?? 'Elite',
+        'html',
+        active?.targetId,
+        activeTicketKey,
+        (ticketCrossTeam[activeTicketKey] ?? []).map((impact) => impact.app_name)
+      )
+      const url = URL.createObjectURL(blob)
+      const printWindow = window.open(url, '_blank')
+      if (!printWindow) {
+        setDesignDocError('Allow pop-ups for this site to print the document.')
+        return
+      }
+      printWindow.addEventListener('load', () => printWindow.print())
+    } catch (err) {
+      setDesignDocError(err instanceof ApiError ? err.message : 'Could not open the document.')
+    }
+  }
+
   async function handleGenerateTests() {
     if (!activeTicketKey) return
     const active = TICKET_TARGETS[activeTicketKey]
@@ -941,7 +1089,8 @@ export default function S3() {
       const result = await s3Api.testsGenerate(
         active?.tierName ?? 'Elite',
         active?.targetId,
-        activeTicketKey
+        activeTicketKey,
+        scenarios.length ? scenarios : null
       )
       setTestsGenerated(result)
       // A fresh generation invalidates any previous run/proof of the old file.
@@ -979,6 +1128,29 @@ export default function S3() {
     }
   }
 
+  // Independent of generate/run: the regression suite predates the CR, so it
+  // is runnable at any point. Presenters take a green baseline before Apply
+  // and re-run it after — the pair is the "we broke nothing" evidence.
+  async function handleRunRegression() {
+    if (!activeTicketKey) return
+    const active = TICKET_TARGETS[activeTicketKey]
+    setRunningRegression(true)
+    setTestError(null)
+    try {
+      const result = await s3Api.testsRegression(
+        active?.tierName ?? 'Elite',
+        active?.targetId,
+        activeTicketKey
+      )
+      setRegressionRun(result)
+      saveTicketState(activeTicketKey, { regressionRun: result })
+    } catch (err) {
+      setTestError(err instanceof ApiError ? err.message : 'Regression run failed.')
+    } finally {
+      setRunningRegression(false)
+    }
+  }
+
   async function handleMutationCheck() {
     if (!activeTicketKey) return
     const active = TICKET_TARGETS[activeTicketKey]
@@ -1005,9 +1177,20 @@ export default function S3() {
     setDraftingDesignDoc(true)
     setDesignDocError(null)
     try {
-      const result = await s3Api.designDoc(active?.tierName ?? 'Elite', active?.targetId, activeTicketKey)
+      const result = await s3Api.designDoc(
+        active?.tierName ?? 'Elite',
+        active?.targetId,
+        activeTicketKey,
+        (ticketCrossTeam[activeTicketKey] ?? []).map((impact) => impact.app_name)
+      )
       setDesignDoc(result.design_doc)
-      saveTicketState(activeTicketKey, { designDoc: result.design_doc })
+      setDesignDiagram(result.diagram_svg ?? null)
+      setDesignDiagramCaption(result.diagram_caption ?? null)
+      saveTicketState(activeTicketKey, {
+        designDoc: result.design_doc,
+        designDiagram: result.diagram_svg,
+        designDiagramCaption: result.diagram_caption,
+      })
     } catch (err) {
       setDesignDocError(err instanceof ApiError ? err.message : 'Design doc drafting failed.')
     } finally {
@@ -1019,12 +1202,79 @@ export default function S3() {
     if (!activeTicketKey) return
     const active = TICKET_TARGETS[activeTicketKey]
     setDraftingNotes(true)
+    setReleaseError(null)
     try {
-      const result = await s3Api.releaseNotes(active?.tierName ?? 'Elite', active?.targetId)
-      setReleaseNotes(result.release_notes)
-      saveTicketState(activeTicketKey, { releaseNotes: result.release_notes })
+      const result = await s3Api.releaseNoteSet(
+        active?.tierName ?? 'Elite',
+        active?.targetId,
+        activeTicketKey,
+        (ticketCrossTeam[activeTicketKey] ?? []).map((impact) => impact.app_name)
+      )
+      setReleaseNoteSet(result.notes)
+      setDeploymentPlan(result.plan)
+      saveTicketState(activeTicketKey, {
+        releaseNoteSet: result.notes,
+        deploymentPlan: result.plan,
+      })
+    } catch (err) {
+      setReleaseError(err instanceof ApiError ? err.message : 'Could not draft release notes.')
     } finally {
       setDraftingNotes(false)
+    }
+  }
+
+  // Everything the record needs that only this browser knows. Approvals are
+  // deliberately absent — the server reads those from its own event log
+  // rather than taking the client's word for who signed what.
+  function releaseRecordPayload(format: 'pdf' | 'html') {
+    const active = activeTicketKey ? TICKET_TARGETS[activeTicketKey] : undefined
+    return {
+      tier_name: active?.tierName ?? 'Elite',
+      target_id: active?.targetId ?? null,
+      ticket_number: activeTicketKey,
+      downstream_apps: (ticketCrossTeam[activeTicketKey ?? ''] ?? []).map(
+        (impact) => impact.app_name
+      ),
+      format,
+      scenarios,
+      generated_cases: testsRun?.cases ?? [],
+      regression_cases: regressionRun?.cases ?? [],
+      mutation: mutationCheck
+        ? {
+            caught: mutationCheck.tests_caught_bug,
+            total: mutationCheck.summary.total,
+            failed: mutationCheck.summary.failed + mutationCheck.summary.errors,
+          }
+        : null,
+      applied_files: Object.keys(appliedFiles).filter((path) => appliedFiles[path]),
+    }
+  }
+
+  async function handleDownloadRecord() {
+    if (!activeTicketKey) return
+    setExportingRecord(true)
+    setReleaseError(null)
+    try {
+      const blob = await s3Api.releaseRecord(releaseRecordPayload('pdf'))
+      const label = TICKET_TARGETS[activeTicketKey]?.crLabel ?? 'release'
+      downloadBlob(`${label}-release-record.pdf`, blob)
+    } catch (err) {
+      setReleaseError(err instanceof ApiError ? err.message : 'Could not build the record.')
+    } finally {
+      setExportingRecord(false)
+    }
+  }
+
+  async function handleAttachRecord() {
+    if (!activeTicketKey) return
+    setAttachingRecord(true)
+    setReleaseError(null)
+    try {
+      setAttachResult(await s3Api.releaseRecordAttach(releaseRecordPayload('pdf')))
+    } catch (err) {
+      setReleaseError(err instanceof ApiError ? err.message : 'Could not attach the record.')
+    } finally {
+      setAttachingRecord(false)
     }
   }
 
@@ -1449,10 +1699,20 @@ export default function S3() {
     setPerFileChat(persisted.fileChats ?? {})
     setPerFileQuestion({})
     setDesignDoc(persisted.designDoc ?? null)
+    setDesignDiagram(persisted.designDiagram ?? null)
+    setDesignDiagramCaption(persisted.designDiagramCaption ?? null)
+    setScenarioDraft(persisted.scenarioDraft ?? null)
+    setScenarios(persisted.scenarios ?? [])
+    setScenariosApprovedBy(persisted.scenariosApprovedBy ?? null)
+    setTraceability(persisted.traceability ?? null)
     setTestsGenerated(persisted.testsGenerated ?? null)
     setTestsRun(persisted.testsRun ?? null)
+    setRegressionRun(persisted.regressionRun ?? null)
     setMutationCheck(persisted.mutationCheck ?? null)
-    setReleaseNotes(persisted.releaseNotes ?? null)
+    setReleaseNoteSet(persisted.releaseNoteSet ?? null)
+    setDeploymentPlan(persisted.deploymentPlan ?? null)
+    setAttachResult(null)
+    setReleaseError(null)
     setHandoffError(null)
   }, [activeTicketKey])
 
@@ -2453,21 +2713,38 @@ export default function S3() {
                 <div className="ams-doc-meta">
                   {crLabel} · Ticket {activeTicketKey} · {docDate} · Engineering → QA hand-off
                 </div>
+                {designDiagram && (
+                  <figure className="ams-doc-figure">
+                    <div className="ams-doc-figure-title">Change map</div>
+                    {/* Server-rendered SVG built from the changed-file set — no
+                        model output reaches this, so there is nothing here a
+                        prompt could have injected. */}
+                    <div
+                      className="ams-doc-diagram"
+                      dangerouslySetInnerHTML={{ __html: designDiagram }}
+                    />
+                    {/* The server's caption, not a fixed string: it only
+                        claims the parts this particular diagram contains. */}
+                    <figcaption className="ams-doc-figcaption">{designDiagramCaption}</figcaption>
+                  </figure>
+                )}
                 <div style={{ fontSize: '0.9rem' }}>{rendered}</div>
                 <div className="ams-doc-label">{AI_LABEL}</div>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
                 <button
-                  className="ams-button-secondary"
-                  onClick={() =>
-                    downloadFile(
-                      `${crLabel}-design-doc.html`,
-                      'text/html',
-                      buildDesignDocHtml(designDoc, crLabel, activeTicketKey)
-                    )
-                  }
+                  className="ams-button"
+                  onClick={() => handleExportDesignDoc('pdf')}
+                  disabled={exportingDoc !== null}
                 >
-                  ⬇ Download document (.html)
+                  {exportingDoc === 'pdf' ? 'Rendering…' : '⬇ Download PDF'}
+                </button>
+                <button
+                  className="ams-button-secondary"
+                  onClick={() => handleExportDesignDoc('html')}
+                  disabled={exportingDoc !== null}
+                >
+                  {exportingDoc === 'html' ? 'Rendering…' : '⬇ Download document (.html)'}
                 </button>
                 <button
                   className="ams-button-secondary"
@@ -2527,31 +2804,87 @@ export default function S3() {
         locked={!canTest}
         lockedHint={testLockedReason}
         statusLabel={
-          mutationCheck
-            ? mutationCheck.tests_caught_bug
-              ? '✓ Proven'
-              : '⚠ Bug missed'
-            : testsRun
-              ? testsRun.passed
-                ? '✓ Passed'
-                : '✗ Failed'
-              : testsGenerated
-                ? 'Generated'
-                : null
+          // A broken regression outranks every other headline here: the new
+          // tests going green while existing ones go red is the worst
+          // outcome this stage can report, so it must not read as "Proven".
+          regressionRun && !regressionRun.passed
+            ? '✗ Regression'
+            : mutationCheck
+              ? mutationCheck.tests_caught_bug
+                ? '✓ Proven'
+                : '⚠ Bug missed'
+              : testsRun
+                ? testsRun.passed
+                  ? '✓ Passed'
+                  : '✗ Failed'
+                : testsGenerated
+                  ? 'Generated'
+                  : null
         }
         statusVariant={
-          (mutationCheck && !mutationCheck.tests_caught_bug) || (testsRun && !testsRun.passed)
+          (mutationCheck && !mutationCheck.tests_caught_bug) ||
+          (testsRun && !testsRun.passed) ||
+          (regressionRun && !regressionRun.passed)
             ? 'error'
             : 'ok'
         }
         open={openStage === 'tests'}
         onToggle={() => toggleStage('tests')}
       >
-        {/* Beat 1 — generate the test file and review it before anything runs. */}
-        <div>
+        {/* Beat 1 — the test plan, in prose, before any test code exists. The
+            tester edits it; what they approve is what gets generated. */}
+        <div className="ams-card">
+          <strong style={{ fontSize: '0.9rem' }}>Test plan — scenarios first</strong>
+          <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.4rem 0 0.6rem' }}>
+            What will be checked, traced to the CR's acceptance criteria, before a line of test
+            code is written. Edit, delete or add scenarios — the approved list is what the
+            generated suite is written against.
+          </p>
+          <button
+            className={scenarioDraft ? 'ams-button-secondary' : 'ams-button'}
+            onClick={handleDraftScenarios}
+            disabled={draftingScenarios}
+          >
+            {draftingScenarios
+              ? 'Drafting…'
+              : scenarioDraft
+                ? 'Re-draft scenarios'
+                : 'Draft test scenarios'}
+          </button>
+          {scenarioDraft && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <ScenarioPlan
+                scenarios={scenarios}
+                criteria={scenarioDraft.criteria}
+                uncovered={scenarioDraft.criteria
+                  .filter(
+                    (criterion) =>
+                      !scenarios.some((scenario) =>
+                        scenario.acceptance_criteria.includes(criterion.id)
+                      )
+                  )
+                  .map((criterion) => criterion.id)}
+                approvedBy={scenariosApprovedBy}
+                onChange={handleScenariosChange}
+                onApprove={handleApproveScenarios}
+                approving={approvingScenarios}
+              />
+              <TokenPanel panel={scenarioDraft.token_panel} />
+            </div>
+          )}
+        </div>
+
+        {/* Beat 2 — generate the test file and review it before anything runs. */}
+        <div style={{ marginTop: '0.75rem' }}>
           <button className="ams-button" onClick={handleGenerateTests} disabled={generatingTests}>
             {generatingTests ? 'Generating…' : testsGenerated ? 'Regenerate tests' : 'Generate tests'}
           </button>
+          {scenariosApprovedBy && (
+            <span style={{ fontSize: '0.82rem', color: 'var(--ams-ink-soft)', marginLeft: '0.6rem' }}>
+              Generating against {scenarios.length} approved scenario
+              {scenarios.length === 1 ? '' : 's'}.
+            </span>
+          )}
         </div>
         {testError && <p style={{ color: 'var(--ams-error)' }}>{testError}</p>}
         {testsGenerated && (
@@ -2578,7 +2911,7 @@ export default function S3() {
             ))}
             <TokenPanel panel={testsGenerated.token_panel} />
 
-            {/* Beat 2 — run the reviewed suite; results render as a per-test
+            {/* Beat 3 — run the reviewed suite; results render as a per-test
                 checklist parsed from JUnit XML, raw output behind a disclosure. */}
             <div style={{ marginTop: '0.75rem' }}>
               <button className="ams-button" onClick={handleRunTests} disabled={runningTests}>
@@ -2604,7 +2937,72 @@ export default function S3() {
               </div>
             )}
 
-            {/* Beat 3 — prove the suite bites: inject the seeded bug, watch the
+            {/* Beat 4 — the other half of "did it work": the app's own
+                checked-in suite, which the AI never wrote and cannot edit.
+                New tests passing says the CR did what it claimed; these
+                passing says it cost nothing that already worked.
+
+                Deliberately not gated on the generated run: this suite
+                predates the change, so it is runnable at any point — the
+                endpoint needs neither generated code nor generated tests. */}
+            <div className="ams-card" style={{ marginTop: '0.75rem' }}>
+              <strong style={{ fontSize: '0.9rem' }}>Regression — the pre-existing suite</strong>
+              <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.4rem 0 0.6rem' }}>
+                Checked into the repo before this change request, authored by a human, and named
+                by no allowlist the pipeline can write to. Every CR here ends with “existing
+                flows are unaffected” — this is the part that checks it.
+              </p>
+              <button
+                className="ams-button-secondary"
+                onClick={handleRunRegression}
+                disabled={runningRegression}
+              >
+                {runningRegression
+                  ? 'Running…'
+                  : regressionRun
+                    ? 'Re-run regression suite'
+                    : 'Run regression suite'}
+              </button>
+              {regressionRun && (
+                <div style={{ marginTop: '0.75rem' }}>
+                  <p
+                    style={{
+                      fontWeight: 700,
+                      fontSize: '0.9rem',
+                      margin: '0 0 0.2rem',
+                      color: regressionRun.passed ? 'var(--ams-success)' : 'var(--ams-error)',
+                    }}
+                  >
+                    {regressionRun.passed
+                      ? `✓ ${regressionRun.summary.total} pre-existing test${
+                          regressionRun.summary.total === 1 ? '' : 's'
+                        } still pass — no regression.`
+                      : `✗ This change broke ${
+                          regressionRun.summary.failed + regressionRun.summary.errors
+                        } pre-existing test${
+                          regressionRun.summary.failed + regressionRun.summary.errors === 1
+                            ? ''
+                            : 's'
+                        }.`}
+                  </p>
+                  <RunSummaryLine run={regressionRun} />
+                  <p
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--ams-ink-soft)',
+                      fontFamily: 'ui-monospace, monospace',
+                      margin: '0.2rem 0 0',
+                    }}
+                  >
+                    {regressionRun.suite_paths.join(' ')}
+                  </p>
+                  <TestCaseTable cases={regressionRun.cases} />
+                  <RunnerOutput output={regressionRun.output} />
+                </div>
+              )}
+            </div>
+
+            {/* Beat 5 — prove the suite bites: inject the seeded bug, watch the
                 right test go red, working tree reverted server-side. */}
             {testsRun?.passed && (
               <div className="ams-card" style={{ marginTop: '0.75rem' }}>
@@ -2671,6 +3069,41 @@ export default function S3() {
             )}
           </>
         )}
+
+        {/* Beat 6 — the closing artifact: every acceptance criterion, what was
+            planned for it, what actually ran, and the result. Outside the
+            testsGenerated block because a criterion with no automated test is
+            exactly what this is here to show. */}
+        {scenarioDraft && (
+          <div className="ams-card" style={{ marginTop: '0.75rem' }}>
+            <strong style={{ fontSize: '0.9rem' }}>Traceability — criteria to evidence</strong>
+            <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.4rem 0 0.6rem' }}>
+              One row per acceptance criterion in the CR, joined to the approved scenarios and to
+              the tests that actually ran. This is the artifact an auditor asks for.
+            </p>
+            <button
+              className="ams-button-secondary"
+              onClick={handleBuildTraceability}
+              disabled={buildingMatrix || !scenarios.length}
+            >
+              {buildingMatrix
+                ? 'Building…'
+                : traceability
+                  ? 'Rebuild matrix'
+                  : 'Build traceability matrix'}
+            </button>
+            {!testsRun && (
+              <span style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)', marginLeft: '0.6rem' }}>
+                Runs above are optional — without them the matrix reports coverage, not results.
+              </span>
+            )}
+            {traceability && (
+              <div style={{ marginTop: '0.75rem' }}>
+                <TraceabilityMatrix matrix={traceability} />
+              </div>
+            )}
+          </div>
+        )}
       </StageCard>
 
       <StageCard
@@ -2678,24 +3111,76 @@ export default function S3() {
         title="Draft release notes"
         locked={!canDraftNotes}
         lockedHint={notesLockedReason}
-        statusLabel={releaseNotes ? '✓ Drafted' : null}
+        statusLabel={releaseNoteSet ? '✓ Drafted' : null}
         open={openStage === 'notes'}
         onToggle={() => toggleStage('notes')}
       >
         <div>
           <button className="ams-button" onClick={handleDraftReleaseNotes} disabled={draftingNotes}>
-            Draft release notes
+            {draftingNotes
+              ? 'Drafting…'
+              : releaseNoteSet
+                ? 'Re-draft release notes'
+                : 'Draft release notes'}
           </button>
         </div>
-        {releaseNotes && (
+        {releaseError && <p style={{ color: 'var(--ams-error)' }}>{releaseError}</p>}
+        {releaseNoteSet && (
           <div className="ams-card" style={{ marginTop: '0.75rem' }}>
-            <strong>{AI_LABEL}</strong>
-            <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-              {releaseNotes}
+            <strong style={{ fontSize: '0.9rem' }}>Release notes — three audiences</strong>
+            <p style={{ fontSize: '0.82rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
+              {AI_LABEL}
+            </p>
+            <ReleaseNotes notes={releaseNoteSet} />
+          </div>
+        )}
+        {deploymentPlan && (
+          <div className="ams-card" style={{ marginTop: '0.75rem' }}>
+            <strong style={{ fontSize: '0.9rem' }}>Deployment &amp; rollback</strong>
+            <div style={{ marginTop: '0.5rem' }}>
+              <DeploymentPlanPanel plan={deploymentPlan} />
             </div>
           </div>
         )}
-        {releaseNotes && inQa && isActiveAssignee && activeIssue?.status !== 'Done' && (
+        {releaseNoteSet && (
+          <div className="ams-card" style={{ marginTop: '0.75rem' }}>
+            <strong style={{ fontSize: '0.9rem' }}>Release record</strong>
+            <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.4rem 0 0.6rem' }}>
+              One document with what shipped, the change map, the acceptance-criteria matrix,
+              every test run, the approvals from this ticket's own timeline, and the deployment
+              plan. Anything the pipeline could not evidence is listed in it explicitly.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                className="ams-button"
+                onClick={handleDownloadRecord}
+                disabled={exportingRecord}
+              >
+                {exportingRecord ? 'Building…' : '⬇ Download release record (PDF)'}
+              </button>
+              <button
+                className="ams-button-secondary"
+                onClick={handleAttachRecord}
+                disabled={attachingRecord}
+              >
+                {attachingRecord ? 'Attaching…' : 'Attach to ticket'}
+              </button>
+            </div>
+            {attachResult && (
+              <p
+                style={{
+                  fontSize: '0.85rem',
+                  marginTop: '0.6rem',
+                  color: attachResult.attached ? 'var(--ams-success)' : 'var(--ams-warning)',
+                }}
+              >
+                {attachResult.attached ? '✓ ' : '○ '}
+                {attachResult.detail}
+              </p>
+            )}
+          </div>
+        )}
+        {releaseNoteSet && inQa && isActiveAssignee && activeIssue?.status !== 'Done' && (
           <button
             className="ams-button"
             style={{ marginTop: '0.75rem' }}

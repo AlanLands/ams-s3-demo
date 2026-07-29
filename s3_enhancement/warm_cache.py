@@ -23,7 +23,12 @@ from s3_enhancement import targets
 from s3_enhancement.analyze import draft_effort_estimate, draft_impact_analysis
 from s3_enhancement.codegen import generate_change
 from s3_enhancement.cr import raw_cr_template, render_cr
-from s3_enhancement.docgen import draft_design_doc, draft_release_notes
+from s3_enhancement.docgen import (
+    draft_design_doc,
+    draft_release_note_set,
+    draft_release_notes,
+)
+from s3_enhancement.scenarios import draft_scenarios
 from s3_enhancement.testgen import generate_tests
 
 
@@ -42,6 +47,8 @@ def warm(tier_name: str = "Elite") -> list[str]:
         draft_impact_analysis(cr_text, target=target)
         draft_design_doc(cr_text, target=target)
         draft_release_notes(cr_text, target=target)
+        draft_release_note_set(cr_text, target=target)
+        draft_scenarios(cr_text, target=target)
         messages.append(f"narrative cache warmed for {target.target_id}")
     return messages
 

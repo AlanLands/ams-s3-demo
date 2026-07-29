@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from s3_enhancement import testrun
-from s3_enhancement.targets import Mutation
+from s3_enhancement.targets import Mutation, Target
 from s3_enhancement.testrun import (
     MutationError,
     SuiteRun,
@@ -175,3 +175,77 @@ def test_demo_targets_all_declare_a_mutation():
         targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE,
     ):
         assert target.mutations, f"{target.target_id} has no seeded mutation"
+
+
+def test_demo_targets_all_declare_a_regression_suite():
+    """The counterpart to the mutation check: every demo target must be able
+    to answer "did this break anything that already worked?"."""
+    from s3_enhancement import targets
+
+    for target in (
+        targets.MOCKAPP_COVERAGE_UPGRADE,
+        targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
+        targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE,
+    ):
+        assert target.has_regression_suite, f"{target.target_id} has no regression suite"
+
+
+def test_regression_suite_is_never_writable_by_the_pipeline():
+    """The whole claim rests on the AI being unable to touch these files. If a
+    regression path ever appeared in a testgen or codegen allowlist, the suite
+    would be marking its own homework."""
+    from s3_enhancement import targets
+
+    for target in targets.all_targets():
+        writable = set(target.testgen_allowlist) | set(target.codegen_allowlist)
+        for path in target.regression_paths:
+            assert path not in writable, f"{target.target_id} can overwrite {path}"
+
+
+def _regression_target(**overrides) -> Target:
+    """A minimal, unregistered Target — enough for run_regression's dispatch."""
+    return Target(
+        target_id="fake-regression-target",
+        source_kind="local",
+        display_name="fake",
+        **overrides,
+    )
+
+
+def test_run_regression_rejects_a_target_without_a_suite():
+    with pytest.raises(testrun.NoRegressionSuiteError, match="no checked-in regression suite"):
+        testrun.run_regression(_regression_target())
+
+
+def test_run_regression_uses_pytest_paths_when_no_command_declared():
+    target = _regression_target(regression_paths=("tests/test_regression_example.py",))
+    captured: dict = {}
+
+    def fake_pytest(paths):
+        captured["paths"] = paths
+        return SuiteRun(output="", returncode=0, cases=[], duration_s=0.0)
+
+    with patch.object(testrun, "_run_pytest", side_effect=fake_pytest):
+        testrun.run_regression(target)
+
+    assert captured["paths"] == ["tests/test_regression_example.py"]
+
+
+def test_run_regression_prefers_a_declared_command(tmp_path):
+    target = _regression_target(
+        regression_paths=("tests/ignored.py",),
+        regression_command=("mvn", "-q", "test"),
+        regression_cwd=tmp_path,
+    )
+    captured: dict = {}
+
+    def fake_external(command, cwd):
+        captured["command"] = command
+        captured["cwd"] = cwd
+        return SuiteRun(output="", returncode=0, cases=[], duration_s=0.0)
+
+    with patch.object(testrun, "_run_external", side_effect=fake_external):
+        testrun.run_regression(target)
+
+    assert captured["command"] == ["mvn", "-q", "test"]
+    assert captured["cwd"] == tmp_path

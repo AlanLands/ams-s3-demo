@@ -49,20 +49,67 @@ class TestgenResult:
 
 
 def generate_tests(
-    tier_name: str, cr_text: str, *, target: Target | None = None
+    tier_name: str,
+    cr_text: str,
+    *,
+    target: Target | None = None,
+    scenarios: list[dict] | None = None,
 ) -> TestgenResult:
+    """Generate the target's test file.
+
+    `scenarios` is the tester-approved plan (see s3_enhancement/scenarios.py).
+    When supplied it is appended to the prompt, so a live or recording run
+    writes the suite against the reviewed list rather than against the CR
+    alone. It intentionally does not enter the cache key: the demo's streamed
+    caches are keyed by literal (see targets.Target.stream_cache_key), so in
+    replay mode the recorded suite is served whatever the plan says — the
+    console is explicit about that rather than implying otherwise.
+    """
     target = target or targets.get_target(None)
     if os.environ.get("LLM_MODE", "replay").lower() == "replay":
-        return _generate_tests_once(tier_name, cr_text, target=target, used_replay=True)
+        return _generate_tests_once(
+            tier_name, cr_text, target=target, used_replay=True, scenarios=scenarios
+        )
     try:
-        return _generate_tests_once(tier_name, cr_text, target=target, used_replay=False)
+        return _generate_tests_once(
+            tier_name, cr_text, target=target, used_replay=False, scenarios=scenarios
+        )
     except LLMError:
         with _temporary_env("LLM_MODE", "replay"):
-            return _generate_tests_once(tier_name, cr_text, target=target, used_replay=True)
+            return _generate_tests_once(
+                tier_name, cr_text, target=target, used_replay=True, scenarios=scenarios
+            )
+
+
+def _format_scenarios(scenarios: list[dict] | None) -> str:
+    """Render the approved plan as prompt context. Defensive about shape: this
+    data round-tripped through the browser and a tester's edits, so a missing
+    key must degrade the prompt, never raise."""
+    if not scenarios:
+        return ""
+    lines = []
+    for scenario in scenarios:
+        refs = scenario.get("acceptance_criteria") or []
+        ref_text = f" [{', '.join(str(ref) for ref in refs)}]" if refs else ""
+        lines.append(
+            f"- {scenario.get('id', '?')} ({scenario.get('kind', 'unspecified')})"
+            f"{ref_text}: {scenario.get('title', '')}\n"
+            f"    expected: {scenario.get('expected', '')}"
+        )
+    return (
+        "\n\nThe tester has reviewed and approved this test plan. Write one "
+        "test per scenario below, in this order, and name each test so the "
+        "scenario it implements is recognisable:\n" + "\n".join(lines)
+    )
 
 
 def _generate_tests_once(
-    tier_name: str, cr_text: str, *, target: Target, used_replay: bool
+    tier_name: str,
+    cr_text: str,
+    *,
+    target: Target,
+    used_replay: bool,
+    scenarios: list[dict] | None = None,
 ) -> TestgenResult:
     if target.cache_namespace == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace:
         prompt = build_endorsement_prompt(cr_text, target=target)
@@ -70,6 +117,7 @@ def _generate_tests_once(
         prompt = build_spring_prompt(cr_text, target=target)
     else:
         prompt = build_prompt(tier_name, cr_text)
+    prompt += _format_scenarios(scenarios)
     usage: dict = {}
     substitutions = {"{{TIER_NAME}}": tier_name} if used_replay else None
     chunks: list[str] = []

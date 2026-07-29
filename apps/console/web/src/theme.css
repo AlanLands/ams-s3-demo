@@ -1023,3 +1023,380 @@ a:hover {
   color: var(--ams-accent-ink);
   font-family: 'Asap', system-ui, sans-serif;
 }
+
+/* --- Test plan and traceability matrix (see TestPlanPanel.tsx) ----------
+   The QA-facing half of the tests stage: a reviewable scenario table before
+   any code is generated, and the acceptance-criteria matrix after it runs. */
+.ams-scenario-coverage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.ams-ac-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  color: var(--ams-success);
+  cursor: default;
+}
+.ams-ac-chip-gap {
+  color: var(--ams-warning);
+  border-color: var(--ams-warning);
+}
+.ams-scenario-gap-note {
+  font-size: 0.82rem;
+  color: var(--ams-warning);
+  margin: 0 0 0.6rem;
+}
+.ams-scenario-table,
+.ams-trace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.ams-scenario-table th,
+.ams-trace-table th {
+  text-align: left;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ams-ink-soft);
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--ams-line);
+}
+.ams-scenario-table td,
+.ams-trace-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--ams-line);
+  vertical-align: top;
+}
+.ams-scenario-editing > td {
+  background: var(--ams-accent-soft);
+}
+.ams-scenario-id {
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.ams-kind {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+  background: var(--ams-line);
+  color: var(--ams-ink);
+}
+.ams-kind-positive {
+  background: #dbeee6;
+  color: #125c43;
+}
+.ams-kind-negative {
+  background: #f6dfe3;
+  color: #8a1330;
+}
+.ams-kind-boundary {
+  background: #fbeed3;
+  color: #7a5407;
+}
+.ams-kind-regression {
+  background: #dde7f3;
+  color: #1d4a72;
+}
+.ams-scenario-title {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  color: var(--ams-ink);
+  cursor: pointer;
+}
+.ams-scenario-title:hover {
+  text-decoration: underline;
+}
+.ams-scenario-expected {
+  font-size: 0.8rem;
+  color: var(--ams-ink-soft);
+  margin-top: 0.15rem;
+}
+.ams-scenario-detail {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.65rem;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.ams-scenario-detail dt {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ams-ink-soft);
+  margin-top: 0.4rem;
+}
+.ams-scenario-detail dt:first-child {
+  margin-top: 0;
+}
+.ams-scenario-detail dd {
+  margin: 0.1rem 0 0;
+}
+.ams-scenario-detail ol {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.ams-scenario-acs {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.ams-scenario-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.ams-scenario-actions button {
+  margin-left: 0.5rem;
+}
+.ams-scenario-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.ams-scenario-editor-row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+}
+.ams-scenario-editor-row > label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ams-ink-soft);
+  padding-top: 0.45rem;
+}
+.ams-scenario-editor-row .ams-input {
+  width: 100%;
+}
+.ams-scenario-hint {
+  font-size: 0.75rem;
+  color: var(--ams-ink-soft);
+  margin-top: 0.2rem;
+}
+.ams-scenario-ac-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding-top: 0.35rem;
+}
+.ams-ac-toggle {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 3px;
+  border: 1px solid var(--ams-line);
+  background: #fff;
+  color: var(--ams-ink-soft);
+  cursor: pointer;
+}
+.ams-ac-toggle-on {
+  border-color: var(--ams-accent);
+  background: var(--ams-accent-soft);
+  color: var(--ams-accent-ink);
+  font-weight: 700;
+}
+.ams-trace-headline {
+  margin: 0 0 0.6rem;
+  font-size: 0.88rem;
+}
+.ams-trace-ac {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.ams-trace-text {
+  font-size: 0.82rem;
+  color: var(--ams-ink-soft);
+  max-width: 34rem;
+}
+.ams-trace-scenarios,
+.ams-trace-tests {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+}
+.ams-trace-source {
+  font-family: 'Asap', system-ui, sans-serif;
+  font-size: 0.72rem;
+  color: var(--ams-ink-soft);
+}
+.ams-trace-status {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+}
+.ams-trace-status-passed {
+  background: #dbeee6;
+  color: #125c43;
+}
+.ams-trace-status-failed {
+  background: #f6dfe3;
+  color: #8a1330;
+}
+.ams-trace-status-not_automated,
+.ams-trace-status-no_scenario {
+  background: #fbeed3;
+  color: #7a5407;
+}
+.ams-trace-status-not_run {
+  background: var(--ams-line);
+  color: var(--ams-ink-soft);
+}
+.ams-trace-footnote {
+  font-size: 0.75rem;
+  color: var(--ams-ink-soft);
+  margin: 0.6rem 0 0;
+  max-width: 60rem;
+}
+
+/* Change map inside the on-screen design document. The SVG arrives sized in
+   absolute pixels (it also has to render standalone in the exported file), so
+   it is scaled down to the panel rather than forcing the panel to fit it. */
+.ams-doc-figure {
+  margin: 1.2rem 0;
+}
+.ams-doc-figure-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ams-ink-soft);
+  margin-bottom: 0.4rem;
+}
+.ams-doc-diagram {
+  overflow-x: auto;
+}
+.ams-doc-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.ams-doc-figcaption {
+  font-size: 0.75rem;
+  color: var(--ams-ink-soft);
+  margin-top: 0.4rem;
+  max-width: 46rem;
+}
+
+/* --- Release stage (see ReleasePanel.tsx) -------------------------------
+   Three notes for three readers, and a deploy/rollback plan derived from the
+   change's own service graph. */
+.ams-note-block {
+  border-top: 1px solid var(--ams-line);
+  padding: 0.6rem 0;
+}
+.ams-note-block:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.ams-note-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.ams-note-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.ams-note-audience {
+  font-size: 0.75rem;
+  color: var(--ams-ink-soft);
+  flex: 1;
+}
+.ams-note-body {
+  margin: 0.3rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+.ams-plan-reason {
+  font-size: 0.85rem;
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  background: var(--ams-accent-soft);
+  border-radius: 4px;
+  max-width: 64ch;
+}
+.ams-plan-list {
+  margin: 0.3rem 0 0;
+  padding-left: 1.3rem;
+  font-size: 0.88rem;
+}
+.ams-plan-list li {
+  margin-bottom: 0.55rem;
+}
+.ams-plan-kind {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  margin-right: 0.4rem;
+  vertical-align: 1px;
+  background: var(--ams-line);
+  color: var(--ams-ink);
+}
+.ams-plan-kind-deploy {
+  background: #dde7f3;
+  color: #1d4a72;
+}
+.ams-plan-kind-migrate {
+  background: #fbeed3;
+  color: #7a5407;
+}
+.ams-plan-kind-verify {
+  background: #dbeee6;
+  color: #125c43;
+}
+.ams-plan-kind-rollback {
+  background: #f6dfe3;
+  color: #8a1330;
+}
+.ams-plan-detail {
+  color: var(--ams-ink-soft);
+  font-size: 0.82rem;
+  margin-top: 0.1rem;
+  max-width: 62ch;
+}
+.ams-plan-command {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.76rem;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: 3px;
+  padding: 0.15rem 0.4rem;
+  overflow-wrap: anywhere;
+}
+.ams-plan-empty,
+.ams-plan-note {
+  font-size: 0.8rem;
+  color: var(--ams-ink-soft);
+}
+.ams-plan-note {
+  margin: 0.8rem 0 0;
+  max-width: 62ch;
+}
