@@ -96,6 +96,7 @@ from s3_enhancement.scenarios import (
     validate_scenarios,
 )
 from s3_enhancement.screenshots import ScreenshotError, capture_form_screenshot
+from s3_enhancement.target_match import TargetMatch, resolve_target_for_cr
 from s3_enhancement.targets import Target
 from s3_enhancement.testgen import generate_tests
 from s3_enhancement.traceability import build_matrix
@@ -438,6 +439,82 @@ def route(payload: RouteRequest, identity: Identity = Depends(require_identity))
         record_event(payload.ticket_number, "system", "ticket_routed", detail=detail)
 
     return _route_dict(decision)
+
+
+_CRS_ROOT = targets.REPO_ROOT / "crs"
+
+
+class TargetResolveRequest(BaseModel):
+    # Exactly one of these two. cr_file is the common case: the console
+    # already knows which CR a ticket links to (see S3.tsx's TICKET_CRS) but
+    # not which target it resolves to — that's the whole point of this
+    # endpoint — so it names the file under crs/ and the server reads it,
+    # rather than the client fetching and re-posting the CR's own text.
+    # cr_text remains for the ad-hoc/cross-team case where there's no
+    # committed CR file at all.
+    cr_file: str | None = None
+    cr_text: str | None = None
+    ticket_number: str | None = None
+
+
+def _target_match_dict(match: TargetMatch) -> dict:
+    return {
+        "method": match.method,
+        "resolved": match.resolved,
+        "needs_confirmation": match.needs_confirmation,
+        "confidence": match.confidence if match.method == "ai" else None,
+        "reasoning": match.reasoning if match.method == "ai" else "",
+        "target_id": match.target.target_id if match.target is not None else None,
+        "display_name": match.target.display_name if match.target is not None else None,
+    }
+
+
+@router.post("/target/resolve")
+def resolve_target(
+    payload: TargetResolveRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Resolve a CR's text to one of this console's registered targets.
+
+    Cheapest tier first (see s3_enhancement/target_match.py): the CR's own
+    `CR-YYYY-NNN:` identifier against every registered target's
+    `cr_template_path`, then its `Application:` header against the
+    applications registry, and only then an LLM guess across the registered
+    targets. This is what lets onboarding a new repo mean "register a Target
+    and drop its CR under crs/" instead of also editing a ticket-key lookup
+    table in the console.
+    """
+    if payload.cr_file and payload.cr_text:
+        raise HTTPException(
+            status_code=422, detail="pass exactly one of cr_file or cr_text, not both"
+        )
+    if payload.cr_file:
+        # Filename only, no path components — the client names *which* CR,
+        # never *where* to read from, so this can never escape crs/.
+        if "/" in payload.cr_file or "\\" in payload.cr_file or not payload.cr_file.endswith(".md"):
+            raise HTTPException(status_code=422, detail="cr_file must be a bare *.md filename")
+        cr_path = _CRS_ROOT / payload.cr_file
+        if not cr_path.is_file():
+            raise HTTPException(status_code=404, detail=f"no such CR file: {payload.cr_file}")
+        cr_text = cr_path.read_text(encoding="utf-8").strip()
+    elif payload.cr_text:
+        cr_text = payload.cr_text.strip()
+    else:
+        raise HTTPException(status_code=422, detail="cr_file or cr_text is required")
+
+    if not cr_text:
+        raise HTTPException(status_code=422, detail="cr_text must not be empty")
+
+    match = resolve_target_for_cr(cr_text)
+
+    if payload.ticket_number:
+        detail = (
+            f"{match.target.display_name} via {match.method}"
+            if match.resolved
+            else "no target match — CR text didn't resolve to a registered target"
+        )
+        record_event(payload.ticket_number, "system", "target_resolved", detail=detail)
+
+    return _target_match_dict(match)
 
 
 @router.get("/applications")
