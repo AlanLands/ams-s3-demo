@@ -1,20 +1,15 @@
 #!/usr/bin/env bash
-# CR-2026-043 demo beat — the Spring Boot ClaimsPortal services themselves:
-# the Policy Team console (:8081) and Claims Team console (:8082) the AI adds
-# deductible handling to. Builds if needed, then runs both until Ctrl-C.
+# CR-2026-043 demo beat — the ClaimsPortal services themselves: the Policy
+# Team console (:8081) and Claims Team console (:8082) the AI adds deductible
+# handling to. Runs both until Ctrl-C.
 set -euo pipefail
-cd "$(dirname "$0")/../apps/claimsportal"
-
-# Always rebuild: an existing jar may predate a just-applied S3 change, and
-# serving stale code silently breaks the before/after demo beat. With a warm
-# local Maven repo this is seconds, not minutes.
-for svc in policy-service claims-service; do
-  (cd "$svc" && mvn -q package -DskipTests)
-done
+cd "$(dirname "$0")/.."
+source .venv/bin/activate
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
 trap 'kill 0' EXIT
-java -jar policy-service/target/policy-service-1.0.0.jar &
-java -jar claims-service/target/claims-service-1.0.0.jar &
+uvicorn apps.claimsportal.policy_service.main:app --port 8081 &
+uvicorn apps.claimsportal.claims_service.main:app --port 8082 &
 
 echo "Policy Team console  -> http://localhost:8081/"
 echo "Claims Team console  -> http://localhost:8082/"

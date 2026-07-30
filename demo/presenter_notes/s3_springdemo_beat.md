@@ -1,16 +1,21 @@
-# S3 — ClaimsPortal beat (Spring Boot second target, ~8 min)
+# S3 — ClaimsPortal beat (second target, ~8 min)
 
-**Point being made**: S3 is a pipeline, not a party trick tuned to one Python
-app. Same console, same beats, second repo, second language (Java 21 / Spring
-Boot 3, two Maven microservices), second CR — and the verification step runs
-that stack's own toolchain (`mvn test` / JUnit 5), not pytest.
+**Point being made**: S3 is a pipeline, not a party trick tuned to one app.
+Same console, same beats, a second independently-registered repo/target,
+second CR. (Until 2026-07-30 this beat also carried a second-language story —
+ClaimsPortal was Java/Spring Boot, verified via `mvn test`/JUnit. It was
+rebuilt in Python/FastAPI so the demo runs without a JVM/Maven; the pipeline
+now speaks pytest end to end across all three scenarios. What this beat
+proves today is a second real repo the pipeline generalizes to, not a second
+tech stack.)
 
-**Cast**: `apps/claimsportal` = "ClaimsPortal". policy-service (:8081, Policy
-Team console) serves policies; claims-service (:8082, Claims Team console)
-validates each submitted claim by calling policy-service over REST. CR-2026-043
+**Cast**: `apps/claimsportal` = "ClaimsPortal". policy_service (:8081, Policy
+Team console) serves policies; claims_service (:8082, Claims Team console)
+validates each submitted claim by calling policy_service over REST. CR-2026-043
 (`apps/claimsportal/crs/CR-2026-043.md`, Jira AMS-103, assignee Ravi Kumar)
 adds a per-policy deductible: below-deductible claims are rejected, accepted
-claims record a payable amount. Fixed contract: `ClaimRules.decide/payable`.
+claims record a payable amount. Fixed contract: `claim_rules.decide`/`payable`
+module-level functions.
 
 ## Pre-flight (before the audience is in the room)
 
@@ -27,7 +32,7 @@ uvicorn apps.console.api.main:app --port 8000  # terminal 1 — API :8000 (never
 Check: :8081 policies show **no Deductible**; claims console accepts an
 80-dollar claim on MS-1004 (this exact claim gets rejected later — the
 before/after moment). Make sure no stale service holds 8081/8082
-(`pkill -f 'policy-service|claims-service'` first if in doubt) — a stale
+(`pkill -f 'policy_service|claims_service'` first if in doubt) — a stale
 process serves the OLD behavior and silently ruins the after-beat.
 
 ## Beats
@@ -36,13 +41,13 @@ process serves the OLD behavior and silently ruins the after-beat.
    Submit an 80-dollar claim on MS-1004 → ACCEPTED. "Small claims below any
    deductible sail through to adjusters today."
 2. **Console** (:5173, log in Ravi Kumar / 1001): open **AMS-103** on the
-   board. This is a *Java* estate — the file-selection panel's
-   per-language pool count shows it (8 Java files, 0 Python).
-3. **Impact analysis + effort**: drafted against the real Java sources —
-   names Policy.java / PolicyClient.PolicyView / a new ClaimRules class.
-4. **Generate**: diff spans BOTH services — the record gains `deductible`
-   on the policy side and the consuming record on the claims side, plus the
-   new ClaimRules class. Point out reasons-per-file, then **Apply**.
+   board. This is a second registered target — the file-selection panel
+   scopes to ClaimsPortal's own pool (5 Python files).
+3. **Impact analysis + effort**: drafted against the real sources — names
+   policy.py / policy_client.py's PolicyView / a new claim_rules module.
+4. **Generate**: diff spans BOTH services — the model gains `deductible`
+   on the policy side and the consuming field on the claims side, plus the
+   new claim_rules.py. Point out reasons-per-file, then **Apply**.
 5. **Design doc + QA hand-off**: the workflow is real Jira discipline, live
    on the board — running the analysis already moved the card
    To Do → In Progress automatically. After Apply, draft the design doc: it
@@ -52,12 +57,11 @@ process serves the OLD behavior and silently ruins the after-beat.
    to the **QA column**, assigned to them, and the developer is now locked
    out of the test step (show the lock hint).
 6. **Generate tests, as the tester**: log out, log in as the tester, open
-   the ticket from the QA column, run "Generate tests + run": a JUnit 5
-   suite (`ClaimRulesTest.java`), and the test run output is **Maven**, not
-   pytest — the pipeline speaks the target repo's language end to end.
-   5 tests green.
-7. **After**: rebuild + restart the services (Ctrl-C terminal 3, rerun
-   `./demo/run_s3_springdemo.sh` — it rebuilds automatically), resubmit the
+   the ticket from the QA column, run "Generate tests + run": a pytest suite
+   (`tests/test_s3_claims_deductible.py`) — same runner as scenarios 1 and 2.
+   All green.
+7. **After**: restart the services (Ctrl-C terminal 3, rerun
+   `./demo/run_s3_springdemo.sh`), resubmit the
    same 80-dollar claim on MS-1004 → **REJECTED_BELOW_DEDUCTIBLE**; a
    1,200-dollar claim on MS-1001 → ACCEPTED with **payableAmount 700**.
 8. **Release notes** (still as the tester), then "QA passed — mark ticket
@@ -70,9 +74,7 @@ process serves the OLD behavior and silently ruins the after-beat.
   warmed) — with `LLM_MODE=replay` (the default) the whole flow runs offline.
   `reset_s3.sh` wipes `.cache/llm`, so either re-warm the narrative beats in
   rehearsal or skip that wipe on demo day.
-- Maven needs a warm local repo: run `mvn -q package` once per service on the
-  demo machine beforehand so demo-day builds are seconds, not downloads.
-- If the after-beat restart flakes, the JUnit/Maven output in beat 5 already
+- If the after-beat restart flakes, the pytest output in beat 6 already
   proved the change — narrate and move on.
 
 ## Reset between rehearsals

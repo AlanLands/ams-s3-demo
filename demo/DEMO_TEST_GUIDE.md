@@ -10,7 +10,7 @@ This repo has **one pipeline, three CR scenarios** riding on it:
 |---|--------|----|-----------|---------|--------------------|
 | 1 | AMS-101 | CR-2026-041 | MapleSure mockapp (policy portal) | Python | A new top coverage tier (audience picks the name) |
 | 2 | AMS-102 | CR-2026-042 | MapleSure mockapp (same app) | Python | A "Priority" field on the endorsement request form |
-| 3 | AMS-103 | CR-2026-043 | ClaimsPortal (`apps/claimsportal`) | Java / Spring Boot | Per-policy deductible handling, across two microservices |
+| 3 | AMS-103 | CR-2026-043 | ClaimsPortal (`apps/claimsportal`) | Python / FastAPI | Per-policy deductible handling, across two microservices |
 
 All three run through the same AMS console (FastAPI + React, `apps/console/api/` +
 `apps/console/web/`) — the ticket you click just determines which registered
@@ -166,8 +166,11 @@ Streamlit :8501 via `demo/run_mockapp.sh`).
 
 ## Scenario 3 — CR-2026-043: Claims Deductible Handling (AMS-103, ClaimsPortal)
 
-Second repo, second language — the pipeline speaks Java/Maven, not just
-Python/pytest.
+Second repo, second language *until 2026-07-30* — ClaimsPortal was rebuilt
+from Java/Spring Boot to Python/FastAPI so it runs without a JVM/Maven. Same
+pipeline, same pytest-based test/regression path as the other two scenarios;
+what this beat now proves is a second independent repo/target, not a second
+language.
 
 **Reset:**
 ```bash
@@ -183,32 +186,31 @@ uvicorn apps.console.api.main:app --port 8000
 # terminal 2 — console
 cd apps/console/web && npm run dev
 
-# terminal 3 — the two Spring Boot services (builds automatically)
+# terminal 3 — the two Python/FastAPI services
 demo/run_s3_springdemo.sh
 ```
-Confirms Maven/Java are on PATH — verified `mvn` and `java` are available
-in this environment.
 
 **Steps:**
 1. Policy Team console `http://localhost:8081` and Claims Team console
    `http://localhost:8082`. Submit an **$80 claim on MS-1004** → ACCEPTED
    (no deductible logic yet — this exact claim gets rejected later).
 2. Log in to the console (:5173) as **Ravi Kumar / 1001**, open **AMS-103**.
-   File-selection panel shows a Java-only pool (8 files, 0 Python).
-3. Impact analysis — should name `Policy.java`, `PolicyClient`/`PolicyView`,
-   and a new `ClaimRules` class.
+   File-selection panel shows the ClaimsPortal-scoped pool (5 files, all
+   Python).
+3. Impact analysis — should name `policy.py`, `policy_client.py`'s
+   `PolicyView`, and a new `claim_rules` module.
 4. Generate — diff spans **both** services (policy gains `deductible`,
-   claims gains the consuming field, plus a new `ClaimRules.java`). Apply.
+   claims gains the consuming field, plus a new `claim_rules.py`). Apply.
 5. Draft the design doc (downloadable .html/.md), then hand off to a tester
    — pick **Priya Nair (1003)** or **Tom Becker (1004)**. Ticket moves to
    the QA column; the developer is now locked out of the test step.
 6. Log out, log back in as the tester, open AMS-103 from the QA column, run
-   "Generate tests + run" — expect `ClaimRulesTest.java` (JUnit 5), and the
-   test output is **Maven**, not pytest. 5 tests green.
+   "Generate tests + run" — expect `tests/test_s3_claims_deductible.py`,
+   same pytest runner as the other two scenarios. All green.
 7. Restart the services to pick up the change:
    ```bash
    # Ctrl-C terminal 3, then:
-   demo/run_s3_springdemo.sh   # rebuilds automatically
+   demo/run_s3_springdemo.sh
    ```
    Resubmit the same $80 claim on MS-1004 → **REJECTED_BELOW_DEDUCTIBLE**.
    Submit a $1,200 claim on MS-1001 → ACCEPTED with **payableAmount 700**.

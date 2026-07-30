@@ -155,14 +155,14 @@ tooling that drives them. You do <strong>not</strong> need all four for every be
 </tr>
 <tr>
 <td>3</td>
-<td><strong>Policy-Service</strong> — ClaimsPortal policy side (Spring Boot).</td>
+<td><strong>Policy-Service</strong> — ClaimsPortal policy side (Python/FastAPI).</td>
 <td><code>apps/run-policy-service.sh</code></td>
 <td>8081</td>
 <td>CR-2026-043</td>
 </tr>
 <tr>
 <td>4</td>
-<td><strong>Claims-Service</strong> — ClaimsPortal claims side (Spring Boot). Start after #3.</td>
+<td><strong>Claims-Service</strong> — ClaimsPortal claims side (Python/FastAPI). Start after #3.</td>
 <td><code>apps/run-claims-service.sh</code></td>
 <td>8082</td>
 <td>CR-2026-043</td>
@@ -188,7 +188,7 @@ application.</p>
 <tr>
 <td>Python</td>
 <td>3.12+</td>
-<td>Console API, PolicyCore, S3 tooling</td>
+<td>Console API, PolicyCore, S3 tooling, ClaimsPortal</td>
 <td><code>python3 --version</code></td>
 </tr>
 <tr>
@@ -197,21 +197,8 @@ application.</p>
 <td>Console UI</td>
 <td><code>node --version</code></td>
 </tr>
-<tr>
-<td>Java JDK</td>
-<td>17+</td>
-<td>Apps 3 and 4 only</td>
-<td><code>java -version</code></td>
-</tr>
-<tr>
-<td>Maven</td>
-<td>3.9+</td>
-<td>Apps 3 and 4 only</td>
-<td><code>mvn -version</code></td>
-</tr>
 </tbody>
 </table>
-<p>Skip Java and Maven entirely if you are only demoing the PolicyCore CRs.</p>
 <hr />
 <h2>3. First-time setup from base packages</h2>
 <p>From the repository root. Run once per machine.</p>
@@ -231,7 +218,7 @@ cp .env.example .env
 python -m apps.policycore.core.seed
 
 # 5. Confirm the install
-python -m pytest -q          # expect: 309 passed
+python -m pytest -q          # expect: 529 passed
 </code></pre>
 <div class="callout"><span class="label">Sanity check</span><p>If <code>pytest</code> passes, the wiring is correct. It exercises
 the routing registry, the code-review flow and both replay targets without
@@ -313,7 +300,7 @@ demo/warm_s3_cache.sh         # ALWAYS last — reset_s3.sh wipes .cache/llm
 <p>Expected final lines:</p>
 <pre><code class="language-text">S3 source baseline restored, mockapp reseeded, LLM cache cleared, and ticket timeline cleared.
 CR-2026-042 source baseline restored, mockapp reseeded, and LLM cache cleared.
-Spring demo (ClaimsPortal) source baseline restored; generated files and build output removed.
+ClaimsPortal source baseline restored; generated files removed.
 </code></pre>
 <hr />
 <h2>6. Start the applications</h2>
@@ -458,8 +445,8 @@ need to reset between the two.</p>
 </tbody>
 </table>
 <p>On beats 12-13: the deployment order is <strong>derived</strong>, not drafted — on
-CR-2026-043 the plan puts policy-service before claims-service because
-claims-service calls it, and says why. The release record is assembled from
+CR-2026-043 the plan puts policy_service before claims_service because
+claims_service calls it, and says why. The release record is assembled from
 what the run actually produced; its &quot;Not evidenced by this release&quot; block is
 the part worth pausing on, because a release document that only lists
 successes is marketing. <strong>Attach to ticket</strong> is honest about the demo default:
@@ -485,7 +472,7 @@ honest undo at that point is a revert commit, not a rewritten history.</p>
 <p>On beat 6b: the change map is <strong>derived, not drawn by the model</strong> — services,
 layers and the cross-service arrow are read from the changed-file set, so it
 costs no LLM call and needs no cache warming. The <code>NEW</code> badge comes from git
-(the file is absent from <code>HEAD</code>), which is why <code>ClaimRules.java</code> carries one on
+(the file is absent from <code>HEAD</code>), which is why <code>claim_rules.py</code> carries one on
 CR-2026-043 and nothing does on CR-2026-042. The PDF is rendered server-side by
 headless Chromium; if <code>playwright install chromium</code> has not been run on the
 demo machine the endpoint answers 503 and the console silently falls back to
@@ -494,7 +481,7 @@ the browser's own print-to-PDF, so the button always does something.</p>
 saying out loud when showing them:</p>
 <ul>
 <li>The regression suite (<code>tests/test_regression_policycore.py</code>,
-<code>PolicyApiRegressionTest.java</code>) appears in <strong>no</strong> target's
+<code>tests/test_regression_claimsportal.py</code>) appears in <strong>no</strong> target's
 <code>testgen_allowlist</code>. The pipeline physically cannot write to it, which is
 what makes &quot;the pre-existing tests still pass&quot; a result rather than a claim.</li>
 <li>In the matrix, only the scenario→test column is inferred, and it is

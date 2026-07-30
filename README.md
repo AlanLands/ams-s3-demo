@@ -23,8 +23,8 @@ need all four for every beat.
 |---|-------------|-------|------|------------|
 | 1 | **Console** — FastAPI + React. The screen you present from. | `apps/run-console.sh` | 8000 + **5173** | every beat |
 | 2 | **PolicyCore** — the client's policy portal (Streamlit) | `apps/run-policycore.sh` | 8501 | CR-2026-041, CR-2026-042 |
-| 3 | **Policy-Service** — ClaimsPortal policy side (Spring Boot) | `apps/run-policy-service.sh` | 8081 | CR-2026-043 |
-| 4 | **Claims-Service** — ClaimsPortal claims side (Spring Boot) | `apps/run-claims-service.sh` | 8082 | CR-2026-043 |
+| 3 | **Policy-Service** — ClaimsPortal policy side (Python/FastAPI) | `apps/run-policy-service.sh` | 8081 | CR-2026-043 |
+| 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI) | `apps/run-claims-service.sh` | 8082 | CR-2026-043 |
 
 Open **`http://localhost:5173`** and log in with a name/passcode from
 `common/roster.py` (the scheme is `1001 + roster position`, so the first
@@ -37,7 +37,6 @@ a ServiceNow application, and why the directory names must not change.
 
 - **Python 3.12+**
 - **Node.js 20+** and npm
-- **Java 17+ and Maven 3.9+** — only for applications 3 and 4
 - An LLM provider — Anthropic, OpenAI, Bedrock, Ollama, or any
   OpenAI-compatible endpoint you host yourself (`LLM_PROVIDER=custom`)
 - Nothing else. Every external call (LLM, Jira, GitLab, vector embeddings)
@@ -114,7 +113,7 @@ this order**, because the endorsement baseline builds on the database
 ```bash
 demo/reset_s3.sh               # CR-2026-041 (PolicyCore coverage tier) + shared state
 demo/reset_s3_endorsement.sh   # CR-2026-042 (PolicyCore endorsement priority)
-demo/reset_s3_springdemo.sh    # CR-2026-043 (ClaimsPortal, Java/Spring)
+demo/reset_s3_springdemo.sh    # CR-2026-043 (ClaimsPortal)
 demo/warm_s3_cache.sh          # ALWAYS last — reset_s3.sh wipes .cache/llm
 ```
 
@@ -128,8 +127,8 @@ provider path deliberately booby-trapped — the pre-demo confidence check.
   - `apps/console/api/`, `apps/console/web/` — FastAPI backend + React console
   - `apps/policycore/` — the MapleSure policy portal; S3's first target
     (CR-2026-041, CR-2026-042). Imported as `apps.policycore.*`
-  - `apps/claimsportal/` — S3's second target, "ClaimsPortal" (Java/Spring
-    Boot, CR-2026-043). One folder, two services: the CR edits both, so S3
+  - `apps/claimsportal/` — S3's second target, "ClaimsPortal" (Python/FastAPI,
+    CR-2026-043). One folder, two services: the CR edits both, so S3
     treats it as a single target root
 - `s3_enhancement/` — the S3 pipeline: `analyze.py` (requirement analysis),
   `codegen.py` (code generation, per-file apply/reject/revert),

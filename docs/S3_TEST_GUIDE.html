@@ -143,18 +143,18 @@
     <td class="mono">demo/run_mockapp.sh</td>
   </tr>
   <tr>
-    <td class="mono">8081</td><td>Spring Policy Team console (CR-043)</td>
+    <td class="mono">8081</td><td>ClaimsPortal Policy Team console (CR-043)</td>
     <td class="mono">localhost:8081</td>
-    <td class="mono">mvn -q package -DskipTests<br>java -jar policy-service/target/*.jar</td>
+    <td class="mono">apps/run-policy-service.sh</td>
   </tr>
   <tr>
-    <td class="mono">8082</td><td>Spring Claims Team console (CR-043)</td>
+    <td class="mono">8082</td><td>ClaimsPortal Claims Team console (CR-043)</td>
     <td class="mono">localhost:8082</td>
-    <td class="mono">mvn -q package -DskipTests<br>java -jar claims-service/target/*.jar</td>
+    <td class="mono">apps/run-claims-service.sh</td>
   </tr>
 </table>
 
-<p>Both Spring services together, built and launched in one foreground terminal:
+<p>Both ClaimsPortal services together, in one foreground terminal:
 <code>demo/run_s3_springdemo.sh</code>. It traps <code>kill 0</code> on exit, so use the two
 separate commands above if you want them in independent background terminals.</p>
 
@@ -172,12 +172,12 @@ separate commands above if you want them in independent background terminals.</p
   <p><strong>Never run uvicorn with <code>--reload</code>.</strong> The pipeline writes <code>.py</code> files
   into the tree uvicorn watches; the reload wipes the in-memory session store and every request then 401s
   while the UI still looks logged in.</p>
-  <p><strong>The Spring jars serve whatever was last compiled.</strong> A reset deletes both
-  <code>target/</code> directories, and an Apply changes the source — either way you must
-  <code>mvn -q package -DskipTests</code> in each service and relaunch before :8081/:8082 reflect reality.
-  A JVM already running holds its jar open and survives the reset entirely: it keeps serving the
-  <em>post-CR</em> app while the source sits at baseline, and both ports answer 200 the whole time.
-  Port-is-up is not build-is-current — check the process start time against your reset time.</p>
+  <p><strong>The ClaimsPortal processes serve whatever was last running.</strong> There's no build step
+  (plain Python), but <code>uvicorn</code> is deliberately started without <code>--reload</code>, so an Apply
+  changing the source does not take effect until you restart both services. A process already running
+  survives the reset entirely: it keeps serving the <em>post-CR</em> app while the source sits at baseline,
+  and both ports answer 200 the whole time. Port-is-up is not process-is-current — check the process
+  start time against your reset time.</p>
   <p><strong>Start the portal only via <code>demo/run_mockapp.sh</code>.</strong> The script exports
   <code>PYTHONPATH="$PWD"</code> first. Streamlit otherwise puts <code>apps/policycore/</code> on
   <code>sys.path</code> instead of the repo root, and the app dies at
@@ -203,7 +203,7 @@ separate commands above if you want them in independent background terminals.</p
   <tr><th>Ticket</th><th>CR</th><th>Status</th><th>Assignee</th><th>Target</th><th>Language</th></tr>
   <tr><td class="mono">AMS-101</td><td class="mono">CR-2026-041</td><td>QA</td><td>Priya Nair</td><td>mockapp — coverage tier</td><td>Python</td></tr>
   <tr><td class="mono">AMS-102</td><td class="mono">CR-2026-042</td><td>In Progress</td><td>Ravi Kumar</td><td>mockapp — endorsement priority</td><td>Python</td></tr>
-  <tr><td class="mono">AMS-103</td><td class="mono">CR-2026-043</td><td>To Do</td><td>Ravi Kumar</td><td>spring-demo — claims deductible</td><td>Java</td></tr>
+  <tr><td class="mono">AMS-103</td><td class="mono">CR-2026-043</td><td>To Do</td><td>Ravi Kumar</td><td>spring-demo — claims deductible</td><td>Python</td></tr>
   <tr><td class="mono">AMS-098</td><td>—</td><td>Done</td><td>Elena Cruz</td><td>none (ad-hoc path)</td><td>—</td></tr>
 </table>
 
@@ -213,8 +213,8 @@ the endorsement reset must come <em>after</em> <code>reset_s3.sh</code>, because
 mockapp state that leaves both AMS-101 and AMS-102 demo-ready.</p>
 <pre><code>demo/reset_s3.sh              # CR-041 + shared state: .cache/llm, out/, events, Jira caches
 demo/reset_s3_endorsement.sh  # CR-042 baseline  (MUST run after reset_s3.sh)
-demo/reset_s3_springdemo.sh   # CR-043 Java target, from apps/claimsportal/.baseline/</code></pre>
-<p>Then rebuild the Spring jars and restart all five services. Hard-refresh the browser tab —
+demo/reset_s3_springdemo.sh   # CR-043 target, from apps/claimsportal/.baseline/</code></pre>
+<p>Then restart all five services. Hard-refresh the browser tab —
 the console caches per-ticket state in <code>localStorage</code> and drops it when the reset marker changes.</p>
 
 <div class="callout">
@@ -258,16 +258,17 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
     <td>Claims :8082<div class="tiny">and Policy :8081</div></td>
     <td class="before">Policies carry no deductible. An <strong>$80 claim on MS-1004 → ACCEPTED</strong>.</td>
     <td class="after">Policies gain a deductible (MS-1001 500, MS-1002 1000, MS-1003 500, MS-1004 100). The same <strong>$80 claim on MS-1004 → REJECTED_BELOW_DEDUCTIBLE</strong>. A <strong>$1,200 claim on MS-1001 → ACCEPTED, <code>payableAmount</code> 700</strong>.</td>
-    <td><strong>Rebuild + restart both jars</strong></td>
+    <td><strong>Restart both services</strong></td>
   </tr>
 </table>
 
 <div class="callout warn">
   <span class="label">The easiest way to make a working demo look broken</span>
-  <p>The two Python scenarios need only a browser refresh — Streamlit re-executes <code>app.py</code> on
-  each run. <strong>Scenario 3 does not.</strong> The running JVMs serve whatever was compiled, so a
-  just-applied CR is invisible on :8081/:8082 until you rebuild. Apply the change, switch to :8082, and
-  nothing has changed. Ctrl-C both Spring terminals, then <code>demo/run_s3_springdemo.sh</code>.</p>
+  <p>The two mockapp scenarios need only a browser refresh — Streamlit re-executes <code>app.py</code> on
+  each run. <strong>Scenario 3 does not.</strong> The running processes serve whatever was loaded at
+  startup (no <code>--reload</code>), so a just-applied CR is invisible on :8081/:8082 until you restart. Apply
+  the change, switch to :8082, and nothing has changed. Ctrl-C both terminals, then
+  <code>demo/run_s3_springdemo.sh</code>.</p>
 </div>
 
 <h3>Confirm the baseline is genuinely "before"</h3>
@@ -275,7 +276,7 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
 <pre><code>grep -c 'coverage_tier\|COVERAGE_TIERS' apps/policycore/app.py    # 0       — no CR-041 yet
 grep -c 'selectbox("Priority"' apps/policycore/app.py              # 0       — no CR-042 yet
 ls apps/policycore/core/coverage.py                                # absent
-ls .../com/maplesure/claims/ClaimRules.java                # absent
+ls apps/claimsportal/claims_service/claim_rules.py          # absent
 ls apps/policycore/core/endorsements.py                            # PRESENT — CR-042's "before" needs it
 curl -s localhost:8081/api/policies/MS-1004                # no "deductible" key
 ls s3_enhancement/out/ | wc -l                             # 0</code></pre>
@@ -299,7 +300,7 @@ listener and you read the wrong process's start time.</p>
 <section class="scenario">
   <div class="scenario-head">
     <span class="num">01</span>
-    <span class="scenario-title">AMS-103 — Java / Spring, full pipeline</span>
+    <span class="scenario-title">AMS-103 — ClaimsPortal, full pipeline</span>
   </div>
   <p class="who"><strong>Start as:</strong> Ravi Kumar (1001) → hand off to Priya Nair (1003) ·
   <strong>Time:</strong> ~15 min · <strong>Best single end-to-end run</strong></p>
@@ -312,23 +313,23 @@ listener and you read the wrong process's start time.</p>
     <li><strong>Apply to repo.</strong></li>
     <li><strong>Stage 2 · Draft design doc</strong> → <strong>Assign tester &amp; move to QA</strong> (Priya Nair).</li>
     <li>Log out → log in as <strong>Priya Nair</strong> → open AMS-103 → <strong>Stage 3 · Generate tests</strong>
-        → <strong>Run tests</strong> (real Maven; first run pulls dependencies, allow a minute).</li>
+        → <strong>Run tests</strong> (real pytest, same runner as the other two scenarios).</li>
     <li><strong>Prove the tests catch bugs</strong> → <strong>Stage 4 · Draft release notes</strong> → mark Done.</li>
   </ol>
 
   <ul class="check">
     <li>After the second answer it <em>must</em> produce a final analysis — the two-turn cap is hard.</li>
     <li>Activity tab logs: clarification requested ×2 → impact analysis drafted → status In Progress.</li>
-    <li>Selection panel reads <span class="pass">Files in this app 8 · used 8</span> and
+    <li>Selection panel reads <span class="pass">Files in this app 5 · used 5</span> and
         <em>"No subsystem doc matched closely enough"</em> — no <code>apps/policycore/systems/…</code> entry.</li>
     <li>Token panel says <em>"no saving over whole-app context here"</em> — the honest branch.</li>
-    <li>Six Java files, each with a one-line reason.</li>
+    <li>Six Python files, each with a one-line reason.</li>
     <li>Post-apply link reads <strong>"open the Claims Team console"</strong> → :8082 (not the mockapp portal).</li>
-    <li>On disk: <code>ClaimRules.java</code> created, <code>deductible</code> present in <code>Policy.java</code>.</li>
+    <li>On disk: <code>claim_rules.py</code> created, <code>deductible</code> present in <code>policy.py</code>.</li>
     <li>Stage 3 was <em>locked</em> for Ravi — the developer cannot verify their own change.</li>
-    <li>Per-case checklist parsed from Surefire XML, all green.</li>
+    <li>Per-case checklist parsed from pytest's JUnit XML output, all green.</li>
     <li>Mutation flips <code>&lt;=</code> to <code>&lt;</code>; the "claim at exactly the deductible" test goes red;
-        file auto-restored (<code>git diff</code> on <code>ClaimRules.java</code> is clean afterwards).</li>
+        file auto-restored (<code>git diff</code> on <code>claim_rules.py</code> is clean afterwards).</li>
   </ul>
 
   <div class="callout warn">
@@ -337,7 +338,7 @@ listener and you read the wrong process's start time.</p>
     HTML"</em>, and no <code>.html</code> is in the target's codegen allowlist. The policy console's table has
     no Deductible column, so it looks identical after the CR. The change <em>is</em> there —
     <code>GET :8081/api/policies</code> now returns <code>"deductible":500</code>.</p>
-    <p><strong>The visible proof is on :8082.</strong> Rebuild the jars, then submit a claim against
+    <p><strong>The visible proof is on :8082.</strong> Restart the services, then submit a claim against
     MS-1001 (limit 25 000, deductible 500):</p>
   </div>
 
@@ -364,7 +365,7 @@ listener and you read the wrong process's start time.</p>
     <li><strong>Stage 1 · Generate</strong> — type an audience-chosen tier name
         (≤ 24 chars, no quotes or slashes, e.g. <em>Platinum</em>).</li>
     <li><strong>Apply</strong> → post-apply runs <code>python -m apps.policycore.core.seed</code>.</li>
-    <li><strong>Design doc</strong> → <strong>Generate tests → Run</strong> (pytest here, not Maven)
+    <li><strong>Design doc</strong> → <strong>Generate tests → Run</strong> (pytest)
         → <strong>Mutation check</strong> → <strong>Release notes</strong>.</li>
   </ol>
 
@@ -608,7 +609,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   </tr>
   <tr>
     <td class="mono">7</td>
-    <td>Spring consoles show no deductible column; <code>payableAmount</code> is not rendered either</td>
+    <td>ClaimsPortal consoles show no deductible column; <code>payableAmount</code> is not rendered either</td>
     <td>No visual before/after on :8081</td>
     <td>By design — CR forbids HTML changes</td>
   </tr>
@@ -625,12 +626,13 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   </tr>
   <tr>
     <td>:8081 or :8082 refuses to connect</td>
-    <td>No jar — a reset deleted <code>target/</code>. Run <code>mvn -q package -DskipTests</code> in each
-        service, then relaunch.</td>
+    <td>Neither service is running — start with <code>apps/run-policy-service.sh</code> /
+        <code>apps/run-claims-service.sh</code> (or <code>demo/run_s3_springdemo.sh</code> for both).</td>
   </tr>
   <tr>
-    <td>Applied a CR but the Spring console is unchanged</td>
-    <td>Stale jar. Rebuild and relaunch both services.</td>
+    <td>Applied a CR but the ClaimsPortal console is unchanged</td>
+    <td>Stale process — uvicorn runs without <code>--reload</code> here, so it's still serving the pre-apply
+        code. Ctrl-C and relaunch both services.</td>
   </tr>
   <tr>
     <td>A stage will not open</td>
