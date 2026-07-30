@@ -35,6 +35,7 @@ def submit_endorsement(
     effective_date: str,
     contact_phone: str,
     contact_email: str,
+    priority: str = "Standard"
 ) -> Endorsement:
     """Create and persist a new endorsement request, returning the record."""
     endorsement = Endorsement(
@@ -46,6 +47,7 @@ def submit_endorsement(
         contact_phone=contact_phone,
         contact_email=contact_email,
         filed_at=datetime.now(UTC).isoformat(timespec="seconds"),
+        priority=priority
     )
     insert_endorsement(endorsement)
     return endorsement

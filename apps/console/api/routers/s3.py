@@ -11,10 +11,10 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
+from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
 from apps.console.api.auth import require_identity, require_session_id
@@ -30,7 +30,8 @@ from common.ticket_events import (
     events_log_marker,
     record_event,
 )
-from s3_enhancement import applications, routing, targets, testrun
+from s3_enhancement import applications, routing, scm, scm_live, targets, testrun
+from s3_enhancement.acceptance import parse_acceptance_criteria
 from s3_enhancement.analyze import (
     build_assumption_question,
     check_cr_clarity,
@@ -48,16 +49,34 @@ from s3_enhancement.codegen import (
     propose_change,
     reject_file,
     rejected_files,
-    revertable_files,
     revert_change,
+    revertable_files,
     revise_change,
 )
 from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS, clarification_turns_used
 from s3_enhancement.cr import render_cr, sanitize_tier_name
 from s3_enhancement.design_sync import review_after_apply
-from s3_enhancement.docgen import draft_design_doc, draft_release_notes
+from s3_enhancement.designdoc import (
+    PdfUnavailableError,
+    render_document_html,
+    render_pdf,
+    render_release_record_html,
+)
+from s3_enhancement.diagram import build_change_map, build_svg, caption_for
+from s3_enhancement.docgen import (
+    draft_design_doc,
+    draft_release_note_set,
+    draft_release_notes,
+)
 from s3_enhancement.harness import latest_harness_run
 from s3_enhancement.quick_chat import QuickChatTurn, continue_session
+from s3_enhancement.release import (
+    ReleaseRecord,
+    SuiteEvidence,
+    build_deployment_plan,
+    collect_approvals,
+    unproven_claims,
+)
 from s3_enhancement.relevance import (
     discover_files_for_target,
     discover_gitlab_files,
@@ -70,9 +89,16 @@ from s3_enhancement.repo_match import (
     needs_confirmation,
     suggest_target_repo,
 )
+from s3_enhancement.scenarios import (
+    draft_scenarios,
+    scenario_from_dict,
+    uncovered_criteria,
+    validate_scenarios,
+)
 from s3_enhancement.screenshots import ScreenshotError, capture_form_screenshot
 from s3_enhancement.targets import Target
 from s3_enhancement.testgen import generate_tests
+from s3_enhancement.traceability import build_matrix
 
 _QUICK_CHAT_SESSION_KEY = "s3_quick_chat_history"
 _ADHOC_CLARITY_SESSION_KEY = "s3_adhoc_clarity_history"
@@ -87,6 +113,71 @@ class TierRequest(BaseModel):
     # "AMS-101") — purely for the Activity feed; the pipeline behaves
     # identically whether or not it's supplied.
     ticket_number: str | None = None
+
+
+class DesignDocRequest(TierRequest):
+    # Applications the cross-team check surfaced, if it was run. Optional
+    # because the diagram is useful without them and the check is an
+    # independent beat the tester may skip.
+    downstream_apps: list[str] = []
+
+
+class DesignDocExportRequest(DesignDocRequest):
+    format: Literal["html", "pdf"] = "pdf"
+    include_diagram: bool = True
+
+
+class ReleaseRequest(TierRequest):
+    downstream_apps: list[str] = []
+    # Lets the deployment plan and the release record pin themselves to the
+    # branch and commit the change went through. The branch state is read
+    # server-side from the proposal's own file (see s3_enhancement/scm.py), not
+    # posted as a branch name, so a client cannot claim a commit nobody made.
+    proposal_id: str | None = None
+
+
+class ReleaseRecordRequest(ReleaseRequest):
+    """Everything the record needs that only the console knows.
+
+    The API is stateless across beats, so the run's results live in the
+    browser until something collects them — which is precisely the gap the
+    record exists to close. Approvals are the exception: those are read from
+    the server-side event log, because "who signed this" must not be
+    reported by the same client that is asking for the certificate.
+    """
+
+    format: Literal["pdf", "html"] = "pdf"
+    scenarios: list[dict] = []
+    generated_cases: list[dict] = []
+    regression_cases: list[dict] = []
+    # {"caught": bool, "total": int, "failed": int} from the seeded-bug beat.
+    mutation: dict | None = None
+    applied_files: list[str] = []
+
+
+class ScenarioApprovalRequest(TierRequest):
+    # The tester's edited plan, in the same JSON shape the draft returned.
+    scenarios: list[dict] = []
+
+
+class TestsGenerateRequest(TierRequest):
+    # Optional: the approved plan to generate against. Absent means "generate
+    # from the CR alone", which is what the pre-scenario flow did.
+    scenarios: list[dict] | None = None
+
+
+class TraceabilityRequest(TierRequest):
+    """Everything the matrix needs, supplied by the caller.
+
+    The console already holds the approved plan and both runs' results, and
+    the API is otherwise stateless across beats — re-running suites here just
+    to rebuild a report would be slower and could disagree with what the
+    tester is looking at on screen.
+    """
+
+    scenarios: list[dict] = []
+    generated_cases: list[dict] = []
+    regression_cases: list[dict] = []
 
 
 class AdhocAnalyzeRequest(BaseModel):
@@ -115,9 +206,9 @@ def _cr_text_or_400(tier_name: str, *, target: Target | None = None) -> str:
 
 def _run_suite_or_502(target: Target) -> testrun.SuiteRun:
     """Run the target's generated test suite with the target's own runner —
-    pytest by default; a Java target declares its Maven invocation on the
-    Target itself (test_command/test_cwd). A missing runner binary surfaces as
-    a clean 502, not an uncaught FileNotFoundError 500."""
+    pytest by default; a target can declare an external invocation instead on
+    the Target itself (test_command/test_cwd). A missing runner binary
+    surfaces as a clean 502, not an uncaught FileNotFoundError 500."""
     try:
         return testrun.run_suite(target)
     except testrun.TestRunnerNotFoundError as exc:
@@ -895,6 +986,11 @@ class ApplyRequest(BaseModel):
     # view) instead of the whole proposal.
     file_path: str | None = None
     ticket_number: str | None = None
+    # Names the feature branch apply opens (see s3_enhancement/scm.py). Absent
+    # falls back to the default target rather than skipping the branch: the
+    # branch-before-write framing is the point of the beat, so it must not be
+    # something a caller can drop by omitting a field.
+    target_id: str | None = None
 
 
 class DesignSyncRequest(BaseModel):
@@ -1037,15 +1133,35 @@ def _run_post_apply(applied_files: list[str], ticket_number: str | None) -> dict
 def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity)) -> dict:
     """Apply a reviewed proposal to the working tree — the only endpoint that
     ever writes to the real repo files. Pass `file_path` to apply just one
-    staged file instead of the whole proposal."""
+    staged file instead of the whole proposal.
+
+    Opens the change's feature branch *before* the first write (see
+    s3_enhancement/scm.py). The branch is modelled, not real — but it is opened
+    in the right order, because "you branch, then you edit" is the part of the
+    flow this beat is here to show, and back-filling it after the write would
+    misrepresent it.
+    """
+    target = targets.get_target(payload.target_id)
+    branch = scm.open_branch(
+        payload.proposal_id, payload.ticket_number or "", target.target_id
+    )
+    branch_was_new = not branch.staged_files and branch.commit is None
     try:
         applied_files = apply_change(payload.proposal_id, payload.file_path)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    branch = scm.record_applied(payload.proposal_id, applied_files) or branch
     post_apply = _run_post_apply(applied_files, payload.ticket_number)
 
     if payload.ticket_number:
+        if branch_was_new:
+            record_event(
+                payload.ticket_number,
+                "system",
+                "branch_opened",
+                detail=f"{branch.branch} (off {branch.base}) — simulated",
+            )
         record_event(
             payload.ticket_number,
             "human",
@@ -1058,6 +1174,7 @@ def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity))
         "post_apply": post_apply,
         "rejected_files": rejected_files(payload.proposal_id),
         "revertable_files": revertable_files(payload.proposal_id),
+        "scm": branch.to_dict(),
     }
 
 
@@ -1143,6 +1260,10 @@ def revert(payload: RevertRequest, identity: Identity = Depends(require_identity
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     post_apply = _run_post_apply(reverted_files, payload.ticket_number)
+    # Reverting every applied file abandons the branch rather than rewinding it:
+    # a commit that exists on a branch is not unmade by an undo button, and
+    # pretending otherwise would be the one dishonest step in the flow.
+    branch = scm.record_reverted(payload.proposal_id, reverted_files)
 
     if payload.ticket_number:
         record_event(
@@ -1151,12 +1272,207 @@ def revert(payload: RevertRequest, identity: Identity = Depends(require_identity
             "code_change_reverted",
             detail=payload.file_path or payload.proposal_id,
         )
+        if branch is not None and branch.abandoned_at:
+            record_event(
+                payload.ticket_number,
+                "system",
+                "branch_abandoned",
+                detail=f"{branch.branch} — every applied file was reverted",
+            )
 
     return {
         "proposal_id": payload.proposal_id,
         "reverted_files": reverted_files,
         "post_apply": post_apply,
         "revertable_files": revertable_files(payload.proposal_id),
+        "scm": branch.to_dict() if branch else None,
+    }
+
+
+# --- the source-control flow around Apply -----------------------------------
+#
+# Every response below carries `simulated: true` and a `transcript` of the git
+# commands a real integration would have run. Nothing here executes git — see
+# s3_enhancement/scm.py for why that is load-bearing rather than a shortcut,
+# and do not "fix" the simulation into a fake success.
+
+
+class ScmCheckoutRequest(BaseModel):
+    ticket_number: str
+    target_id: str
+
+
+@router.post("/scm/checkout")
+def scm_checkout(
+    payload: ScmCheckoutRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Step 0, "Check out the repo": cut (or switch to) this CR's feature
+    branch before anything is generated.
+
+    Simulated by default — same convention `/s3/release/attach` uses under
+    JIRA_MODE=replay: a computed branch name, no `sha`, clearly labelled.
+    Set SCM_MODE=live to run a real local `git checkout -b` / `git checkout`
+    in this repo. Still branch-only even then: no commit, no push, no
+    remote — see s3_enhancement/scm_live.py for why that stays a separate,
+    narrower module rather than an extension of scm.py's modelled flow.
+    """
+    branch = scm.branch_name_for(payload.ticket_number, payload.target_id)
+    if not scm_live.live_mode_enabled():
+        detail = (
+            f"{branch} would be checked out off {scm.BASE_BRANCH}. This console "
+            "does not run git — set SCM_MODE=live to run a real local checkout."
+        )
+        record_event(
+            payload.ticket_number,
+            "human",
+            "repo_checked_out",
+            detail=f"{branch} — simulated",
+        )
+        return {
+            "mode": "simulated",
+            "branch": branch,
+            "base": scm.BASE_BRANCH,
+            "sha": None,
+            "created": None,
+            "already_current": None,
+            "dirty_files": [],
+            "detail": detail,
+        }
+
+    try:
+        result = scm_live.checkout_branch(payload.ticket_number, payload.target_id)
+    except scm_live.ScmLiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if result.already_current:
+        detail = f"Already on {result.branch}."
+    elif result.created:
+        detail = f"Created {result.branch} off {result.base}."
+    else:
+        detail = f"Switched to {result.branch}."
+    if result.dirty_files:
+        count = len(result.dirty_files)
+        detail += (
+            f" Note: {count} file{'s' if count != 1 else ''} were already modified "
+            "before this checkout — not touched by it, just carried over."
+        )
+    record_event(
+        payload.ticket_number,
+        "human",
+        "repo_checked_out",
+        detail=f"{result.branch} @ {result.sha}",
+    )
+    return {**result.to_dict(), "detail": detail}
+
+
+class ScmRequest(BaseModel):
+    proposal_id: str
+    ticket_number: str | None = None
+    target_id: str | None = None
+
+
+class ScmCommitRequest(ScmRequest):
+    # Optional override for the generated subject line. The default is assembled
+    # from the ticket and CR label (scm.commit_message_for) rather than drafted
+    # by the model — no cache key, nothing to be confidently wrong about.
+    message: str | None = None
+
+
+def _scm_payload(proposal_id: str, ticket_number: str | None) -> dict:
+    """Branch state plus the gate's reasoning, as the console renders it."""
+    state = scm.state_for(proposal_id)
+    events = events_for(ticket_number) if ticket_number else []
+    return {
+        "proposal_id": proposal_id,
+        "scm": state.to_dict() if state else None,
+        "commit_blockers": scm.commit_blockers(events),
+        "test_evidence": scm.evidence_summary(events),
+    }
+
+
+@router.get("/scm")
+def scm_state(
+    proposal_id: str,
+    ticket_number: str | None = None,
+    identity: Identity = Depends(require_identity),
+) -> dict:
+    """Where this proposal's change sits in the branch → commit → push flow."""
+    return _scm_payload(proposal_id, ticket_number)
+
+
+@router.post("/scm/commit")
+def scm_commit(
+    payload: ScmCommitRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Commit the applied files onto the change's feature branch.
+
+    Gated on the ticket's own event log, not on a flag from the browser: the
+    generated suite must have run and passed, and the pre-existing regression
+    suite must not be failing. Reading the gate server-side is the same rule the
+    release record's approvals follow — a client that could assert "tests
+    passed" could commit a red branch, which would make the beat's central
+    claim false.
+    """
+    if not payload.ticket_number:
+        raise HTTPException(
+            status_code=422,
+            detail="A ticket number is required to commit — the gate reads the ticket's test results.",
+        )
+    blockers = scm.commit_blockers(events_for(payload.ticket_number))
+    if blockers:
+        raise HTTPException(status_code=409, detail=" ".join(blockers))
+
+    target = targets.get_target(payload.target_id)
+    message = payload.message or scm.commit_message_for(
+        payload.ticket_number,
+        _cr_label_for(target),
+        scm.summary_from_display_name(target.display_name),
+    )
+    try:
+        state = scm.commit_branch(payload.proposal_id, message)
+    except scm.ScmError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    record_event(
+        payload.ticket_number,
+        "human",
+        "change_committed",
+        detail=(
+            f"{state.commit.sha} on {state.branch}: {state.commit.message} "
+            f"({len(state.commit.files)} file(s)) — simulated"
+        ),
+    )
+    return _scm_payload(payload.proposal_id, payload.ticket_number)
+
+
+@router.post("/scm/push")
+def scm_push(payload: ScmRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Push the branch and queue the deployment pipeline — modelled, not run.
+
+    The honest counterpart to the commit step: no remote is contacted, so the
+    response says `simulated: true` and the release record counts the pipeline
+    as something this release did *not* evidence. The same convention
+    `/s3/release/attach` uses under JIRA_MODE=replay.
+    """
+    try:
+        state = scm.push_branch(payload.proposal_id)
+    except scm.ScmError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if payload.ticket_number:
+        record_event(
+            payload.ticket_number,
+            "system",
+            "branch_pushed",
+            detail=f"{state.branch} → {scm.REMOTE}, {state.pipeline_id} queued — simulated",
+        )
+    return {
+        **_scm_payload(payload.proposal_id, payload.ticket_number),
+        "detail": (
+            f"{state.branch} would be pushed to {scm.REMOTE} and {state.pipeline_id} "
+            "queued. This console does not contact a remote — the push and the "
+            "pipeline run are simulated."
+        ),
     }
 
 
@@ -1328,14 +1644,92 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
     return {"project_key": project_key, "issues": merged}
 
 
-@router.post("/tests/generate")
-def tests_generate(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
-    """Generate (and stage into the working tree) the target's test file only
-    — nothing runs yet. The tester reviews the diff, then hits /tests/run."""
+@router.post("/tests/scenarios")
+def tests_scenarios(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Draft the test plan — scenarios traced to the CR's acceptance criteria,
+    before any test code exists. Produces a document, never a file on disk."""
     target = targets.get_target(payload.target_id)
     cr_text = _cr_text_or_400(payload.tier_name, target=target)
     try:
-        result = generate_tests(payload.tier_name, cr_text, target=target)
+        draft = draft_scenarios(cr_text, target=target)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if payload.ticket_number:
+        record_event(
+            payload.ticket_number,
+            "ai",
+            "test_scenarios_drafted",
+            detail=f"{len(draft.scenarios)} scenarios across {len(draft.criteria)} criteria",
+        )
+    return {
+        "label": AI_SUGGESTION_LABEL,
+        "scenarios": [scenario.to_dict() for scenario in draft.scenarios],
+        "criteria": [
+            {"id": c.id, "text": c.text, "is_regression": c.is_regression}
+            for c in draft.criteria
+        ],
+        "uncovered_criteria": draft.uncovered_criteria,
+        "token_panel": {
+            "scoped_input_tokens": draft.scoped_input_tokens,
+            "scoped_output_tokens": draft.scoped_output_tokens,
+            "estimated": draft.tokens_estimated,
+        },
+    }
+
+
+@router.post("/tests/scenarios/approve")
+def tests_scenarios_approve(
+    payload: ScenarioApprovalRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Validate a tester-edited scenario list and record the approval.
+
+    The console could keep the edited plan to itself, but then "the tester
+    approved this" would be a client-side claim with no audit trail. Running
+    the edited list back through the same validator the draft passed also
+    means an edit can't smuggle in an untraceable scenario.
+    """
+    target = targets.get_target(payload.target_id)
+    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    criteria = parse_acceptance_criteria(cr_text)
+    scenarios = [scenario_from_dict(raw) for raw in payload.scenarios]
+    try:
+        validate_scenarios(scenarios, criteria)
+    except LLMError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    gaps = uncovered_criteria(scenarios, criteria)
+    if payload.ticket_number:
+        detail = f"{len(scenarios)} scenarios approved by {identity.name}"
+        if gaps:
+            detail += f"; no scenario covers {', '.join(gaps)}"
+        record_event(payload.ticket_number, "human", "test_scenarios_approved", detail=detail)
+    return {
+        "scenarios": [scenario.to_dict() for scenario in scenarios],
+        "uncovered_criteria": gaps,
+        "approved_by": identity.name,
+    }
+
+
+@router.post("/tests/generate")
+def tests_generate(
+    payload: TestsGenerateRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Generate (and stage into the working tree) the target's test file only
+    — nothing runs yet. The tester reviews the diff, then hits /tests/run.
+
+    `scenarios` carries the tester-approved plan into the prompt so the
+    generated suite is written against the reviewed list rather than against
+    the CR alone. In replay mode the recorded suite is served regardless (as
+    with every other AI beat here) — the console says so rather than implying
+    an edit re-drove the generation.
+    """
+    target = targets.get_target(payload.target_id)
+    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    try:
+        result = generate_tests(
+            payload.tier_name, cr_text, target=target, scenarios=payload.scenarios or None
+        )
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -1378,6 +1772,91 @@ def tests_run(payload: TierRequest, identity: Identity = Depends(require_identit
             detail=f"{summary['passed']}/{summary['total']} passed",
         )
     return {"label": AI_SUGGESTION_LABEL, **_suite_run_dict(run)}
+
+
+def _test_case_from_dict(raw: dict) -> testrun.TestCase:
+    return testrun.TestCase(
+        name=str(raw.get("name", "")),
+        classname=str(raw.get("classname", "")),
+        description=str(raw.get("description", "")),
+        status=str(raw.get("status", "passed")),
+        time_s=float(raw.get("time_s") or 0.0),
+        message=raw.get("message"),
+    )
+
+
+@router.post("/tests/traceability")
+def tests_traceability(
+    payload: TraceabilityRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Acceptance criterion -> scenario -> automated test -> result.
+
+    The criteria come from the CR, the citations from the approved plan, and
+    the results from the two runs. Only the scenario-to-test link is inferred,
+    conservatively — see s3_enhancement/traceability.py on why an unmatched
+    row is the safe answer and a wrongly matched one is not.
+    """
+    target = targets.get_target(payload.target_id)
+    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    criteria = parse_acceptance_criteria(cr_text)
+    if not criteria:
+        raise HTTPException(
+            status_code=409,
+            detail="This CR states no acceptance criteria, so there is nothing to trace to.",
+        )
+
+    matrix = build_matrix(
+        criteria,
+        [scenario_from_dict(raw) for raw in payload.scenarios],
+        generated_cases=[_test_case_from_dict(raw) for raw in payload.generated_cases],
+        regression_cases=[_test_case_from_dict(raw) for raw in payload.regression_cases],
+    )
+
+    if payload.ticket_number:
+        counts = matrix.summary()
+        gaps = counts["not_automated"] + counts["no_scenario"]
+        record_event(
+            payload.ticket_number,
+            "system",
+            "traceability_built",
+            detail=(
+                f"{counts['passed']}/{counts['total']} acceptance criteria evidenced"
+                + (f"; {gaps} with no automated coverage" if gaps else "")
+            ),
+        )
+    return matrix.to_dict()
+
+
+@router.post("/tests/regression")
+def tests_regression(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Run the target app's checked-in, pre-existing regression suite.
+
+    Separate endpoint, separate result, deliberately: the generated suite
+    proves the CR does what it said, and this proves it didn't cost anything
+    that already worked. Runnable at any point — it needs neither generated
+    code nor generated tests — so a presenter can take a green baseline
+    before Apply and re-run it after.
+    """
+    target = targets.get_target(payload.target_id)
+    try:
+        run = testrun.run_regression(target)
+    except testrun.NoRegressionSuiteError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except testrun.TestRunnerNotFoundError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if payload.ticket_number:
+        summary = run.summary()
+        record_event(
+            payload.ticket_number,
+            "system",
+            "regression_passed" if run.passed else "regression_failed",
+            detail=f"{summary['passed']}/{summary['total']} pre-existing tests passed",
+        )
+    return {
+        "suite_paths": list(target.regression_paths or target.regression_command),
+        **_suite_run_dict(run),
+    }
 
 
 @router.post("/tests/mutation")
@@ -1445,11 +1924,27 @@ def tests(payload: TierRequest, identity: Identity = Depends(require_identity)) 
     }
 
 
+def _cr_label_for(target: Target) -> str:
+    """The CR's identifier as the document should title it. Read off the
+    template filename so the server never depends on the console telling it
+    which CR it is currently showing."""
+    if target.cr_template_path is not None:
+        return target.cr_template_path.stem
+    return target.display_name
+
+
 @router.post("/design-doc")
-def design_doc(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
+def design_doc(
+    payload: DesignDocRequest, identity: Identity = Depends(require_identity)
+) -> dict:
     """Draft the internal design doc that hands the applied change off to QA
     — the artifact test generation is written against, sitting between
-    "apply" and "generate tests" in the pipeline."""
+    "apply" and "generate tests" in the pipeline.
+
+    The change map ships with it. It costs no model call (see
+    s3_enhancement/diagram.py), so it is built unconditionally rather than
+    hidden behind another button.
+    """
     target = targets.get_target(payload.target_id)
     cr_text = _cr_text_or_400(payload.tier_name, target=target)
     try:
@@ -1457,9 +1952,308 @@ def design_doc(payload: TierRequest, identity: Identity = Depends(require_identi
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    diagram_svg, change_map = build_svg(target, downstream=payload.downstream_apps)
+
     if payload.ticket_number:
         record_event(payload.ticket_number, "ai", "design_doc_drafted", detail="")
-    return {"label": AI_SUGGESTION_LABEL, "design_doc": text}
+    return {
+        "label": AI_SUGGESTION_LABEL,
+        "design_doc": text,
+        "diagram_svg": diagram_svg,
+        "diagram_caption": caption_for(change_map),
+        "changed_files": [node.rel_path for node in change_map.nodes],
+    }
+
+
+@router.post("/design-doc/document")
+def design_doc_document(
+    payload: DesignDocExportRequest, identity: Identity = Depends(require_identity)
+) -> Response:
+    """The design doc as a downloadable file — HTML or PDF, same renderer.
+
+    Deliberately re-drafts server-side rather than accepting document text
+    from the browser: the draft is cache-pinned so this is free and returns
+    the identical document, and it keeps a rendering endpoint from being
+    handed arbitrary markup to render.
+    """
+    target = targets.get_target(payload.target_id)
+    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    try:
+        text = draft_design_doc(cr_text, target=target)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    cr_label = _cr_label_for(target)
+    diagram_svg, change_map = build_svg(target, downstream=payload.downstream_apps)
+    html = render_document_html(
+        text,
+        cr_label=cr_label,
+        ticket_key=payload.ticket_number or "unassigned",
+        diagram_svg=diagram_svg if payload.include_diagram else None,
+        diagram_caption=caption_for(change_map),
+    )
+
+    if payload.format == "html":
+        return Response(
+            content=html,
+            media_type="text/html; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{cr_label}-design-doc.html"'
+            },
+        )
+
+    try:
+        pdf = render_pdf(html)
+    except PdfUnavailableError as exc:
+        # 503, not 500: the request is fine and the caller has a working
+        # alternative (the browser's own print-to-PDF), which the console
+        # falls back to on exactly this status.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    if payload.ticket_number:
+        record_event(
+            payload.ticket_number,
+            "human",
+            "design_doc_exported",
+            detail=f"PDF downloaded by {identity.name}",
+        )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{cr_label}-design-doc.pdf"'
+        },
+    )
+
+
+def _release_context(payload, identity: Identity):
+    """Everything the release beats share: target, CR text, change map, plan."""
+    target = targets.get_target(payload.target_id)
+    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    change_map = build_change_map(target, downstream=payload.downstream_apps)
+    proposal_id = getattr(payload, "proposal_id", None)
+    branch = scm.state_for(proposal_id) if proposal_id else None
+    plan = build_deployment_plan(
+        target,
+        change_map,
+        applied_files=getattr(payload, "applied_files", None) or None,
+        branch=branch,
+    )
+    return target, cr_text, change_map, plan, branch
+
+
+def _evidence_from(payload: ReleaseRecordRequest) -> list[SuiteEvidence]:
+    """Turn the console's raw run results into the record's headline rows.
+
+    A suite that was never run is absent rather than reported as zero-passed:
+    "not run" and "ran and found nothing" are different claims, and
+    `unproven_claims` treats the absence as a gap.
+    """
+    evidence: list[SuiteEvidence] = []
+    if payload.generated_cases:
+        passed = sum(1 for case in payload.generated_cases if case.get("status") == "passed")
+        evidence.append(
+            SuiteEvidence(
+                name="Generated suite",
+                passed=passed == len(payload.generated_cases),
+                total=len(payload.generated_cases),
+                passed_count=passed,
+                note="written for this change",
+            )
+        )
+    if payload.regression_cases:
+        passed = sum(1 for case in payload.regression_cases if case.get("status") == "passed")
+        evidence.append(
+            SuiteEvidence(
+                name="Regression (pre-existing)",
+                passed=passed == len(payload.regression_cases),
+                total=len(payload.regression_cases),
+                passed_count=passed,
+                note="checked in before this CR; the pipeline cannot write to it",
+            )
+        )
+    if payload.mutation:
+        caught = bool(payload.mutation.get("caught"))
+        total = int(payload.mutation.get("total") or 0)
+        failed = int(payload.mutation.get("failed") or 0)
+        evidence.append(
+            SuiteEvidence(
+                name="Seeded-bug check",
+                passed=caught,
+                total=total,
+                passed_count=max(0, total - failed),
+                note=(
+                    f"{failed} test(s) went red against an injected bug, as intended"
+                    if caught
+                    else "the suite did NOT catch the injected bug"
+                ),
+            )
+        )
+    return evidence
+
+
+@router.post("/release/notes")
+def release_note_set(
+    payload: ReleaseRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """The three audience-specific release notes, plus the derived deployment
+    plan. One call because the plan costs nothing — it is computed from the
+    change's own file set, not drafted."""
+    target, cr_text, change_map, plan, _branch = _release_context(payload, identity)
+    usage: dict = {}
+    try:
+        notes = draft_release_note_set(cr_text, target=target, usage_out=usage)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if payload.ticket_number:
+        record_event(payload.ticket_number, "ai", "release_notes_drafted", detail="")
+    return {
+        "label": AI_SUGGESTION_LABEL,
+        "notes": notes.to_dict(),
+        "plan": plan.to_dict(),
+        "token_panel": {
+            "scoped_input_tokens": usage.get("input_tokens"),
+            "scoped_output_tokens": usage.get("output_tokens"),
+            "estimated": bool(usage.get("estimated")),
+        },
+    }
+
+
+def _build_record(
+    payload: ReleaseRecordRequest, identity: Identity
+) -> tuple[ReleaseRecord, str]:
+    target, cr_text, change_map, plan, branch = _release_context(payload, identity)
+    criteria = parse_acceptance_criteria(cr_text)
+    matrix = (
+        build_matrix(
+            criteria,
+            [scenario_from_dict(raw) for raw in payload.scenarios],
+            generated_cases=[_test_case_from_dict(raw) for raw in payload.generated_cases],
+            regression_cases=[_test_case_from_dict(raw) for raw in payload.regression_cases],
+        )
+        if criteria
+        else None
+    )
+    evidence = _evidence_from(payload)
+    try:
+        notes = draft_release_note_set(cr_text, target=target)
+    except LLMError:
+        # The record's value is the evidence, not the prose. A model that is
+        # unreachable at release time must not stop the artifact being
+        # produced — it just ships without the notes section.
+        notes = None
+
+    diagram_svg, _ = build_svg(target, downstream=payload.downstream_apps)
+    record = ReleaseRecord(
+        cr_label=_cr_label_for(target),
+        ticket_key=payload.ticket_number or "unassigned",
+        released_by=identity.name,
+        generated_at=datetime.now(),
+        changed_files=payload.applied_files or [node.rel_path for node in change_map.nodes],
+        criteria=criteria,
+        matrix=matrix,
+        evidence=evidence,
+        approvals=collect_approvals(
+            events_for(payload.ticket_number) if payload.ticket_number else []
+        ),
+        plan=plan,
+        notes=notes,
+        diagram_svg=diagram_svg,
+        diagram_caption=caption_for(change_map),
+        unproven=unproven_claims(matrix, evidence, branch),
+        branch=branch,
+    )
+    return record, render_release_record_html(record)
+
+
+@router.post("/release/record")
+def release_record(
+    payload: ReleaseRecordRequest, identity: Identity = Depends(require_identity)
+) -> Response:
+    """The release record as a downloadable file."""
+    record, html = _build_record(payload, identity)
+    filename = f"{record.cr_label}-release-record"
+
+    if payload.format == "html":
+        return Response(
+            content=html,
+            media_type="text/html; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.html"'},
+        )
+    try:
+        pdf = render_pdf(html)
+    except PdfUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.pdf"'},
+    )
+
+
+@router.post("/release/attach")
+def release_record_attach(
+    payload: ReleaseRecordRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Attach the release record to its Jira ticket.
+
+    Honest about the demo default: with JIRA_MODE=replay there is no Jira to
+    attach to, and `attach_file`'s replay cache is keyed partly by content
+    digest, which a freshly rendered PDF can never match. Rather than fake a
+    recording, the beat records the intent against the ticket timeline and
+    reports the attachment as simulated — the same convention the "Check out
+    repo" beat uses for an operation it does not really perform.
+    """
+    if not payload.ticket_number:
+        raise HTTPException(status_code=422, detail="A ticket number is required to attach.")
+
+    record, html = _build_record(payload, identity)
+    try:
+        pdf = render_pdf(html)
+    except PdfUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    filename = f"{record.cr_label}-release-record.pdf"
+
+    mode = os.environ.get("JIRA_MODE", "replay").lower()
+    if mode == "replay":
+        record_event(
+            payload.ticket_number,
+            "human",
+            "release_record_attached",
+            detail=f"{filename} prepared by {identity.name} (simulated — JIRA_MODE=replay)",
+        )
+        return {
+            "attached": False,
+            "simulated": True,
+            "filename": filename,
+            "size_bytes": len(pdf),
+            "detail": (
+                "Recorded against the ticket. The attachment itself is simulated because "
+                "this console is running with JIRA_MODE=replay; set JIRA_MODE=live to "
+                "upload it to the real ticket."
+            ),
+        }
+
+    try:
+        get_jira_client().attach_file(
+            payload.ticket_number, filename, pdf, "application/pdf"
+        )
+    except JiraError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    record_event(
+        payload.ticket_number,
+        "human",
+        "release_record_attached",
+        detail=f"{filename} attached by {identity.name}",
+    )
+    return {
+        "attached": True,
+        "simulated": False,
+        "filename": filename,
+        "size_bytes": len(pdf),
+        "detail": f"{filename} attached to {payload.ticket_number}.",
+    }
 
 
 @router.post("/release-notes")

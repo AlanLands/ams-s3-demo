@@ -2,7 +2,7 @@
 // Mirrors the api/routers/s3.py response shapes exactly — no client-side
 // business logic, same "thin view" convention as api.ts's s1Api/s2Api.
 
-import { request } from './api'
+import { ApiError, request } from './api'
 
 export interface SubsystemScreen {
   in_scope: string[]
@@ -153,6 +153,68 @@ export interface PostApplyResult {
   steps: PostApplyStep[]
 }
 
+// The source-control flow around Apply: branch → commit → push. Modelled, never
+// executed — `simulated` is always true, and the release record reports the
+// un-run pipeline as something this release did not evidence. See
+// s3_enhancement/scm.py before changing any of this.
+export interface ScmCommit {
+  sha: string
+  message: string
+  files: string[]
+  committed_at: string
+}
+
+export interface ScmState {
+  proposal_id: string
+  branch: string
+  base: string
+  ticket: string
+  created_at: string
+  staged_files: string[]
+  commit: ScmCommit | null
+  pushed_at: string | null
+  pipeline_id: string
+  abandoned_at: string | null
+  status: 'open' | 'applied' | 'committed' | 'pushed' | 'abandoned'
+  simulated: boolean
+  // The git commands a real integration would have issued, in order.
+  transcript: string[]
+}
+
+export interface ScmSuiteEvidence {
+  passed: boolean
+  detail: string
+  ts: string
+}
+
+export interface ScmResponse {
+  proposal_id: string
+  scm: ScmState | null
+  // Why the branch may not be committed yet, in the words to show the user.
+  // Empty means the gate is open. Computed server-side from the ticket's event
+  // log, never from anything this client asserts.
+  commit_blockers: string[]
+  test_evidence: {
+    generated_suite: ScmSuiteEvidence | null
+    regression_suite: ScmSuiteEvidence | null
+  }
+  detail?: string
+}
+
+export interface ScmCheckoutResponse {
+  mode: 'simulated' | 'live'
+  branch: string
+  base: string
+  // Null in simulated mode — there is no real commit to point a sha at.
+  sha: string | null
+  created: boolean | null
+  already_current: boolean | null
+  // Files that were already modified before this checkout, live mode only —
+  // informational, never blocks the checkout (see s3_enhancement/scm_live.py).
+  dirty_files: string[]
+  detail: string
+}
+
 export interface ApplyResponse {
   proposal_id: string
   applied_files: string[]
@@ -163,6 +225,8 @@ export interface ApplyResponse {
   rejected_files: Record<string, string>
   // Files this proposal has written and can still put back.
   revertable_files: string[]
+  // The feature branch apply opened before writing anything.
+  scm?: ScmState | null
 }
 
 export interface RejectResponse {
@@ -175,6 +239,9 @@ export interface RevertResponse {
   reverted_files: string[]
   post_apply?: PostApplyResult | null
   revertable_files: string[]
+  // Null when the proposal never went through the source-control flow.
+  // Reverting every applied file abandons the branch rather than rewinding it.
+  scm?: ScmState | null
 }
 
 export interface DesignDocFinding {
@@ -252,6 +319,63 @@ export interface TestsRunResponse {
   cases: TestCaseResult[]
 }
 
+// One planned check, before any test code exists. Editable by the tester —
+// the console treats this as a draft document, not a server-owned record.
+export interface TestScenario {
+  id: string
+  title: string
+  kind: 'positive' | 'negative' | 'boundary' | 'regression'
+  acceptance_criteria: string[]
+  preconditions: string
+  test_data: string
+  steps: string[]
+  expected: string
+}
+
+export interface AcceptanceCriterion {
+  id: string
+  text: string
+  is_regression: boolean
+}
+
+export interface ScenariosResponse {
+  label: string
+  scenarios: TestScenario[]
+  criteria: AcceptanceCriterion[]
+  uncovered_criteria: string[]
+  token_panel: TokenPanel
+}
+
+export interface ScenarioApprovalResponse {
+  scenarios: TestScenario[]
+  uncovered_criteria: string[]
+  approved_by: string
+}
+
+export type TraceStatus = 'passed' | 'failed' | 'not_automated' | 'no_scenario' | 'not_run'
+
+export interface TraceabilityRow {
+  criterion_id: string
+  criterion_text: string
+  is_regression: boolean
+  scenario_ids: string[]
+  test_names: string[]
+  status: TraceStatus
+  covered_by: 'generated' | 'regression' | ''
+}
+
+export interface TraceabilityResponse {
+  rows: TraceabilityRow[]
+  summary: Record<TraceStatus | 'total', number>
+}
+
+// The target app's checked-in, pre-existing suite. No `label` — nothing here
+// is AI output, and labelling a human-authored regression run as an AI
+// suggestion would be a lie the rest of this console is careful not to tell.
+export interface RegressionRunResponse extends Omit<TestsRunResponse, 'label'> {
+  suite_paths: string[]
+}
+
 // The "prove the tests catch bugs" beat: a seeded bug is injected, the suite
 // re-run, and the working tree reverted server-side before this returns.
 export interface MutationCheckResponse extends TestsRunResponse {
@@ -270,6 +394,49 @@ export interface ReleaseNotesResponse {
 export interface DesignDocResponse {
   label: string
   design_doc: string
+  // Inline SVG change map, derived server-side from the changed-file set —
+  // see s3_enhancement/diagram.py. Not model output.
+  diagram_svg: string
+  diagram_caption: string
+  changed_files: string[]
+}
+
+export interface ReleaseNoteSet {
+  changelog: string
+  ops_note: string
+  whats_new: string
+}
+
+export interface PlanStep {
+  order: number
+  kind: 'deploy' | 'migrate' | 'verify' | 'rollback'
+  title: string
+  detail: string
+  command: string
+}
+
+// Derived from the change's own service graph — see s3_enhancement/release.py.
+// No model call, so it arrives with the notes rather than behind its own button.
+export interface DeploymentPlan {
+  steps: PlanStep[]
+  rollback: PlanStep[]
+  service_order: string[]
+  order_reason: string
+}
+
+export interface ReleaseNotesResponse2 {
+  label: string
+  notes: ReleaseNoteSet
+  plan: DeploymentPlan
+  token_panel: TokenPanel
+}
+
+export interface ReleaseAttachResponse {
+  attached: boolean
+  simulated: boolean
+  filename: string
+  size_bytes: number
+  detail: string
 }
 
 export interface HarnessStatus {
@@ -499,12 +666,59 @@ export const s3Api = {
       method: 'POST',
       body: JSON.stringify({ proposal_id: proposalId, instruction }),
     }),
-  apply: (proposalId: string, ticketNumber?: string, filePath?: string) =>
+  // targetId names the feature branch apply opens before it writes anything.
+  apply: (
+    proposalId: string,
+    ticketNumber?: string,
+    filePath?: string,
+    targetId?: string | null,
+  ) =>
     request<ApplyResponse>('/api/s3/apply', {
       method: 'POST',
       body: JSON.stringify({
         proposal_id: proposalId,
         file_path: filePath ?? null,
+        ticket_number: ticketNumber ?? null,
+        target_id: targetId ?? null,
+      }),
+    }),
+  // --- the source-control flow around Apply ---------------------------------
+  // Commit and push are simulated: nothing here runs git or contacts a
+  // remote. The commit gate lives on the server and reads the ticket's own
+  // test results, so there is deliberately no "tests passed" flag to send
+  // from here. Checkout is the exception — real when the server has
+  // SCM_MODE=live set (branch creation only; see s3_enhancement/scm_live.py),
+  // simulated otherwise. The server decides and reports which in `mode`.
+  scmCheckout: (ticketNumber: string, targetId: string) =>
+    request<ScmCheckoutResponse>('/api/s3/scm/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ ticket_number: ticketNumber, target_id: targetId }),
+    }),
+  scmState: (proposalId: string, ticketNumber?: string) =>
+    request<ScmResponse>(
+      `/api/s3/scm?proposal_id=${encodeURIComponent(proposalId)}` +
+        (ticketNumber ? `&ticket_number=${encodeURIComponent(ticketNumber)}` : ''),
+    ),
+  scmCommit: (
+    proposalId: string,
+    ticketNumber: string,
+    targetId?: string | null,
+    message?: string,
+  ) =>
+    request<ScmResponse>('/api/s3/scm/commit', {
+      method: 'POST',
+      body: JSON.stringify({
+        proposal_id: proposalId,
+        ticket_number: ticketNumber,
+        target_id: targetId ?? null,
+        message: message ?? null,
+      }),
+    }),
+  scmPush: (proposalId: string, ticketNumber?: string) =>
+    request<ScmResponse>('/api/s3/scm/push', {
+      method: 'POST',
+      body: JSON.stringify({
+        proposal_id: proposalId,
         ticket_number: ticketNumber ?? null,
       }),
     }),
@@ -565,22 +779,56 @@ export const s3Api = {
         ticket_number: ticketNumber ?? null,
       }),
     }),
-  designDoc: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
+  designDoc: (
+    tierName: string,
+    targetId?: string | null,
+    ticketNumber?: string,
+    downstreamApps?: string[]
+  ) =>
     request<DesignDocResponse>('/api/s3/design-doc', {
       method: 'POST',
       body: JSON.stringify({
         tier_name: tierName,
         target_id: targetId ?? null,
         ticket_number: ticketNumber ?? null,
+        downstream_apps: downstreamApps ?? [],
       }),
     }),
+  // Returns a file, not JSON, so it bypasses `request` — which parses every
+  // response as JSON and would choke on PDF bytes. Errors still surface as
+  // ApiError so the 503 "no chromium" fallback can be caught by status.
+  designDocDocument: async (
+    tierName: string,
+    format: 'pdf' | 'html',
+    targetId?: string | null,
+    ticketNumber?: string,
+    downstreamApps?: string[]
+  ): Promise<Blob> => {
+    const response = await fetch('/api/s3/design-doc/document', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        downstream_apps: downstreamApps ?? [],
+        format,
+      }),
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      throw new ApiError(response.status, body.detail ?? response.statusText)
+    }
+    return response.blob()
+  },
   tests: (tierName: string, targetId?: string | null) =>
     request<TestsResponse>('/api/s3/tests', {
       method: 'POST',
       body: JSON.stringify({ tier_name: tierName, target_id: targetId ?? null }),
     }),
-  testsGenerate: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
-    request<TestsGenerateResponse>('/api/s3/tests/generate', {
+  testsScenarios: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
+    request<ScenariosResponse>('/api/s3/tests/scenarios', {
       method: 'POST',
       body: JSON.stringify({
         tier_name: tierName,
@@ -588,8 +836,66 @@ export const s3Api = {
         ticket_number: ticketNumber ?? null,
       }),
     }),
+  testsScenariosApprove: (
+    tierName: string,
+    scenarios: TestScenario[],
+    targetId?: string | null,
+    ticketNumber?: string
+  ) =>
+    request<ScenarioApprovalResponse>('/api/s3/tests/scenarios/approve', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        scenarios,
+      }),
+    }),
+  testsTraceability: (
+    tierName: string,
+    scenarios: TestScenario[],
+    generatedCases: TestCaseResult[],
+    regressionCases: TestCaseResult[],
+    targetId?: string | null,
+    ticketNumber?: string
+  ) =>
+    request<TraceabilityResponse>('/api/s3/tests/traceability', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        scenarios,
+        generated_cases: generatedCases,
+        regression_cases: regressionCases,
+      }),
+    }),
+  testsGenerate: (
+    tierName: string,
+    targetId?: string | null,
+    ticketNumber?: string,
+    scenarios?: TestScenario[] | null
+  ) =>
+    request<TestsGenerateResponse>('/api/s3/tests/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        scenarios: scenarios ?? null,
+      }),
+    }),
   testsRun: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
     request<TestsRunResponse>('/api/s3/tests/run', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  testsRegression: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
+    request<RegressionRunResponse>('/api/s3/tests/regression', {
       method: 'POST',
       body: JSON.stringify({
         tier_name: tierName,
@@ -606,6 +912,45 @@ export const s3Api = {
         ticket_number: ticketNumber ?? null,
       }),
     }),
+  // proposalId lets the returned deployment plan name the branch and commit the
+  // change went through, instead of leaving "deploy the change" to the reader.
+  releaseNoteSet: (
+    tierName: string,
+    targetId?: string | null,
+    ticketNumber?: string,
+    downstreamApps?: string[],
+    proposalId?: string | null,
+  ) =>
+    request<ReleaseNotesResponse2>('/api/s3/release/notes', {
+      method: 'POST',
+      body: JSON.stringify({
+        tier_name: tierName,
+        target_id: targetId ?? null,
+        ticket_number: ticketNumber ?? null,
+        downstream_apps: downstreamApps ?? [],
+        proposal_id: proposalId ?? null,
+      }),
+    }),
+  releaseRecordAttach: (body: Record<string, unknown>) =>
+    request<ReleaseAttachResponse>('/api/s3/release/attach', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  // File download, so it bypasses `request` for the same reason the design
+  // doc export does — `request` parses every response as JSON.
+  releaseRecord: async (body: Record<string, unknown>): Promise<Blob> => {
+    const response = await fetch('/api/s3/release/record', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}))
+      throw new ApiError(response.status, errorBody.detail ?? response.statusText)
+    }
+    return response.blob()
+  },
   releaseNotes: (tierName: string, targetId?: string | null) =>
     request<ReleaseNotesResponse>('/api/s3/release-notes', {
       method: 'POST',

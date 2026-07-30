@@ -206,9 +206,66 @@ need to reset between the two.
 | 3 | Generate code | Only the files the relevance funnel selected are sent — the token panel shows scoped vs naive cost |
 | 4 | **Review file by file**: Ask, Apply this file, Reject | Developers accept or reject one file at a time; a rejection records a reason to the ticket's audit trail and is excluded from Apply |
 | 5 | Apply, then look at PolicyCore on :8501 | The client's running application changed |
+| 5b | **Source control panel**: branch → commit → push | The change lands on a feature branch cut off `main` before anything is written, the commit is gated on the tests passing, and the push hands off to the pipeline — the flow, not a direct edit to main |
 | 6 | **Revert** (per file or all) | Anything applied can be undone without a full demo reset |
-| 7 | Generate tests, run them, then the seeded-bug check | The generated tests actually catch a deliberately introduced bug |
-| 8 | Design doc + release notes | Documentation drift is detected automatically after Apply, not by remembering to press a button |
+| 6b | **Design doc: change map + Download PDF** | The hand-off document carries a diagram of what the change touches, and leaves as a real PDF you can attach to the ticket |
+| 7 | **Draft test scenarios**, edit one, approve the plan | QA reviews *what will be checked*, in prose traced to the CR's acceptance criteria, before any test code exists — and can change it |
+| 8 | Generate tests, run them, then the seeded-bug check | The generated tests actually catch a deliberately introduced bug |
+| 9 | **Run the regression suite** | A human-authored suite the AI cannot write to still passes — the CR cost nothing that already worked |
+| 10 | **Build the traceability matrix** | Every acceptance criterion, the scenarios planned for it, the tests that ran, and the result — the artifact an auditor asks for |
+| 11 | Design-doc drift check | Documentation drift is detected automatically after Apply, not by remembering to press a button |
+| 12 | **Release notes — three audiences** + the derived **deployment & rollback plan** | One note per reader (client / ops / user guide), and a deploy order computed from the change's own service graph |
+| 13 | **Download the release record, attach it to the ticket** | Everything the run proved, in one PDF — including what it could *not* prove |
+
+On beats 12-13: the deployment order is **derived**, not drafted — on
+CR-2026-043 the plan puts policy-service before claims-service because
+claims-service calls it, and says why. The release record is assembled from
+what the run actually produced; its "Not evidenced by this release" block is
+the part worth pausing on, because a release document that only lists
+successes is marketing. **Attach to ticket** is honest about the demo default:
+with `JIRA_MODE=replay` there is no Jira to attach to, so the beat records the
+intent on the ticket timeline and says the upload was simulated. Set
+`JIRA_MODE=live` and it uploads for real.
+
+On beat 5b: say plainly that the git flow is **modelled, not executed** — the
+panel says so on screen and the release record repeats it under "Not evidenced
+by this release". Nothing runs git and no remote is contacted. That is
+deliberate: the target apps live inside this repo and the reset scripts restore
+the baseline from `HEAD`, so a real commit would make them start restoring the
+CR instead. The point of the beat is the *shape* of the flow — branch before
+edit, commit gated on green tests, pipeline on push — which is what a reviewer
+asks about when they see an AI editing code.
+
+Two things are worth clicking rather than describing. Press **Commit to branch**
+before running the tests: it refuses, and names the reason, because the gate is
+computed server-side from the ticket's own test results — the console cannot
+assert "tests passed". And open **What a real integration would have run** for
+the git transcript, which grows one step at a time as you take each step. If you
+Revert everything afterwards, the branch shows as *abandoned* rather than
+disappearing, and a commit already made is not unmade — in a real repo the
+honest undo at that point is a revert commit, not a rewritten history.
+
+On beat 6b: the change map is **derived, not drawn by the model** — services,
+layers and the cross-service arrow are read from the changed-file set, so it
+costs no LLM call and needs no cache warming. The `NEW` badge comes from git
+(the file is absent from `HEAD`), which is why `ClaimRules.java` carries one on
+CR-2026-043 and nothing does on CR-2026-042. The PDF is rendered server-side by
+headless Chromium; if `playwright install chromium` has not been run on the
+demo machine the endpoint answers 503 and the console silently falls back to
+the browser's own print-to-PDF, so the button always does something.
+
+Beats 7, 9 and 10 are the QA-facing half of the tests stage. Two things worth
+saying out loud when showing them:
+
+- The regression suite (`tests/test_regression_policycore.py`,
+  `PolicyApiRegressionTest.java`) appears in **no** target's
+  `testgen_allowlist`. The pipeline physically cannot write to it, which is
+  what makes "the pre-existing tests still pass" a result rather than a claim.
+- In the matrix, only the scenario→test column is inferred, and it is
+  deliberately conservative: an ambiguous pairing renders as "no automated
+  test" rather than guessing. On CR-2026-043 two criteria legitimately land
+  there — that is the honest answer, and a good moment to make the point that
+  the tool reports gaps instead of hiding them.
 
 For the full per-scenario talk track and the fallback ladder, see
 `demo/DEMO_TEST_GUIDE.md`.
@@ -238,7 +295,7 @@ For the full per-scenario talk track and the fallback ladder, see
 - [ ] Console reachable at `:5173`; you are logged in
 - [ ] PolicyCore reachable at `:8501` in a second window
 - [ ] For the ClaimsPortal CR: `:8081` and `:8082` both responding
-- [ ] You have walked beats 1–8 once, end to end, on this machine
+- [ ] You have walked beats 1–13 once, end to end, on this machine
 
 ---
 

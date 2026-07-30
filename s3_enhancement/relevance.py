@@ -78,7 +78,15 @@ NEVER_EXTRA: frozenset[str] = targets.MOCKAPP_COVERAGE_UPGRADE.never_extra
 # pre-CR snapshot (demo/reset_s3_springdemo.sh restores from it) — sources
 # under either must never enter the candidate pool, same reasoning as
 # __pycache__ for Python.
-_EXCLUDED_DIR_NAMES = {"__pycache__", "target", ".baseline"}
+#
+# "test"/"tests" joins them because test sources are not implementation
+# context for codegen, and — more importantly — including them made the pool
+# depend on demo *order*: the Spring target's generated ClaimRulesTest.java
+# lands under its own root, so re-running codegen after testgen scored
+# against a pool one file larger than the first run did. Excluding them keeps
+# a target's candidate pool identical no matter which beats have already run,
+# and lets a checked-in regression suite live beside the code it guards.
+_EXCLUDED_DIR_NAMES = {"__pycache__", "target", ".baseline", "test", "tests"}
 _SOURCE_GLOBS = ("*.py", "*.java")
 
 

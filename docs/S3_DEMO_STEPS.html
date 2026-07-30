@@ -406,22 +406,103 @@ need to reset between the two.</p>
 <td>The client's running application changed</td>
 </tr>
 <tr>
+<td>5b</td>
+<td><strong>Source control panel</strong>: branch → commit → push</td>
+<td>The change lands on a feature branch cut off <code>main</code> before anything is written, the commit is gated on the tests passing, and the push hands off to the pipeline — the flow, not a direct edit to main</td>
+</tr>
+<tr>
 <td>6</td>
 <td><strong>Revert</strong> (per file or all)</td>
 <td>Anything applied can be undone without a full demo reset</td>
 </tr>
 <tr>
+<td>6b</td>
+<td><strong>Design doc: change map + Download PDF</strong></td>
+<td>The hand-off document carries a diagram of what the change touches, and leaves as a real PDF you can attach to the ticket</td>
+</tr>
+<tr>
 <td>7</td>
+<td><strong>Draft test scenarios</strong>, edit one, approve the plan</td>
+<td>QA reviews <em>what will be checked</em>, in prose traced to the CR's acceptance criteria, before any test code exists — and can change it</td>
+</tr>
+<tr>
+<td>8</td>
 <td>Generate tests, run them, then the seeded-bug check</td>
 <td>The generated tests actually catch a deliberately introduced bug</td>
 </tr>
 <tr>
-<td>8</td>
-<td>Design doc + release notes</td>
+<td>9</td>
+<td><strong>Run the regression suite</strong></td>
+<td>A human-authored suite the AI cannot write to still passes — the CR cost nothing that already worked</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>Build the traceability matrix</strong></td>
+<td>Every acceptance criterion, the scenarios planned for it, the tests that ran, and the result — the artifact an auditor asks for</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Design-doc drift check</td>
 <td>Documentation drift is detected automatically after Apply, not by remembering to press a button</td>
+</tr>
+<tr>
+<td>12</td>
+<td><strong>Release notes — three audiences</strong> + the derived <strong>deployment &amp; rollback plan</strong></td>
+<td>One note per reader (client / ops / user guide), and a deploy order computed from the change's own service graph</td>
+</tr>
+<tr>
+<td>13</td>
+<td><strong>Download the release record, attach it to the ticket</strong></td>
+<td>Everything the run proved, in one PDF — including what it could <em>not</em> prove</td>
 </tr>
 </tbody>
 </table>
+<p>On beats 12-13: the deployment order is <strong>derived</strong>, not drafted — on
+CR-2026-043 the plan puts policy-service before claims-service because
+claims-service calls it, and says why. The release record is assembled from
+what the run actually produced; its &quot;Not evidenced by this release&quot; block is
+the part worth pausing on, because a release document that only lists
+successes is marketing. <strong>Attach to ticket</strong> is honest about the demo default:
+with <code>JIRA_MODE=replay</code> there is no Jira to attach to, so the beat records the
+intent on the ticket timeline and says the upload was simulated. Set
+<code>JIRA_MODE=live</code> and it uploads for real.</p>
+<p>On beat 5b: say plainly that the git flow is <strong>modelled, not executed</strong> — the
+panel says so on screen and the release record repeats it under &quot;Not evidenced
+by this release&quot;. Nothing runs git and no remote is contacted. That is
+deliberate: the target apps live inside this repo and the reset scripts restore
+the baseline from <code>HEAD</code>, so a real commit would make them start restoring the
+CR instead. The point of the beat is the <em>shape</em> of the flow — branch before
+edit, commit gated on green tests, pipeline on push — which is what a reviewer
+asks about when they see an AI editing code.</p>
+<p>Two things are worth clicking rather than describing. Press <strong>Commit to branch</strong>
+before running the tests: it refuses, and names the reason, because the gate is
+computed server-side from the ticket's own test results — the console cannot
+assert &quot;tests passed&quot;. And open <strong>What a real integration would have run</strong> for
+the git transcript, which grows one step at a time as you take each step. If you
+Revert everything afterwards, the branch shows as <em>abandoned</em> rather than
+disappearing, and a commit already made is not unmade — in a real repo the
+honest undo at that point is a revert commit, not a rewritten history.</p>
+<p>On beat 6b: the change map is <strong>derived, not drawn by the model</strong> — services,
+layers and the cross-service arrow are read from the changed-file set, so it
+costs no LLM call and needs no cache warming. The <code>NEW</code> badge comes from git
+(the file is absent from <code>HEAD</code>), which is why <code>ClaimRules.java</code> carries one on
+CR-2026-043 and nothing does on CR-2026-042. The PDF is rendered server-side by
+headless Chromium; if <code>playwright install chromium</code> has not been run on the
+demo machine the endpoint answers 503 and the console silently falls back to
+the browser's own print-to-PDF, so the button always does something.</p>
+<p>Beats 7, 9 and 10 are the QA-facing half of the tests stage. Two things worth
+saying out loud when showing them:</p>
+<ul>
+<li>The regression suite (<code>tests/test_regression_policycore.py</code>,
+<code>PolicyApiRegressionTest.java</code>) appears in <strong>no</strong> target's
+<code>testgen_allowlist</code>. The pipeline physically cannot write to it, which is
+what makes &quot;the pre-existing tests still pass&quot; a result rather than a claim.</li>
+<li>In the matrix, only the scenario→test column is inferred, and it is
+deliberately conservative: an ambiguous pairing renders as &quot;no automated
+test&quot; rather than guessing. On CR-2026-043 two criteria legitimately land
+there — that is the honest answer, and a good moment to make the point that
+the tool reports gaps instead of hiding them.</li>
+</ul>
 <p>For the full per-scenario talk track and the fallback ladder, see
 <code>demo/DEMO_TEST_GUIDE.md</code>.</p>
 <hr />
@@ -474,7 +555,7 @@ need to reset between the two.</p>
 <li>Console reachable at <code>:5173</code>; you are logged in</li>
 <li>PolicyCore reachable at <code>:8501</code> in a second window</li>
 <li>For the ClaimsPortal CR: <code>:8081</code> and <code>:8082</code> both responding</li>
-<li>You have walked beats 1–8 once, end to end, on this machine</li>
+<li>You have walked beats 1–13 once, end to end, on this machine</li>
 </ul>
 <p class="footer-note">The four applications live under <code>apps/</code>; the AI pipeline that drives them is
 in <code>s3_enhancement/</code>, shared clients in <code>common/</code>, and presenter scripts in

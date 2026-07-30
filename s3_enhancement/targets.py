@@ -47,6 +47,8 @@ _LEGACY_CACHE_KEYS: dict[str, str] = {
     # just following the same naming convention for the default target.
     "cross_team_impact": "s3_cross_team_impact:coverage_upgrade:v1",
     "design_doc": "s3_design_doc:coverage_upgrade:v1",
+    "test_scenarios": "s3_test_scenarios:coverage_upgrade:v1",
+    "release_note_set": "s3_release_note_set:coverage_upgrade:v1",
 }
 _LEGACY_STREAM_CACHE_KEYS: dict[str, str] = {
     "codegen": "s3_codegen",
@@ -132,11 +134,27 @@ class Target:
     test_command: tuple[str, ...] = ()
     test_cwd: Path | None = None
 
+    # The target app's checked-in, human-authored regression suite — the tests
+    # that existed *before* this CR and must still pass after it. Deliberately
+    # separate from testgen_allowlist: nothing in the S3 pipeline may write to
+    # these paths, which is what makes "the pre-existing tests still pass" a
+    # result rather than a promise. `regression_paths` is the pytest form;
+    # `regression_command`/`regression_cwd` mirror test_command/test_cwd for a
+    # target whose regression suite runs under another runner. Empty means the
+    # target has no regression suite and the console hides the beat.
+    regression_paths: tuple[str, ...] = ()
+    regression_command: tuple[str, ...] = ()
+    regression_cwd: Path | None = None
+
     # Seeded bugs for the /s3/tests/mutation beat, tried in declaration order
     # (see Mutation). Empty means the beat is unavailable for this target.
     mutations: tuple[Mutation, ...] = ()
 
     cache_namespace: str = ""
+
+    @property
+    def has_regression_suite(self) -> bool:
+        return bool(self.regression_paths or self.regression_command)
 
     def cache_key(self, beat: str) -> str:
         """Cache key for `common.llm.complete()`'s hash-keyed narrative cache."""
@@ -201,6 +219,7 @@ MOCKAPP_COVERAGE_UPGRADE = Target(
         "apps/policycore/app.py",
     ),
     testgen_allowlist=("tests/test_s3_coverage_upgrade.py",),
+    regression_paths=("tests/test_regression_policycore.py",),
     harness_expected_files=(
         "apps/policycore/core/models.py",
         "apps/policycore/core/db.py",
@@ -249,6 +268,7 @@ MOCKAPP_ENDORSEMENT_FIELD_ADD = Target(
         "apps/policycore/app.py",
     ),
     testgen_allowlist=("tests/test_s3_endorsement_priority.py",),
+    regression_paths=("tests/test_regression_policycore.py",),
     harness_expected_files=(),
     post_apply_command=("{python}", "-m", "apps.policycore.core.seed"),
     mutations=(
@@ -271,48 +291,47 @@ register_target(MOCKAPP_ENDORSEMENT_FIELD_ADD)
 SPRING_TARGET_ID = "springdemo-claims-deductible"
 
 _SPRING_ROOT = REPO_ROOT / "apps" / "claimsportal"
-_SPRING_CLAIMS_SRC = "apps/claimsportal/claims-service/src/main/java/com/maplesure/claims"
-_SPRING_POLICY_SRC = "apps/claimsportal/policy-service/src/main/java/com/maplesure/policy"
+_SPRING_CLAIMS_SRC = "apps/claimsportal/claims_service"
+_SPRING_POLICY_SRC = "apps/claimsportal/policy_service"
 
+# target_id and cache_namespace still say "spring"/"springdemo" after the
+# 2026-07-30 Java-to-Python rewrite (see CLAUDE.md) — kept verbatim rather
+# than churned across every test/UI/SCM-branch-name reference that keys off
+# them, same precedent as this module's other legacy literals.
 SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
     target_id=SPRING_TARGET_ID,
     source_kind="local",
-    display_name="ClaimsPortal (Spring Boot) — claims deductible handling (CR-2026-043)",
+    display_name="ClaimsPortal — claims deductible handling (CR-2026-043)",
     application_id=applications.CLAIMS_PORTAL_ID,
     root=_SPRING_ROOT,
     cr_template_path=_SPRING_ROOT / "crs" / "CR-2026-043.md",
     cr_placeholder="",  # like CR-2026-042, no audience-picked placeholder token
     core_files=(
-        f"{_SPRING_POLICY_SRC}/Policy.java",
-        f"{_SPRING_POLICY_SRC}/PolicyController.java",
-        f"{_SPRING_CLAIMS_SRC}/Claim.java",
-        f"{_SPRING_CLAIMS_SRC}/PolicyClient.java",
-        f"{_SPRING_CLAIMS_SRC}/ClaimsController.java",
+        f"{_SPRING_POLICY_SRC}/policy.py",
+        f"{_SPRING_POLICY_SRC}/main.py",
+        f"{_SPRING_CLAIMS_SRC}/claim.py",
+        f"{_SPRING_CLAIMS_SRC}/policy_client.py",
+        f"{_SPRING_CLAIMS_SRC}/main.py",
         # Does not exist until the CR creates it — same idiom as
         # apps/policycore/core/coverage.py on the default target.
-        f"{_SPRING_CLAIMS_SRC}/ClaimRules.java",
+        f"{_SPRING_CLAIMS_SRC}/claim_rules.py",
     ),
     codegen_allowlist=(
-        f"{_SPRING_POLICY_SRC}/Policy.java",
-        f"{_SPRING_POLICY_SRC}/PolicyController.java",
-        f"{_SPRING_CLAIMS_SRC}/Claim.java",
-        f"{_SPRING_CLAIMS_SRC}/PolicyClient.java",
-        f"{_SPRING_CLAIMS_SRC}/ClaimsController.java",
-        f"{_SPRING_CLAIMS_SRC}/ClaimRules.java",
+        f"{_SPRING_POLICY_SRC}/policy.py",
+        f"{_SPRING_POLICY_SRC}/main.py",
+        f"{_SPRING_CLAIMS_SRC}/claim.py",
+        f"{_SPRING_CLAIMS_SRC}/policy_client.py",
+        f"{_SPRING_CLAIMS_SRC}/main.py",
+        f"{_SPRING_CLAIMS_SRC}/claim_rules.py",
     ),
-    testgen_allowlist=(
-        "apps/claimsportal/claims-service/src/test/java/com/maplesure/claims/"
-        "ClaimRulesTest.java",
-    ),
+    testgen_allowlist=("tests/test_s3_claims_deductible.py",),
+    regression_paths=("tests/test_regression_claimsportal.py",),
     harness_expected_files=(),
-    language="java",
-    test_command=("mvn", "-q", "-Dtest=ClaimRulesTest", "test"),
-    test_cwd=_SPRING_ROOT / "claims-service",
     mutations=(
         Mutation(
-            rel_path=f"{_SPRING_CLAIMS_SRC}/ClaimRules.java",
-            old_snippet="if (amount.compareTo(deductible) <= 0) {",
-            new_snippet="if (amount.compareTo(deductible) < 0) {",
+            rel_path=f"{_SPRING_CLAIMS_SRC}/claim_rules.py",
+            old_snippet="if amount <= deductible:",
+            new_snippet="if amount < deductible:",
             description=(
                 "Weakened the deductible boundary check from `<=` to `<` — "
                 "a claim for exactly the deductible amount is now accepted "

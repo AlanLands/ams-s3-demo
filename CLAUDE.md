@@ -29,15 +29,34 @@ AI analysis → codegen → tests → docs → release notes.
   target — CR-2026-041 and CR-2026-042. Its Python package moved with it, so
   imports are `apps.policycore.core.*`.
 - `apps/claimsportal/` (was `sandbox/spring-demo/`) is S3's second target —
-  "ClaimsPortal" (Java/Spring Boot, CR-2026-043, ticket AMS-103, target id
-  `springdemo-claims-deductible`). It is one folder holding two services
-  because CR-2026-043 edits files in both, so S3 treats it as a single target
-  root; they still start as two processes. Checked-in source is the pre-CR
-  baseline (snapshot in `.baseline/`); reset with `demo/reset_s3_springdemo.sh`.
+  "ClaimsPortal" (Python/FastAPI, CR-2026-043, ticket AMS-103, target id
+  `springdemo-claims-deductible`). Rebuilt from Java/Spring Boot to Python on
+  2026-07-30 so the target sandbox (no JVM/Maven) can run it — same REST
+  contract, same CR behavior, `policy-service`/`claims-service` renamed to
+  `policy_service`/`claims_service` (valid Python package names). The
+  `target_id`/`cache_namespace` still say "spring" — kept verbatim rather than
+  churned, same precedent as `targets.py`'s other legacy literals. It is one
+  folder holding two services because CR-2026-043 edits files in both, so S3
+  treats it as a single target root; they still start as two processes.
+  Checked-in source is the pre-CR baseline (snapshot in `.baseline/`); reset
+  with `demo/reset_s3_springdemo.sh`. Its generated test and regression suite
+  now live in the top-level `tests/` dir like the other two targets (the
+  Java-only exception for in-target-root test discovery no longer applies).
 - `apps/console/` is the console: `api/` (FastAPI, run as
   `uvicorn apps.console.api.main:app`) and `web/` (React, was `frontend/`).
 - `s3_enhancement/cache/` is the committed replay cache that makes the demo
   deterministic; `s3_enhancement/out/` is gitignored and regenerated per run.
+- `tests/` holds both the pipeline's own tests **and** the target apps'
+  checked-in regression suites (`test_regression_policycore.py`,
+  `test_regression_claimsportal.py`). The regression suites are deliberately
+  outside every target root: anything ending `.py` under a target root joins
+  the codegen candidate pool (see below). Until the 2026-07-30 Python rewrite,
+  ClaimsPortal's Java regression suite was the one exception, living at
+  `apps/claimsportal/policy-service/src/test/` — safe only because
+  `relevance.py` excludes `test`/`tests` directories from discovery. That
+  exclusion stays in `relevance.py` (harmless, still guards decoy test dirs)
+  but no target now depends on it — all three keep their regression suite and
+  generated-test output in `tests/`.
 - The demo reset scripts restore from `HEAD`, **not** from the `s3-baseline` /
   `s3-endorsement-baseline` tags. Those tags predate both this layout and the
   endorsements table, and restoring from them breaks reseeding with a FOREIGN
@@ -63,6 +82,99 @@ own `import` statements, so both had to be rewritten together, and both
 targets were re-verified generate → apply → revert afterwards. A live
 re-record was NOT needed. If you move one again, expect the same two-part
 rewrite plus a fresh end-to-end pass.
+
+## Release artifacts
+
+`s3_enhancement/release.py` holds the deployment plan and the release record.
+The plan is **derived** — deploy order comes from the change map's service
+graph (callee before caller), the migration step from the target's
+`post_apply_command`, verification from its regression suite. No LLM.
+
+The release record is an assembly of what the run produced, and its
+"Not evidenced by this release" block is load-bearing: a release document
+that only lists successes is marketing. `unproven_claims()` is what keeps it
+honest — extend that when you add evidence, not just the happy path.
+
+Approvals in the record come from `common/ticket_events.py` server-side, never
+from the client posting them. `POST /s3/release/attach` really uploads only
+when `JIRA_MODE` is not `replay`; under the demo default it records the intent
+and reports `simulated: true`. Don't "fix" that into a fake success.
+
+Release notes are now three audience-specific fields (`draft_release_note_set`,
+cache beat `release_note_set`). The older single-blob `draft_release_notes`
+still exists for the legacy `/release-notes` endpoint and the rehearsal
+scripts — the two must keep separate cache keys, or replay hands JSON to a
+caller expecting prose.
+
+## The source-control flow is modelled and must stay that way
+
+`s3_enhancement/scm.py` frames Apply with branch → commit → push, because
+applying straight to the working tree skips the part every reviewer asks about
+(you do not edit main). **Nothing in it runs git** — no subprocess, no remote,
+`simulated=True` on every response, and `git_transcript()` renders the commands
+a real integration *would* have issued.
+
+That is a constraint, not an unfinished feature. The target apps live inside
+this repo and `demo/reset_s3*.sh` restore their baseline with `git checkout
+HEAD -- <paths>`; a real commit would put the CR into HEAD, so the resets would
+start silently restoring the change instead of the baseline. That failure
+surfaces mid-rehearsal, not at the call site.
+`tests/test_s3_scm.py` asserts the guarantee structurally on the parsed AST
+(imports and call names, not substrings — the module's own prose and transcript
+legitimately contain the words "commit" and "push"), the same way
+`tests/test_autofix_no_git_writes.py` does for the autofix loop. A real SCM
+integration belongs in a new module behind an explicit mode flag; do not turn
+`simulated` into a lie in this one.
+
+Two things carry the honesty: the panel's banner (`ScmPanel.tsx`) and
+`release._source_control_gaps()`, which puts the un-run pipeline in the release
+record's "Not evidenced by this release" block. Every branch state has a gap
+line — no branch, applied-but-uncommitted, committed-but-unpushed, abandoned,
+and pushed-but-simulated — so a modelled push can never read as a deployment
+that happened.
+
+The commit gate reads `tests_passed`/`tests_failed` and
+`regression_passed`/`regression_failed` off the ticket's event log
+**server-side** (`scm.commit_blockers`), never from a flag the console posts —
+same rule as the release record's approvals. A client that could assert "tests
+passed" could commit a red branch, which would make the beat's central claim
+false. It reads the *latest* run of each suite, not any run, so a fixed suite
+unblocks and a newly-broken one re-blocks.
+
+State lives at `s3_enhancement/out/{proposal_id}/scm.json`, keyed by proposal
+like staged files, backups, and rejections — so `demo/reset_s3.sh`'s
+`rm -rf s3_enhancement/out/*` already clears it.
+
+## Two things in the QA hand-off are deliberately not AI output
+
+`s3_enhancement/diagram.py` (the design doc's change map) and
+`s3_enhancement/acceptance.py` (the traceability matrix's criteria column) are
+both pure functions of data already on hand — the changed-file set and the CR
+text. No LLM call, so no cache key, no warming, and nothing to go wrong on a
+cache miss. Keep it that way: the moment either becomes model output it needs
+a replay recording and can be confidently wrong on stage. The diagram's
+provenance caption (`diagram.caption_for`) exists to say so in the document,
+and only claims the parts a given diagram actually contains.
+
+PDF export renders server-side through Playwright's chromium
+(`s3_enhancement/designdoc.py`). Chromium is an optional runtime dependency:
+missing browser → `PdfUnavailableError` → HTTP 503 → the console falls back to
+browser print. Do not turn that 503 into a 500.
+
+## The regression suites are the AI's blind spot on purpose
+
+`Target.regression_paths` / `regression_command` name a checked-in,
+human-authored suite per target. Nothing in the pipeline may write to those
+paths — `tests/test_s3_testrun.py` asserts they never appear in a
+`testgen_allowlist` or `codegen_allowlist`, and that assertion is the whole
+value of the beat. If you ever need S3 to generate into one of them, you have
+removed the only independent check that a CR broke nothing.
+
+Two rules for anything added to them: it must pass **before and after** every
+CR (they are invariants, not assertions about the change under test), and it
+must stay out of the target roots for the corpus reason above. Both suites
+were verified pre-CR, post-CR, and against three injected breakages on
+2026-07-29.
 
 ## Hard rules — carried over, still non-negotiable
 

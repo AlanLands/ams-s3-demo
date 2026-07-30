@@ -13,6 +13,13 @@ Also home to the "prove the tests catch bugs" beat: `run_mutation()` applies a
 target's seeded, deterministic bug (see `targets.Mutation`), re-runs the
 generated suite, and always restores the original file content — the working
 tree is byte-identical afterwards no matter how the run ends.
+
+`run_regression()` is the counterpart to `run_suite()`: same runners, same
+parsing, but pointed at the target app's checked-in suite instead of the
+generated one. Keeping them as two calls rather than one merged run is the
+whole point — "12 new tests pass" and "20 pre-existing tests still pass" are
+different claims, and a CR that breaks the second while satisfying the first
+is exactly the failure this beat exists to catch.
 """
 
 from __future__ import annotations
@@ -34,6 +41,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 class TestRunnerNotFoundError(Exception):
     """The target's declared test runner binary is not on PATH."""
+
+
+class NoRegressionSuiteError(Exception):
+    """The target has no checked-in regression suite registered."""
 
 
 class MutationError(Exception):
@@ -146,43 +157,75 @@ def _run(argv: list[str], cwd: Path | None) -> subprocess.CompletedProcess:
         ) from exc
 
 
-def run_suite(target: Target) -> SuiteRun:
-    """Run the target's generated tests and parse per-case results."""
+def _run_external(command: list[str], cwd: Path | None) -> SuiteRun:
+    """Run a target-declared command (Maven today) and parse Surefire's XML."""
     start = time.monotonic()
-    if target.test_command:
-        # Surefire writes one TEST-*.xml per class into target/surefire-reports;
-        # clear stale reports first so a parse can never pick up a previous run.
-        reports_dir = (target.test_cwd or REPO_ROOT) / "target" / "surefire-reports"
-        if reports_dir.exists():
-            for stale in reports_dir.glob("TEST-*.xml"):
-                stale.unlink(missing_ok=True)
-        process = _run(list(target.test_command), target.test_cwd)
-        xml_paths = sorted(reports_dir.glob("TEST-*.xml")) if reports_dir.exists() else []
-        cases = _parse_junit_files(xml_paths)
-    else:
-        test_path = target.testgen_allowlist[0] if target.testgen_allowlist else ""
-        with tempfile.TemporaryDirectory(prefix="s3-junit-") as tmp_dir:
-            xml_path = Path(tmp_dir) / "junit.xml"
-            process = _run(
-                [
-                    sys.executable,
-                    "-m",
-                    "pytest",
-                    test_path,
-                    "-v",
-                    f"--junitxml={xml_path}",
-                    "-o",
-                    "junit_family=xunit2",
-                ],
-                REPO_ROOT,
-            )
-            cases = _parse_junit_files([xml_path])
+    # Surefire writes one TEST-*.xml per class into target/surefire-reports;
+    # clear stale reports first so a parse can never pick up a previous run.
+    reports_dir = (cwd or REPO_ROOT) / "target" / "surefire-reports"
+    if reports_dir.exists():
+        for stale in reports_dir.glob("TEST-*.xml"):
+            stale.unlink(missing_ok=True)
+    process = _run(command, cwd)
+    xml_paths = sorted(reports_dir.glob("TEST-*.xml")) if reports_dir.exists() else []
+    return SuiteRun(
+        output=process.stdout + process.stderr,
+        returncode=process.returncode,
+        cases=_parse_junit_files(xml_paths),
+        duration_s=time.monotonic() - start,
+    )
+
+
+def _run_pytest(test_paths: list[str]) -> SuiteRun:
+    start = time.monotonic()
+    with tempfile.TemporaryDirectory(prefix="s3-junit-") as tmp_dir:
+        xml_path = Path(tmp_dir) / "junit.xml"
+        process = _run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                *test_paths,
+                "-v",
+                f"--junitxml={xml_path}",
+                "-o",
+                "junit_family=xunit2",
+            ],
+            REPO_ROOT,
+        )
+        cases = _parse_junit_files([xml_path])
     return SuiteRun(
         output=process.stdout + process.stderr,
         returncode=process.returncode,
         cases=cases,
         duration_s=time.monotonic() - start,
     )
+
+
+def run_suite(target: Target) -> SuiteRun:
+    """Run the target's generated tests and parse per-case results."""
+    if target.test_command:
+        return _run_external(list(target.test_command), target.test_cwd)
+    test_path = target.testgen_allowlist[0] if target.testgen_allowlist else ""
+    return _run_pytest([test_path])
+
+
+def run_regression(target: Target) -> SuiteRun:
+    """Run the target app's checked-in, pre-existing regression suite.
+
+    Deliberately independent of whether the generated suite exists or has been
+    run: the point of the beat is that these tests predate the change, so they
+    are runnable before a single line of it has been generated. That also makes
+    them usable as a *baseline* — run them before Apply and again after, and
+    the pair is the evidence that the CR broke nothing.
+    """
+    if not target.has_regression_suite:
+        raise NoRegressionSuiteError(
+            f"Target {target.target_id!r} has no checked-in regression suite registered."
+        )
+    if target.regression_command:
+        return _run_external(list(target.regression_command), target.regression_cwd)
+    return _run_pytest(list(target.regression_paths))
 
 
 def generated_test_file_exists(target: Target) -> bool:

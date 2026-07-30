@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS endorsements (
     effective_date     TEXT NOT NULL,
     contact_phone      TEXT NOT NULL,
     contact_email      TEXT NOT NULL,
-    filed_at           TEXT NOT NULL
+    filed_at           TEXT NOT NULL,
+    priority           TEXT NOT NULL DEFAULT 'Standard'
 );
 """
 
@@ -119,6 +120,7 @@ def _row_to_endorsement(row: sqlite3.Row) -> Endorsement:
         contact_phone=row["contact_phone"],
         contact_email=row["contact_email"],
         filed_at=row["filed_at"],
+        priority=row["priority"] if "priority" in row.keys() else "Standard",
     )
 
 
@@ -231,8 +233,8 @@ def insert_endorsement(endorsement: Endorsement) -> None:
             """
             INSERT OR REPLACE INTO endorsements
                 (endorsement_number, policy_number, endorsement_type, requested_change,
-                 effective_date, contact_phone, contact_email, filed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 effective_date, contact_phone, contact_email, filed_at, priority)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 endorsement.endorsement_number,
@@ -243,6 +245,7 @@ def insert_endorsement(endorsement: Endorsement) -> None:
                 endorsement.contact_phone,
                 endorsement.contact_email,
                 endorsement.filed_at,
+                endorsement.priority,
             ),
         )
         conn.commit()

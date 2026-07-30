@@ -6,6 +6,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
 
+# Step 0 (SCM_MODE=live) can leave the repo on a real feature branch cut for
+# a previous rehearsal's CR — see the same note in demo/reset_s3.sh. Best-
+# effort and non-fatal: a developer running this from their own work branch
+# must not have this step abort the restore below.
+_current_branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$_current_branch" != "main" ]] && ! git checkout main 2>/dev/null; then
+  echo "note: staying on '$_current_branch' — switching to main would conflict with local changes"
+fi
+
 # Restored from HEAD, not from the `s3-endorsement-baseline` tag.
 #
 # Two reasons. The tag predates the apps/ restructure, so every path in it

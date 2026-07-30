@@ -16,7 +16,21 @@ from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError
 from common.llm import LLMError
 from common.roster import PASSCODE_BY_NAME
+from common.ticket_events import record_event
+from s3_enhancement import scm
 from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS
+
+
+@pytest.fixture(autouse=True)
+def _isolated_scm_state(tmp_path, monkeypatch):
+    """Keep /apply's branch state out of the real s3_enhancement/out/.
+
+    /apply opens the change's (simulated) feature branch, which writes
+    out/{proposal_id}/scm.json. Most tests here mock apply_change and would
+    otherwise leave state behind under proposal ids that never existed, where a
+    later real run could read it back.
+    """
+    monkeypatch.setattr(scm, "OUT_ROOT", tmp_path / "out")
 
 
 def _login(client: TestClient, name: str) -> None:
@@ -848,8 +862,10 @@ def test_tests_failure_carries_returncode_and_passed_flag():
 
 
 def test_run_tests_missing_runner_returns_502():
-    """A Java target's mvn not being on PATH must surface as a clean 502
-    detail, not an uncaught FileNotFoundError 500."""
+    """A target with an external test_command whose binary isn't on PATH
+    must surface as a clean 502 detail, not an uncaught FileNotFoundError
+    500. Uses a fake target/command — no registered target shells out
+    anymore, but the endpoint must still handle one that could."""
     from fastapi import HTTPException
 
     from apps.console.api.routers.s3 import _run_suite_or_502
@@ -1072,7 +1088,8 @@ def test_apply_calls_apply_change_with_file_path():
 
     apply_change.assert_called_once_with("prop-1", "a.py")
     assert response.status_code == 200
-    assert response.json() == {
+    body = response.json()
+    assert {key: body[key] for key in body if key != "scm"} == {
         "proposal_id": "prop-1",
         "applied_files": ["a.py"],
         "post_apply": {"ok": True, "steps": []},
@@ -1081,6 +1098,11 @@ def test_apply_calls_apply_change_with_file_path():
         "rejected_files": {},
         "revertable_files": [],
     }
+    # Apply opens the change's feature branch before writing, and reports it —
+    # see s3_enhancement/scm.py for why the branch is modelled, not real.
+    assert body["scm"]["status"] == "applied"
+    assert body["scm"]["staged_files"] == ["a.py"]
+    assert body["scm"]["simulated"] is True
 
 
 def test_apply_mockapp_files_runs_post_apply_migration():
@@ -1139,6 +1161,280 @@ def test_apply_post_apply_failure_carried_in_response(tmp_path, monkeypatch):
     assert len(failed) == 1
     assert failed[0]["actor"] == "system"
     assert "KeyError: 'deductible'" in failed[0]["detail"]
+
+
+def _apply(client: TestClient, ticket: str = "AMS-103", files: list[str] | None = None) -> None:
+    with patch(
+        "apps.console.api.routers.s3.apply_change", return_value=files or ["a.py"]
+    ):
+        response = client.post(
+            "/api/s3/apply",
+            json={
+                "proposal_id": "prop-1",
+                "ticket_number": ticket,
+                "target_id": "springdemo-claims-deductible",
+            },
+        )
+    assert response.status_code == 200
+
+
+def test_apply_opens_the_branch_before_writing(tmp_path, monkeypatch):
+    """The branch has to exist before the edit, not be back-filled after it —
+    otherwise the flow being shown is not the flow being described."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+    order: list[str] = []
+
+    real_open = scm.open_branch
+    with (
+        patch(
+            "apps.console.api.routers.s3.scm.open_branch",
+            side_effect=lambda *a, **k: (order.append("branch"), real_open(*a, **k))[1],
+        ),
+        patch(
+            "apps.console.api.routers.s3.apply_change",
+            side_effect=lambda *a, **k: (order.append("write"), ["a.py"])[1],
+        ),
+    ):
+        response = client.post(
+            "/api/s3/apply",
+            json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        )
+
+    assert response.status_code == 200
+    assert order == ["branch", "write"]
+
+
+def test_apply_records_the_branch_on_the_ticket_timeline(tmp_path, monkeypatch):
+    events_path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    client = _client()
+    _apply(client)
+
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    opened = [e for e in events if e["action"] == "branch_opened"]
+    assert len(opened) == 1
+    assert "simulated" in opened[0]["detail"]
+    assert "feature/AMS-103-springdemo-claims-deductible" in opened[0]["detail"]
+
+
+def test_checkout_is_simulated_by_default(tmp_path, monkeypatch):
+    """SCM_MODE unset -> the fully modelled path, same convention
+    /s3/release/attach uses under JIRA_MODE=replay: no git touched, and the
+    response says so."""
+    monkeypatch.delenv("SCM_MODE", raising=False)
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+
+    response = client.post(
+        "/api/s3/scm/checkout",
+        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "simulated"
+    assert body["branch"] == "feature/AMS-103-springdemo-claims-deductible"
+    assert body["sha"] is None
+    assert "SCM_MODE=live" in body["detail"]
+
+
+def test_checkout_records_a_ticket_event(tmp_path, monkeypatch):
+    monkeypatch.delenv("SCM_MODE", raising=False)
+    events_path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    client = _client()
+
+    client.post(
+        "/api/s3/scm/checkout",
+        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+    )
+
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    checked_out = [e for e in events if e["action"] == "repo_checked_out"]
+    assert len(checked_out) == 1
+    assert "feature/AMS-103-springdemo-claims-deductible" in checked_out[0]["detail"]
+    assert "simulated" in checked_out[0]["detail"]
+
+
+def test_checkout_runs_a_real_local_branch_under_scm_mode_live(tmp_path, monkeypatch):
+    """SCM_MODE=live -> a real branch, in a standalone throwaway folder named
+    by SCM_LIVE_TARGET_ROOT — never against the actual project repo from a
+    test, and starting from plain files with no git history, the realistic
+    case (a fresh copy of just the target app)."""
+    import subprocess
+
+    target_root = tmp_path / "policycore-standalone"
+    target_root.mkdir()
+    (target_root / "app.py").write_text("print('hello')\n", encoding="utf-8")
+
+    monkeypatch.setenv("SCM_MODE", "live")
+    monkeypatch.setenv("SCM_LIVE_TARGET_ROOT", str(target_root))
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+
+    response = client.post(
+        "/api/s3/scm/checkout",
+        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "live"
+    assert body["branch"] == "feature/AMS-103-springdemo-claims-deductible"
+    assert body["created"] is True
+    assert body["sha"] is not None
+
+    current = subprocess.run(
+        ["git", "-C", str(target_root), "rev-parse", "--abbrev-ref", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert current == body["branch"]
+
+
+def test_checkout_409s_under_scm_mode_live_without_a_target_root(tmp_path, monkeypatch):
+    """The safety guarantee end to end: SCM_MODE=live with no
+    SCM_LIVE_TARGET_ROOT must refuse rather than silently default to
+    branching ams-s3-demo itself."""
+    monkeypatch.setenv("SCM_MODE", "live")
+    monkeypatch.delenv("SCM_LIVE_TARGET_ROOT", raising=False)
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+
+    response = client.post(
+        "/api/s3/scm/checkout",
+        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+    )
+    assert response.status_code == 409
+    assert "SCM_LIVE_TARGET_ROOT" in response.json()["detail"]
+
+
+def test_commit_requires_a_ticket_number():
+    """The gate reads the ticket's test results, so there is nothing to gate on
+    without one — 422 rather than committing ungated."""
+    client = _client()
+    response = client.post("/api/s3/scm/commit", json={"proposal_id": "prop-1"})
+    assert response.status_code == 422
+
+
+def test_commit_is_blocked_until_the_tests_have_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+    _apply(client)
+
+    response = client.post(
+        "/api/s3/scm/commit",
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+    )
+    assert response.status_code == 409
+    assert "has not been run" in response.json()["detail"]
+
+
+def test_commit_is_blocked_by_a_failing_suite_even_if_the_client_says_otherwise(
+    tmp_path, monkeypatch
+):
+    """The gate is server-side on purpose: a client that could assert "tests
+    passed" could commit a red branch, which would make the beat's central claim
+    false. Posting extra fields must not help."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+    _apply(client)
+    record_event("AMS-103", "ai", "tests_failed", detail="3/12 passed")
+
+    response = client.post(
+        "/api/s3/scm/commit",
+        json={
+            "proposal_id": "prop-1",
+            "ticket_number": "AMS-103",
+            "tests_passed": True,
+            "message": "AMS-103: ship it anyway",
+        },
+    )
+    assert response.status_code == 409
+    assert "3/12 passed" in response.json()["detail"]
+
+
+def test_commit_then_push_walks_the_flow(tmp_path, monkeypatch):
+    events_path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    client = _client()
+    _apply(client)
+    record_event("AMS-103", "ai", "tests_passed", detail="12/12 passed")
+
+    committed = client.post(
+        "/api/s3/scm/commit",
+        json={
+            "proposal_id": "prop-1",
+            "ticket_number": "AMS-103",
+            "target_id": "springdemo-claims-deductible",
+        },
+    )
+    assert committed.status_code == 200
+    body = committed.json()
+    assert body["scm"]["status"] == "committed"
+    assert body["commit_blockers"] == []
+    assert body["test_evidence"]["generated_suite"]["passed"] is True
+
+    pushed = client.post(
+        "/api/s3/scm/push",
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+    )
+    assert pushed.status_code == 200
+    assert pushed.json()["scm"]["status"] == "pushed"
+    # Honest about what did not happen, the same way /s3/release/attach is under
+    # JIRA_MODE=replay. Do not let this become a fake success.
+    assert pushed.json()["scm"]["simulated"] is True
+    assert "simulated" in pushed.json()["detail"]
+
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    actions = [e["action"] for e in events]
+    assert actions.index("branch_opened") < actions.index("change_committed")
+    assert actions.index("change_committed") < actions.index("branch_pushed")
+    assert all(
+        "simulated" in e["detail"]
+        for e in events
+        if e["action"] in ("change_committed", "branch_pushed")
+    )
+
+
+def test_push_without_a_commit_is_409(tmp_path, monkeypatch):
+    """"Pushed uncommitted work" is not a state that exists, and showing it
+    would teach the audience something false."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+    _apply(client)
+
+    response = client.post(
+        "/api/s3/scm/push",
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+    )
+    assert response.status_code == 409
+    assert "commit the applied files first" in response.json()["detail"]
+
+
+def test_scm_state_endpoint_reports_the_gate_before_anything_happens():
+    client = _client()
+    response = client.get("/api/s3/scm", params={"proposal_id": "never-applied"})
+    assert response.status_code == 200
+    assert response.json()["scm"] is None
+
+
+def test_reverting_everything_abandons_the_branch(tmp_path, monkeypatch):
+    events_path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    client = _client()
+    _apply(client)
+
+    with patch("apps.console.api.routers.s3.revert_change", return_value=["a.py"]):
+        response = client.post(
+            "/api/s3/revert",
+            json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["scm"]["status"] == "abandoned"
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    assert any(e["action"] == "branch_abandoned" for e in events)
 
 
 def test_apply_non_stateful_files_skips_post_apply_migration():
@@ -1389,3 +1685,528 @@ def test_gitlab_scope_auto_returns_502_on_llm_error():
         response = client.post("/api/s3/gitlab/scope-auto", json={"tier_name": "Elite"})
 
     assert response.status_code == 502
+
+
+def test_tests_regression_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/tests/regression", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def test_tests_regression_returns_parsed_cases():
+    client = _client()
+    run = SimpleNamespace(
+        output="15 passed",
+        returncode=0,
+        duration_s=0.3,
+        passed=True,
+        cases=[
+            SimpleNamespace(
+                name="test_policy_list_returns_every_seeded_policy",
+                classname="tests.test_regression_policycore",
+                description="Policy list returns every seeded policy",
+                status="passed",
+                time_s=0.01,
+                message=None,
+            )
+        ],
+        summary=lambda: {"total": 15, "passed": 15, "failed": 0, "errors": 0, "skipped": 0},
+    )
+
+    with patch("apps.console.api.routers.s3.testrun.run_regression", return_value=run):
+        response = client.post("/api/s3/tests/regression", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["passed"] is True
+    assert body["summary"]["total"] == 15
+    assert body["cases"][0]["description"] == "Policy list returns every seeded policy"
+    assert body["suite_paths"] == ["tests/test_regression_policycore.py"]
+    # No AI label: nothing in this response came from a model.
+    assert "label" not in body
+
+
+def test_tests_regression_409s_when_target_has_no_suite():
+    client = _client()
+    from s3_enhancement import testrun
+
+    with patch(
+        "apps.console.api.routers.s3.testrun.run_regression",
+        side_effect=testrun.NoRegressionSuiteError("no checked-in regression suite"),
+    ):
+        response = client.post("/api/s3/tests/regression", json={"tier_name": "Elite"})
+
+    assert response.status_code == 409
+
+
+def test_tests_regression_records_a_system_event_not_an_ai_one():
+    client = _client()
+    run = SimpleNamespace(
+        output="",
+        returncode=1,
+        duration_s=0.2,
+        passed=False,
+        cases=[],
+        summary=lambda: {"total": 15, "passed": 14, "failed": 1, "errors": 0, "skipped": 0},
+    )
+
+    with (
+        patch("apps.console.api.routers.s3.testrun.run_regression", return_value=run),
+        patch("apps.console.api.routers.s3.record_event") as record,
+    ):
+        response = client.post(
+            "/api/s3/tests/regression", json={"tier_name": "Elite", "ticket_number": "AMS-101"}
+        )
+
+    assert response.status_code == 200
+    record.assert_called_once()
+    assert record.call_args.args[1] == "system"
+    assert record.call_args.args[2] == "regression_failed"
+
+
+def _scenario_payload(**overrides) -> dict:
+    base = {
+        "id": "TS-01",
+        "title": "Default priority is Standard",
+        "kind": "positive",
+        "acceptance_criteria": ["AC-1"],
+        "preconditions": "A seeded policy exists",
+        "test_data": "POL-10001",
+        "steps": ["Submit without touching priority"],
+        "expected": "The stored endorsement has priority Standard",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_tests_scenarios_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/tests/scenarios", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def test_tests_scenarios_returns_plan_and_criteria():
+    client = _client()
+    from s3_enhancement.acceptance import Criterion
+    from s3_enhancement.scenarios import ScenarioDraft, scenario_from_dict
+
+    draft = ScenarioDraft(
+        scenarios=[scenario_from_dict(_scenario_payload())],
+        criteria=[Criterion("AC-1", "The form has a Priority field.")],
+        uncovered_criteria=[],
+    )
+    with patch("apps.console.api.routers.s3.draft_scenarios", return_value=draft):
+        response = client.post(
+            "/api/s3/tests/scenarios",
+            json={"tier_name": "Elite", "target_id": "mockapp-endorsement-field-add"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["scenarios"][0]["id"] == "TS-01"
+    assert body["criteria"][0]["id"] == "AC-1"
+    assert body["label"] == AI_SUGGESTION_LABEL
+
+
+def test_tests_scenarios_approve_rejects_an_untraceable_edit():
+    """A tester edit goes through the same validator the draft did, so an
+    edited plan cannot smuggle in a scenario citing a criterion the CR lacks."""
+    client = _client()
+    response = client.post(
+        "/api/s3/tests/scenarios/approve",
+        json={
+            "tier_name": "Elite",
+            "target_id": "mockapp-endorsement-field-add",
+            "scenarios": [_scenario_payload(acceptance_criteria=["AC-99"])],
+        },
+    )
+    assert response.status_code == 422
+    assert "unknown acceptance criterion" in response.json()["detail"]
+
+
+def test_tests_scenarios_approve_records_a_human_event():
+    client = _client()
+    with patch("apps.console.api.routers.s3.record_event") as record:
+        response = client.post(
+            "/api/s3/tests/scenarios/approve",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "ticket_number": "AMS-102",
+                "scenarios": [_scenario_payload()],
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["approved_by"] == "Ravi Kumar"
+    # Approval is a human act, and the audit trail has to say so.
+    assert record.call_args.args[1] == "human"
+    assert record.call_args.args[2] == "test_scenarios_approved"
+
+
+def test_tests_scenarios_approve_reports_uncovered_criteria():
+    client = _client()
+    response = client.post(
+        "/api/s3/tests/scenarios/approve",
+        json={
+            "tier_name": "Elite",
+            "target_id": "mockapp-endorsement-field-add",
+            "scenarios": [_scenario_payload()],
+        },
+    )
+    assert response.status_code == 200
+    # CR-2026-042 states four criteria; a one-scenario plan covers one of them.
+    assert response.json()["uncovered_criteria"] == ["AC-2", "AC-3", "AC-4"]
+
+
+def test_tests_traceability_builds_the_matrix():
+    client = _client()
+    response = client.post(
+        "/api/s3/tests/traceability",
+        json={
+            "tier_name": "Elite",
+            "target_id": "mockapp-endorsement-field-add",
+            "scenarios": [_scenario_payload()],
+            "generated_cases": [
+                {
+                    "name": "test_default_priority_standard",
+                    "classname": "tests.generated",
+                    "description": "Default priority standard",
+                    "status": "passed",
+                    "time_s": 0.01,
+                    "message": None,
+                }
+            ],
+            "regression_cases": [],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["total"] == 4
+    first = body["rows"][0]
+    assert first["criterion_id"] == "AC-1"
+    assert first["test_names"] == ["test_default_priority_standard"]
+    assert first["status"] == "passed"
+    # The criteria nothing covers must be visible, not omitted.
+    assert body["summary"]["no_scenario"] == 3
+
+
+def test_tests_generate_forwards_the_approved_plan():
+    client = _client()
+    result = SimpleNamespace(
+        diff_text="",
+        files_changed=["tests/test_generated.py"],
+        used_replay=True,
+        scoped_input_tokens=1,
+        scoped_output_tokens=1,
+        tokens_estimated=False,
+    )
+    with patch(
+        "apps.console.api.routers.s3.generate_tests", return_value=result
+    ) as generate:
+        response = client.post(
+            "/api/s3/tests/generate",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "scenarios": [_scenario_payload()],
+            },
+        )
+
+    assert response.status_code == 200
+    assert generate.call_args.kwargs["scenarios"] == [_scenario_payload()]
+
+
+def test_tests_generate_still_works_without_a_plan():
+    """The pre-scenario flow (and the rehearsal scripts) send no scenarios."""
+    client = _client()
+    result = SimpleNamespace(
+        diff_text="",
+        files_changed=["tests/test_generated.py"],
+        used_replay=True,
+        scoped_input_tokens=1,
+        scoped_output_tokens=1,
+        tokens_estimated=False,
+    )
+    with patch(
+        "apps.console.api.routers.s3.generate_tests", return_value=result
+    ) as generate:
+        response = client.post("/api/s3/tests/generate", json={"tier_name": "Elite"})
+
+    assert response.status_code == 200
+    assert generate.call_args.kwargs["scenarios"] is None
+
+
+def test_design_doc_includes_the_derived_change_map():
+    client = _client()
+    with patch("apps.console.api.routers.s3.draft_design_doc", return_value="1. Summary\nx"):
+        response = client.post(
+            "/api/s3/design-doc",
+            json={"tier_name": "Elite", "target_id": "springdemo-claims-deductible"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["diagram_svg"].startswith("<svg")
+    assert "claim_rules.py" in body["diagram_svg"]
+    assert "not generated by a model" in body["diagram_caption"]
+
+
+def test_design_doc_diagram_includes_downstream_apps_when_supplied():
+    client = _client()
+    with patch("apps.console.api.routers.s3.draft_design_doc", return_value="x"):
+        response = client.post(
+            "/api/s3/design-doc",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "downstream_apps": ["BillingGateway"],
+            },
+        )
+
+    assert "BillingGateway" in response.json()["diagram_svg"]
+
+
+def test_design_doc_document_returns_html():
+    client = _client()
+    with patch("apps.console.api.routers.s3.draft_design_doc", return_value="1. Summary\nx"):
+        response = client.post(
+            "/api/s3/design-doc/document",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "format": "html",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "CR-2026-042-design-doc.html" in response.headers["content-disposition"]
+    assert "MapleSure Insurance" in response.text
+
+
+def test_design_doc_document_returns_pdf_bytes():
+    client = _client()
+    with (
+        patch("apps.console.api.routers.s3.draft_design_doc", return_value="1. Summary\nx"),
+        patch("apps.console.api.routers.s3.render_pdf", return_value=b"%PDF-1.4 fake"),
+    ):
+        response = client.post(
+            "/api/s3/design-doc/document",
+            json={"tier_name": "Elite", "target_id": "mockapp-endorsement-field-add"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+
+
+def test_design_doc_pdf_503s_when_chromium_is_missing():
+    """503 specifically: the console catches that status and falls back to the
+    browser's own print-to-PDF rather than showing an error."""
+    client = _client()
+    from s3_enhancement.designdoc import PdfUnavailableError
+
+    with (
+        patch("apps.console.api.routers.s3.draft_design_doc", return_value="x"),
+        patch(
+            "apps.console.api.routers.s3.render_pdf",
+            side_effect=PdfUnavailableError("Chromium is not installed"),
+        ),
+    ):
+        response = client.post(
+            "/api/s3/design-doc/document",
+            json={"tier_name": "Elite", "target_id": "mockapp-endorsement-field-add"},
+        )
+
+    assert response.status_code == 503
+
+
+def test_design_doc_document_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/design-doc/document", json={"tier_name": "Elite"})
+    assert response.status_code == 401
+
+
+def _note_set():
+    from s3_enhancement.docgen import ReleaseNoteSet
+
+    return ReleaseNoteSet("Client text.", "Ops text.", "User text.")
+
+
+def test_release_notes_returns_three_audiences_and_the_plan():
+    client = _client()
+    with patch("apps.console.api.routers.s3.draft_release_note_set", return_value=_note_set()):
+        response = client.post(
+            "/api/s3/release/notes",
+            json={"tier_name": "Elite", "target_id": "springdemo-claims-deductible"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["notes"]) == {"changelog", "ops_note", "whats_new"}
+    # The plan rides along because it costs no model call.
+    assert body["plan"]["service_order"] == ["policy_service", "claims_service"]
+    assert "policy_service first" in body["plan"]["order_reason"]
+
+
+def test_release_record_returns_a_pdf():
+    client = _client()
+    with (
+        patch("apps.console.api.routers.s3.draft_release_note_set", return_value=_note_set()),
+        patch("apps.console.api.routers.s3.render_pdf", return_value=b"%PDF-1.4 fake"),
+    ):
+        response = client.post(
+            "/api/s3/release/record",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "ticket_number": "AMS-102",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "CR-2026-042-release-record.pdf" in response.headers["content-disposition"]
+
+
+def test_release_record_reads_approvals_from_the_server_log_not_the_client():
+    """Who signed a release must not be reported by the same client asking
+    for the certificate."""
+    client = _client()
+    events = [
+        {"actor": "human", "action": "test_scenarios_approved", "detail": "4 by Priya", "ts": "t1"},
+        {"actor": "ai", "action": "tests_generated", "detail": "", "ts": "t2"},
+    ]
+    with (
+        patch("apps.console.api.routers.s3.draft_release_note_set", return_value=_note_set()),
+        patch("apps.console.api.routers.s3.events_for", return_value=events),
+    ):
+        response = client.post(
+            "/api/s3/release/record",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "ticket_number": "AMS-102",
+                "format": "html",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "test scenarios approved" in response.text
+    assert "tests_generated" not in response.text
+
+
+def test_release_record_still_builds_when_the_model_is_unreachable():
+    """The record's value is the evidence, not the prose."""
+    client = _client()
+    with (
+        patch(
+            "apps.console.api.routers.s3.draft_release_note_set",
+            side_effect=LLMError("provider down"),
+        ),
+        patch("apps.console.api.routers.s3.events_for", return_value=[]),
+    ):
+        response = client.post(
+            "/api/s3/release/record",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "ticket_number": "AMS-102",
+                "format": "html",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "What shipped" in response.text
+    assert "Release notes" not in response.text
+
+
+def test_release_record_reports_a_failing_suite_as_not_evidenced():
+    client = _client()
+    failing = [
+        {
+            "name": "test_default_priority_standard",
+            "classname": "c",
+            "description": "Default priority standard",
+            "status": "failed",
+            "time_s": 0.01,
+            "message": "boom",
+        }
+    ]
+    with (
+        patch("apps.console.api.routers.s3.draft_release_note_set", return_value=_note_set()),
+        patch("apps.console.api.routers.s3.events_for", return_value=[]),
+    ):
+        response = client.post(
+            "/api/s3/release/record",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "ticket_number": "AMS-102",
+                "format": "html",
+                "generated_cases": failing,
+            },
+        )
+
+    assert "Not evidenced by this release" in response.text
+    assert "did not pass" in response.text
+
+
+def test_release_attach_is_honest_about_replay_mode(monkeypatch):
+    """With JIRA_MODE=replay there is no Jira to attach to; the beat says so
+    rather than reporting a success that did not happen."""
+    monkeypatch.setenv("JIRA_MODE", "replay")
+    client = _client()
+    with (
+        patch("apps.console.api.routers.s3.draft_release_note_set", return_value=_note_set()),
+        patch("apps.console.api.routers.s3.render_pdf", return_value=b"%PDF-1.4 fake"),
+        patch("apps.console.api.routers.s3.events_for", return_value=[]),
+    ):
+        response = client.post(
+            "/api/s3/release/attach",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "ticket_number": "AMS-102",
+            },
+        )
+
+    body = response.json()
+    assert body["attached"] is False
+    assert body["simulated"] is True
+    assert "JIRA_MODE=replay" in body["detail"]
+
+
+def test_release_attach_uploads_when_jira_is_live(monkeypatch):
+    monkeypatch.setenv("JIRA_MODE", "live")
+    client = _client()
+    jira = MagicMock()
+    with (
+        patch("apps.console.api.routers.s3.draft_release_note_set", return_value=_note_set()),
+        patch("apps.console.api.routers.s3.render_pdf", return_value=b"%PDF-1.4 fake"),
+        patch("apps.console.api.routers.s3.events_for", return_value=[]),
+        patch("apps.console.api.routers.s3.get_jira_client", return_value=jira),
+    ):
+        response = client.post(
+            "/api/s3/release/attach",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "ticket_number": "AMS-102",
+            },
+        )
+
+    assert response.json()["attached"] is True
+    jira.attach_file.assert_called_once()
+    assert jira.attach_file.call_args.args[0] == "AMS-102"
+
+
+def test_release_attach_requires_a_ticket():
+    client = _client()
+    response = client.post(
+        "/api/s3/release/attach",
+        json={"tier_name": "Elite", "target_id": "mockapp-endorsement-field-add"},
+    )
+    assert response.status_code == 422
