@@ -19,8 +19,8 @@ tooling that drives them. You do **not** need all four for every beat.
 |---|-------------|-------|------|------------|
 | 1 | **Console** — FastAPI + React. The screen you present from. | `apps/run-console.sh` | 8000 + 5173 | Every beat |
 | 2 | **PolicyCore** — the client's policy portal (Streamlit). The window the audience watches change. | `apps/run-policycore.sh` | 8501 | CR-2026-041, CR-2026-042 |
-| 3 | **Policy-Service** — ClaimsPortal policy side (Spring Boot). | `apps/run-policy-service.sh` | 8081 | CR-2026-043 |
-| 4 | **Claims-Service** — ClaimsPortal claims side (Spring Boot). Start after #3. | `apps/run-claims-service.sh` | 8082 | CR-2026-043 |
+| 3 | **Policy-Service** — ClaimsPortal policy side (Python/FastAPI). | `apps/run-policy-service.sh` | 8081 | CR-2026-043 |
+| 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI). Start after #3. | `apps/run-claims-service.sh` | 8082 | CR-2026-043 |
 
 > **Open this one** — the console UI is `http://localhost:5173`, not `:8000`.
 > Port 8000 is the API the UI talks to.
@@ -34,12 +34,8 @@ application.
 
 | Tool | Version | Needed for | Check |
 |------|---------|------------|-------|
-| Python | 3.12+ | Console API, PolicyCore, S3 tooling | `python3 --version` |
+| Python | 3.12+ | Console API, PolicyCore, S3 tooling, ClaimsPortal | `python3 --version` |
 | Node.js | 18+ | Console UI | `node --version` |
-| Java JDK | 17+ | Apps 3 and 4 only | `java -version` |
-| Maven | 3.9+ | Apps 3 and 4 only | `mvn -version` |
-
-Skip Java and Maven entirely if you are only demoing the PolicyCore CRs.
 
 ---
 
@@ -64,7 +60,7 @@ cp .env.example .env
 python -m apps.policycore.core.seed
 
 # 5. Confirm the install
-python -m pytest -q          # expect: 309 passed
+python -m pytest -q          # expect: 529 passed
 ```
 
 > **Sanity check** — if `pytest` passes, the wiring is correct. It exercises
@@ -146,7 +142,7 @@ Expected final lines:
 ```text
 S3 source baseline restored, mockapp reseeded, LLM cache cleared, and ticket timeline cleared.
 CR-2026-042 source baseline restored, mockapp reseeded, and LLM cache cleared.
-Spring demo (ClaimsPortal) source baseline restored; generated files and build output removed.
+ClaimsPortal source baseline restored; generated files removed.
 ```
 
 ---
@@ -218,8 +214,8 @@ need to reset between the two.
 | 13 | **Download the release record, attach it to the ticket** | Everything the run proved, in one PDF — including what it could *not* prove |
 
 On beats 12-13: the deployment order is **derived**, not drafted — on
-CR-2026-043 the plan puts policy-service before claims-service because
-claims-service calls it, and says why. The release record is assembled from
+CR-2026-043 the plan puts policy_service before claims_service because
+claims_service calls it, and says why. The release record is assembled from
 what the run actually produced; its "Not evidenced by this release" block is
 the part worth pausing on, because a release document that only lists
 successes is marketing. **Attach to ticket** is honest about the demo default:
@@ -248,7 +244,7 @@ honest undo at that point is a revert commit, not a rewritten history.
 On beat 6b: the change map is **derived, not drawn by the model** — services,
 layers and the cross-service arrow are read from the changed-file set, so it
 costs no LLM call and needs no cache warming. The `NEW` badge comes from git
-(the file is absent from `HEAD`), which is why `ClaimRules.java` carries one on
+(the file is absent from `HEAD`), which is why `claim_rules.py` carries one on
 CR-2026-043 and nothing does on CR-2026-042. The PDF is rendered server-side by
 headless Chromium; if `playwright install chromium` has not been run on the
 demo machine the endpoint answers 503 and the console silently falls back to
@@ -258,7 +254,7 @@ Beats 7, 9 and 10 are the QA-facing half of the tests stage. Two things worth
 saying out loud when showing them:
 
 - The regression suite (`tests/test_regression_policycore.py`,
-  `PolicyApiRegressionTest.java`) appears in **no** target's
+  `tests/test_regression_claimsportal.py`) appears in **no** target's
   `testgen_allowlist`. The pipeline physically cannot write to it, which is
   what makes "the pre-existing tests still pass" a result rather than a claim.
 - In the matrix, only the scenario→test column is inferred, and it is

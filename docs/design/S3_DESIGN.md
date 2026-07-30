@@ -27,7 +27,7 @@ same pipeline against two different applications in two different languages:
 |---|---|---|---|---|
 | AMS-101 | CR-2026-041 | `apps/policycore/` (MapleSure portal) | Python | Add a coverage-tier upgrade capability (audience picks the tier name live) |
 | AMS-102 | CR-2026-042 | `apps/policycore/` | Python | Add a `priority` field to the endorsement form |
-| AMS-103 | CR-2026-043 | `apps/claimsportal/` (ClaimsPortal) | Java / Spring Boot | Add deductible handling to claims decisioning |
+| AMS-103 | CR-2026-043 | `apps/claimsportal/` (ClaimsPortal) | Python / FastAPI | Add deductible handling to claims decisioning |
 
 The point of AMS-103 is architectural, not narrative: it proves the pipeline is not welded
 to one repo, one language, or one test runner.
@@ -81,7 +81,7 @@ graph TB
 
   subgraph Targets
     MA["apps/policycore/<br/>Streamlit portal + SQLite"]
-    SP["apps/claimsportal/<br/>2 Maven services"]
+    SP["apps/claimsportal/<br/>2 Python/FastAPI services"]
   end
 
   UI -->|"/api/*, httponly cookie"| API --> AUTH --> R
@@ -575,18 +575,19 @@ every core file back), but review shouldn't show noise.
 |---|---|---|
 | Shape | all | valid JSON, `files` list, string `path`/`content` |
 | File set | all | core recall (`verify_core_recall`) + nothing outside `selection.selected` |
-| Python content | `.py` | `ast.parse`, no legacy `typing.List/Dict/Optional` (ruff UP006/UP035) |
-| Java content | `.java` | `com.maplesure.*` package declaration, balanced braces after stripping strings/comments (catches truncation) |
+| Python content | `.py` (all three targets) | `ast.parse`, no legacy `typing.List/Dict/Optional` (ruff UP006/UP035) |
 | Safety | all | denylist (`real client`, `end client`, `.env`, `api_key`, `secret`) + secret-shaped regex (`sk-…`, `AKIA…`, PEM headers) |
 | CR-2026-041 | `coverage.py`, `models.py` | required public symbols `COVERAGE_TIERS`/`TIER_MULTIPLIERS`/`upgrade_coverage`; `Policy(...)` still constructible with 6 positional args |
 | CR-2026-042 | `models.py` | `Endorsement.priority` is the **last** field and **has a default** |
-| CR-2026-043 | `ClaimRules.java` etc. | required contract tokens; `Policy.java`/`PolicyClient.java` carry `deductible` |
+| CR-2026-043 | `claim_rules.py` etc. | `decide`/`payable` function defs exist (via `ast.walk`), required contract tokens; `policy.py`/`policy_client.py` carry `deductible` |
 
 The backward-compat check actually `exec`s the generated `models.py` and constructs a
 `Policy` with the exact 6 positional args `seed.py` uses — because `seed.py` is off the
-allowlist and would crash the app on startup otherwise. Java can't go through `ast.parse`,
-so its real compile check is the Maven run at the tests beat; `_validate_java_content` is the
-cheap structural gate so a truncated response fails here instead of at `mvn`.
+allowlist and would crash the app on startup otherwise. All three targets are pure Python
+since ClaimsPortal's 2026-07-30 rewrite from Java/Spring Boot, so `_validate_content` is a
+single `ast.parse` path with no per-language fork (the Java-specific `_validate_java_content`
+brace/package-declaration gate this table used to describe was deleted along with the
+Spring/Maven target).
 
 ### 7.3 Two behaviours worth calling out
 
@@ -617,18 +618,17 @@ rather than dying silently in a discarded subprocess.
 Three separate beats, because "the AI wrote tests and they passed" is a weak claim on its
 own.
 
-1. **`POST /s3/tests/generate`** — streams the test file, validates it (JUnit-shape tokens
-   for Java, `ast.parse` for Python, same denylist), and stages it. Note that unlike
-   codegen, testgen *does* apply to the tree immediately — a test file is not a change to
-   the product.
+1. **`POST /s3/tests/generate`** — streams the test file, validates it (`ast.parse`, same
+   denylist), and stages it. Note that unlike codegen, testgen *does* apply to the tree
+   immediately — a test file is not a change to the product.
 2. **`POST /s3/tests/run`** — runs the target's own runner and parses **JUnit XML** into
    per-case results, so the console renders a checklist instead of a raw runner dump:
-   - Python: `pytest <path> -v --junitxml=<tmp> -o junit_family=xunit2`
-   - Java: the Target's declared `mvn -q -Dtest=ClaimRulesTest test` from `test_cwd`, reading
-     Surefire's `target/surefire-reports/TEST-*.xml` (stale reports are cleared first so a
-     parse can never pick up a previous run)
-   - `humanize_test_name()` turns `test_unknown_tier_raises_value_error` and Java's
-     `claimAtExactlyDeductibleIsRejected` into readable labels
+   - The default (all three registered targets): `pytest <path> -v --junitxml=<tmp>
+     -o junit_family=xunit2`
+   - A target can instead declare an external `test_command`/`test_cwd` (an escape hatch for
+     a non-Python target, unused today — ClaimsPortal's Maven/JUnit invocation used this path
+     until its 2026-07-30 rewrite to Python)
+   - `humanize_test_name()` turns `test_unknown_tier_raises_value_error` into a readable label
    - A run whose XML never appeared still returns, with an empty case list and the real
      return code
 3. **`POST /s3/tests/mutation`** — the "prove the tests catch bugs" beat. Injects the
