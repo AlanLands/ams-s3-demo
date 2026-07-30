@@ -39,7 +39,7 @@ def _branch(**overrides) -> BranchState:
         base="main",
         ticket="AMS-103",
         created_at="2026-07-30 09:00:00",
-        staged_files=["apps/claimsportal/policy-service/src/main/java/Policy.java"],
+        staged_files=["apps/claimsportal/policy_service/policy.py"],
     )
     base.update(overrides)
     return BranchState(**base)
@@ -49,7 +49,7 @@ def _commit() -> Commit:
     return Commit(
         sha="abc1234",
         message="AMS-103: add claims deductible",
-        files=("apps/claimsportal/policy-service/src/main/java/Policy.java",),
+        files=("apps/claimsportal/policy_service/policy.py",),
         committed_at="2026-07-30 09:30:00",
     )
 
@@ -74,11 +74,11 @@ POLICYCORE = targets.MOCKAPP_ENDORSEMENT_FIELD_ADD
 
 
 def test_callee_deploys_before_caller():
-    """claims-service calls policy-service. Ship claims first and it spends
-    the gap reading a field policy-service has not deployed yet."""
+    """claims_service calls policy_service. Ship claims first and it spends
+    the gap reading a field policy_service has not deployed yet."""
     plan = build_deployment_plan(SPRING, build_change_map(SPRING))
-    assert plan.service_order == ["policy-service", "claims-service"]
-    assert "policy-service first" in plan.order_reason
+    assert plan.service_order == ["policy_service", "claims_service"]
+    assert "policy_service first" in plan.order_reason
 
 
 def test_single_service_plan_claims_no_ordering_constraint():
@@ -103,15 +103,15 @@ def test_plan_verifies_with_the_regression_suite():
     plan = build_deployment_plan(SPRING, build_change_map(SPRING))
     verify = [step for step in plan.steps if step.kind == "verify"]
     assert len(verify) == 1
-    assert "PolicyApiRegressionTest" in verify[0].command
+    assert "test_regression_claimsportal.py" in verify[0].command
 
 
 def test_rollback_reverses_the_deploy_order():
     plan = build_deployment_plan(SPRING, build_change_map(SPRING))
     assert plan.rollback
     restore = plan.rollback[0]
-    # claims-service (the caller) comes down first.
-    assert restore.detail.index("claims-service") < restore.detail.index("policy-service")
+    # claims_service (the caller) comes down first.
+    assert restore.detail.index("claims_service") < restore.detail.index("policy_service")
 
 
 def test_rollback_is_itself_verified():

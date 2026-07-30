@@ -294,9 +294,10 @@ be deterministic and have no LLM calls or network access."""
 
 
 def build_spring_prompt(cr_text: str, *, target: Target) -> str:
-    """Prompt for CR-2026-043's generated JUnit suite — a plain unit test of
-    the ClaimRules contract, no Spring context and no HTTP, so `mvn test`
-    stays fast and deterministic."""
+    """Prompt for CR-2026-043's generated pytest suite — a plain unit test of
+    the claim_rules contract, no HTTP/app startup, so it stays fast and
+    deterministic. Name kept from this target's Java-era history (see
+    CLAUDE.md); the source is Python since the 2026-07-30 rewrite."""
     test_path = target.testgen_allowlist[0]
 
     reference = """Tests should cover:
@@ -316,7 +317,7 @@ def build_spring_prompt(cr_text: str, *, target: Target) -> str:
     context_paths = [
         rel_path
         for rel_path in target.codegen_allowlist
-        if rel_path.endswith(("ClaimRules.java", "Claim.java"))
+        if rel_path.endswith(("claim_rules.py", "claim.py"))
     ]
     for rel_path in context_paths:
         path = REPO_ROOT / rel_path
@@ -342,13 +343,12 @@ Return structured JSON only with this exact shape:
   ]
 }}
 
-Use JUnit 5 (org.junit.jupiter.api — already on the claims-service test
-classpath via spring-boot-starter-test), package com.maplesure.claims, class
-ClaimRulesTest. Plain unit tests of ClaimRules only: no @SpringBootTest, no
-web/server startup, no mocking framework, no network. Compare BigDecimal
-values with compareTo (assertEquals(0, expected.compareTo(actual)) or
-assertTrue) — never assertEquals on two BigDecimals with different scales.
-The test file must be deterministic."""
+Use plain pytest functions importing `decide`/`payable` directly from
+apps.claimsportal.claims_service.claim_rules. Plain unit tests of claim_rules
+only: no FastAPI TestClient, no server startup, no mocking, no network. Use
+modern built-in generics for any type hint (never `typing.Optional` etc.) and
+keep every line at 100 characters or fewer. The test file must be
+deterministic."""
 
 
 def _parse_files_response(response: str) -> dict[str, str]:
@@ -384,19 +384,10 @@ def _validate_file_set(files: dict[str, str], *, allowlist: tuple[str, ...] = AL
             f"expected {sorted(allowlist)}, got {sorted(files)}"
         )
     content = files[allowlist[0]]
-    if allowlist[0].endswith(".java"):
-        # Java can't go through ast.parse — the compile check is the Maven
-        # test run right after apply. Gate on the JUnit shape instead.
-        for token in (f"class {Path(allowlist[0]).stem}", "@Test", "org.junit.jupiter"):
-            if token not in content:
-                raise LLMError(
-                    f"S3 generated {allowlist[0]} is missing required token {token!r}"
-                )
-    else:
-        try:
-            ast.parse(content, filename=allowlist[0])
-        except SyntaxError as exc:
-            raise LLMError(f"S3 generated invalid Python for {allowlist[0]}: {exc}") from exc
+    try:
+        ast.parse(content, filename=allowlist[0])
+    except SyntaxError as exc:
+        raise LLMError(f"S3 generated invalid Python for {allowlist[0]}: {exc}") from exc
     lowered = content.lower()
     for forbidden in ("real client", ".env", "api_key", "api key", "secret"):
         if forbidden in lowered:

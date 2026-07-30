@@ -173,7 +173,7 @@ def build_prompt(cr_text: str, criteria: list[Criterion], *, target: Target) -> 
         "\n".join(f"{criterion.id}: {criterion.text}" for criterion in criteria)
         or "(this ticket has no numbered acceptance criteria)"
     )
-    language = "Java/Spring Boot" if target.language == "java" else "Python"
+    language = "Python"
     return f"""Change request:
 {cr_text}
 

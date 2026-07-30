@@ -45,10 +45,10 @@ const MOCKAPP_URL = 'http://localhost:8501'
 
 // Where an applied change can actually be seen running, per target. Keyed by
 // target id so the post-apply "go look at it" link names the app the change
-// landed in — not always the mockapp portal. The Spring ClaimsPortal target
-// serves its own consoles from two Maven services (demo/run_s3_springdemo.sh:
-// policy-service :8081, claims-service :8082); CR-2026-043 changes claim
-// intake, so the claims console is the one worth opening.
+// landed in — not always the mockapp portal. The ClaimsPortal target serves
+// its own consoles from two Python/FastAPI services (apps/run-policy-service.sh
+// :8081, apps/run-claims-service.sh :8082); CR-2026-043 changes claim intake,
+// so the claims console is the one worth opening.
 const TARGET_APPS: Record<string, { url: string; label: string }> = {
   'springdemo-claims-deductible': {
     url: 'http://localhost:8082/',
@@ -75,9 +75,9 @@ const TESTER_ROSTER = ['Priya Nair', 'Tom Becker']
 const TICKET_TARGETS: Record<string, { targetId: string | null; tierName: string; crLabel: string }> = {
   'AMS-101': { targetId: null, tierName: 'Elite', crLabel: 'CR-2026-041' },
   'AMS-102': { targetId: 'mockapp-endorsement-field-add', tierName: 'Elite', crLabel: 'CR-2026-042' },
-  // The Spring Boot ClaimsPortal target (apps/claimsportal) — S3's proof
-  // that the pipeline handles a second repo in a second language. tierName is
-  // a required placeholder like AMS-102's; CR-2026-043 has no {{TIER_NAME}}.
+  // The ClaimsPortal target (apps/claimsportal) — S3's proof that the
+  // pipeline handles a second repo. tierName is a required placeholder like
+  // AMS-102's; CR-2026-043 has no {{TIER_NAME}}.
   'AMS-103': { targetId: 'springdemo-claims-deductible', tierName: 'Elite', crLabel: 'CR-2026-043' },
 }
 
@@ -277,7 +277,7 @@ function parseDiff(diffText: string): DiffFile[] {
 
 
 // Per-test checklist parsed from the runner's JUnit XML — the readable
-// alternative to the raw pytest/Maven dump (which stays available behind a
+// alternative to the raw pytest dump (which stays available behind a
 // "runner output" disclosure below the table).
 function TestCaseTable({ cases }: { cases: TestCaseResult[] }) {
   if (cases.length === 0) return null

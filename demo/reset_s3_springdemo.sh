@@ -1,38 +1,36 @@
 #!/usr/bin/env bash
-# CR-2026-043 (Spring Boot ClaimsPortal target) between-rehearsals reset.
-# Mirrors demo/reset_s3.sh's job for the mockapp target, but apps/claimsportal
-# is not git-tracked, so the pre-CR baseline is restored from the committed-in-place
-# snapshot at apps/claimsportal/.baseline/ instead of a git tag.
+# CR-2026-043 (ClaimsPortal target) between-rehearsals reset.
+# Mirrors demo/reset_s3.sh's job for the mockapp target: the pre-CR baseline
+# is restored from the committed-in-place snapshot at
+# apps/claimsportal/.baseline/ rather than `git checkout HEAD --`, since the
+# generated claim_rules.py has no pre-CR counterpart to check out.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Step 0 (SCM_MODE=live) can leave the repo on a real feature branch cut for
 # a previous rehearsal's CR — see the same note in demo/reset_s3.sh. Best-
 # effort and non-fatal: a developer running this from their own work branch
-# must not have this step abort the restore below. Applies here too even
-# though apps/claimsportal itself isn't git-tracked — branching is repo-wide.
+# must not have this step abort the restore below.
 _current_branch="$(git rev-parse --abbrev-ref HEAD)"
 if [[ "$_current_branch" != "main" ]] && ! git checkout main 2>/dev/null; then
   echo "note: staying on '$_current_branch' — switching to main would conflict with local changes"
 fi
 
-SPRING=apps/claimsportal
+CLAIMSPORTAL=apps/claimsportal
 BASELINE_FILES=(
-  policy-service/src/main/java/com/maplesure/policy/Policy.java
-  policy-service/src/main/java/com/maplesure/policy/PolicyController.java
-  claims-service/src/main/java/com/maplesure/claims/Claim.java
-  claims-service/src/main/java/com/maplesure/claims/PolicyClient.java
-  claims-service/src/main/java/com/maplesure/claims/ClaimsController.java
+  policy_service/policy.py
+  policy_service/main.py
+  claims_service/claim.py
+  claims_service/policy_client.py
+  claims_service/main.py
 )
 for f in "${BASELINE_FILES[@]}"; do
-  cp "$SPRING/.baseline/$f" "$SPRING/$f"
+  cp "$CLAIMSPORTAL/.baseline/$f" "$CLAIMSPORTAL/$f"
 done
 # Files the CR creates from scratch — removed entirely on reset.
-rm -f "$SPRING/claims-service/src/main/java/com/maplesure/claims/ClaimRules.java"
-rm -f "$SPRING/claims-service/src/test/java/com/maplesure/claims/ClaimRulesTest.java"
-# Stale Maven build output of the enhanced code.
-rm -rf "$SPRING/policy-service/target" "$SPRING/claims-service/target"
+rm -f "$CLAIMSPORTAL/claims_service/claim_rules.py"
+rm -f tests/test_s3_claims_deductible.py
 
-echo "Spring demo (ClaimsPortal) source baseline restored; generated files and build output removed."
+echo "ClaimsPortal source baseline restored; generated files removed."
 echo "Note: staged proposals under s3_enhancement/out/ are shared with the mockapp target —"
 echo "run demo/reset_s3.sh too for a full between-rehearsals reset."

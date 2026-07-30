@@ -29,22 +29,34 @@ AI analysis → codegen → tests → docs → release notes.
   target — CR-2026-041 and CR-2026-042. Its Python package moved with it, so
   imports are `apps.policycore.core.*`.
 - `apps/claimsportal/` (was `sandbox/spring-demo/`) is S3's second target —
-  "ClaimsPortal" (Java/Spring Boot, CR-2026-043, ticket AMS-103, target id
-  `springdemo-claims-deductible`). It is one folder holding two services
-  because CR-2026-043 edits files in both, so S3 treats it as a single target
-  root; they still start as two processes. Checked-in source is the pre-CR
-  baseline (snapshot in `.baseline/`); reset with `demo/reset_s3_springdemo.sh`.
+  "ClaimsPortal" (Python/FastAPI, CR-2026-043, ticket AMS-103, target id
+  `springdemo-claims-deductible`). Rebuilt from Java/Spring Boot to Python on
+  2026-07-30 so the target sandbox (no JVM/Maven) can run it — same REST
+  contract, same CR behavior, `policy-service`/`claims-service` renamed to
+  `policy_service`/`claims_service` (valid Python package names). The
+  `target_id`/`cache_namespace` still say "spring" — kept verbatim rather than
+  churned, same precedent as `targets.py`'s other legacy literals. It is one
+  folder holding two services because CR-2026-043 edits files in both, so S3
+  treats it as a single target root; they still start as two processes.
+  Checked-in source is the pre-CR baseline (snapshot in `.baseline/`); reset
+  with `demo/reset_s3_springdemo.sh`. Its generated test and regression suite
+  now live in the top-level `tests/` dir like the other two targets (the
+  Java-only exception for in-target-root test discovery no longer applies).
 - `apps/console/` is the console: `api/` (FastAPI, run as
   `uvicorn apps.console.api.main:app`) and `web/` (React, was `frontend/`).
 - `s3_enhancement/cache/` is the committed replay cache that makes the demo
   deterministic; `s3_enhancement/out/` is gitignored and regenerated per run.
 - `tests/` holds both the pipeline's own tests **and** the target apps'
-  checked-in regression suite (`test_regression_policycore.py`). The
-  regression suites are deliberately outside every target root: anything
-  ending `.py`/`.java` under a target root joins the codegen candidate pool
-  (see below). The Java one is the exception and lives at
+  checked-in regression suites (`test_regression_policycore.py`,
+  `test_regression_claimsportal.py`). The regression suites are deliberately
+  outside every target root: anything ending `.py` under a target root joins
+  the codegen candidate pool (see below). Until the 2026-07-30 Python rewrite,
+  ClaimsPortal's Java regression suite was the one exception, living at
   `apps/claimsportal/policy-service/src/test/` — safe only because
-  `relevance.py` now excludes `test`/`tests` directories from discovery.
+  `relevance.py` excludes `test`/`tests` directories from discovery. That
+  exclusion stays in `relevance.py` (harmless, still guards decoy test dirs)
+  but no target now depends on it — all three keep their regression suite and
+  generated-test output in `tests/`.
 - The demo reset scripts restore from `HEAD`, **not** from the `s3-baseline` /
   `s3-endorsement-baseline` tags. Those tags predate both this layout and the
   endorsements table, and restoring from them breaks reseeding with a FOREIGN

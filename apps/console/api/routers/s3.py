@@ -206,9 +206,9 @@ def _cr_text_or_400(tier_name: str, *, target: Target | None = None) -> str:
 
 def _run_suite_or_502(target: Target) -> testrun.SuiteRun:
     """Run the target's generated test suite with the target's own runner —
-    pytest by default; a Java target declares its Maven invocation on the
-    Target itself (test_command/test_cwd). A missing runner binary surfaces as
-    a clean 502, not an uncaught FileNotFoundError 500."""
+    pytest by default; a target can declare an external invocation instead on
+    the Target itself (test_command/test_cwd). A missing runner binary
+    surfaces as a clean 502, not an uncaught FileNotFoundError 500."""
     try:
         return testrun.run_suite(target)
     except testrun.TestRunnerNotFoundError as exc:

@@ -11,12 +11,11 @@ below; only the last two depend on each other.
 |---|---|---|---|---|
 | 1 | **Console** | `apps/run-console.sh` | 8000 + **5173** | The AMS console the presenter drives. FastAPI backend + React UI. Open **:5173**. |
 | 2 | **PolicyCore** | `apps/run-policycore.sh` | 8501 | The client's policy-administration portal (Python/Streamlit/SQLite). The window the audience watches change. |
-| 3 | **Policy-Service** | `apps/run-policy-service.sh` | 8081 | ClaimsPortal's policy side (Java/Spring Boot). Start before Claims-Service. |
-| 4 | **Claims-Service** | `apps/run-claims-service.sh` | 8082 | ClaimsPortal's claims side (Java/Spring Boot). Target of CR-2026-043. |
+| 3 | **Policy-Service** | `apps/run-policy-service.sh` | 8081 | ClaimsPortal's policy side (Python/FastAPI). Start before Claims-Service. |
+| 4 | **Claims-Service** | `apps/run-claims-service.sh` | 8082 | ClaimsPortal's claims side (Python/FastAPI). Target of CR-2026-043. |
 
 You do **not** need all four for every beat. The mockapp CRs (CR-2026-041,
-CR-2026-042) need apps 1 and 2. The Spring CR (CR-2026-043) needs apps 1, 3
-and 4.
+CR-2026-042) need apps 1 and 2. CR-2026-043 needs apps 1, 3 and 4.
 
 ## How these map to the demo's story
 
@@ -41,8 +40,15 @@ pretending it can generate a fix.
   as a single change target — CR-2026-043 edits files in both. Splitting the
   directories would split the target. They still start as two processes, via
   the two scripts above.
-- **`claimsportal/.baseline/`** is the pre-CR snapshot of the Java sources,
-  restored by `demo/reset_s3_springdemo.sh`. It is not built or run.
+- **`claimsportal/.baseline/`** is the pre-CR snapshot of the Python sources,
+  restored by `demo/reset_s3_springdemo.sh`. It is not run.
+- **`claimsportal/policy_service/`, `claimsportal/claims_service/`** were
+  `policy-service/`, `claims-service/` (Java/Spring Boot) — rebuilt in Python
+  (FastAPI/uvicorn) so the demo runs without a JVM. Renamed hyphen→underscore
+  because they're now real Python packages (`apps.claimsportal.policy_service`).
+  This is the one sanctioned exception to "do not rename these directories"
+  below: the rewrite already required a fresh replay-cache recording, so the
+  rename rode along with it instead of desyncing a working cache.
 - **`console/web/`** was `frontend/`; **`console/api/`** was `api/`;
   **`policycore/`** was `mockapp/`. The Python package moved with the folder,
   so imports are `apps.policycore.core.db`, and the console runs as

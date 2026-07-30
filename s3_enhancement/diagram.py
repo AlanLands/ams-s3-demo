@@ -47,18 +47,18 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # suffix matches its filename or any fragment appears in its path.
 LAYERS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     # Entry points: what a user or an HTTP client touches first.
-    ("Interface", ("app.py", "Controller.java"), ("/views/", "/static/")),
+    ("Interface", ("app.py", "main.py"), ("/views/", "/static/")),
     # Persistence and the shapes that cross it.
     ("Data", ("db.py", "models.py", "seed.py"), ("/repository/", "/entity/")),
     # Business rules and outbound calls. Broadest rule, so it runs last.
-    ("Logic", ("Rules.java", "Client.java", "Service.java", ".py"), ("/core/",)),
+    ("Logic", (".py",), ("/core/",)),
 )
 LAYER_ORDER = ("Interface", "Logic", "Data", "Other")
 
-# A Java record carrying only fields is the data shape for its service, not
-# logic — but it has no suffix that says so. These are the demo estate's
+# A record/dataclass carrying only fields is the data shape for its service,
+# not logic — but it has no suffix that says so. These are the demo estate's
 # record types; anything else falls through to the rules above.
-_DATA_RECORDS = ("Policy.java", "Claim.java", "ClaimRequest.java")
+_DATA_RECORDS = ("policy.py", "claim.py")
 
 _BOX_W = 190
 _BOX_H = 46
@@ -114,7 +114,7 @@ def _layer_for(rel_path: str) -> str:
 def _service_for(rel_path: str, target: Target) -> str:
     """The deployable unit a file belongs to.
 
-    The Spring target is one target root holding two Maven services (see
+    The ClaimsPortal target is one target root holding two services (see
     CLAUDE.md), so its files split by the directory under the root. A
     single-service target returns one bucket named for the application.
     """
@@ -130,7 +130,7 @@ def _service_for(rel_path: str, target: Target) -> str:
     head = remainder.split("/", 1)[0]
     # A file directly under the root (apps/policycore/app.py) means the target
     # is not split into services at all.
-    if "/" not in remainder or not head.endswith("-service"):
+    if "/" not in remainder or not head.endswith("_service"):
         return target.root.name
     return head
 
@@ -187,14 +187,14 @@ def build_change_map(
         if node.service not in services:
             services.append(node.service)
 
-    # A *Client.java in one service is an outbound HTTP call to another. With
+    # A *_client.py in one service is an outbound HTTP call to another. With
     # exactly two services in the change there is only one candidate for the
     # other end, so the edge is unambiguous; with more, drawing it would be a
     # guess and is skipped.
     crossings: list[tuple[str, str]] = []
     if len(services) == 2:
         for node in nodes:
-            if node.filename.endswith("Client.java"):
+            if node.filename.endswith("_client.py"):
                 other = [s for s in services if s != node.service][0]
                 edge = (node.service, other)
                 if edge not in crossings:

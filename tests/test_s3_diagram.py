@@ -4,6 +4,7 @@ s3_enhancement/designdoc.py (the standalone HTML/PDF document)."""
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -35,31 +36,32 @@ def test_layers_files_by_convention():
     assert by_name["models.py"] == "Data"
 
 
-def test_java_records_land_in_the_data_layer():
-    """Policy.java and Claim.java are field-only records with no suffix that
-    says "data" — without the explicit list they would fall through to Logic."""
+def test_python_records_land_in_the_data_layer():
+    """policy.py and claim.py are field-only pydantic models with no suffix
+    that says "data" — without the explicit list they would fall through to
+    Logic."""
     change_map = build_change_map(SPRING)
-    by_name = {node.filename: node.layer for node in change_map.nodes}
-    assert by_name["Policy.java"] == "Data"
-    assert by_name["Claim.java"] == "Data"
-    assert by_name["ClaimsController.java"] == "Interface"
-    assert by_name["ClaimRules.java"] == "Logic"
+    by_path = {node.rel_path: node.layer for node in change_map.nodes}
+    assert by_path["apps/claimsportal/policy_service/policy.py"] == "Data"
+    assert by_path["apps/claimsportal/claims_service/claim.py"] == "Data"
+    assert by_path["apps/claimsportal/claims_service/main.py"] == "Interface"
+    assert by_path["apps/claimsportal/claims_service/claim_rules.py"] == "Logic"
 
 
 def test_single_service_target_is_one_column():
     assert build_change_map(POLICYCORE).services == ["policycore"]
 
 
-def test_two_service_target_splits_by_maven_module():
+def test_two_service_target_splits_by_python_package():
     """apps/claimsportal is one target root holding two deployables; the
     diagram has to show them apart or the change looks like one service."""
-    assert set(build_change_map(SPRING).services) == {"claims-service", "policy-service"}
+    assert set(build_change_map(SPRING).services) == {"claims_service", "policy_service"}
 
 
 def test_cross_service_call_points_from_caller_to_callee():
-    """A PolicyClient in claims-service calls policy-service. Drawn backwards
-    it would tell QA to test the dependency the wrong way round."""
-    assert build_change_map(SPRING).crossings == [("claims-service", "policy-service")]
+    """policy_client.py in claims_service calls policy_service. Drawn
+    backwards it would tell QA to test the dependency the wrong way round."""
+    assert build_change_map(SPRING).crossings == [("claims_service", "policy_service")]
 
 
 def test_no_crossing_claimed_for_a_single_service():
@@ -67,11 +69,19 @@ def test_no_crossing_claimed_for_a_single_service():
 
 
 def test_new_files_are_badged_and_existing_ones_are_not():
-    change_map = build_change_map(SPRING)
-    by_name = {node.filename: node.is_new for node in change_map.nodes}
-    # ClaimRules.java does not exist until CR-2026-043 creates it.
-    assert by_name["ClaimRules.java"] is True
-    assert by_name["ClaimsController.java"] is False
+    """claim_rules.py does not exist until CR-2026-043 creates it. Fakes git
+    so the assertion doesn't depend on whether this checkout has committed
+    the rewritten target's baseline files yet."""
+
+    def fake_run(cmd, **kwargs):
+        rel_path = cmd[-1].split(":", 1)[1]
+        return SimpleNamespace(returncode=1 if rel_path.endswith("claim_rules.py") else 0)
+
+    with patch.object(diagram.subprocess, "run", side_effect=fake_run):
+        change_map = build_change_map(SPRING)
+    by_path = {node.rel_path: node.is_new for node in change_map.nodes}
+    assert by_path["apps/claimsportal/claims_service/claim_rules.py"] is True
+    assert by_path["apps/claimsportal/claims_service/main.py"] is False
 
 
 def test_new_file_detection_degrades_to_modified_without_git():

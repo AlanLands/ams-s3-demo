@@ -773,9 +773,10 @@ Rules:
 
 
 def build_spring_prompt(cr_text: str, *, selection: relevance.SelectionResult) -> str:
-    """Prompt for CR-2026-043 (claims deductible) against the Spring Boot
-    ClaimsPortal target — Java sources, not Python; no audience-picked
-    placeholder, like the endorsement CR."""
+    """Prompt for CR-2026-043 (claims deductible) against the ClaimsPortal
+    target — no audience-picked placeholder, like the endorsement CR. Name
+    kept from this target's Java-era history (see CLAUDE.md); the source is
+    Python since the 2026-07-30 rewrite."""
     current_files = []
     for rel_path, content in selection.selected.items():
         current_files.append(f"--- {rel_path} ---\n{content}")
@@ -807,35 +808,35 @@ Rules:
 - Return every listed file, each as a complete replacement, not a patch or diff.
 - "reason" is one short sentence (plain English, no code) a reviewer can read
   at a glance to know why that specific file is part of this change.
-- These are Java 21 / Spring Boot 3 sources in two Maven services. Keep each
-  file's existing package declaration and imports style; add only the imports
-  a change actually needs.
-- ClaimRules.java's public API is a fixed contract the generated test suite
-  depends on by these exact names — package com.maplesure.claims, class
-  ClaimRules, with exactly:
-  - `static String decide(String policyStatus, BigDecimal coverageLimit,
-    BigDecimal deductible, BigDecimal amount)` returning exactly one of
-    "REJECTED_POLICY_" + policyStatus (any non-ACTIVE status),
+- These are FastAPI sources in two services (policy_service, claims_service).
+- claim_rules.py's public API is a fixed contract the generated test suite
+  depends on by these exact names — module-level functions, no class:
+  - `decide(policy_status: str, coverage_limit: float, deductible: float,
+    amount: float) -> str` returning exactly one of
+    "REJECTED_POLICY_" + policy_status (any non-ACTIVE status),
     "REJECTED_OVER_LIMIT", "REJECTED_BELOW_DEDUCTIBLE", or "ACCEPTED" —
     checked in exactly that precedence order.
-  - `static BigDecimal payable(BigDecimal amount, BigDecimal deductible)`
-    returning the amount minus the deductible, floored at BigDecimal.ZERO.
-- "at or below the deductible" means amount.compareTo(deductible) <= 0 is
-  rejected; strictly above the deductible (and within the limit) is accepted.
-- Policy.java (policy-service) gains a `BigDecimal deductible` record
-  component as the LAST component, after coverageLimit. PolicyController's
-  seeded policies use the CR's deductible values. PolicyClient.PolicyView
-  (claims-service) gains the matching last component.
-- Claim.java gains a `BigDecimal payableAmount` record component as the LAST
-  component, after submittedAt. ClaimsController computes the status via
-  ClaimRules.decide(...) and payableAmount via ClaimRules.payable(...) for
-  accepted claims (BigDecimal.ZERO for rejected claims) — no inline decision
-  logic left in the controller.
-- Do not touch the static HTML consoles, pom.xml files, or application
-  classes — they are not in your file list and must keep working unchanged.
+  - `payable(amount: float, deductible: float) -> float` returning the
+    amount minus the deductible, floored at zero.
+- "at or below the deductible" means `amount <= deductible` is rejected;
+  strictly above the deductible (and within the limit) is accepted.
+- policy.py's `Policy` model gains a `deductible: float` field as the LAST
+  field, after coverageLimit. main.py's seeded policies use the CR's
+  deductible values. policy_client.py's `PolicyView` model gains the
+  matching last field.
+- claim.py's `Claim` model gains a `payableAmount: float` field as the LAST
+  field, after submittedAt. claims_service/main.py computes the status via
+  claim_rules.decide(...) and payableAmount via claim_rules.payable(...) for
+  accepted claims (0.0 for rejected claims) — no inline decision logic left
+  in main.py.
+- Do not touch the static HTML consoles — they are not in your file list and
+  must keep working unchanged.
 {_PRESERVATION_RULES}
-- 4-space indentation throughout, matching the given files.
-- Keep every line at 100 characters or fewer.
+- Use modern built-in generics for every type hint (`list[str]`, `dict[str,
+  float]`, `X | None`) — never `typing.List`, `typing.Dict`, `typing.Tuple`,
+  or `typing.Optional`; this repo's ruff config rejects them.
+- Keep every line at 100 characters or fewer (this repo's ruff line-length
+  limit) — wrap long f-strings and comments rather than exceeding it.
 - Existing flows must keep working: policy list/detail, the claims service's
   policy-directory passthrough, claim submission, and claim listing."""
 
@@ -954,31 +955,32 @@ def _validate_spring_file_set(
     _validate_claim_rules_contract(files)
 
 
-_REQUIRED_CLAIM_RULES_TOKENS = (
-    "class ClaimRules",
-    "static String decide",
-    "static BigDecimal payable",
-    "REJECTED_OVER_LIMIT",
-    "REJECTED_BELOW_DEDUCTIBLE",
-    "ACCEPTED",
-)
-
-
 def _validate_claim_rules_contract(files: dict[str, str]) -> None:
-    """CR-2026-043's fixed contract — the generated JUnit suite calls
-    ClaimRules.decide/payable by these exact names, and both Policy-side
-    records must actually carry the new deductible for the cross-service
+    """CR-2026-043's fixed contract — the generated pytest suite calls
+    claim_rules.decide/payable by these exact names, and both Policy-side
+    models must actually carry the new deductible for the cross-service
     JSON mapping to line up."""
-    rules_path = next((path for path in files if path.endswith("ClaimRules.java")), None)
+    rules_path = next((path for path in files if path.endswith("claim_rules.py")), None)
     if rules_path is None:
-        raise LLMError("S3 generated file set is missing ClaimRules.java")
+        raise LLMError("S3 generated file set is missing claim_rules.py")
     rules = files[rules_path]
-    missing = [token for token in _REQUIRED_CLAIM_RULES_TOKENS if token not in rules]
-    if missing:
+    try:
+        tree = ast.parse(rules, filename=rules_path)
+    except SyntaxError as exc:
+        raise LLMError(f"S3 generated invalid Python for {rules_path}: {exc}") from exc
+
+    def_names = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    missing_defs = {"decide", "payable"} - def_names
+    if missing_defs:
+        raise LLMError(f"S3 generated claim_rules.py is missing function(s) {sorted(missing_defs)}")
+
+    required_tokens = ("REJECTED_OVER_LIMIT", "REJECTED_BELOW_DEDUCTIBLE", "ACCEPTED")
+    missing_tokens = [token for token in required_tokens if token not in rules]
+    if missing_tokens:
         raise LLMError(
-            f"S3 generated ClaimRules.java is missing required contract token(s) {missing}"
+            f"S3 generated claim_rules.py is missing required contract token(s) {missing_tokens}"
         )
-    for suffix in ("Policy.java", "PolicyClient.java"):
+    for suffix in ("policy.py", "policy_client.py"):
         path = next((p for p in files if p.endswith(suffix)), None)
         if path is not None and "deductible" not in files[path]:
             raise LLMError(f"S3 generated {suffix} does not carry the new deductible field")
@@ -1050,9 +1052,6 @@ _LEGACY_TYPING_ALIASES = frozenset({"List", "Dict", "Tuple", "Set", "FrozenSet",
 
 
 def _validate_content(rel_path: str, content: str) -> None:
-    if rel_path.endswith(".java"):
-        _validate_java_content(rel_path, content)
-        return
     try:
         tree = ast.parse(content, filename=rel_path)
     except SyntaxError as exc:
@@ -1090,41 +1089,6 @@ def _validate_content(rel_path: str, content: str) -> None:
                 f"S3 generated apps/policycore/core/coverage.py is missing required public "
                 f"symbol(s) {missing} — got {sorted(top_level_names)}"
             )
-
-
-def _validate_java_content(rel_path: str, content: str) -> None:
-    """Java sources can't go through ast.parse — the real compile check is the
-    Maven test run at the /s3/tests beat. This is the cheap structural gate
-    the Python path also gets pre-apply: denylist/secret scan, a package
-    declaration, and balanced braces (a truncated or fence-mangled response
-    fails here instead of at mvn)."""
-    lowered = content.lower()
-    for forbidden in _DENYLIST:
-        if forbidden in lowered:
-            raise LLMError(f"S3 generated forbidden string {forbidden!r} in {rel_path}")
-    if _SECRET_RE.search(content):
-        raise LLMError(f"S3 generated secret-shaped content in {rel_path}")
-    if not re.search(r"^package\s+com\.maplesure\.", content, re.M):
-        raise LLMError(f"S3 generated {rel_path} without a com.maplesure package declaration")
-    stripped = _strip_java_strings_and_comments(content)
-    if stripped.count("{") != stripped.count("}"):
-        raise LLMError(
-            f"S3 generated {rel_path} with unbalanced braces "
-            f"({stripped.count('{')} open vs {stripped.count('}')} close)"
-        )
-
-
-_JAVA_NOISE_RE = re.compile(
-    r"//[^\n]*"  # line comment
-    r"|/\*.*?\*/"  # block comment
-    r"|\"(?:\\.|[^\"\\])*\""  # string literal
-    r"|'(?:\\.|[^'\\])'",  # char literal
-    re.S,
-)
-
-
-def _strip_java_strings_and_comments(content: str) -> str:
-    return _JAVA_NOISE_RE.sub("", content)
 
 
 def _drop_unchanged_files(files: dict[str, str]) -> dict[str, str]:

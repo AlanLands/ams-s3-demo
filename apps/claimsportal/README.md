@@ -1,4 +1,4 @@
-# MapleSure Spring Boot Demo (two services)
+# MapleSure ClaimsPortal demo (two services)
 
 > **S3 target**: this app doubles as the S3 pipeline's second enhancement
 > target — "ClaimsPortal", CR-2026-043 (`crs/CR-2026-043.md`), registered as
@@ -6,21 +6,21 @@
 > Jira ticket AMS-103 in the AMS console. The checked-in source is the
 > **pre-CR baseline** (mirrored in `.baseline/`); the AI pipeline adds the
 > deductible feature live (or from the committed replay cache), generates
-> `ClaimRulesTest.java`, and proves it with `mvn test`. Reset between
-> rehearsals with `demo/reset_s3_springdemo.sh`.
+> `tests/test_s3_claims_deductible.py`, and proves it with `pytest`. Reset
+> between rehearsals with `demo/reset_s3_springdemo.sh`.
 
-Two small Spring Boot 3 (Java 21) applications that demo service-to-service
-communication over REST. All data is synthetic — no real client data.
+Two small FastAPI applications that demo service-to-service communication
+over REST. All data is synthetic — no real client data.
 
 | Service | Port | Role | Team UI |
 |---|---|---|---|
-| `policy-service` | 8081 | Serves MapleSure policies from an in-memory list | Policy Team console — http://localhost:8081/ |
-| `claims-service` | 8082 | Accepts claims and validates them by calling policy-service | Claims Team console — http://localhost:8082/ |
+| `policy_service` | 8081 | Serves MapleSure policies from an in-memory list | Policy Team console — http://localhost:8081/ |
+| `claims_service` | 8082 | Accepts claims and validates them by calling policy_service | Claims Team console — http://localhost:8082/ |
 
-Each service serves its team's web console from `src/main/resources/static/`
+Each service serves its team's web console from its own `static/` directory
 (plain HTML/JS, no build step). The Policy Team console lists and filters
 policies; the Claims Team console submits claims via a form whose policy
-dropdown is fetched live from policy-service (through
+dropdown is fetched live from policy_service (through
 `GET /api/claims/policy-directory`), and shows each claim's ACCEPTED/REJECTED
 outcome.
 
@@ -29,17 +29,17 @@ outcome.
 In two terminals (or use `./run-demo.sh` to start both):
 
 ```bash
-cd policy-service && mvn spring-boot:run
-cd claims-service && mvn spring-boot:run
+../run-policy-service.sh
+../run-claims-service.sh
 ```
 
 ## Demo script
 
 ```bash
-# 1. List policies (policy-service)
+# 1. List policies (policy_service)
 curl http://localhost:8081/api/policies
 
-# 2. Submit a valid claim (claims-service calls policy-service to validate)
+# 2. Submit a valid claim (claims_service calls policy_service to validate)
 curl -X POST http://localhost:8082/api/claims \
   -H 'Content-Type: application/json' \
   -d '{"policyNumber": "MS-1001", "amount": 1200, "description": "Windshield damage"}'
@@ -67,7 +67,7 @@ curl -X POST http://localhost:8082/api/claims \
 curl http://localhost:8082/api/claims
 ```
 
-Health checks: `http://localhost:8081/actuator/health`, `http://localhost:8082/actuator/health`.
+Health checks: `http://localhost:8081/health`, `http://localhost:8082/health`.
 
-The policy-service URL used by claims-service can be overridden with the
+The policy_service URL used by claims_service can be overridden with the
 `POLICY_SERVICE_URL` environment variable (defaults to `http://localhost:8081`).

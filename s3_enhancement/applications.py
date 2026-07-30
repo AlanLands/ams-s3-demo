@@ -147,7 +147,7 @@ CLAIMS_PORTAL = Application(
     ),
     jira_project_key="AMS",
     component_team="App Support — ClaimsPortal",
-    tech_stack="Java 17 / Spring Boot",
+    tech_stack="Python / FastAPI",
     repo_path="apps/claimsportal",
 )
 register_application(CLAIMS_PORTAL)
