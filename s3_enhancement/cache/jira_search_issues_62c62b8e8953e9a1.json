@@ -9,18 +9,18 @@
       "id": "10101",
       "self": null,
       "summary": "CR-2026-041: Coverage-Upgrade Option",
-      "status": "In Progress",
+      "status": "QA",
       "issue_type": "Task",
-      "assignee": "Ravi Kumar"
+      "assignee": "Priya Nair"
     },
     {
       "key": "AMS-102",
       "id": "10102",
       "self": null,
       "summary": "CR-2026-042: Endorsement Priority Field",
-      "status": "To Do",
+      "status": "In Progress",
       "issue_type": "Task",
-      "assignee": null
+      "assignee": "Ravi Kumar"
     },
     {
       "key": "AMS-103",
