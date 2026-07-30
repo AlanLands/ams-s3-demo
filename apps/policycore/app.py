@@ -142,7 +142,6 @@ def render() -> None:
                 effective_date = st.date_input("Effective date")
                 contact_phone = st.text_input("Contact phone")
                 contact_email = st.text_input("Contact email")
-                priority = st.selectbox("Priority", ["Standard", "Urgent"])
                 endorsement_submitted = st.form_submit_button("Submit Endorsement Request")
 
                 if endorsement_submitted:
@@ -153,7 +152,6 @@ def render() -> None:
                         effective_date=str(effective_date),
                         contact_phone=contact_phone,
                         contact_email=contact_email,
-                        priority=priority
                     )
                     st.success(
                         f"Endorsement request {new_endorsement.endorsement_number} submitted."
