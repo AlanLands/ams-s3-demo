@@ -130,7 +130,6 @@ apps/
 │   │   ├── endorsements.py     endorsement-submission business logic
 │   │   ├── seed.py            regenerates data/mockapp.db (18 policies, 6 claims)
 │   │   └── coverage.py        CR-2026-041 creates this — absent at baseline
-│   ├── crs/                 CR-2026-041.md, CR-2026-042.md — the change-request text itself
 │   └── systems/legacy_java_platform/   the relevance-funnel decoy corpus — 6 subsystems
 │       (audit, billing, reporting, risk, settlement, underwriting), 58 files, all Java.
 │       Exists so the demo can show the AI *not* opening ~50 irrelevant legacy files —
@@ -139,10 +138,14 @@ apps/
     ├── policy_service/      policy.py, main.py, static/index.html
     ├── claims_service/      claim.py, policy_client.py, main.py, static/index.html
     │                        (claim_rules.py: created by CR-2026-043, absent at baseline)
-    ├── .baseline/           pre-CR snapshot of policy_service/claims_service — what
-    │                        demo/reset_s3_springdemo.sh restores
-    └── crs/CR-2026-043.md
+    └── .baseline/           pre-CR snapshot of policy_service/claims_service — what
+                             demo/reset_s3_springdemo.sh restores
 ```
+
+All three CR texts (`CR-2026-041.md`, `CR-2026-042.md`, `CR-2026-043.md`) live in
+one top-level `crs/` directory, not scattered per-target — `Target.cr_template_path`
+in `s3_enhancement/targets.py` is an explicit `Path` per target, not a glob, so
+nothing about the pipeline requires the CR text to sit inside the target's own root.
 
 ### `s3_enhancement/` — the AI pipeline itself
 
