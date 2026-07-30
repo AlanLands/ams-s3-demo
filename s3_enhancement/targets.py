@@ -204,7 +204,7 @@ MOCKAPP_COVERAGE_UPGRADE = Target(
     display_name="MapleSure mockapp — coverage tier upgrade (CR-2026-041)",
     application_id=applications.POLICY_CORE_ID,
     root=REPO_ROOT / "apps" / "policycore",
-    cr_template_path=REPO_ROOT / "apps" / "policycore" / "crs" / "CR-2026-041.md",
+    cr_template_path=REPO_ROOT / "crs" / "CR-2026-041.md",
     core_files=(
         "apps/policycore/core/models.py",
         "apps/policycore/core/db.py",
@@ -252,7 +252,7 @@ MOCKAPP_ENDORSEMENT_FIELD_ADD = Target(
     display_name="MapleSure mockapp — endorsement priority field (CR-2026-042)",
     application_id=applications.POLICY_CORE_ID,
     root=REPO_ROOT / "apps" / "policycore",
-    cr_template_path=REPO_ROOT / "apps" / "policycore" / "crs" / "CR-2026-042.md",
+    cr_template_path=REPO_ROOT / "crs" / "CR-2026-042.md",
     cr_placeholder="",  # this CR has no audience-picked placeholder token
     core_files=(
         "apps/policycore/core/models.py",
@@ -304,7 +304,7 @@ SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
     display_name="ClaimsPortal — claims deductible handling (CR-2026-043)",
     application_id=applications.CLAIMS_PORTAL_ID,
     root=_SPRING_ROOT,
-    cr_template_path=_SPRING_ROOT / "crs" / "CR-2026-043.md",
+    cr_template_path=REPO_ROOT / "crs" / "CR-2026-043.md",
     cr_placeholder="",  # like CR-2026-042, no audience-picked placeholder token
     core_files=(
         f"{_SPRING_POLICY_SRC}/policy.py",

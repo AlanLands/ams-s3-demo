@@ -5,7 +5,7 @@ name, and the AMS console generates a real policy-portal enhancement plus tests.
 
 ## Scripted Demo Order
 
-1. **CR text** (`apps/policycore/crs/CR-2026-041.md`) - rendered by
+1. **CR text** (`crs/CR-2026-041.md`) - rendered by
    `s3_enhancement.cr.render_cr(tier_name)` with the chosen tier name.
 2. **AI impact analysis and effort estimate** (`s3_enhancement/analyze.py`) -
    short `complete()` calls using the generic `.cache/llm` store.

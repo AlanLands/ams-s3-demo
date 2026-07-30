@@ -6,7 +6,7 @@ that can drift, and would make the traceability matrix's left-hand column an
 AI artifact rather than the customer's own words. Same principle as the
 routing panel's CI lookup: when the answer is in a table, read the table.
 
-Every CR under `*/crs/*.md` shares one shape — a run of `Key: Value` headers,
+Every CR under `crs/*.md` shares one shape — a run of `Key: Value` headers,
 prose sections, then an `Acceptance criteria:` heading over a flat list of
 `- ` bullets, some with hard-wrapped continuation lines and (CR-2026-043)
 nested sub-bullets that belong to the criterion above them. The list ends at

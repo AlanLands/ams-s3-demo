@@ -17,7 +17,7 @@ function initials(name: string | null | undefined): string {
   return name.trim().charAt(0).toUpperCase()
 }
 
-// The CR files in */crs/*.md all share one shape: a title line, a run of
+// The CR files in crs/*.md all share one shape: a title line, a run of
 // "Key: Value" header lines, then "Section:" headings over hard-wrapped
 // prose or "- " bullets. Rendering that raw (white-space: pre-wrap) turned
 // the description into a wall of text where the headings, the metadata and
