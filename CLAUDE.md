@@ -94,6 +94,45 @@ still exists for the legacy `/release-notes` endpoint and the rehearsal
 scripts — the two must keep separate cache keys, or replay hands JSON to a
 caller expecting prose.
 
+## The source-control flow is modelled and must stay that way
+
+`s3_enhancement/scm.py` frames Apply with branch → commit → push, because
+applying straight to the working tree skips the part every reviewer asks about
+(you do not edit main). **Nothing in it runs git** — no subprocess, no remote,
+`simulated=True` on every response, and `git_transcript()` renders the commands
+a real integration *would* have issued.
+
+That is a constraint, not an unfinished feature. The target apps live inside
+this repo and `demo/reset_s3*.sh` restore their baseline with `git checkout
+HEAD -- <paths>`; a real commit would put the CR into HEAD, so the resets would
+start silently restoring the change instead of the baseline. That failure
+surfaces mid-rehearsal, not at the call site.
+`tests/test_s3_scm.py` asserts the guarantee structurally on the parsed AST
+(imports and call names, not substrings — the module's own prose and transcript
+legitimately contain the words "commit" and "push"), the same way
+`tests/test_autofix_no_git_writes.py` does for the autofix loop. A real SCM
+integration belongs in a new module behind an explicit mode flag; do not turn
+`simulated` into a lie in this one.
+
+Two things carry the honesty: the panel's banner (`ScmPanel.tsx`) and
+`release._source_control_gaps()`, which puts the un-run pipeline in the release
+record's "Not evidenced by this release" block. Every branch state has a gap
+line — no branch, applied-but-uncommitted, committed-but-unpushed, abandoned,
+and pushed-but-simulated — so a modelled push can never read as a deployment
+that happened.
+
+The commit gate reads `tests_passed`/`tests_failed` and
+`regression_passed`/`regression_failed` off the ticket's event log
+**server-side** (`scm.commit_blockers`), never from a flag the console posts —
+same rule as the release record's approvals. A client that could assert "tests
+passed" could commit a red branch, which would make the beat's central claim
+false. It reads the *latest* run of each suite, not any run, so a fixed suite
+unblocks and a newly-broken one re-blocks.
+
+State lives at `s3_enhancement/out/{proposal_id}/scm.json`, keyed by proposal
+like staged files, backups, and rejections — so `demo/reset_s3.sh`'s
+`rm -rf s3_enhancement/out/*` already clears it.
+
 ## Two things in the QA hand-off are deliberately not AI output
 
 `s3_enhancement/diagram.py` (the design doc's change map) and

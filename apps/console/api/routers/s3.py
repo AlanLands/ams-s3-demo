@@ -30,7 +30,7 @@ from common.ticket_events import (
     events_log_marker,
     record_event,
 )
-from s3_enhancement import applications, routing, targets, testrun
+from s3_enhancement import applications, routing, scm, scm_live, targets, testrun
 from s3_enhancement.acceptance import parse_acceptance_criteria
 from s3_enhancement.analyze import (
     build_assumption_question,
@@ -129,6 +129,11 @@ class DesignDocExportRequest(DesignDocRequest):
 
 class ReleaseRequest(TierRequest):
     downstream_apps: list[str] = []
+    # Lets the deployment plan and the release record pin themselves to the
+    # branch and commit the change went through. The branch state is read
+    # server-side from the proposal's own file (see s3_enhancement/scm.py), not
+    # posted as a branch name, so a client cannot claim a commit nobody made.
+    proposal_id: str | None = None
 
 
 class ReleaseRecordRequest(ReleaseRequest):
@@ -981,6 +986,11 @@ class ApplyRequest(BaseModel):
     # view) instead of the whole proposal.
     file_path: str | None = None
     ticket_number: str | None = None
+    # Names the feature branch apply opens (see s3_enhancement/scm.py). Absent
+    # falls back to the default target rather than skipping the branch: the
+    # branch-before-write framing is the point of the beat, so it must not be
+    # something a caller can drop by omitting a field.
+    target_id: str | None = None
 
 
 class DesignSyncRequest(BaseModel):
@@ -1123,15 +1133,35 @@ def _run_post_apply(applied_files: list[str], ticket_number: str | None) -> dict
 def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity)) -> dict:
     """Apply a reviewed proposal to the working tree — the only endpoint that
     ever writes to the real repo files. Pass `file_path` to apply just one
-    staged file instead of the whole proposal."""
+    staged file instead of the whole proposal.
+
+    Opens the change's feature branch *before* the first write (see
+    s3_enhancement/scm.py). The branch is modelled, not real — but it is opened
+    in the right order, because "you branch, then you edit" is the part of the
+    flow this beat is here to show, and back-filling it after the write would
+    misrepresent it.
+    """
+    target = targets.get_target(payload.target_id)
+    branch = scm.open_branch(
+        payload.proposal_id, payload.ticket_number or "", target.target_id
+    )
+    branch_was_new = not branch.staged_files and branch.commit is None
     try:
         applied_files = apply_change(payload.proposal_id, payload.file_path)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    branch = scm.record_applied(payload.proposal_id, applied_files) or branch
     post_apply = _run_post_apply(applied_files, payload.ticket_number)
 
     if payload.ticket_number:
+        if branch_was_new:
+            record_event(
+                payload.ticket_number,
+                "system",
+                "branch_opened",
+                detail=f"{branch.branch} (off {branch.base}) — simulated",
+            )
         record_event(
             payload.ticket_number,
             "human",
@@ -1144,6 +1174,7 @@ def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity))
         "post_apply": post_apply,
         "rejected_files": rejected_files(payload.proposal_id),
         "revertable_files": revertable_files(payload.proposal_id),
+        "scm": branch.to_dict(),
     }
 
 
@@ -1229,6 +1260,10 @@ def revert(payload: RevertRequest, identity: Identity = Depends(require_identity
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     post_apply = _run_post_apply(reverted_files, payload.ticket_number)
+    # Reverting every applied file abandons the branch rather than rewinding it:
+    # a commit that exists on a branch is not unmade by an undo button, and
+    # pretending otherwise would be the one dishonest step in the flow.
+    branch = scm.record_reverted(payload.proposal_id, reverted_files)
 
     if payload.ticket_number:
         record_event(
@@ -1237,12 +1272,207 @@ def revert(payload: RevertRequest, identity: Identity = Depends(require_identity
             "code_change_reverted",
             detail=payload.file_path or payload.proposal_id,
         )
+        if branch is not None and branch.abandoned_at:
+            record_event(
+                payload.ticket_number,
+                "system",
+                "branch_abandoned",
+                detail=f"{branch.branch} — every applied file was reverted",
+            )
 
     return {
         "proposal_id": payload.proposal_id,
         "reverted_files": reverted_files,
         "post_apply": post_apply,
         "revertable_files": revertable_files(payload.proposal_id),
+        "scm": branch.to_dict() if branch else None,
+    }
+
+
+# --- the source-control flow around Apply -----------------------------------
+#
+# Every response below carries `simulated: true` and a `transcript` of the git
+# commands a real integration would have run. Nothing here executes git — see
+# s3_enhancement/scm.py for why that is load-bearing rather than a shortcut,
+# and do not "fix" the simulation into a fake success.
+
+
+class ScmCheckoutRequest(BaseModel):
+    ticket_number: str
+    target_id: str
+
+
+@router.post("/scm/checkout")
+def scm_checkout(
+    payload: ScmCheckoutRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Step 0, "Check out the repo": cut (or switch to) this CR's feature
+    branch before anything is generated.
+
+    Simulated by default — same convention `/s3/release/attach` uses under
+    JIRA_MODE=replay: a computed branch name, no `sha`, clearly labelled.
+    Set SCM_MODE=live to run a real local `git checkout -b` / `git checkout`
+    in this repo. Still branch-only even then: no commit, no push, no
+    remote — see s3_enhancement/scm_live.py for why that stays a separate,
+    narrower module rather than an extension of scm.py's modelled flow.
+    """
+    branch = scm.branch_name_for(payload.ticket_number, payload.target_id)
+    if not scm_live.live_mode_enabled():
+        detail = (
+            f"{branch} would be checked out off {scm.BASE_BRANCH}. This console "
+            "does not run git — set SCM_MODE=live to run a real local checkout."
+        )
+        record_event(
+            payload.ticket_number,
+            "human",
+            "repo_checked_out",
+            detail=f"{branch} — simulated",
+        )
+        return {
+            "mode": "simulated",
+            "branch": branch,
+            "base": scm.BASE_BRANCH,
+            "sha": None,
+            "created": None,
+            "already_current": None,
+            "dirty_files": [],
+            "detail": detail,
+        }
+
+    try:
+        result = scm_live.checkout_branch(payload.ticket_number, payload.target_id)
+    except scm_live.ScmLiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if result.already_current:
+        detail = f"Already on {result.branch}."
+    elif result.created:
+        detail = f"Created {result.branch} off {result.base}."
+    else:
+        detail = f"Switched to {result.branch}."
+    if result.dirty_files:
+        count = len(result.dirty_files)
+        detail += (
+            f" Note: {count} file{'s' if count != 1 else ''} were already modified "
+            "before this checkout — not touched by it, just carried over."
+        )
+    record_event(
+        payload.ticket_number,
+        "human",
+        "repo_checked_out",
+        detail=f"{result.branch} @ {result.sha}",
+    )
+    return {**result.to_dict(), "detail": detail}
+
+
+class ScmRequest(BaseModel):
+    proposal_id: str
+    ticket_number: str | None = None
+    target_id: str | None = None
+
+
+class ScmCommitRequest(ScmRequest):
+    # Optional override for the generated subject line. The default is assembled
+    # from the ticket and CR label (scm.commit_message_for) rather than drafted
+    # by the model — no cache key, nothing to be confidently wrong about.
+    message: str | None = None
+
+
+def _scm_payload(proposal_id: str, ticket_number: str | None) -> dict:
+    """Branch state plus the gate's reasoning, as the console renders it."""
+    state = scm.state_for(proposal_id)
+    events = events_for(ticket_number) if ticket_number else []
+    return {
+        "proposal_id": proposal_id,
+        "scm": state.to_dict() if state else None,
+        "commit_blockers": scm.commit_blockers(events),
+        "test_evidence": scm.evidence_summary(events),
+    }
+
+
+@router.get("/scm")
+def scm_state(
+    proposal_id: str,
+    ticket_number: str | None = None,
+    identity: Identity = Depends(require_identity),
+) -> dict:
+    """Where this proposal's change sits in the branch → commit → push flow."""
+    return _scm_payload(proposal_id, ticket_number)
+
+
+@router.post("/scm/commit")
+def scm_commit(
+    payload: ScmCommitRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """Commit the applied files onto the change's feature branch.
+
+    Gated on the ticket's own event log, not on a flag from the browser: the
+    generated suite must have run and passed, and the pre-existing regression
+    suite must not be failing. Reading the gate server-side is the same rule the
+    release record's approvals follow — a client that could assert "tests
+    passed" could commit a red branch, which would make the beat's central
+    claim false.
+    """
+    if not payload.ticket_number:
+        raise HTTPException(
+            status_code=422,
+            detail="A ticket number is required to commit — the gate reads the ticket's test results.",
+        )
+    blockers = scm.commit_blockers(events_for(payload.ticket_number))
+    if blockers:
+        raise HTTPException(status_code=409, detail=" ".join(blockers))
+
+    target = targets.get_target(payload.target_id)
+    message = payload.message or scm.commit_message_for(
+        payload.ticket_number,
+        _cr_label_for(target),
+        scm.summary_from_display_name(target.display_name),
+    )
+    try:
+        state = scm.commit_branch(payload.proposal_id, message)
+    except scm.ScmError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    record_event(
+        payload.ticket_number,
+        "human",
+        "change_committed",
+        detail=(
+            f"{state.commit.sha} on {state.branch}: {state.commit.message} "
+            f"({len(state.commit.files)} file(s)) — simulated"
+        ),
+    )
+    return _scm_payload(payload.proposal_id, payload.ticket_number)
+
+
+@router.post("/scm/push")
+def scm_push(payload: ScmRequest, identity: Identity = Depends(require_identity)) -> dict:
+    """Push the branch and queue the deployment pipeline — modelled, not run.
+
+    The honest counterpart to the commit step: no remote is contacted, so the
+    response says `simulated: true` and the release record counts the pipeline
+    as something this release did *not* evidence. The same convention
+    `/s3/release/attach` uses under JIRA_MODE=replay.
+    """
+    try:
+        state = scm.push_branch(payload.proposal_id)
+    except scm.ScmError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if payload.ticket_number:
+        record_event(
+            payload.ticket_number,
+            "system",
+            "branch_pushed",
+            detail=f"{state.branch} → {scm.REMOTE}, {state.pipeline_id} queued — simulated",
+        )
+    return {
+        **_scm_payload(payload.proposal_id, payload.ticket_number),
+        "detail": (
+            f"{state.branch} would be pushed to {scm.REMOTE} and {state.pipeline_id} "
+            "queued. This console does not contact a remote — the push and the "
+            "pipeline run are simulated."
+        ),
     }
 
 
@@ -1801,10 +2031,15 @@ def _release_context(payload, identity: Identity):
     target = targets.get_target(payload.target_id)
     cr_text = _cr_text_or_400(payload.tier_name, target=target)
     change_map = build_change_map(target, downstream=payload.downstream_apps)
+    proposal_id = getattr(payload, "proposal_id", None)
+    branch = scm.state_for(proposal_id) if proposal_id else None
     plan = build_deployment_plan(
-        target, change_map, applied_files=getattr(payload, "applied_files", None) or None
+        target,
+        change_map,
+        applied_files=getattr(payload, "applied_files", None) or None,
+        branch=branch,
     )
-    return target, cr_text, change_map, plan
+    return target, cr_text, change_map, plan, branch
 
 
 def _evidence_from(payload: ReleaseRecordRequest) -> list[SuiteEvidence]:
@@ -1864,7 +2099,7 @@ def release_note_set(
     """The three audience-specific release notes, plus the derived deployment
     plan. One call because the plan costs nothing — it is computed from the
     change's own file set, not drafted."""
-    target, cr_text, change_map, plan = _release_context(payload, identity)
+    target, cr_text, change_map, plan, _branch = _release_context(payload, identity)
     usage: dict = {}
     try:
         notes = draft_release_note_set(cr_text, target=target, usage_out=usage)
@@ -1888,7 +2123,7 @@ def release_note_set(
 def _build_record(
     payload: ReleaseRecordRequest, identity: Identity
 ) -> tuple[ReleaseRecord, str]:
-    target, cr_text, change_map, plan = _release_context(payload, identity)
+    target, cr_text, change_map, plan, branch = _release_context(payload, identity)
     criteria = parse_acceptance_criteria(cr_text)
     matrix = (
         build_matrix(
@@ -1926,7 +2161,8 @@ def _build_record(
         notes=notes,
         diagram_svg=diagram_svg,
         diagram_caption=caption_for(change_map),
-        unproven=unproven_claims(matrix, evidence),
+        unproven=unproven_claims(matrix, evidence, branch),
+        branch=branch,
     )
     return record, render_release_record_html(record)
 

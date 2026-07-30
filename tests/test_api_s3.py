@@ -16,7 +16,21 @@ from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError
 from common.llm import LLMError
 from common.roster import PASSCODE_BY_NAME
+from common.ticket_events import record_event
+from s3_enhancement import scm
 from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS
+
+
+@pytest.fixture(autouse=True)
+def _isolated_scm_state(tmp_path, monkeypatch):
+    """Keep /apply's branch state out of the real s3_enhancement/out/.
+
+    /apply opens the change's (simulated) feature branch, which writes
+    out/{proposal_id}/scm.json. Most tests here mock apply_change and would
+    otherwise leave state behind under proposal ids that never existed, where a
+    later real run could read it back.
+    """
+    monkeypatch.setattr(scm, "OUT_ROOT", tmp_path / "out")
 
 
 def _login(client: TestClient, name: str) -> None:
@@ -1072,7 +1086,8 @@ def test_apply_calls_apply_change_with_file_path():
 
     apply_change.assert_called_once_with("prop-1", "a.py")
     assert response.status_code == 200
-    assert response.json() == {
+    body = response.json()
+    assert {key: body[key] for key in body if key != "scm"} == {
         "proposal_id": "prop-1",
         "applied_files": ["a.py"],
         "post_apply": {"ok": True, "steps": []},
@@ -1081,6 +1096,11 @@ def test_apply_calls_apply_change_with_file_path():
         "rejected_files": {},
         "revertable_files": [],
     }
+    # Apply opens the change's feature branch before writing, and reports it —
+    # see s3_enhancement/scm.py for why the branch is modelled, not real.
+    assert body["scm"]["status"] == "applied"
+    assert body["scm"]["staged_files"] == ["a.py"]
+    assert body["scm"]["simulated"] is True
 
 
 def test_apply_mockapp_files_runs_post_apply_migration():
@@ -1139,6 +1159,280 @@ def test_apply_post_apply_failure_carried_in_response(tmp_path, monkeypatch):
     assert len(failed) == 1
     assert failed[0]["actor"] == "system"
     assert "KeyError: 'deductible'" in failed[0]["detail"]
+
+
+def _apply(client: TestClient, ticket: str = "AMS-103", files: list[str] | None = None) -> None:
+    with patch(
+        "apps.console.api.routers.s3.apply_change", return_value=files or ["a.py"]
+    ):
+        response = client.post(
+            "/api/s3/apply",
+            json={
+                "proposal_id": "prop-1",
+                "ticket_number": ticket,
+                "target_id": "springdemo-claims-deductible",
+            },
+        )
+    assert response.status_code == 200
+
+
+def test_apply_opens_the_branch_before_writing(tmp_path, monkeypatch):
+    """The branch has to exist before the edit, not be back-filled after it —
+    otherwise the flow being shown is not the flow being described."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+    order: list[str] = []
+
+    real_open = scm.open_branch
+    with (
+        patch(
+            "apps.console.api.routers.s3.scm.open_branch",
+            side_effect=lambda *a, **k: (order.append("branch"), real_open(*a, **k))[1],
+        ),
+        patch(
+            "apps.console.api.routers.s3.apply_change",
+            side_effect=lambda *a, **k: (order.append("write"), ["a.py"])[1],
+        ),
+    ):
+        response = client.post(
+            "/api/s3/apply",
+            json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        )
+
+    assert response.status_code == 200
+    assert order == ["branch", "write"]
+
+
+def test_apply_records_the_branch_on_the_ticket_timeline(tmp_path, monkeypatch):
+    events_path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    client = _client()
+    _apply(client)
+
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    opened = [e for e in events if e["action"] == "branch_opened"]
+    assert len(opened) == 1
+    assert "simulated" in opened[0]["detail"]
+    assert "feature/AMS-103-springdemo-claims-deductible" in opened[0]["detail"]
+
+
+def test_checkout_is_simulated_by_default(tmp_path, monkeypatch):
+    """SCM_MODE unset -> the fully modelled path, same convention
+    /s3/release/attach uses under JIRA_MODE=replay: no git touched, and the
+    response says so."""
+    monkeypatch.delenv("SCM_MODE", raising=False)
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+
+    response = client.post(
+        "/api/s3/scm/checkout",
+        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "simulated"
+    assert body["branch"] == "feature/AMS-103-springdemo-claims-deductible"
+    assert body["sha"] is None
+    assert "SCM_MODE=live" in body["detail"]
+
+
+def test_checkout_records_a_ticket_event(tmp_path, monkeypatch):
+    monkeypatch.delenv("SCM_MODE", raising=False)
+    events_path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    client = _client()
+
+    client.post(
+        "/api/s3/scm/checkout",
+        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+    )
+
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    checked_out = [e for e in events if e["action"] == "repo_checked_out"]
+    assert len(checked_out) == 1
+    assert "feature/AMS-103-springdemo-claims-deductible" in checked_out[0]["detail"]
+    assert "simulated" in checked_out[0]["detail"]
+
+
+def test_checkout_runs_a_real_local_branch_under_scm_mode_live(tmp_path, monkeypatch):
+    """SCM_MODE=live -> a real branch, in a standalone throwaway folder named
+    by SCM_LIVE_TARGET_ROOT — never against the actual project repo from a
+    test, and starting from plain files with no git history, the realistic
+    case (a fresh copy of just the target app)."""
+    import subprocess
+
+    target_root = tmp_path / "policycore-standalone"
+    target_root.mkdir()
+    (target_root / "app.py").write_text("print('hello')\n", encoding="utf-8")
+
+    monkeypatch.setenv("SCM_MODE", "live")
+    monkeypatch.setenv("SCM_LIVE_TARGET_ROOT", str(target_root))
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+
+    response = client.post(
+        "/api/s3/scm/checkout",
+        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "live"
+    assert body["branch"] == "feature/AMS-103-springdemo-claims-deductible"
+    assert body["created"] is True
+    assert body["sha"] is not None
+
+    current = subprocess.run(
+        ["git", "-C", str(target_root), "rev-parse", "--abbrev-ref", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert current == body["branch"]
+
+
+def test_checkout_409s_under_scm_mode_live_without_a_target_root(tmp_path, monkeypatch):
+    """The safety guarantee end to end: SCM_MODE=live with no
+    SCM_LIVE_TARGET_ROOT must refuse rather than silently default to
+    branching ams-s3-demo itself."""
+    monkeypatch.setenv("SCM_MODE", "live")
+    monkeypatch.delenv("SCM_LIVE_TARGET_ROOT", raising=False)
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+
+    response = client.post(
+        "/api/s3/scm/checkout",
+        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+    )
+    assert response.status_code == 409
+    assert "SCM_LIVE_TARGET_ROOT" in response.json()["detail"]
+
+
+def test_commit_requires_a_ticket_number():
+    """The gate reads the ticket's test results, so there is nothing to gate on
+    without one — 422 rather than committing ungated."""
+    client = _client()
+    response = client.post("/api/s3/scm/commit", json={"proposal_id": "prop-1"})
+    assert response.status_code == 422
+
+
+def test_commit_is_blocked_until_the_tests_have_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+    _apply(client)
+
+    response = client.post(
+        "/api/s3/scm/commit",
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+    )
+    assert response.status_code == 409
+    assert "has not been run" in response.json()["detail"]
+
+
+def test_commit_is_blocked_by_a_failing_suite_even_if_the_client_says_otherwise(
+    tmp_path, monkeypatch
+):
+    """The gate is server-side on purpose: a client that could assert "tests
+    passed" could commit a red branch, which would make the beat's central claim
+    false. Posting extra fields must not help."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+    _apply(client)
+    record_event("AMS-103", "ai", "tests_failed", detail="3/12 passed")
+
+    response = client.post(
+        "/api/s3/scm/commit",
+        json={
+            "proposal_id": "prop-1",
+            "ticket_number": "AMS-103",
+            "tests_passed": True,
+            "message": "AMS-103: ship it anyway",
+        },
+    )
+    assert response.status_code == 409
+    assert "3/12 passed" in response.json()["detail"]
+
+
+def test_commit_then_push_walks_the_flow(tmp_path, monkeypatch):
+    events_path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    client = _client()
+    _apply(client)
+    record_event("AMS-103", "ai", "tests_passed", detail="12/12 passed")
+
+    committed = client.post(
+        "/api/s3/scm/commit",
+        json={
+            "proposal_id": "prop-1",
+            "ticket_number": "AMS-103",
+            "target_id": "springdemo-claims-deductible",
+        },
+    )
+    assert committed.status_code == 200
+    body = committed.json()
+    assert body["scm"]["status"] == "committed"
+    assert body["commit_blockers"] == []
+    assert body["test_evidence"]["generated_suite"]["passed"] is True
+
+    pushed = client.post(
+        "/api/s3/scm/push",
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+    )
+    assert pushed.status_code == 200
+    assert pushed.json()["scm"]["status"] == "pushed"
+    # Honest about what did not happen, the same way /s3/release/attach is under
+    # JIRA_MODE=replay. Do not let this become a fake success.
+    assert pushed.json()["scm"]["simulated"] is True
+    assert "simulated" in pushed.json()["detail"]
+
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    actions = [e["action"] for e in events]
+    assert actions.index("branch_opened") < actions.index("change_committed")
+    assert actions.index("change_committed") < actions.index("branch_pushed")
+    assert all(
+        "simulated" in e["detail"]
+        for e in events
+        if e["action"] in ("change_committed", "branch_pushed")
+    )
+
+
+def test_push_without_a_commit_is_409(tmp_path, monkeypatch):
+    """"Pushed uncommitted work" is not a state that exists, and showing it
+    would teach the audience something false."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    client = _client()
+    _apply(client)
+
+    response = client.post(
+        "/api/s3/scm/push",
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+    )
+    assert response.status_code == 409
+    assert "commit the applied files first" in response.json()["detail"]
+
+
+def test_scm_state_endpoint_reports_the_gate_before_anything_happens():
+    client = _client()
+    response = client.get("/api/s3/scm", params={"proposal_id": "never-applied"})
+    assert response.status_code == 200
+    assert response.json()["scm"] is None
+
+
+def test_reverting_everything_abandons_the_branch(tmp_path, monkeypatch):
+    events_path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
+    client = _client()
+    _apply(client)
+
+    with patch("apps.console.api.routers.s3.revert_change", return_value=["a.py"]):
+        response = client.post(
+            "/api/s3/revert",
+            json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["scm"]["status"] == "abandoned"
+    events = [json.loads(line) for line in events_path.read_text().splitlines()]
+    assert any(e["action"] == "branch_abandoned" for e in events)
 
 
 def test_apply_non_stateful_files_skips_post_apply_migration():

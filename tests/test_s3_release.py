@@ -23,12 +23,43 @@ from s3_enhancement.release import (
     unproven_claims,
 )
 from s3_enhancement.scenarios import Scenario
+from s3_enhancement.scm import BranchState, Commit
 from s3_enhancement.testrun import TestCase as _TestCase
 from s3_enhancement.traceability import build_matrix
 
 
 def _scenario(sid: str, title: str, ref: str) -> Scenario:
     return Scenario(sid, title, "positive", (ref,), "", "", ("step",), "ok")
+
+
+def _branch(**overrides) -> BranchState:
+    base = dict(
+        proposal_id="p1",
+        branch="feature/AMS-103-springdemo-claims-deductible",
+        base="main",
+        ticket="AMS-103",
+        created_at="2026-07-30 09:00:00",
+        staged_files=["apps/claimsportal/policy-service/src/main/java/Policy.java"],
+    )
+    base.update(overrides)
+    return BranchState(**base)
+
+
+def _commit() -> Commit:
+    return Commit(
+        sha="abc1234",
+        message="AMS-103: add claims deductible",
+        files=("apps/claimsportal/policy-service/src/main/java/Policy.java",),
+        committed_at="2026-07-30 09:30:00",
+    )
+
+
+def _pushed_branch() -> BranchState:
+    return _branch(
+        commit=_commit(),
+        pushed_at="2026-07-30 09:35:00",
+        pipeline_id="pipeline-abc1234",
+    )
 
 
 def _case(name: str, status: str = "passed") -> _TestCase:
@@ -136,7 +167,7 @@ def test_unproven_flags_a_suite_that_failed():
     assert any("did not pass" in gap for gap in gaps)
 
 
-def test_unproven_is_empty_when_everything_is_evidenced():
+def _fully_evidenced() -> tuple:
     criteria = [Criterion("AC-1", "Covered.")]
     scenarios = [_scenario("TS-01", "Persist the priority field", "AC-1")]
     matrix = build_matrix(
@@ -148,7 +179,94 @@ def test_unproven_is_empty_when_everything_is_evidenced():
         SuiteEvidence("Generated suite", True, 1, 1),
         SuiteEvidence("Regression (pre-existing)", True, 15, 15),
     ]
-    assert unproven_claims(matrix, evidence) == []
+    return matrix, evidence
+
+
+def test_no_test_evidence_gaps_when_everything_is_evidenced():
+    """Every criterion covered and both suites green leaves no *test* gap.
+
+    The source-control gap is asserted separately below — it is a claim about
+    shipping, not about testing, and conflating the two is what let the old
+    single assertion here pass while the record said nothing about deployment.
+    """
+    matrix, evidence = _fully_evidenced()
+    gaps = unproven_claims(matrix, evidence, _pushed_branch())
+    assert not [gap for gap in gaps if "simulated" not in gap]
+
+
+# --- the source-control half of the honesty check ---------------------------
+#
+# S3 models branch -> commit -> push without running git (s3_enhancement/scm.py).
+# These assert the record says so, in every branch state, because a modelled
+# push that reads as a deployment is the one way this document could mislead the
+# person signing it.
+
+
+def test_a_pushed_branch_is_still_reported_as_simulated():
+    matrix, evidence = _fully_evidenced()
+    gaps = unproven_claims(matrix, evidence, _pushed_branch())
+    assert any("simulated" in gap and "pipeline-abc1234" in gap for gap in gaps)
+
+
+def test_no_branch_at_all_is_a_gap():
+    """Applying straight to the working tree leaves no source-control history,
+    and the record has to say that rather than stay silent about it."""
+    matrix, evidence = _fully_evidenced()
+    gaps = unproven_claims(matrix, evidence, None)
+    assert any("No branch or commit was recorded" in gap for gap in gaps)
+
+
+def test_applied_but_uncommitted_is_a_gap():
+    matrix, evidence = _fully_evidenced()
+    gaps = unproven_claims(matrix, evidence, _branch())
+    assert any("never committed" in gap for gap in gaps)
+
+
+def test_committed_but_unpushed_is_a_gap():
+    matrix, evidence = _fully_evidenced()
+    gaps = unproven_claims(matrix, evidence, _branch(commit=_commit()))
+    assert any("not pushed" in gap and "abc1234" in gap for gap in gaps)
+
+
+def test_abandoned_branch_is_a_gap():
+    matrix, evidence = _fully_evidenced()
+    branch = _branch(staged_files=[], abandoned_at="2026-07-30 10:00:00")
+    gaps = unproven_claims(matrix, evidence, branch)
+    assert any("abandoned" in gap for gap in gaps)
+
+
+def test_plan_pins_the_merge_step_to_the_commit():
+    """With a branch, the plan names the commit being deployed instead of
+    leaving "deploy the change" to the reader."""
+    plan = build_deployment_plan(
+        POLICYCORE, build_change_map(POLICYCORE), branch=_pushed_branch()
+    )
+    merge = [step for step in plan.steps if step.kind == "merge"]
+    assert len(merge) == 1
+    assert merge[0].order == 1, "the merge has to come before the deploys"
+    assert "abc1234" in merge[0].detail
+    reverts = [step for step in plan.rollback if "revert" in step.command]
+    assert reverts and "abc1234" in reverts[0].command
+
+
+def test_plan_step_order_is_contiguous_with_and_without_a_branch():
+    """The branch step is inserted, not appended, so every later step's order
+    shifts — a duplicated or skipped number here would show up as a misnumbered
+    plan in the released document."""
+    change_map = build_change_map(POLICYCORE)
+    for branch in (None, _pushed_branch()):
+        plan = build_deployment_plan(POLICYCORE, change_map, branch=branch)
+        for steps in (plan.steps, plan.rollback):
+            assert [step.order for step in steps] == list(range(1, len(steps) + 1))
+
+
+def test_rollback_reverts_rather_than_rewriting_history():
+    plan = build_deployment_plan(
+        POLICYCORE, build_change_map(POLICYCORE), branch=_pushed_branch()
+    )
+    commands = " ".join(step.command for step in plan.rollback)
+    assert "git revert" in commands
+    assert "reset --hard" not in commands and "push --force" not in commands
 
 
 # --- the rendered record ----------------------------------------------------
@@ -170,6 +288,22 @@ def _record(**overrides) -> ReleaseRecord:
     )
     base.update(overrides)
     return ReleaseRecord(**base)
+
+
+def test_record_html_shows_the_branch_and_says_it_was_not_executed():
+    """A reader who skims to the branch name and stops must not walk away
+    thinking git ran — so the caveat sits next to the branch, not only in the
+    gaps block further up."""
+    html = render_release_record_html(_record(branch=_pushed_branch()))
+    assert "Source control" in html
+    assert "feature/AMS-103-springdemo-claims-deductible" in html
+    assert "abc1234" in html
+    assert "does not run git" in html
+
+
+def test_record_html_omits_source_control_when_there_was_none():
+    html = render_release_record_html(_record())
+    assert "Source control" not in html
 
 
 def test_record_html_states_what_it_could_not_evidence():

@@ -21,6 +21,12 @@ The only model-authored content in the record is the release notes and the
 design doc's prose; everything structural is computed. The rendered document
 labels the AI-drafted parts rather than presenting the whole thing as
 machine-verified.
+
+Both artifacts take the change's source-control state (s3_enhancement/scm.py)
+when it exists, which pins the plan to a named branch and commit instead of
+"deploy the change". That state is *simulated* — no git ran — so
+`unproven_claims()` says so in the record rather than letting a modelled push
+read as a deployment that happened.
 """
 
 from __future__ import annotations
@@ -32,10 +38,11 @@ from datetime import datetime
 from s3_enhancement.acceptance import Criterion
 from s3_enhancement.diagram import ChangeMap
 from s3_enhancement.docgen import ReleaseNoteSet
+from s3_enhancement.scm import BranchState
 from s3_enhancement.targets import Target
 from s3_enhancement.traceability import Matrix
 
-StepKind = str  # "deploy" | "migrate" | "verify" | "rollback"
+StepKind = str  # "merge" | "deploy" | "migrate" | "verify" | "rollback"
 
 
 @dataclass(frozen=True)
@@ -115,13 +122,45 @@ def _deploy_order(change_map: ChangeMap) -> tuple[list[str], str]:
 
 
 def build_deployment_plan(
-    target: Target, change_map: ChangeMap, *, applied_files: list[str] | None = None
+    target: Target,
+    change_map: ChangeMap,
+    *,
+    applied_files: list[str] | None = None,
+    branch: BranchState | None = None,
 ) -> DeploymentPlan:
-    """The ordered steps to ship this change, and the ones to undo it."""
+    """The ordered steps to ship this change, and the ones to undo it.
+
+    `branch`, when the change went through the source-control flow (see
+    s3_enhancement/scm.py), pins the plan to a specific commit instead of
+    leaving "deploy the change" to the reader's imagination. Derived like every
+    other step here — no LLM.
+    """
     service_order, order_reason = _deploy_order(change_map)
     files = applied_files if applied_files is not None else [n.rel_path for n in change_map.nodes]
 
     steps: list[PlanStep] = []
+    if branch is not None:
+        steps.append(
+            PlanStep(
+                order=1,
+                kind="merge",
+                title=f"Merge {branch.branch} into {branch.base}",
+                detail=(
+                    (
+                        f"The change was committed as {branch.commit.sha} "
+                        f"(“{branch.commit.message}”) on {branch.branch}, cut from "
+                        f"{branch.base}. Everything below deploys that commit."
+                    )
+                    if branch.commit
+                    else (
+                        f"{branch.branch} was cut from {branch.base} and the files were "
+                        "applied to it, but nothing was committed — there is no commit "
+                        "for the steps below to deploy."
+                    )
+                ),
+                command=f"git merge --no-ff {branch.branch}",
+            )
+        )
     for service in service_order:
         in_service = [node for node in change_map.nodes if node.service == service]
         names = ", ".join(sorted({node.filename for node in in_service}))
@@ -182,10 +221,25 @@ def build_deployment_plan(
             ),
         )
     ]
+    if branch is not None and branch.commit is not None:
+        rollback.append(
+            PlanStep(
+                order=len(rollback) + 1,
+                kind="rollback",
+                title=f"Revert {branch.commit.sha} on {branch.base}",
+                detail=(
+                    "A revert commit rather than a history rewrite: the commit has "
+                    f"already been merged, so {branch.base} has to move forward to "
+                    "undo it. Rewriting a shared branch is a second incident, not a "
+                    "rollback."
+                ),
+                command=f"git revert --no-edit {branch.commit.sha}",
+            )
+        )
     if target.post_apply_command:
         rollback.append(
             PlanStep(
-                order=2,
+                order=len(rollback) + 1,
                 kind="rollback",
                 title="Re-run the migration against the restored code",
                 detail=(
@@ -258,6 +312,10 @@ class ReleaseRecord:
     diagram_svg: str = ""
     diagram_caption: str = ""
     unproven: list[str] = field(default_factory=list)
+    # The branch/commit/push this change went through, when it went through one.
+    # None means it was applied to the working tree without the source-control
+    # flow, which `unproven_claims()` reports as a gap.
+    branch: BranchState | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -272,6 +330,7 @@ class ReleaseRecord:
             "plan": self.plan.to_dict(),
             "notes": self.notes.to_dict() if self.notes else None,
             "unproven": self.unproven,
+            "branch": self.branch.to_dict() if self.branch else None,
         }
 
 
@@ -285,6 +344,7 @@ HUMAN_ACTIONS = (
     "files_applied",
     "file_rejected",
     "change_applied",
+    "change_committed",
     "handoff_to_qa",
     "ticket_done",
     "release_record_attached",
@@ -312,12 +372,23 @@ def collect_approvals(events: list[dict]) -> list[dict]:
     return approvals
 
 
-def unproven_claims(matrix: Matrix | None, evidence: list[SuiteEvidence]) -> list[str]:
+def unproven_claims(
+    matrix: Matrix | None,
+    evidence: list[SuiteEvidence],
+    branch: BranchState | None = None,
+) -> list[str]:
     """What this release does *not* have evidence for.
 
     A release record that only lists successes is marketing. Anything the
-    pipeline could not show — an uncovered criterion, a suite that never ran —
-    is stated in the record itself, where the person signing it will see it.
+    pipeline could not show — an uncovered criterion, a suite that never ran,
+    a deployment nobody performed — is stated in the record itself, where the
+    person signing it will see it.
+
+    The source-control gaps are the newest and the most important to keep here.
+    S3 models the branch → commit → push flow without running git (see
+    s3_enhancement/scm.py), so the record must never let a modelled push read as
+    a release that shipped. If that flow ever becomes real, these lines are what
+    change — not the transcript, and not the panel.
     """
     gaps: list[str] = []
     if matrix is None:
@@ -337,4 +408,42 @@ def unproven_claims(matrix: Matrix | None, evidence: list[SuiteEvidence]) -> lis
     for item in evidence:
         if not item.passed:
             gaps.append(f"{item.name} did not pass.")
+    gaps.extend(_source_control_gaps(branch))
+    return gaps
+
+
+def _source_control_gaps(branch: BranchState | None) -> list[str]:
+    """The part of "shipped" that S3 models rather than performs.
+
+    Ordered so the biggest caveat lands last, because that is the line the
+    signer's eye stops on.
+    """
+    if branch is None:
+        return [
+            "No branch or commit was recorded for this change: it was applied "
+            "straight to the working tree, so there is no source-control history "
+            "for it."
+        ]
+    gaps: list[str] = []
+    if branch.abandoned_at:
+        gaps.append(
+            f"{branch.branch} was abandoned — every applied file was reverted, so "
+            "nothing from this proposal is in the tree."
+        )
+    if branch.commit is None:
+        gaps.append(
+            f"The change was applied to {branch.branch} but never committed, so "
+            "there is no commit for a pipeline to deploy."
+        )
+    elif not branch.pushed_at:
+        gaps.append(
+            f"{branch.commit.sha} was committed on {branch.branch} but not pushed; "
+            "no deployment pipeline was triggered."
+        )
+    else:
+        gaps.append(
+            f"The push of {branch.branch} and pipeline {branch.pipeline_id} are "
+            "simulated: this console does not contact a remote, so no build, "
+            "deployment, or post-deployment verification actually ran."
+        )
     return gaps

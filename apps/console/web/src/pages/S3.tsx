@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext'
 import FileSelectionPanel from '../FileSelectionPanel'
 import TicketModal from '../TicketModal'
 import { DeploymentPlanPanel, ReleaseNotes } from '../ReleasePanel'
+import { ScmPanel } from '../ScmPanel'
 import ScenarioPlan, { TraceabilityMatrix } from '../TestPlanPanel'
 import TokenPanel from '../TokenPanel'
 import {
@@ -21,6 +22,9 @@ import {
   type ReleaseAttachResponse,
   type ReleaseNoteSet,
   type ScenariosResponse,
+  type ScmCheckoutResponse,
+  type ScmResponse,
+  type ScmState,
   type TestScenario,
   type TraceabilityResponse,
   type PostApplyResult,
@@ -103,6 +107,10 @@ interface PersistedTicketState {
   // the next apply/reject response overwrites this.
   rejectedFiles?: Record<string, string>
   postApplyFailure?: PostApplyResult | null
+  // The branch/commit/push state, so a reload shows the change still sitting on
+  // its branch. The server's out/{proposal_id}/scm.json is the authority — this
+  // is only what to render before the next refresh answers.
+  scm?: ScmState | null
   fileChats?: Record<string, FileChatTurn[]>
   // Downstream-stage artifacts persist per ticket so the QA hand-off works
   // across logins in the same browser: the developer drafts the design doc,
@@ -487,6 +495,21 @@ export default function S3() {
   const [fixingCrash, setFixingCrash] = useState(false)
   const [fixCrashError, setFixCrashError] = useState<string | null>(null)
 
+  // The change's branch → commit → push state. Server-owned like rejectedFiles:
+  // apply/revert/commit/push all return it, and the commit gate is computed
+  // server-side from the ticket's test results, so there is no client-side
+  // "tests passed" to keep in sync (or to get wrong). See s3_enhancement/scm.py.
+  const [scmState, setScmState] = useState<ScmState | null>(null)
+  const [scmBlockers, setScmBlockers] = useState<string[]>([])
+  const [scmEvidence, setScmEvidence] = useState<ScmResponse['test_evidence']>({
+    generated_suite: null,
+    regression_suite: null,
+  })
+  const [committing, setCommitting] = useState(false)
+  const [pushing, setPushing] = useState(false)
+  const [scmError, setScmError] = useState<string | null>(null)
+  const [scmDetail, setScmDetail] = useState<string | null>(null)
+
   const [newFilePath, setNewFilePath] = useState('')
   const [newFileInstruction, setNewFileInstruction] = useState('')
   const [addingFile, setAddingFile] = useState(false)
@@ -532,6 +555,8 @@ export default function S3() {
 
   const [checkingOut, setCheckingOut] = useState(false)
   const [checkedOut, setCheckedOut] = useState(false)
+  const [checkOutResult, setCheckOutResult] = useState<ScmCheckoutResponse | null>(null)
+  const [checkOutError, setCheckOutError] = useState<string | null>(null)
 
   const [quickChatMessages, setQuickChatMessages] = useState<
     { role: 'user' | 'assistant'; text: string }[]
@@ -594,13 +619,31 @@ export default function S3() {
   const [screenshotBefore, setScreenshotBefore] = useState<string | null>(null)
   const [screenshotAfter, setScreenshotAfter] = useState<string | null>(null)
 
-  function handleCheckOut() {
+  async function handleCheckOut() {
+    if (!activeTicketKey) return
+    const targetId = TICKET_TARGETS[activeTicketKey]?.targetId
+    if (!targetId) return
     setCheckingOut(true)
     setCheckedOut(false)
-    setTimeout(() => {
-      setCheckingOut(false)
+    setCheckOutError(null)
+    setCheckOutResult(null)
+    const startedAt = Date.now()
+    try {
+      const result = await s3Api.scmCheckout(activeTicketKey, targetId)
+      if (result.mode === 'simulated') {
+        // Preserve the original ~10s pacing for the fully-fake path — this
+        // beat is a deliberate "watch it happen" moment on stage. Live mode
+        // resolves as soon as the real response arrives.
+        const elapsed = Date.now() - startedAt
+        await new Promise((resolve) => setTimeout(resolve, Math.max(0, 10000 - elapsed)))
+      }
+      setCheckOutResult(result)
       setCheckedOut(true)
-    }, 10000)
+    } catch (err) {
+      setCheckOutError(err instanceof ApiError ? err.message : 'Check out failed.')
+    } finally {
+      setCheckingOut(false)
+    }
   }
 
   async function handleGenerate() {
@@ -710,7 +753,12 @@ export default function S3() {
     setApplying(true)
     setApplyError(null)
     try {
-      const result = await s3Api.apply(generated.proposal_id, activeTicketKey)
+      const result = await s3Api.apply(
+        generated.proposal_id,
+        activeTicketKey,
+        undefined,
+        TICKET_TARGETS[activeTicketKey]?.targetId,
+      )
       const nextAppliedFiles = { ...appliedFiles }
       for (const path of result.applied_files) nextAppliedFiles[path] = true
       const failure = result.post_apply && !result.post_apply.ok ? result.post_apply : null
@@ -719,17 +767,80 @@ export default function S3() {
       setRejectedFiles(result.rejected_files)
       setPostApplyFailure(failure)
       setFixCrashError(null)
+      setScmState(result.scm ?? null)
       saveTicketState(activeTicketKey, {
         applied: true,
         appliedFiles: nextAppliedFiles,
         rejectedFiles: result.rejected_files,
         postApplyFailure: failure,
+        scm: result.scm ?? null,
       })
+      // The commit gate reads the ticket's test results, which may already exist
+      // (a presenter can take a green regression baseline before Apply), so the
+      // panel asks for them rather than assuming an empty gate.
+      void refreshScm(generated.proposal_id, activeTicketKey)
       void runDesignSync(generated.proposal_id, result.applied_files, activeTicketKey)
     } catch (err) {
       setApplyError(err instanceof ApiError ? err.message : 'Apply failed.')
     } finally {
       setApplying(false)
+    }
+  }
+
+  // Pulls the branch state and the server-computed commit gate. Called after
+  // Apply and after each test beat, because the gate's inputs are the test
+  // results and they change under the panel.
+  async function refreshScm(proposalId: string, ticketKey: string) {
+    try {
+      const result = await s3Api.scmState(proposalId, ticketKey)
+      setScmState(result.scm)
+      setScmBlockers(result.commit_blockers)
+      setScmEvidence(result.test_evidence)
+      saveTicketState(ticketKey, { scm: result.scm })
+    } catch {
+      // Read-only refresh of a panel that is already on screen — leave what is
+      // showing rather than blanking it on a transient failure.
+    }
+  }
+
+  async function handleCommit() {
+    if (!generated || !activeTicketKey) return
+    setCommitting(true)
+    setScmError(null)
+    setScmDetail(null)
+    try {
+      const result = await s3Api.scmCommit(
+        generated.proposal_id,
+        activeTicketKey,
+        TICKET_TARGETS[activeTicketKey]?.targetId,
+      )
+      setScmState(result.scm)
+      setScmBlockers(result.commit_blockers)
+      setScmEvidence(result.test_evidence)
+      saveTicketState(activeTicketKey, { scm: result.scm })
+    } catch (err) {
+      // A 409 here is the gate refusing, and its message is the reason — show it
+      // verbatim rather than replacing it with "Commit failed".
+      setScmError(err instanceof ApiError ? err.message : 'Commit failed.')
+    } finally {
+      setCommitting(false)
+    }
+  }
+
+  async function handlePush() {
+    if (!generated || !activeTicketKey) return
+    setPushing(true)
+    setScmError(null)
+    setScmDetail(null)
+    try {
+      const result = await s3Api.scmPush(generated.proposal_id, activeTicketKey)
+      setScmState(result.scm)
+      setScmDetail(result.detail ?? null)
+      saveTicketState(activeTicketKey, { scm: result.scm })
+    } catch (err) {
+      setScmError(err instanceof ApiError ? err.message : 'Push failed.')
+    } finally {
+      setPushing(false)
     }
   }
 
@@ -808,13 +919,20 @@ export default function S3() {
     setApplyingFile(path)
     setApplyError(null)
     try {
-      const result = await s3Api.apply(generated.proposal_id, activeTicketKey, path)
+      const result = await s3Api.apply(
+        generated.proposal_id,
+        activeTicketKey,
+        path,
+        TICKET_TARGETS[activeTicketKey]?.targetId,
+      )
       const nextAppliedFiles = { ...appliedFiles, [path]: true }
       setAppliedFiles(nextAppliedFiles)
       setRejectedFiles(result.rejected_files)
+      setScmState(result.scm ?? null)
       saveTicketState(activeTicketKey, {
         appliedFiles: nextAppliedFiles,
         rejectedFiles: result.rejected_files,
+        scm: result.scm ?? null,
       })
     } catch (err) {
       setApplyError(err instanceof ApiError ? err.message : 'Apply failed.')
@@ -872,7 +990,8 @@ export default function S3() {
       for (const reverted of result.reverted_files) delete nextAppliedFiles[reverted]
       setAppliedFiles(nextAppliedFiles)
       setPostApplyFailure(result.post_apply && !result.post_apply.ok ? result.post_apply : null)
-      saveTicketState(activeTicketKey, { appliedFiles: nextAppliedFiles })
+      setScmState(result.scm ?? null)
+      saveTicketState(activeTicketKey, { appliedFiles: nextAppliedFiles, scm: result.scm ?? null })
     } catch (err) {
       setApplyError(err instanceof ApiError ? err.message : 'Revert failed.')
     } finally {
@@ -892,10 +1011,17 @@ export default function S3() {
       // The design-doc drift panel described the applied state; once that's
       // undone it is describing something that is no longer on disk.
       setDesignSync(null)
+      // Reverting everything abandons the branch server-side; keep showing it in
+      // that state rather than hiding it, so "the branch was cut and thrown
+      // away" stays visible instead of looking like it never happened.
+      setScmState(result.scm ?? null)
+      setScmDetail(null)
+      setScmError(null)
       saveTicketState(activeTicketKey, {
         applied: false,
         appliedFiles: {},
         postApplyFailure: null,
+        scm: result.scm ?? null,
       })
     } catch (err) {
       setApplyError(err instanceof ApiError ? err.message : 'Revert failed.')
@@ -1121,6 +1247,10 @@ export default function S3() {
       )
       setTestsRun(result)
       saveTicketState(activeTicketKey, { testsRun: result })
+      // This run is the commit gate's input, so the source-control panel has to
+      // hear about it — otherwise the gate stays closed on screen after the very
+      // run that opened it.
+      if (generated) void refreshScm(generated.proposal_id, activeTicketKey)
     } catch (err) {
       setTestError(err instanceof ApiError ? err.message : 'Test run failed.')
     } finally {
@@ -1144,6 +1274,7 @@ export default function S3() {
       )
       setRegressionRun(result)
       saveTicketState(activeTicketKey, { regressionRun: result })
+      if (generated) void refreshScm(generated.proposal_id, activeTicketKey)
     } catch (err) {
       setTestError(err instanceof ApiError ? err.message : 'Regression run failed.')
     } finally {
@@ -1208,7 +1339,8 @@ export default function S3() {
         active?.tierName ?? 'Elite',
         active?.targetId,
         activeTicketKey,
-        (ticketCrossTeam[activeTicketKey] ?? []).map((impact) => impact.app_name)
+        (ticketCrossTeam[activeTicketKey] ?? []).map((impact) => impact.app_name),
+        generated?.proposal_id ?? null,
       )
       setReleaseNoteSet(result.notes)
       setDeploymentPlan(result.plan)
@@ -1247,6 +1379,10 @@ export default function S3() {
           }
         : null,
       applied_files: Object.keys(appliedFiles).filter((path) => appliedFiles[path]),
+      // Lets the record pin the deployment plan to the branch and commit this
+      // change went through. Only the id is sent — the server reads the branch
+      // state itself, so the record cannot be told about a commit nobody made.
+      proposal_id: generated?.proposal_id ?? null,
     }
   }
 
@@ -1714,6 +1850,17 @@ export default function S3() {
     setAttachResult(null)
     setReleaseError(null)
     setHandoffError(null)
+    setScmState(persisted.scm ?? null)
+    setScmBlockers([])
+    setScmEvidence({ generated_suite: null, regression_suite: null })
+    setScmError(null)
+    setScmDetail(null)
+    // The persisted branch is what to render immediately; the gate is not
+    // persisted at all, because it is a function of the ticket's test results
+    // and a stale "ready to commit" is exactly the wrong thing to show.
+    if (persisted.generated?.proposal_id && persisted.scm) {
+      void refreshScm(persisted.generated.proposal_id, activeTicketKey)
+    }
   }, [activeTicketKey])
 
   useEffect(() => {
@@ -1966,21 +2113,38 @@ export default function S3() {
       {isEngineer && (
       <>
       <div className="ams-card" style={{ marginBottom: '1.25rem' }}>
-        <strong>Step 0 · Check out the repo</strong>
-        <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
-          Visual representation only — this demo works against the repo already on
-          disk; no real git operation runs here.
-        </p>
+        <strong style={{ display: 'block', marginBottom: '0.3rem' }}>
+          Step 0 · Check out the repo
+        </strong>
+        {!checkOutResult && !checkOutError && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
+            Cuts this CR's feature branch. Simulated by default — a real local git
+            branch only if the server has <code>SCM_MODE=live</code> set; no remote is
+            ever contacted either way.
+          </p>
+        )}
         <button
           className="ams-button"
           onClick={handleCheckOut}
-          disabled={checkingOut}
+          disabled={checkingOut || !activeTicketKey}
         >
           {checkingOut ? 'Checking out…' : 'Check out mockapp'}
         </button>
-        {checkedOut && !checkingOut && (
+        {checkedOut && !checkingOut && checkOutResult && (
           <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
-            ✓ Checked out <code>mockapp</code> @ <code>main</code> (<code>a3f9c21</code>)
+            ✓ {checkOutResult.mode === 'live' ? 'Checked out' : 'Would check out'}{' '}
+            <code>{checkOutResult.branch}</code> off <code>{checkOutResult.base}</code>
+            {checkOutResult.sha && <> (<code>{checkOutResult.sha}</code>)</>}
+          </p>
+        )}
+        {checkOutResult && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0' }}>
+            {checkOutResult.detail}
+          </p>
+        )}
+        {checkOutError && (
+          <p className="ams-scm-error" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+            {checkOutError}
           </p>
         )}
       </div>
@@ -2546,6 +2710,23 @@ export default function S3() {
                       <p style={{ color: 'var(--ams-error)', marginBottom: 0 }}>{fixCrashError}</p>
                     )}
                   </div>
+                )}
+                {/* Branch -> commit -> push around the apply. Shown as soon as a
+                    branch exists, including after a revert abandoned it, so the
+                    flow is visible rather than implied. Modelled, never executed
+                    -- see s3_enhancement/scm.py and ScmPanel.tsx. */}
+                {scmState && (
+                  <ScmPanel
+                    state={scmState}
+                    blockers={scmBlockers}
+                    evidence={scmEvidence}
+                    committing={committing}
+                    pushing={pushing}
+                    error={scmError}
+                    detail={scmDetail}
+                    onCommit={handleCommit}
+                    onPush={handlePush}
+                  />
                 )}
                 {applied && !postApplyFailure && (
                   <p style={{ color: 'var(--ams-success)', fontSize: '0.85rem' }}>

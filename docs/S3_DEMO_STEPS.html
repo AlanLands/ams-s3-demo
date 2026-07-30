@@ -406,6 +406,11 @@ need to reset between the two.</p>
 <td>The client's running application changed</td>
 </tr>
 <tr>
+<td>5b</td>
+<td><strong>Source control panel</strong>: branch → commit → push</td>
+<td>The change lands on a feature branch cut off <code>main</code> before anything is written, the commit is gated on the tests passing, and the push hands off to the pipeline — the flow, not a direct edit to main</td>
+</tr>
+<tr>
 <td>6</td>
 <td><strong>Revert</strong> (per file or all)</td>
 <td>Anything applied can be undone without a full demo reset</td>
@@ -461,6 +466,22 @@ successes is marketing. <strong>Attach to ticket</strong> is honest about the de
 with <code>JIRA_MODE=replay</code> there is no Jira to attach to, so the beat records the
 intent on the ticket timeline and says the upload was simulated. Set
 <code>JIRA_MODE=live</code> and it uploads for real.</p>
+<p>On beat 5b: say plainly that the git flow is <strong>modelled, not executed</strong> — the
+panel says so on screen and the release record repeats it under &quot;Not evidenced
+by this release&quot;. Nothing runs git and no remote is contacted. That is
+deliberate: the target apps live inside this repo and the reset scripts restore
+the baseline from <code>HEAD</code>, so a real commit would make them start restoring the
+CR instead. The point of the beat is the <em>shape</em> of the flow — branch before
+edit, commit gated on green tests, pipeline on push — which is what a reviewer
+asks about when they see an AI editing code.</p>
+<p>Two things are worth clicking rather than describing. Press <strong>Commit to branch</strong>
+before running the tests: it refuses, and names the reason, because the gate is
+computed server-side from the ticket's own test results — the console cannot
+assert &quot;tests passed&quot;. And open <strong>What a real integration would have run</strong> for
+the git transcript, which grows one step at a time as you take each step. If you
+Revert everything afterwards, the branch shows as <em>abandoned</em> rather than
+disappearing, and a commit already made is not unmade — in a real repo the
+honest undo at that point is a revert commit, not a rewritten history.</p>
 <p>On beat 6b: the change map is <strong>derived, not drawn by the model</strong> — services,
 layers and the cross-service arrow are read from the changed-file set, so it
 costs no LLM call and needs no cache warming. The <code>NEW</code> badge comes from git

@@ -153,6 +153,68 @@ export interface PostApplyResult {
   steps: PostApplyStep[]
 }
 
+// The source-control flow around Apply: branch → commit → push. Modelled, never
+// executed — `simulated` is always true, and the release record reports the
+// un-run pipeline as something this release did not evidence. See
+// s3_enhancement/scm.py before changing any of this.
+export interface ScmCommit {
+  sha: string
+  message: string
+  files: string[]
+  committed_at: string
+}
+
+export interface ScmState {
+  proposal_id: string
+  branch: string
+  base: string
+  ticket: string
+  created_at: string
+  staged_files: string[]
+  commit: ScmCommit | null
+  pushed_at: string | null
+  pipeline_id: string
+  abandoned_at: string | null
+  status: 'open' | 'applied' | 'committed' | 'pushed' | 'abandoned'
+  simulated: boolean
+  // The git commands a real integration would have issued, in order.
+  transcript: string[]
+}
+
+export interface ScmSuiteEvidence {
+  passed: boolean
+  detail: string
+  ts: string
+}
+
+export interface ScmResponse {
+  proposal_id: string
+  scm: ScmState | null
+  // Why the branch may not be committed yet, in the words to show the user.
+  // Empty means the gate is open. Computed server-side from the ticket's event
+  // log, never from anything this client asserts.
+  commit_blockers: string[]
+  test_evidence: {
+    generated_suite: ScmSuiteEvidence | null
+    regression_suite: ScmSuiteEvidence | null
+  }
+  detail?: string
+}
+
+export interface ScmCheckoutResponse {
+  mode: 'simulated' | 'live'
+  branch: string
+  base: string
+  // Null in simulated mode — there is no real commit to point a sha at.
+  sha: string | null
+  created: boolean | null
+  already_current: boolean | null
+  // Files that were already modified before this checkout, live mode only —
+  // informational, never blocks the checkout (see s3_enhancement/scm_live.py).
+  dirty_files: string[]
+  detail: string
+}
+
 export interface ApplyResponse {
   proposal_id: string
   applied_files: string[]
@@ -163,6 +225,8 @@ export interface ApplyResponse {
   rejected_files: Record<string, string>
   // Files this proposal has written and can still put back.
   revertable_files: string[]
+  // The feature branch apply opened before writing anything.
+  scm?: ScmState | null
 }
 
 export interface RejectResponse {
@@ -175,6 +239,9 @@ export interface RevertResponse {
   reverted_files: string[]
   post_apply?: PostApplyResult | null
   revertable_files: string[]
+  // Null when the proposal never went through the source-control flow.
+  // Reverting every applied file abandons the branch rather than rewinding it.
+  scm?: ScmState | null
 }
 
 export interface DesignDocFinding {
@@ -599,12 +666,59 @@ export const s3Api = {
       method: 'POST',
       body: JSON.stringify({ proposal_id: proposalId, instruction }),
     }),
-  apply: (proposalId: string, ticketNumber?: string, filePath?: string) =>
+  // targetId names the feature branch apply opens before it writes anything.
+  apply: (
+    proposalId: string,
+    ticketNumber?: string,
+    filePath?: string,
+    targetId?: string | null,
+  ) =>
     request<ApplyResponse>('/api/s3/apply', {
       method: 'POST',
       body: JSON.stringify({
         proposal_id: proposalId,
         file_path: filePath ?? null,
+        ticket_number: ticketNumber ?? null,
+        target_id: targetId ?? null,
+      }),
+    }),
+  // --- the source-control flow around Apply ---------------------------------
+  // Commit and push are simulated: nothing here runs git or contacts a
+  // remote. The commit gate lives on the server and reads the ticket's own
+  // test results, so there is deliberately no "tests passed" flag to send
+  // from here. Checkout is the exception — real when the server has
+  // SCM_MODE=live set (branch creation only; see s3_enhancement/scm_live.py),
+  // simulated otherwise. The server decides and reports which in `mode`.
+  scmCheckout: (ticketNumber: string, targetId: string) =>
+    request<ScmCheckoutResponse>('/api/s3/scm/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ ticket_number: ticketNumber, target_id: targetId }),
+    }),
+  scmState: (proposalId: string, ticketNumber?: string) =>
+    request<ScmResponse>(
+      `/api/s3/scm?proposal_id=${encodeURIComponent(proposalId)}` +
+        (ticketNumber ? `&ticket_number=${encodeURIComponent(ticketNumber)}` : ''),
+    ),
+  scmCommit: (
+    proposalId: string,
+    ticketNumber: string,
+    targetId?: string | null,
+    message?: string,
+  ) =>
+    request<ScmResponse>('/api/s3/scm/commit', {
+      method: 'POST',
+      body: JSON.stringify({
+        proposal_id: proposalId,
+        ticket_number: ticketNumber,
+        target_id: targetId ?? null,
+        message: message ?? null,
+      }),
+    }),
+  scmPush: (proposalId: string, ticketNumber?: string) =>
+    request<ScmResponse>('/api/s3/scm/push', {
+      method: 'POST',
+      body: JSON.stringify({
+        proposal_id: proposalId,
         ticket_number: ticketNumber ?? null,
       }),
     }),
@@ -798,11 +912,14 @@ export const s3Api = {
         ticket_number: ticketNumber ?? null,
       }),
     }),
+  // proposalId lets the returned deployment plan name the branch and commit the
+  // change went through, instead of leaving "deploy the change" to the reader.
   releaseNoteSet: (
     tierName: string,
     targetId?: string | null,
     ticketNumber?: string,
-    downstreamApps?: string[]
+    downstreamApps?: string[],
+    proposalId?: string | null,
   ) =>
     request<ReleaseNotesResponse2>('/api/s3/release/notes', {
       method: 'POST',
@@ -811,6 +928,7 @@ export const s3Api = {
         target_id: targetId ?? null,
         ticket_number: ticketNumber ?? null,
         downstream_apps: downstreamApps ?? [],
+        proposal_id: proposalId ?? null,
       }),
     }),
   releaseRecordAttach: (body: Record<string, unknown>) =>

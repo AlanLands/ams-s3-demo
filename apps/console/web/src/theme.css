@@ -1400,3 +1400,176 @@ a:hover {
   margin: 0.8rem 0 0;
   max-width: 62ch;
 }
+
+/* --- the source-control flow around Apply (ScmPanel.tsx) -------------------
+   Branch → commit → push, modelled rather than executed. The "simulated"
+   banner is styled to be read, not skimmed past: it is the one line that keeps
+   the panel honest. */
+.ams-scm-card {
+  margin-top: 0.9rem;
+  border-left: 3px solid var(--ams-secondary);
+}
+.ams-scm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.ams-scm-branch {
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+.ams-scm-base {
+  font-size: 0.76rem;
+  color: var(--ams-ink-soft);
+  margin-left: 0.4rem;
+}
+.ams-scm-status {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  background: var(--ams-line);
+  white-space: nowrap;
+}
+.ams-scm-status-committed,
+.ams-scm-status-pushed {
+  background: #dbeee6;
+  color: #125c43;
+}
+.ams-scm-status-abandoned {
+  background: #f6dfe3;
+  color: #8a1330;
+}
+.ams-scm-simulated {
+  font-size: 0.78rem;
+  color: var(--ams-warning);
+  background: #fbf4e4;
+  border: 1px solid rgba(176, 136, 36, 0.35);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  margin: 0.5rem 0 0.7rem;
+  max-width: 68ch;
+}
+.ams-scm-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ams-scm-step {
+  flex: 1 1 8rem;
+  min-width: 8rem;
+  border-top: 2px solid var(--ams-line);
+  padding-top: 0.3rem;
+}
+.ams-scm-step-done {
+  border-top-color: var(--ams-secondary);
+}
+.ams-scm-step-void {
+  opacity: 0.45;
+}
+.ams-scm-step-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.ams-scm-step-hint {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--ams-ink-soft);
+}
+.ams-scm-evidence {
+  margin-top: 0.8rem;
+  font-size: 0.82rem;
+}
+.ams-scm-evidence-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.15rem 0;
+  flex-wrap: wrap;
+}
+.ams-scm-evidence-name {
+  color: var(--ams-ink-soft);
+}
+.ams-scm-evidence-none {
+  color: var(--ams-ink-soft);
+  font-style: italic;
+}
+.ams-scm-ok {
+  color: var(--ams-success);
+  font-weight: 600;
+}
+.ams-scm-bad {
+  color: var(--ams-error);
+  font-weight: 600;
+}
+.ams-scm-blockers {
+  margin-top: 0.7rem;
+  font-size: 0.82rem;
+  border: 1px solid rgba(210, 13, 53, 0.35);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  background: #fbeaee;
+}
+.ams-scm-blockers ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+}
+.ams-scm-commit {
+  margin-top: 0.7rem;
+  font-size: 0.83rem;
+}
+.ams-scm-commit code {
+  font-family: ui-monospace, monospace;
+  margin-right: 0.35rem;
+}
+.ams-scm-commit-meta {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--ams-ink-soft);
+}
+.ams-scm-pipeline,
+.ams-scm-detail,
+.ams-scm-abandoned {
+  font-size: 0.8rem;
+  color: var(--ams-ink-soft);
+  max-width: 68ch;
+  margin: 0.6rem 0 0;
+}
+.ams-scm-error {
+  font-size: 0.82rem;
+  color: var(--ams-error);
+  margin: 0.6rem 0 0;
+}
+.ams-scm-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.8rem;
+}
+.ams-scm-transcript {
+  margin-top: 0.8rem;
+  font-size: 0.8rem;
+}
+.ams-scm-transcript summary {
+  cursor: pointer;
+  color: var(--ams-ink-soft);
+}
+.ams-scm-transcript pre {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.6rem;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: 4px;
+  font-size: 0.76rem;
+  overflow-x: auto;
+  white-space: pre;
+}

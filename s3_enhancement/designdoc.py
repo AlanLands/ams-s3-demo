@@ -330,6 +330,39 @@ def render_release_record_html(record, *, today: date | None = None) -> str:
     else:
         sections.append("<p>No human approvals were recorded against this ticket.</p>")
 
+    branch = getattr(record, "branch", None)
+    if branch is not None:
+        sections.append("<h2>Source control</h2>")
+        rows = [
+            ("Branch", f"<code>{escape(branch.branch)}</code> (cut from "
+                       f"<code>{escape(branch.base)}</code>)"),
+            ("Status", escape(branch.status)),
+        ]
+        if branch.commit is not None:
+            rows.append(
+                (
+                    "Commit",
+                    f"<code>{escape(branch.commit.sha)}</code> — "
+                    f"{escape(branch.commit.message)} "
+                    f"({len(branch.commit.files)} file(s), {escape(branch.commit.committed_at)})",
+                )
+            )
+        if branch.pushed_at:
+            rows.append(
+                ("Pipeline", f"{escape(branch.pipeline_id)} queued {escape(branch.pushed_at)}")
+            )
+        body = "".join(
+            f"<tr><td><strong>{label}</strong></td><td>{value}</td></tr>"
+            for label, value in rows
+        )
+        sections.append(f"<table><tbody>{body}</tbody></table>")
+        # Stated here as well as in the gaps block: a reader who skims to the
+        # branch name and stops must not walk away thinking git ran.
+        sections.append(
+            '<p class="drafted">Modelled, not executed — this console does not run '
+            "git or contact a remote. See “Not evidenced by this release”.</p>"
+        )
+
     sections.append("<h2>Deployment</h2>")
     if record.plan.order_reason:
         sections.append(

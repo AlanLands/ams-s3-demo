@@ -41,6 +41,29 @@ SYSTEM_PROMPT = (
     "only. Do not include markdown fences, prose, or diffs."
 )
 
+# Shared verbatim across every codegen/revise prompt below so the rule can't
+# drift between them the way three independently-worded "preserve style"
+# bullets did. Whole-file replacement is what makes a model shed this
+# material in the first place — asked afterward, it denies removing anything
+# — so this is belt-and-suspenders with the deterministic repairs in
+# `_restore_module_docstring` / `_restore_body_docstrings` /
+# `_format_generated_python`, not a substitute for them: this text only
+# reaches a live model, never a replayed one.
+_PRESERVATION_RULES = """\
+- Treat the given file as an edit target, not a blank page: reproduce every
+  line you are not intentionally changing byte-for-byte, including
+  blank-line spacing, existing comments, and docstrings. Do not "clean up,"
+  reflow, or drop anything the change request did not ask you to touch.
+- Every comment and docstring present in the input must still be present in
+  your output, unless the exact line(s) it documents no longer exist after
+  your change. If a comment or docstring becomes inaccurate because of your
+  change, update its wording in place — do not delete it.
+- New functions, classes, fields, or parameters you add need a comment or
+  docstring in the same style already used in that file (e.g. this file's
+  inline `# "A" | "B"` field comments, or a one-sentence docstring for a new
+  function/method) — never ship new code with less documentation than what
+  already surrounds it."""
+
 _SECRET_RE = re.compile(
     r"(sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)"
 )
@@ -458,7 +481,7 @@ def revise_change(
             f"S3 revise returned files outside the staged proposal: {sorted(unexpected)}"
         )
     for rel_path, content in revised_files.items():
-        repaired = _restore_module_docstring(rel_path, content)
+        repaired = _repair_generated_content(rel_path, content)
         _validate_content(rel_path, repaired)
         (staged_dir / rel_path).write_text(repaired, encoding="utf-8")
 
@@ -575,8 +598,8 @@ Rules:
 - Return each changed file as a complete replacement, not a patch or diff.
 - Keep every line at 100 characters or fewer; use modern built-in generics
   (`list[str]`, `X | None`), never `typing.List`/`typing.Optional`.
-- Preserve existing docstrings, comments, and house style in spirit; make
-  only the change the instruction actually asks for."""
+{_PRESERVATION_RULES}
+- Make only the change the instruction actually asks for."""
 
 
 def build_prompt(
@@ -647,12 +670,11 @@ Rules:
     function other code calls.
 - The top tier name appears only in string literals or list elements, never as
   a Python identifier and never in a path.
-- Preserve existing docstrings, comments, and house style in spirit.
-- Do not reformat, re-indent, or restructure any line you are not
-  intentionally changing for this CR. Every file below uses 4-space
-  indentation throughout — match it exactly on every line you output,
-  including lines that already existed. Return a minimal, surgical diff
-  from the given file content, not a wholesale rewrite.
+{_PRESERVATION_RULES}
+- Every file below uses 4-space indentation throughout — match it exactly on
+  every line you output, including lines that already existed. Return a
+  minimal, surgical diff from the given file content, not a wholesale
+  rewrite.
 - Use modern built-in generics for every type hint (`list[str]`,
   `dict[str, float]`, `X | None`) — never `typing.List`, `typing.Dict`,
   `typing.Tuple`, or `typing.Optional`; this repo's ruff config rejects them.
@@ -734,12 +756,11 @@ Rules:
   `submit_endorsement(...)`.
 - Submitting the form without touching the new Priority control must behave
   exactly as before this CR (defaults to "Standard").
-- Preserve existing docstrings, comments, and house style in spirit.
-- Do not reformat, re-indent, or restructure any line you are not
-  intentionally changing for this CR. Every file below uses 4-space
-  indentation throughout — match it exactly on every line you output,
-  including lines that already existed. Return a minimal, surgical diff
-  from the given file content, not a wholesale rewrite.
+{_PRESERVATION_RULES}
+- Every file below uses 4-space indentation throughout — match it exactly on
+  every line you output, including lines that already existed. Return a
+  minimal, surgical diff from the given file content, not a wholesale
+  rewrite.
 - Use modern built-in generics for every type hint (`list[str]`,
   `dict[str, float]`, `X | None`) — never `typing.List`, `typing.Dict`,
   `typing.Tuple`, or `typing.Optional`; this repo's ruff config rejects them.
@@ -812,9 +833,8 @@ Rules:
   logic left in the controller.
 - Do not touch the static HTML consoles, pom.xml files, or application
   classes — they are not in your file list and must keep working unchanged.
-- Preserve existing comments and house style; 4-space indentation throughout,
-  matching the given files. Return a minimal, surgical diff from the given
-  file content, not a wholesale rewrite.
+{_PRESERVATION_RULES}
+- 4-space indentation throughout, matching the given files.
 - Keep every line at 100 characters or fewer.
 - Existing flows must keep working: policy list/detail, the claims service's
   policy-directory passthrough, claim submission, and claim listing."""
@@ -1153,6 +1173,236 @@ def _restore_module_docstring(rel_path: str, content: str) -> str:
     return f"{docstring_block}\n{content.lstrip(chr(10))}"
 
 
+def _qualified_docstring_owners(
+    tree: ast.Module,
+) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef]:
+    """Dotted-name -> node for every function/class in `tree`, e.g.
+    `"Endorsement"` or `"Foo.bar"` for a method `bar` on class `Foo`. Used to
+    match a function/class between the original file and the model's
+    replacement by name rather than by position, since the model is free to
+    reorder or insert around it."""
+    owners: dict[str, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef] = {}
+
+    def visit(node: ast.AST, prefix: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                qualname = f"{prefix}{child.name}"
+                owners[qualname] = child
+                visit(child, f"{qualname}.")
+
+    visit(tree, "")
+    return owners
+
+
+def _restore_body_docstrings(rel_path: str, content: str) -> str:
+    """Put back function/class docstrings the model dropped, the same way
+    `_restore_module_docstring` does for the module docstring — whole-file
+    replacement sheds these just as readily, and it is the exact regression
+    reported against CR-2026-042's replay: docstrings gone from every touched
+    function, not only the module's.
+
+    Matches functions/classes by qualified name only. A function the model
+    renamed, removed, or nested differently gets no repair — that is either
+    a real edit or something `_validate_content`/the test suite should catch
+    on its own, not something to paper over here.
+    """
+    if not rel_path.endswith(".py"):
+        return content
+    source_path = REPO_ROOT / rel_path
+    if not source_path.exists():
+        return content
+    try:
+        original = source_path.read_text(encoding="utf-8")
+        original_tree = ast.parse(original, filename=rel_path)
+        generated_tree = ast.parse(content, filename=rel_path)
+    except (SyntaxError, ValueError):
+        # Invalid Python is _validate_content's problem to report, not ours.
+        return content
+
+    original_lines = original.splitlines(keepends=True)
+    generated_lines = content.splitlines(keepends=True)
+    original_owners = _qualified_docstring_owners(original_tree)
+    generated_owners = _qualified_docstring_owners(generated_tree)
+
+    # Collected then applied bottom-up (by generated line number) so an
+    # earlier insertion never shifts the line numbers still to be inserted.
+    insertions: list[tuple[int, str]] = []
+    for qualname, orig_node in original_owners.items():
+        if not orig_node.body or ast.get_docstring(orig_node) is None:
+            continue
+        gen_node = generated_owners.get(qualname)
+        if gen_node is None or not gen_node.body or ast.get_docstring(gen_node) is not None:
+            continue
+        doc_stmt = orig_node.body[0]
+        doc_end = getattr(doc_stmt, "end_lineno", None)
+        if doc_end is None:
+            continue
+        block = "".join(original_lines[doc_stmt.lineno - 1 : doc_end])
+        target_indent = " " * gen_node.body[0].col_offset
+        reindented = "".join(
+            f"{target_indent}{line.lstrip(' ')}" if line.strip() else line
+            for line in block.splitlines(keepends=True)
+        )
+        insertions.append((gen_node.body[0].lineno - 1, reindented))
+
+    if not insertions:
+        return content
+    for insert_at, block in sorted(insertions, key=lambda pair: pair[0], reverse=True):
+        generated_lines.insert(insert_at, block)
+    return "".join(generated_lines)
+
+
+def _restore_dropped_comment_lines(rel_path: str, content: str) -> str:
+    """Restore whole-line comments a whole-file replacement silently dropped
+    anywhere in the file — not just docstrings. Found against a real
+    recording (CR-2026-042): a design-rationale comment in the middle of a
+    function body vanished with no docstring involved, so the AST-based
+    docstring repairs above never see it.
+
+    Uses a plain line-level diff (`difflib`) against the original file: a
+    contiguous block the model deleted is only restored if it consists
+    entirely of comment/blank lines. A deleted block containing real code is
+    left alone — that's either a legitimate part of the change or something
+    the diff review is supposed to catch, not something to silently reverse.
+    And a comment the model *reworded* shows up as a "replace" opcode, not a
+    "delete" (nothing to restore against), which is deliberate: the rule
+    book asks the model to update stale comment wording in place rather than
+    delete it, and this must not fight that by restoring the old wording
+    over the new.
+    """
+    if not rel_path.endswith(".py"):
+        return content
+    source_path = REPO_ROOT / rel_path
+    if not source_path.exists():
+        return content
+    original_lines = source_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    generated_lines = content.splitlines(keepends=True)
+
+    matcher = difflib.SequenceMatcher(None, original_lines, generated_lines, autojunk=False)
+    insertions: list[tuple[int, list[str]]] = []
+    for tag, i1, i2, j1, _j2 in matcher.get_opcodes():
+        if tag != "delete":
+            continue
+        deleted = original_lines[i1:i2]
+        if not any(line.strip().startswith("#") for line in deleted):
+            continue  # a run of nothing but blank lines is not a content loss
+        if not all(line.strip() == "" or line.lstrip().startswith("#") for line in deleted):
+            continue  # deleted real code alongside it — a real edit, not ours to reverse
+        insertions.append((j1, deleted))
+
+    if not insertions:
+        return content
+    for insert_at, lines in sorted(insertions, key=lambda pair: pair[0], reverse=True):
+        generated_lines[insert_at:insert_at] = lines
+    try:
+        ast.parse("".join(generated_lines), filename=rel_path)
+    except SyntaxError:
+        # A restored comment landed somewhere that broke indentation-sensitive
+        # syntax (e.g. inside a continued expression) — bail out rather than
+        # hand back content worse than what was passed in.
+        return content
+    return "".join(generated_lines)
+
+
+def _top_level_def_starts(tree: ast.Module) -> dict[str, int]:
+    """name -> 1-indexed line of each top-level def/class in `tree`,
+    including its decorator line(s) if any (ast puts `FunctionDef.lineno` on
+    the `def` line itself, not the decorator, so the decorator line has to be
+    found separately)."""
+    starts: dict[str, int] = {}
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            first_line = node.lineno
+            if node.decorator_list:
+                first_line = min(dec.lineno for dec in node.decorator_list)
+            starts[node.name] = first_line
+    return starts
+
+
+def _blank_run_before(lines: list[str], lineno: int) -> tuple[int, int]:
+    """(blank_line_count, index_of_preceding_non_blank_line) for the run of
+    blank lines immediately above 1-indexed `lineno` in `lines`. The second
+    element is -1 if `lineno` is the first line in the file or every line
+    above it is blank."""
+    idx = lineno - 1
+    count = 0
+    cursor = idx - 1
+    while cursor >= 0 and lines[cursor].strip() == "":
+        count += 1
+        cursor -= 1
+    return count, cursor
+
+
+def _restore_top_level_blank_lines(rel_path: str, content: str) -> str:
+    """Restore the exact blank-line count that preceded each top-level
+    def/class in the original file, wherever a whole-file replacement
+    collapsed it (this repo's `ruff.toml` and PEP 8 both call for two blank
+    lines between top-level definitions; the model routinely flattens runs
+    like that to one).
+
+    Matched by name, the same discipline `_restore_body_docstrings` uses: a
+    renamed or newly-added def has no original position to restore, so its
+    spacing is left exactly as the model wrote it. Deliberately narrower than
+    running a general formatter (`ruff format`) over the whole file — that
+    also collapses unrelated multi-line expressions the CR never touched
+    (comprehensions, ternaries, wrapped calls) into a diff the reviewer has
+    to puzzle over. This only ever rewrites the blank-line run immediately
+    above a matched def/class; nothing else in the file is touched.
+    """
+    if not rel_path.endswith(".py"):
+        return content
+    source_path = REPO_ROOT / rel_path
+    if not source_path.exists():
+        return content
+    try:
+        original = source_path.read_text(encoding="utf-8")
+        original_tree = ast.parse(original, filename=rel_path)
+        generated_tree = ast.parse(content, filename=rel_path)
+    except (SyntaxError, ValueError):
+        # Invalid Python is _validate_content's problem to report, not ours.
+        return content
+
+    original_lines = original.splitlines(keepends=True)
+    generated_lines = content.splitlines(keepends=True)
+    original_starts = _top_level_def_starts(original_tree)
+    generated_starts = _top_level_def_starts(generated_tree)
+
+    # Collected then applied bottom-up (by generated line number) so an
+    # earlier edit never shifts the line numbers still to be processed.
+    fixes: list[tuple[int, int, int]] = []  # (preceding_line_idx, def_idx, desired_blanks)
+    for name, orig_lineno in original_starts.items():
+        gen_lineno = generated_starts.get(name)
+        if gen_lineno is None:
+            continue
+        desired, orig_preceding = _blank_run_before(original_lines, orig_lineno)
+        if orig_preceding < 0:
+            continue  # nothing preceded it in the original either
+        actual, gen_preceding = _blank_run_before(generated_lines, gen_lineno)
+        if gen_preceding < 0 or actual == desired:
+            continue
+        fixes.append((gen_preceding, gen_lineno - 1, desired))
+
+    if not fixes:
+        return content
+    for preceding_idx, def_idx, desired in sorted(fixes, key=lambda f: f[0], reverse=True):
+        generated_lines[preceding_idx + 1 : def_idx] = ["\n"] * desired
+    return "".join(generated_lines)
+
+
+def _repair_generated_content(rel_path: str, content: str) -> str:
+    """Chain of deterministic, non-LLM repairs applied to every generated
+    file before it's staged or written — each undoes one specific thing
+    whole-file replacement is known to drop: the module docstring, function
+    docstrings, other dropped comment lines, and top-level blank-line
+    spacing, in that order (each downstream repair re-parses the file fresh,
+    so earlier line-count changes are always accounted for)."""
+    content = _restore_module_docstring(rel_path, content)
+    content = _restore_body_docstrings(rel_path, content)
+    content = _restore_dropped_comment_lines(rel_path, content)
+    content = _restore_top_level_blank_lines(rel_path, content)
+    return content
+
+
 def _stage_files(files: dict[str, str]) -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     staged_dir = OUT_ROOT / stamp / "staged"
@@ -1163,7 +1413,7 @@ def _stage_files(files: dict[str, str]) -> Path:
     for rel_path, content in files.items():
         target = staged_dir / rel_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(_restore_module_docstring(rel_path, content), encoding="utf-8")
+        target.write_text(_repair_generated_content(rel_path, content), encoding="utf-8")
     return staged_dir
 
 
