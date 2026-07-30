@@ -1,5 +1,5 @@
 [Unit]
-Description=AMS S3 demo — MapleSure policy/claims mockapp (Streamlit, the CR target)
+Description=AMS S3 demo — MapleSure policy/claims portal (Streamlit, the CR target for CR-2026-041/042)
 After=network-online.target
 Wants=network-online.target
 
@@ -18,7 +18,7 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/ams-s3-demo/.venv/bin/streamlit run apps/policycore/app.py \
     --server.port 8501 \
     --server.address 127.0.0.1 \
-    --server.baseUrlPath mockapp \
+    --server.baseUrlPath apps/policycore \
     --server.headless true \
     --browser.gatherUsageStats false
 

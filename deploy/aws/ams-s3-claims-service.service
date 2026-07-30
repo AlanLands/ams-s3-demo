@@ -1,0 +1,35 @@
+[Unit]
+Description=AMS S3 demo — ClaimsPortal claims-service (FastAPI, CR-2026-043 target, claims half)
+After=network-online.target ams-s3-policy-service.service
+Wants=network-online.target
+# Not a hard dependency: claims-service starts fine with policy-service down,
+# it just fails claim submissions until policy-service answers. Ordering only
+# — see After=, no Requires=.
+
+[Service]
+Type=exec
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/ams-s3-demo
+EnvironmentFile=/opt/ams-s3-demo/.env
+Environment=PYTHONPATH=/opt/ams-s3-demo
+Environment=PYTHONUNBUFFERED=1
+# policy_client.py defaults to http://localhost:8081 — set explicitly anyway
+# so this unit stays correct if policy-service ever moves host/port.
+Environment=POLICY_SERVICE_URL=http://127.0.0.1:8081
+
+# Bound to localhost; nginx fronts it. No --reload — same reason as
+# policy-service and the console unit. In-memory data, restart clears
+# submitted claims.
+ExecStart=/opt/ams-s3-demo/.venv/bin/uvicorn apps.claimsportal.claims_service.main:app \
+    --host 127.0.0.1 \
+    --port 8082 \
+    --workers 1
+
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

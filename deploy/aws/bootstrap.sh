@@ -28,7 +28,7 @@ echo "==> system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 # git: the S3 pipeline shells out to it for diffs against the pre-CR baseline.
-# nginx: single public entry point in front of the two app processes.
+# nginx: single public entry point in front of the four app processes.
 apt-get install -y -qq python3.12 python3.12-venv python3-pip git nginx curl
 
 echo "==> python venv"
@@ -47,7 +47,7 @@ if [[ -f "$APP_DIR/apps/console/web/dist/index.html" ]]; then
 elif [[ "${BUILD_FRONTEND_ON_HOST:-0}" == "1" ]]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y -qq nodejs
-  sudo -u "$APP_USER" bash -c "cd '$APP_DIR/frontend' && npm ci && npm run build"
+  sudo -u "$APP_USER" bash -c "cd '$APP_DIR/apps/console/web' && npm ci && npm run build"
 else
   echo "    !! apps/console/web/dist missing." >&2
   echo "    !! Build locally (cd apps/console/web && npm run build) and rsync apps/console/web/dist up," >&2
@@ -63,9 +63,11 @@ chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
 
 echo "==> systemd units"
 install -m 0644 "$APP_DIR/deploy/aws/ams-s3-console.service" /etc/systemd/system/
-install -m 0644 "$APP_DIR/deploy/aws/ams-s3-mockapp.service" /etc/systemd/system/
+install -m 0644 "$APP_DIR/deploy/aws/ams-s3-policycore.service" /etc/systemd/system/
+install -m 0644 "$APP_DIR/deploy/aws/ams-s3-policy-service.service" /etc/systemd/system/
+install -m 0644 "$APP_DIR/deploy/aws/ams-s3-claims-service.service" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable ams-s3-console ams-s3-mockapp
+systemctl enable ams-s3-console ams-s3-policycore ams-s3-policy-service ams-s3-claims-service
 
 echo "==> nginx"
 install -m 0644 "$APP_DIR/deploy/aws/nginx.conf" /etc/nginx/sites-available/ams-s3-demo
@@ -75,9 +77,14 @@ nginx -t
 systemctl restart nginx
 
 echo "==> starting services"
-systemctl restart ams-s3-console ams-s3-mockapp
+# policy-service before claims-service: claims-service calls it, and a claim
+# submitted while policy-service is still coming up fails the lookup.
+systemctl restart ams-s3-console ams-s3-policycore ams-s3-policy-service
+sleep 1
+systemctl restart ams-s3-claims-service
 sleep 3
-systemctl --no-pager --lines=0 status ams-s3-console ams-s3-mockapp || true
+systemctl --no-pager --lines=0 status \
+  ams-s3-console ams-s3-policycore ams-s3-policy-service ams-s3-claims-service || true
 
 echo
 echo "Bootstrap complete."

@@ -120,7 +120,7 @@
   async function loadPolicies() {
     const select = document.getElementById("policyNumber");
     try {
-      const policies = await (await fetch("/api/claims/policy-directory")).json();
+      const policies = await (await fetch("api/claims/policy-directory")).json();
       select.innerHTML = '<option value="">Select a policy…</option>' + policies.map(p =>
         `<option value="${p.policyNumber}">${p.policyNumber} — ${p.holderName} (${p.product}, ${p.status})</option>`
       ).join("");
@@ -133,7 +133,7 @@
     const rows = document.getElementById("claimRows");
     let claims;
     try {
-      claims = await (await fetch("/api/claims")).json();
+      claims = await (await fetch("api/claims")).json();
     } catch {
       rows.innerHTML = '<tr><td colspan="5" class="empty">Could not reach claims-service API</td></tr>';
       return;
@@ -162,7 +162,7 @@
       description: document.getElementById("description").value
     };
     try {
-      const res = await fetch("/api/claims", {
+      const res = await fetch("api/claims", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)

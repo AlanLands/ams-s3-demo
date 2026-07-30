@@ -208,7 +208,7 @@ aws iam get-role-policy --role-name ams-s3-demo-ec2 --policy-name bedrock-invoke
 | Type | **t3.large** (2 vCPU / 8 GB) | ChromaDB plus a `pytest` subprocess during codegen makes t3.micro/small unreliable. |
 | Disk | 20 GB gp3 | |
 | IAM instance profile | `ams-s3-demo-ec2` | From Step 2. |
-| Security group | inbound **80** from the presenter's IP only; **22** for admin | Ports 8000/8501 bind to localhost — they must not be public. |
+| Security group | inbound **80** from the presenter's IP only; **22** for admin | Ports 8000/8501/8081/8082 all bind to localhost — they must not be public. |
 
 Then set `export INSTANCE=ubuntu@<public-ip>`.
 
@@ -304,14 +304,14 @@ ssh $INSTANCE 'sudo bash /opt/ams-s3-demo/deploy/aws/bootstrap.sh'
 ssh $INSTANCE 'curl -fsS http://localhost/api/health'   # -> {"ok":true}
 ```
 
-## Step 8. Check both services are up
+## Step 8. Check all four services are up
 
 ```bash
-ssh $INSTANCE 'systemctl is-active ams-s3-console ams-s3-mockapp nginx'
+ssh $INSTANCE 'systemctl is-active ams-s3-console ams-s3-policycore ams-s3-policy-service ams-s3-claims-service nginx'
 ```
 
-Expect `active` three times. If not:
-`ssh $INSTANCE 'journalctl -u ams-s3-console -n 50 --no-pager'`
+Expect `active` five times. If not:
+`ssh $INSTANCE 'journalctl -u ams-s3-console -n 50 --no-pager'` (swap the unit name for whichever isn't active).
 
 ---
 
@@ -389,8 +389,10 @@ A rehearsal on a laptop against the direct Anthropic API does **not** exercise
 the Bedrock path, the proxy, or the warmed cache. Do it here.
 
 Open `http://<public-ip>/` and walk the full script in
-`demo/DEMO_TEST_GUIDE.md`. Check the mockapp at
-`http://<public-ip>/apps/policycore/` too.
+`demo/DEMO_TEST_GUIDE.md`. Check PolicyCore at
+`http://<public-ip>/apps/policycore/`, and ClaimsPortal's two team consoles at
+`http://<public-ip>/apps/claimsportal/policy/` and
+`http://<public-ip>/apps/claimsportal/claims/`, too.
 
 Watch for any beat that pauses where rehearsal was instant — that is an
 unwarmed cache entry going live. Re-run Step 10 if you see one.
@@ -401,8 +403,16 @@ unwarmed cache entry going live. Re-run Step 10 if you see one.
 
 ## Step 12. Reset to a clean state
 
+All three reset scripts, **in this order** — the endorsement reset must run
+after `reset_s3.sh`, because it builds on the database that script reseeds
+(see `demo/DEMO_STEPS.md` §5):
+
 ```bash
-ssh $INSTANCE 'cd /opt/ams-s3-demo && sudo -u ubuntu ./demo/reset_s3.sh'
+ssh $INSTANCE 'cd /opt/ams-s3-demo && sudo -u ubuntu bash -c "
+  ./demo/reset_s3.sh &&
+  ./demo/reset_s3_endorsement.sh &&
+  ./demo/reset_s3_springdemo.sh
+"'
 ```
 
 ## Step 13. Re-warm, then restart
@@ -411,7 +421,7 @@ ssh $INSTANCE 'cd /opt/ams-s3-demo && sudo -u ubuntu ./demo/reset_s3.sh'
 
 ```bash
 # re-warm (Step 10 command), then:
-ssh $INSTANCE 'sudo systemctl restart ams-s3-console ams-s3-mockapp'
+ssh $INSTANCE 'sudo systemctl restart ams-s3-console ams-s3-policycore ams-s3-policy-service ams-s3-claims-service'
 ssh $INSTANCE 'curl -fsS http://localhost/api/health'
 ```
 
@@ -424,10 +434,10 @@ The reset → warm → restart order matters. Warming before the reset is wasted
 ## Operating
 
 ```bash
-sudo systemctl status  ams-s3-console ams-s3-mockapp
+sudo systemctl status  ams-s3-console ams-s3-policycore ams-s3-policy-service ams-s3-claims-service
 sudo systemctl restart ams-s3-console
 sudo journalctl -u ams-s3-console -f
-sudo journalctl -u ams-s3-mockapp -n 100 --no-pager
+sudo journalctl -u ams-s3-policycore -n 100 --no-pager
 ```
 
 ## Deploying a code update
@@ -446,7 +456,8 @@ ssh $INSTANCE 'sudo bash /opt/ams-s3-demo/deploy/aws/bootstrap.sh'
 | `AccessDeniedException` from Bedrock | Model access not granted in the Bedrock console (Step 1), or wrong region |
 | 400 on every LLM call | `BEDROCK_MODEL` missing the `anthropic.` prefix |
 | Console 404s on every page | `apps/console/web/dist` not built or not shipped (Steps 4–5) |
-| Mockapp stuck "connecting" | nginx missing websocket `Upgrade` headers, or `--server.baseUrlPath` not matching the location block |
+| PolicyCore stuck "connecting" | nginx missing websocket `Upgrade` headers, or `--server.baseUrlPath` not matching the location block |
+| ClaimsPortal console loads once then every fetch 404s | Its static HTML uses relative `fetch("api/...")` paths on purpose, so it works under any nginx prefix — if this breaks, someone changed a fetch call back to an absolute `/api/...` path |
 | Pipeline hangs during analyze | `GITLAB_MODE` still `live` with no outbound route (Step 6) |
 | `reset_s3.sh` fails on `git show` | `.git` or the `s3-baseline` tag missing — re-ship without excluding `.git` (Step 5) |
 | App restarts mid-codegen | `--reload` was added to the unit. Never use it: the pipeline writes `.py` files into the tree uvicorn would be watching |
@@ -472,8 +483,14 @@ instance and its security group, not the unit file.
 | Process | Port | Unit | Serves |
 |---|---|---|---|
 | FastAPI console | 8000 (localhost) | `ams-s3-console` | `/api/*` and the built React SPA |
-| Streamlit mockapp | 8501 (localhost) | `ams-s3-mockapp` | MapleSure portal — the CR target |
-| nginx | 80 (public) | `nginx` | `/` → console, `/apps/policycore/` → mockapp |
+| Streamlit PolicyCore | 8501 (localhost) | `ams-s3-policycore` | MapleSure policy portal — CR-2026-041/042 target |
+| FastAPI policy-service | 8081 (localhost) | `ams-s3-policy-service` | ClaimsPortal policy half — CR-2026-043 target |
+| FastAPI claims-service | 8082 (localhost) | `ams-s3-claims-service` | ClaimsPortal claims half — CR-2026-043 target |
+| nginx | 80 (public) | `nginx` | `/` → console, `/apps/policycore/` → PolicyCore, `/apps/claimsportal/policy/` → policy-service, `/apps/claimsportal/claims/` → claims-service |
+
+ClaimsPortal is plain Python/FastAPI (rewritten from Java/Spring Boot on
+2026-07-30 — see `CLAUDE.md`) — no JVM, no Maven build step, same
+`pip install -r requirements.txt` as everything else in this repo.
 
 ## Appendix B — files in this directory
 
@@ -481,6 +498,8 @@ instance and its security group, not the unit file.
 |---|---|
 | `bootstrap.sh` | Idempotent provisioning script (Step 7) |
 | `ams-s3-console.service` | systemd unit for the FastAPI console |
-| `ams-s3-mockapp.service` | systemd unit for the Streamlit mockapp |
+| `ams-s3-policycore.service` | systemd unit for the Streamlit PolicyCore portal |
+| `ams-s3-policy-service.service` | systemd unit for ClaimsPortal's policy-service |
+| `ams-s3-claims-service.service` | systemd unit for ClaimsPortal's claims-service |
 | `nginx.conf` | Reverse proxy, long timeouts, SSE + websocket support |
 | `bedrock-iam-policy.json` | Least-privilege Bedrock invoke policy (Step 2) |

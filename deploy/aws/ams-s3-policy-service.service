@@ -1,0 +1,30 @@
+[Unit]
+Description=AMS S3 demo — ClaimsPortal policy-service (FastAPI, CR-2026-043 target, policy half)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/ams-s3-demo
+EnvironmentFile=/opt/ams-s3-demo/.env
+Environment=PYTHONPATH=/opt/ams-s3-demo
+Environment=PYTHONUNBUFFERED=1
+
+# Bound to localhost; nginx fronts it. No --reload, same reason as the console
+# unit: the S3 pipeline writes generated .py files into this tree, and a
+# watching reloader would restart mid-beat. In-memory data (no DB), so a
+# restart resets policy-service back to its 4 seeded policies — expected.
+ExecStart=/opt/ams-s3-demo/.venv/bin/uvicorn apps.claimsportal.policy_service.main:app \
+    --host 127.0.0.1 \
+    --port 8081 \
+    --workers 1
+
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
