@@ -52,3 +52,6 @@ DemoThatAnotherTeam created/
 # Vite's dependency pre-bundling cache. Written wherever a dev server is
 # started from, including stale paths — never a source artifact.
 .vite/
+
+# PID files and stdout/stderr from deploy/production/start-apps.sh.
+logs/
