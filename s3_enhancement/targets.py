@@ -288,48 +288,54 @@ MOCKAPP_ENDORSEMENT_FIELD_ADD = Target(
 register_target(MOCKAPP_ENDORSEMENT_FIELD_ADD)
 
 
-SPRING_TARGET_ID = "springdemo-claims-deductible"
+CLAIMSPORTAL_TARGET_ID = "claimsportal-claims-deductible"
 
-_SPRING_ROOT = REPO_ROOT / "apps" / "claimsportal"
-_SPRING_CLAIMS_SRC = "apps/claimsportal/claims_service"
-_SPRING_POLICY_SRC = "apps/claimsportal/policy_service"
+_CLAIMSPORTAL_ROOT = REPO_ROOT / "apps" / "claimsportal"
+_CLAIMSPORTAL_CLAIMS_SRC = "apps/claimsportal/claims_service"
+_CLAIMSPORTAL_POLICY_SRC = "apps/claimsportal/policy_service"
 
-# target_id and cache_namespace still say "spring"/"springdemo" after the
-# 2026-07-30 Java-to-Python rewrite (see CLAUDE.md) — kept verbatim rather
-# than churned across every test/UI/SCM-branch-name reference that keys off
-# them, same precedent as this module's other legacy literals.
-SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
-    target_id=SPRING_TARGET_ID,
+# target_id and cache_namespace were renamed off their original
+# "spring"/"springdemo" literals once nothing in this target was Spring any
+# more (it has been Python/FastAPI since the 2026-07-30 rewrite). target_id
+# is not purely internal — scm.branch_name_for folds it into the branch the
+# console shows at Step 0 — so a stale name was visible on stage.
+#
+# The rename had to move the committed stream recordings with it:
+# cache_namespace feeds Target.stream_cache_key, which *is* the recording's
+# filename (s3_{beat}__{cache_namespace}.json). Renaming one without the
+# other means a replay miss, which falls through to a live call.
+CLAIMSPORTAL_CLAIMS_DEDUCTIBLE = Target(
+    target_id=CLAIMSPORTAL_TARGET_ID,
     source_kind="local",
     display_name="ClaimsPortal — claims deductible handling (CR-2026-043)",
     application_id=applications.CLAIMS_PORTAL_ID,
-    root=_SPRING_ROOT,
+    root=_CLAIMSPORTAL_ROOT,
     cr_template_path=REPO_ROOT / "crs" / "CR-2026-043.md",
     cr_placeholder="",  # like CR-2026-042, no audience-picked placeholder token
     core_files=(
-        f"{_SPRING_POLICY_SRC}/policy.py",
-        f"{_SPRING_POLICY_SRC}/main.py",
-        f"{_SPRING_CLAIMS_SRC}/claim.py",
-        f"{_SPRING_CLAIMS_SRC}/policy_client.py",
-        f"{_SPRING_CLAIMS_SRC}/main.py",
+        f"{_CLAIMSPORTAL_POLICY_SRC}/policy.py",
+        f"{_CLAIMSPORTAL_POLICY_SRC}/main.py",
+        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim.py",
+        f"{_CLAIMSPORTAL_CLAIMS_SRC}/policy_client.py",
+        f"{_CLAIMSPORTAL_CLAIMS_SRC}/main.py",
         # Does not exist until the CR creates it — same idiom as
         # apps/policycore/core/coverage.py on the default target.
-        f"{_SPRING_CLAIMS_SRC}/claim_rules.py",
+        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
     ),
     codegen_allowlist=(
-        f"{_SPRING_POLICY_SRC}/policy.py",
-        f"{_SPRING_POLICY_SRC}/main.py",
-        f"{_SPRING_CLAIMS_SRC}/claim.py",
-        f"{_SPRING_CLAIMS_SRC}/policy_client.py",
-        f"{_SPRING_CLAIMS_SRC}/main.py",
-        f"{_SPRING_CLAIMS_SRC}/claim_rules.py",
+        f"{_CLAIMSPORTAL_POLICY_SRC}/policy.py",
+        f"{_CLAIMSPORTAL_POLICY_SRC}/main.py",
+        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim.py",
+        f"{_CLAIMSPORTAL_CLAIMS_SRC}/policy_client.py",
+        f"{_CLAIMSPORTAL_CLAIMS_SRC}/main.py",
+        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
     ),
     testgen_allowlist=("tests/test_s3_claims_deductible.py",),
     regression_paths=("tests/test_regression_claimsportal.py",),
     harness_expected_files=(),
     mutations=(
         Mutation(
-            rel_path=f"{_SPRING_CLAIMS_SRC}/claim_rules.py",
+            rel_path=f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
             old_snippet="if amount <= deductible:",
             new_snippet="if amount < deductible:",
             description=(
@@ -339,9 +345,9 @@ SPRINGDEMO_CLAIMS_DEDUCTIBLE = Target(
             ),
         ),
     ),
-    cache_namespace="spring_claims_deductible",
+    cache_namespace="claimsportal_claims_deductible",
 )
-register_target(SPRINGDEMO_CLAIMS_DEDUCTIBLE)
+register_target(CLAIMSPORTAL_CLAIMS_DEDUCTIBLE)
 
 
 def get_target(target_id: str | None) -> Target:

@@ -64,14 +64,11 @@ pretending it can generate a fix.
   directories would split the target. They still start as two processes, via
   the two scripts above.
 - **`claimsportal/.baseline/`** is the pre-CR snapshot of the Python sources,
-  restored by `demo/reset_s3_springdemo.sh`. It is not run.
-- **`claimsportal/policy_service/`, `claimsportal/claims_service/`** were
-  `policy-service/`, `claims-service/` (Java/Spring Boot) — rebuilt in Python
-  (FastAPI/uvicorn) so the demo runs without a JVM. Renamed hyphen→underscore
-  because they're now real Python packages (`apps.claimsportal.policy_service`).
-  This is the one sanctioned exception to "do not rename these directories"
-  below: the rewrite already required a fresh replay-cache recording, so the
-  rename rode along with it instead of desyncing a working cache.
+  restored by `demo/reset_s3_claimsportal.sh`. It is not run.
+- **`claimsportal/policy_service/`, `claimsportal/claims_service/`** are
+  Python/FastAPI services run under uvicorn, so the demo needs no extra
+  runtime beyond the venv. Their directories use underscores because they are
+  real Python packages (`apps.claimsportal.policy_service`).
 - **`console/web/`** was `frontend/`; **`console/api/`** was `api/`;
   **`policycore/`** was `mockapp/`. The Python package moved with the folder,
   so imports are `apps.policycore.core.db`, and the console runs as
@@ -81,3 +78,14 @@ pretending it can generate a fix.
   `s3_enhancement/cache/` contain these exact paths — a rename desyncs them and
   the codegen beat fails with "codegen returned unexpected file set". Moving a
   target is a path-rewrite across code *and* caches, not a `mv`.
+- One directory *inside* a target root has been renamed since:
+  `policycore/systems/legacy_java_platform/` → `legacy_platform/` on
+  2026-07-31, dropping a stack name the demo no longer uses. Those 50 decoy
+  files are 50 of PolicyCore's 56-file candidate pool, so this was a real
+  risk, not a cosmetic edit. It was safe only because it was verified rather
+  than assumed: the candidate pool and the selected file set came back
+  byte-identical for both PolicyCore CRs, and codegen/testgen still replayed
+  from cache for all three targets. `.cache/vectordb` had to be deleted
+  first — the embedding index is keyed by path and `demo/reset_s3.sh` clears
+  only `.cache/llm`, so a stale index would have hidden any drift. Verify the
+  same way, or don't do it.

@@ -161,7 +161,7 @@ def test_every_demo_target_has_a_distinct_scenario_cache_key():
         for target in (
             targets.MOCKAPP_COVERAGE_UPGRADE,
             targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
-            targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE,
+            targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
         )
     ]
     assert len(set(keys)) == len(keys)

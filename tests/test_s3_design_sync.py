@@ -7,8 +7,8 @@ import pytest
 from common.llm import LLMError
 from s3_enhancement import codegen, design_sync
 
-SETTLEMENT = "apps/policycore/systems/legacy_java_platform/settlement"
-BILLING = "apps/policycore/systems/legacy_java_platform/billing"
+SETTLEMENT = "apps/policycore/systems/legacy_platform/settlement"
+BILLING = "apps/policycore/systems/legacy_platform/billing"
 
 
 # --- stage 1: impact detection (no LLM, no file reads) ----------------------

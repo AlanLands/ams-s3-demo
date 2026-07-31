@@ -10,11 +10,18 @@ def test_warm_covers_every_registered_target():
     target, not just the default one. Before this fix, non-default targets'
     design docs were never pre-cached, so the first live click after a reset
     was a guaranteed cold call."""
+    # Every outbound call warm() makes is patched, not just the four this
+    # test asserts on. warm()'s whole job is to make live calls, so any beat
+    # left unpatched here is a real, billed API call the moment .cache/llm is
+    # cold -- which is exactly the state `demo/reset_s3.sh` leaves behind.
     with (
         patch("s3_enhancement.warm_cache.draft_effort_estimate") as mock_effort,
         patch("s3_enhancement.warm_cache.draft_impact_analysis") as mock_impact,
         patch("s3_enhancement.warm_cache.draft_design_doc") as mock_design_doc,
         patch("s3_enhancement.warm_cache.draft_release_notes") as mock_release_notes,
+        patch("s3_enhancement.warm_cache.draft_release_note_set"),
+        patch("s3_enhancement.warm_cache.draft_scenarios"),
+        patch("s3_enhancement.warm_cache.resolve_target_for_cr") as mock_resolve,
     ):
         warm()
 
@@ -22,10 +29,21 @@ def test_warm_covers_every_registered_target():
     assert {
         targets.DEFAULT_TARGET_ID,
         targets.ENDORSEMENT_TARGET_ID,
-        targets.SPRING_TARGET_ID,
+        targets.CLAIMSPORTAL_TARGET_ID,
     } <= warmable_ids
 
     for mock in (mock_effort, mock_impact, mock_design_doc, mock_release_notes):
         assert mock.call_count == len(warmable_ids)
         warmed_target_ids = {call.kwargs["target"].target_id for call in mock.call_args_list}
         assert warmed_target_ids == warmable_ids
+
+    # Target resolution is warmed for every CR under crs/, not just the ones
+    # that back a registered target. The one that resolves through the AI
+    # tier is precisely the CR that names no target, so it has no target to
+    # be reached by the loop above -- and its entry lives in .cache/llm,
+    # which every reset wipes. Left cold it fails quietly: _match_by_ai turns
+    # an LLMError into an "unresolved" match, which the console shows as
+    # "couldn't identify the repo" rather than an error.
+    crs = sorted(p.name for p in (targets.REPO_ROOT / "crs").glob("*.md"))
+    assert crs, "no CRs found to warm resolution for"
+    assert mock_resolve.call_count == len(crs)

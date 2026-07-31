@@ -54,7 +54,7 @@ const MOCKAPP_URL =
 // :8081, apps/run-claims-service.sh :8082); CR-2026-043 changes claim intake,
 // so the claims console is the one worth opening.
 const TARGET_APPS: Record<string, { url: string; label: string }> = {
-  'springdemo-claims-deductible': {
+  'claimsportal-claims-deductible': {
     url: import.meta.env.VITE_CLAIMS_SERVICE_URL || 'http://localhost:8082/',
     label: 'open the Claims Team console',
   },

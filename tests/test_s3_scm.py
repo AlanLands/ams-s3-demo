@@ -93,7 +93,7 @@ def test_every_state_dict_declares_itself_simulated():
     """`simulated` is not a mode flag that could come back false — it is the
     truth about this module, on every response, so the console and the release
     record cannot present a modelled push as a deployment."""
-    state = scm.open_branch("p1", "AMS-103", "springdemo-claims-deductible")
+    state = scm.open_branch("p1", "AMS-103", "claimsportal-claims-deductible")
     assert state.to_dict()["simulated"] is True
     scm.record_applied("p1", ["a.java"])
     state = scm.commit_branch("p1", "AMS-103: do the thing")
@@ -106,8 +106,8 @@ def test_every_state_dict_declares_itself_simulated():
 
 def test_branch_name_pairs_the_ticket_with_the_target():
     assert (
-        scm.branch_name_for("AMS-103", "springdemo-claims-deductible")
-        == "feature/AMS-103-springdemo-claims-deductible"
+        scm.branch_name_for("AMS-103", "claimsportal-claims-deductible")
+        == "feature/AMS-103-claimsportal-claims-deductible"
     )
 
 
@@ -383,7 +383,7 @@ def test_commit_summary_comes_from_the_target_display_name():
     """The only human description of the change S3 has without asking a model."""
     assert (
         scm.summary_from_display_name(
-            "ClaimsPortal (Spring Boot) — claims deductible handling (CR-2026-043)"
+            "ClaimsPortal — claims deductible handling (CR-2026-043)"
         )
         == "claims deductible handling"
     )
@@ -405,7 +405,7 @@ def test_real_targets_all_produce_a_readable_commit_subject():
     from s3_enhancement import targets
 
     for target in (
-        targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE,
+        targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
         targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
         targets.MOCKAPP_COVERAGE_UPGRADE,
     ):

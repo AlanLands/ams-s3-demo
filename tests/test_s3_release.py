@@ -35,7 +35,7 @@ def _scenario(sid: str, title: str, ref: str) -> Scenario:
 def _branch(**overrides) -> BranchState:
     base = dict(
         proposal_id="p1",
-        branch="feature/AMS-103-springdemo-claims-deductible",
+        branch="feature/AMS-103-claimsportal-claims-deductible",
         base="main",
         ticket="AMS-103",
         created_at="2026-07-30 09:00:00",
@@ -66,7 +66,7 @@ def _case(name: str, status: str = "passed") -> _TestCase:
     return _TestCase(name, "cls", name.replace("_", " "), status, 0.0, None)
 
 
-SPRING = targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE
+SPRING = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
 POLICYCORE = targets.MOCKAPP_ENDORSEMENT_FIELD_ADD
 
 
@@ -296,7 +296,7 @@ def test_record_html_shows_the_branch_and_says_it_was_not_executed():
     gaps block further up."""
     html = render_release_record_html(_record(branch=_pushed_branch()))
     assert "Source control" in html
-    assert "feature/AMS-103-springdemo-claims-deductible" in html
+    assert "feature/AMS-103-claimsportal-claims-deductible" in html
     assert "abc1234" in html
     assert "does not run git" in html
 
@@ -378,7 +378,7 @@ def test_note_set_uses_a_distinct_cache_beat_per_target():
         for target in (
             targets.MOCKAPP_COVERAGE_UPGRADE,
             targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
-            targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE,
+            targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
         )
     }
     assert len(keys) == 3

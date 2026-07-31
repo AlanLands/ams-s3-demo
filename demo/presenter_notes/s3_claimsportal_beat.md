@@ -3,7 +3,7 @@
 **Point being made**: S3 is a pipeline, not a party trick tuned to one app.
 Same console, same beats, a second independently-registered repo/target,
 second CR. (Until 2026-07-30 this beat also carried a second-language story —
-ClaimsPortal was Java/Spring Boot, verified via `mvn test`/JUnit. It was
+ClaimsPortal is Python/FastAPI, verified via pytest. It was
 rebuilt in Python/FastAPI so the demo runs without a JVM/Maven; the pipeline
 now speaks pytest end to end across all three scenarios. What this beat
 proves today is a second real repo the pipeline generalizes to, not a second
@@ -21,12 +21,12 @@ module-level functions.
 
 ```bash
 ./demo/reset_s3.sh              # shared state: out/, ticket events, .cache/llm
-./demo/reset_s3_springdemo.sh   # ClaimsPortal back to pre-CR baseline
+./demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-CR baseline
 uvicorn apps.console.api.main:app --port 8000  # terminal 1 — API :8000 (never --reload:
                                   # Generate/Apply write .py files, the watcher
                                   # restarts, and your login session 401s)
 (cd apps/console/web && npm run dev)    # terminal 2 — console :5173
-./demo/run_s3_springdemo.sh     # terminal 3 — both team consoles :8081/:8082
+./demo/run_s3_claimsportal.sh     # terminal 3 — both team consoles :8081/:8082
 ```
 
 Check: :8081 policies show **no Deductible**; claims console accepts an
@@ -61,7 +61,7 @@ process serves the OLD behavior and silently ruins the after-beat.
    (`tests/test_s3_claims_deductible.py`) — same runner as scenarios 1 and 2.
    All green.
 7. **After**: restart the services (Ctrl-C terminal 3, rerun
-   `./demo/run_s3_springdemo.sh`), resubmit the
+   `./demo/run_s3_claimsportal.sh`), resubmit the
    same 80-dollar claim on MS-1004 → **REJECTED_BELOW_DEDUCTIBLE**; a
    1,200-dollar claim on MS-1001 → ACCEPTED with **payableAmount 700**.
 8. **Release notes** (still as the tester), then "QA passed — mark ticket
@@ -70,7 +70,7 @@ process serves the OLD behavior and silently ruins the after-beat.
 ## Fallbacks
 
 - All generative beats replay from committed recordings
-  (`s3_enhancement/cache/*spring_claims_deductible*`, plus `.cache/llm` once
+  (`s3_enhancement/cache/*claimsportal_claims_deductible*`, plus `.cache/llm` once
   warmed) — with `LLM_MODE=replay` (the default) the whole flow runs offline.
   `reset_s3.sh` wipes `.cache/llm`, so either re-warm the narrative beats in
   rehearsal or skip that wipe on demo day.
@@ -79,5 +79,5 @@ process serves the OLD behavior and silently ruins the after-beat.
 
 ## Reset between rehearsals
 
-`./demo/reset_s3_springdemo.sh` then `./demo/reset_s3.sh`. Browser
+`./demo/reset_s3_claimsportal.sh` then `./demo/reset_s3.sh`. Browser
 localStorage clears itself via the reset marker.

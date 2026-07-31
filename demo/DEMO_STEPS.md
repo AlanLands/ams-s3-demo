@@ -133,7 +133,7 @@ the database the endorsement baseline then builds on.
 ```bash
 demo/reset_s3.sh              # CR-2026-041 (PolicyCore coverage tier) + shared state
 demo/reset_s3_endorsement.sh  # CR-2026-042 (PolicyCore endorsement priority)
-demo/reset_s3_springdemo.sh   # CR-2026-043 (ClaimsPortal deductible)
+demo/reset_s3_claimsportal.sh   # CR-2026-043 (ClaimsPortal deductible)
 demo/warm_s3_cache.sh         # ALWAYS last — reset_s3.sh wipes .cache/llm
 ```
 

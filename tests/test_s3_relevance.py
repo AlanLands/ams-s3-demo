@@ -89,7 +89,7 @@ def test_naive_prompt_tokens_never_undercuts_what_was_actually_spent() -> None:
     """When scoping selects every file there is no saving to claim. Summing
     file bodies alone (the earlier approach) reported a *smaller* number than
     the real prompt, because it dropped the scaffold from the naive side —
-    that's what made the Spring target's 8-of-8 selection read as though
+    that's what made the ClaimsPortal target's 8-of-8 selection read as though
     whole-app context would have been cheaper."""
     all_files = {"a.py": "x" * 400}
     assert relevance.naive_prompt_tokens(1000, all_files, all_files) == 1000
@@ -123,7 +123,7 @@ def test_design_docs_are_scoped_to_the_root_they_are_asked_for() -> None:
     so any target rooted elsewhere was screened against mockapp's decoy
     subsystems.
     """
-    spring_root = targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE.root
+    spring_root = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.root
     assert spring_root is not None
     assert relevance.discover_subsystem_design_docs(spring_root) == {}
 
@@ -131,9 +131,9 @@ def test_design_docs_are_scoped_to_the_root_they_are_asked_for() -> None:
 def test_non_mockapp_target_is_never_screened_against_mockapp_subsystems() -> None:
     """The UI's "which part of the repo the AI matched this change to" panel
     reads straight off this screen, so a mockapp subsystem showing up as
-    in-scope for the Spring target is a wrong answer on stage, not cosmetic.
+    in-scope for the ClaimsPortal target is a wrong answer on stage, not cosmetic.
     """
-    target = targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE
+    target = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
     cr_text = cr.render_cr("Elite", target=target)
     all_files = relevance.discover_files_for_target(target, cr_text)
     selection = relevance.select_relevant_files(

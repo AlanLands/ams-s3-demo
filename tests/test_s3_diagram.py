@@ -23,7 +23,7 @@ from s3_enhancement.diagram import (
     render_svg,
 )
 
-SPRING = targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE
+SPRING = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
 POLICYCORE = targets.MOCKAPP_ENDORSEMENT_FIELD_ADD
 
 

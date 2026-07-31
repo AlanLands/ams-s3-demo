@@ -28,18 +28,21 @@ AI analysis → codegen → tests → docs → release notes.
 - `apps/policycore/` (was `mockapp/`) is the MapleSure portal AND S3's first
   target — CR-2026-041 and CR-2026-042. Its Python package moved with it, so
   imports are `apps.policycore.core.*`.
-- `apps/claimsportal/` (was `sandbox/spring-demo/`) is S3's second target —
-  "ClaimsPortal" (Python/FastAPI, CR-2026-043, ticket AMS-103, target id
-  `springdemo-claims-deductible`). Rebuilt from Java/Spring Boot to Python on
-  2026-07-30 so the target sandbox (no JVM/Maven) can run it — same REST
-  contract, same CR behavior, `policy-service`/`claims-service` renamed to
-  `policy_service`/`claims_service` (valid Python package names). The
-  `target_id`/`cache_namespace` still say "spring" — kept verbatim rather than
-  churned, same precedent as `targets.py`'s other legacy literals. It is one
+- `apps/claimsportal/` is S3's second target — "ClaimsPortal"
+  (Python/FastAPI, CR-2026-043, ticket AMS-103, target id
+  `claimsportal-claims-deductible`). Runs on nothing but the venv, so a
+  locked-down sandbox can host it. Its `target_id` and `cache_namespace` were
+  renamed off their original "spring"/"springdemo" literals on 2026-07-31:
+  `target_id` is not internal — `scm.branch_name_for` folds it into the
+  branch shown at Step 0, so the stale name was on screen. `cache_namespace`
+  *is* the committed recording's filename
+  (`s3_{beat}__{cache_namespace}.json`), so both recordings were renamed in
+  the same commit; renaming one without the other is a replay miss that
+  silently falls through to a live call. It is one
   folder holding two services because CR-2026-043 edits files in both, so S3
   treats it as a single target root; they still start as two processes.
   Checked-in source is the pre-CR baseline (snapshot in `.baseline/`); reset
-  with `demo/reset_s3_springdemo.sh`. Its generated test and regression suite
+  with `demo/reset_s3_claimsportal.sh`. Its generated test and regression suite
   now live in the top-level `tests/` dir like the other two targets (the
   Java-only exception for in-target-root test discovery no longer applies).
 - `apps/console/` is the console: `api/` (FastAPI, run as
@@ -73,7 +76,7 @@ Renaming or moving a target directory changes every embedding, reshuffles which
 files the relevance funnel selects, and desyncs that selection from the
 committed codegen recordings in `s3_enhancement/cache/`. The beat then dies with
 `LLMError: codegen returned unexpected file set` — in replay mode, offline, with
-no live fallback. Verified against the Spring target on 2026-07-26.
+no live fallback. Verified against the ClaimsPortal target on 2026-07-26.
 
 Moving a target is a path-rewrite across code *and* the committed recordings,
 not a `mv`. Done once, on 2026-07-28, for the `apps/` restructure: the

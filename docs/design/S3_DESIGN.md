@@ -251,14 +251,14 @@ core file, passed to the prompt with empty content, and still required back in t
 Streamlit console — all inherently mockapp-scoped) fall back to `apps/policycore/`.
 
 This matters because a root with no design docs must yield `{}`, which
-`screen_subsystems` turns into an empty screen that excludes nothing. The Spring
+`screen_subsystems` turns into an empty screen that excludes nothing. The ClaimsPortal
 ClaimsPortal target has no `DESIGN.md` anywhere, so its screen is correctly empty
 and the UI says "no subsystem doc matched closely enough — this change used the
 CR's fixed core file list directly".
 
 *Fixed 2026-07-27.* Screening previously globbed `apps/policycore/` unconditionally, so
-the Spring target was scored against mockapp's decoy subsystems and the panel
-reported `apps/policycore/systems/legacy_java_platform/settlement` (0.49) as the part of
+the ClaimsPortal target was scored against mockapp's decoy subsystems and the panel
+reported `apps/policycore/systems/legacy_platform/settlement` (0.49) as the part of
 the repo the change was matched to — for a change that never touched mockapp.
 Selection itself was unaffected (a `apps/policycore/systems/…/` prefix never matches a
 `apps/claimsportal/…` path), but the reported answer was wrong on stage.
@@ -307,7 +307,7 @@ The naive prompt is the scoped prompt with every file substituted for the select
 it differs from what was actually billed by exactly the unselected files' contents —
 everything else (system prompt, CR text, task instructions) is identical and must not be
 dropped from one side. *(The earlier implementation summed all file bodies alone, comparing
-a full prompt against bare source; on the Spring target, where scoping selects 8 of 8 files,
+a full prompt against bare source; on the ClaimsPortal target, where scoping selects 8 of 8 files,
 it reported the naive baseline as cheaper than what was actually spent.)*
 
 `estimate_tokens()` is a ~4-chars/token heuristic, **not** a real tokenizer — used only for
@@ -363,7 +363,7 @@ Design decisions baked into that rendering:
 | otherwise | "Scoped context used ~N input tokens; a whole-app-context approach would have used ~M tokens — **3.4×** more." |
 
 The `<1.05` branch exists because the old code floored the multiplier at 1× and rendered the
-Spring target's 8-of-8 selection as "1× fewer", which is dressing up a no-op. Multipliers
+ClaimsPortal target's 8-of-8 selection as "1× fewer", which is dressing up a no-op. Multipliers
 below 10× show one decimal — "3×" quietly rounds a third of the saving away.
 
 ---
@@ -584,10 +584,10 @@ every core file back), but review shouldn't show noise.
 The backward-compat check actually `exec`s the generated `models.py` and constructs a
 `Policy` with the exact 6 positional args `seed.py` uses — because `seed.py` is off the
 allowlist and would crash the app on startup otherwise. All three targets are pure Python
-since ClaimsPortal's 2026-07-30 rewrite from Java/Spring Boot, so `_validate_content` is a
+since ClaimsPortal is Python, so `_validate_content` is a
 single `ast.parse` path with no per-language fork (the Java-specific `_validate_java_content`
 brace/package-declaration gate this table used to describe was deleted along with the
-Spring/Maven target).
+non-Python target).
 
 ### 7.3 Two behaviours worth calling out
 

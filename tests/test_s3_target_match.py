@@ -45,7 +45,7 @@ def test_new_cr_with_no_pinned_title_resolves_by_application_header():
         match = resolve_target_for_cr(cr_text)
     mock_complete.assert_not_called()
     assert match.method == "application_header"
-    assert match.target is targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE
+    assert match.target is targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
     assert match.resolved
 
 
@@ -141,7 +141,7 @@ def test_ai_tier_ranks_every_candidate_best_first():
     see the runner-up's score, not just the winner's name."""
     canned = _ai_response(
         ranking=[
-            {"target_id": targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE.target_id, "score": 5, "reasoning": "c"},
+            {"target_id": targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.target_id, "score": 5, "reasoning": "c"},
             {"target_id": targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.target_id, "score": 95, "reasoning": "a"},
             {"target_id": targets.MOCKAPP_COVERAGE_UPGRADE.target_id, "score": 20, "reasoning": "b"},
         ]
