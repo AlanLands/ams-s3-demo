@@ -121,7 +121,7 @@
     const select = document.getElementById("policyNumber");
     try {
       const policies = await (await fetch("api/claims/policy-directory")).json();
-      select.innerHTML = '<option value="">Select a contract…</option>' + policies.map(p =>
+      select.innerHTML = '<option value="">Select a policy…</option>' + policies.map(p =>
         `<option value="${p.policyNumber}">${p.policyNumber} — ${p.holderName} (${p.product}, ${p.status})</option>`
       ).join("");
     } catch {
