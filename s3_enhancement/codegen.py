@@ -142,7 +142,7 @@ def _propose_change_once(
     )
     if target.cache_namespace == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace:
         prompt = build_endorsement_prompt(cr_text, selection=selection)
-    elif target.cache_namespace == targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE.cache_namespace:
+    elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
         prompt = build_spring_prompt(cr_text, selection=selection)
     else:
         prompt = build_prompt(tier_name, cr_text, selection=selection)
@@ -174,7 +174,7 @@ def _propose_change_once(
     files, file_reasons = _parse_files_response(response)
     if target.cache_namespace == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace:
         _validate_endorsement_file_set(files, selection)
-    elif target.cache_namespace == targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE.cache_namespace:
+    elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
         _validate_spring_file_set(files, selection)
     else:
         _validate_file_set(files, selection)

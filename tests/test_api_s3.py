@@ -153,7 +153,7 @@ def test_target_resolve_matches_pinned_cr_by_id_with_no_target_id_needed():
     target and gets its target_id back -- no ticket-key table involved."""
     from s3_enhancement import targets
 
-    target = targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE
+    target = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
     cr_text = target.cr_template_path.read_text(encoding="utf-8")
 
     client = _client()
@@ -1257,7 +1257,7 @@ def _apply(client: TestClient, ticket: str = "AMS-103", files: list[str] | None 
             json={
                 "proposal_id": "prop-1",
                 "ticket_number": ticket,
-                "target_id": "springdemo-claims-deductible",
+                "target_id": "claimsportal-claims-deductible",
             },
         )
     assert response.status_code == 200
@@ -1300,27 +1300,34 @@ def test_apply_records_the_branch_on_the_ticket_timeline(tmp_path, monkeypatch):
     opened = [e for e in events if e["action"] == "branch_opened"]
     assert len(opened) == 1
     assert "simulated" in opened[0]["detail"]
-    assert "feature/AMS-103-springdemo-claims-deductible" in opened[0]["detail"]
+    assert "feature/AMS-103-claimsportal-claims-deductible" in opened[0]["detail"]
 
 
 def test_checkout_is_simulated_by_default(tmp_path, monkeypatch):
-    """SCM_MODE unset -> the fully modelled path, same convention
-    /s3/release/attach uses under JIRA_MODE=replay: no git touched, and the
-    response says so."""
+    """SCM_MODE unset -> the fully modelled path: no git touched.
+
+    `mode` still reports "simulated" so callers can tell, but `detail` is
+    empty and carries no prose about which mode ran -- the console asks the
+    audience to read Step 0 as a checkout, not as a commentary on whether it
+    was real. The honesty that matters is not here: it lives on the
+    branch/commit/push flow, where scm.py's simulated=True and
+    release._source_control_gaps() keep a modelled push from ever reading as
+    a deployment that happened.
+    """
     monkeypatch.delenv("SCM_MODE", raising=False)
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
     client = _client()
 
     response = client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["mode"] == "simulated"
-    assert body["branch"] == "feature/AMS-103-springdemo-claims-deductible"
+    assert body["branch"] == "feature/AMS-103-claimsportal-claims-deductible"
     assert body["sha"] is None
-    assert "SCM_MODE=live" in body["detail"]
+    assert body["detail"] is None
 
 
 def test_checkout_records_a_ticket_event(tmp_path, monkeypatch):
@@ -1331,14 +1338,17 @@ def test_checkout_records_a_ticket_event(tmp_path, monkeypatch):
 
     client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
     )
 
     events = [json.loads(line) for line in events_path.read_text().splitlines()]
     checked_out = [e for e in events if e["action"] == "repo_checked_out"]
     assert len(checked_out) == 1
-    assert "feature/AMS-103-springdemo-claims-deductible" in checked_out[0]["detail"]
-    assert "simulated" in checked_out[0]["detail"]
+    # The branch name, and nothing about which mode produced it. This detail
+    # surfaces in the ticket's Activity tab, so it is deliberately free of
+    # "simulated"/"live" commentary -- see test_checkout_is_simulated_by_default
+    # on where the source-control honesty actually lives.
+    assert checked_out[0]["detail"] == "feature/AMS-103-claimsportal-claims-deductible"
 
 
 def test_checkout_runs_a_real_local_branch_under_scm_mode_live(tmp_path, monkeypatch):
@@ -1359,12 +1369,12 @@ def test_checkout_runs_a_real_local_branch_under_scm_mode_live(tmp_path, monkeyp
 
     response = client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["mode"] == "live"
-    assert body["branch"] == "feature/AMS-103-springdemo-claims-deductible"
+    assert body["branch"] == "feature/AMS-103-claimsportal-claims-deductible"
     assert body["created"] is True
     assert body["sha"] is not None
 
@@ -1388,7 +1398,7 @@ def test_checkout_409s_under_scm_mode_live_without_a_target_root(tmp_path, monke
 
     response = client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "springdemo-claims-deductible"},
+        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
     )
     assert response.status_code == 409
     assert "SCM_LIVE_TARGET_ROOT" in response.json()["detail"]
@@ -1451,7 +1461,7 @@ def test_commit_then_push_walks_the_flow(tmp_path, monkeypatch):
         json={
             "proposal_id": "prop-1",
             "ticket_number": "AMS-103",
-            "target_id": "springdemo-claims-deductible",
+            "target_id": "claimsportal-claims-deductible",
         },
     )
     assert committed.status_code == 200
@@ -2028,7 +2038,7 @@ def test_design_doc_includes_the_derived_change_map():
     with patch("apps.console.api.routers.s3.draft_design_doc", return_value="1. Summary\nx"):
         response = client.post(
             "/api/s3/design-doc",
-            json={"tier_name": "Elite", "target_id": "springdemo-claims-deductible"},
+            json={"tier_name": "Elite", "target_id": "claimsportal-claims-deductible"},
         )
 
     assert response.status_code == 200
@@ -2125,7 +2135,7 @@ def test_release_notes_returns_three_audiences_and_the_plan():
     with patch("apps.console.api.routers.s3.draft_release_note_set", return_value=_note_set()):
         response = client.post(
             "/api/s3/release/notes",
-            json={"tier_name": "Elite", "target_id": "springdemo-claims-deductible"},
+            json={"tier_name": "Elite", "target_id": "claimsportal-claims-deductible"},
         )
 
     assert response.status_code == 200

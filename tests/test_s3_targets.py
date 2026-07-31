@@ -98,10 +98,10 @@ def test_post_apply_commands_matched_by_root_not_target_id():
 
 def test_post_apply_commands_empty_for_non_stateful_targets():
     repo_root = targets.REPO_ROOT
-    spring_file = (
+    claimsportal_file = (
         "apps/claimsportal/claims-service/src/main/java/com/maplesure/claims/ClaimRules.java"
     )
-    assert targets.post_apply_commands_for([spring_file], repo_root) == []
+    assert targets.post_apply_commands_for([claimsportal_file], repo_root) == []
     assert targets.post_apply_commands_for([], repo_root) == []
 
 

@@ -75,7 +75,7 @@ def test_every_demo_cr_states_criteria_including_a_regression_one():
     for target in (
         targets.MOCKAPP_COVERAGE_UPGRADE,
         targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
-        targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE,
+        targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
     ):
         criteria = parse_acceptance_criteria(cr.render_cr("Elite", target=target))
         assert criteria, f"{target.target_id} CR has no acceptance criteria"

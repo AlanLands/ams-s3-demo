@@ -115,7 +115,7 @@ def test_ci_route_carries_team_project_and_targets():
     assert decision.application.jira_project_key == "AMS"
     assert decision.component_team == "App Support — ClaimsPortal"
     assert decision.suggested_assignee == "Priya Nair"
-    assert decision.candidate_target_ids == (targets.SPRING_TARGET_ID,)
+    assert decision.candidate_target_ids == (targets.CLAIMSPORTAL_TARGET_ID,)
     assert decision.automation_available
 
 
@@ -177,7 +177,7 @@ def test_route_endpoint_returns_the_decision():
     assert body["automation_available"] is True
     assert body["application"]["component_team"] == "App Support — ClaimsPortal"
     assert body["suggested_assignee"] == "Priya Nair"
-    assert body["candidate_targets"][0]["target_id"] == targets.SPRING_TARGET_ID
+    assert body["candidate_targets"][0]["target_id"] == targets.CLAIMSPORTAL_TARGET_ID
 
 
 def test_route_endpoint_answers_unroutable_rather_than_erroring():

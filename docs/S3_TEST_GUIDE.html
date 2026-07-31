@@ -155,7 +155,7 @@
 </table>
 
 <p>Both ClaimsPortal services together, in one foreground terminal:
-<code>demo/run_s3_springdemo.sh</code>. It traps <code>kill 0</code> on exit, so use the two
+<code>demo/run_s3_claimsportal.sh</code>. It traps <code>kill 0</code> on exit, so use the two
 separate commands above if you want them in independent background terminals.</p>
 
 <h3>Direct URLs for showing raw data</h3>
@@ -213,7 +213,7 @@ the endorsement reset must come <em>after</em> <code>reset_s3.sh</code>, because
 mockapp state that leaves both AMS-101 and AMS-102 demo-ready.</p>
 <pre><code>demo/reset_s3.sh              # CR-041 + shared state: .cache/llm, out/, events, Jira caches
 demo/reset_s3_endorsement.sh  # CR-042 baseline  (MUST run after reset_s3.sh)
-demo/reset_s3_springdemo.sh   # CR-043 target, from apps/claimsportal/.baseline/</code></pre>
+demo/reset_s3_claimsportal.sh   # CR-043 target, from apps/claimsportal/.baseline/</code></pre>
 <p>Then restart all five services. Hard-refresh the browser tab —
 the console caches per-ticket state in <code>localStorage</code> and drops it when the reset marker changes.</p>
 
@@ -268,7 +268,7 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
   each run. <strong>Scenario 3 does not.</strong> The running processes serve whatever was loaded at
   startup (no <code>--reload</code>), so a just-applied CR is invisible on :8081/:8082 until you restart. Apply
   the change, switch to :8082, and nothing has changed. Ctrl-C both terminals, then
-  <code>demo/run_s3_springdemo.sh</code>.</p>
+  <code>demo/run_s3_claimsportal.sh</code>.</p>
 </div>
 
 <h3>Confirm the baseline is genuinely "before"</h3>
@@ -578,9 +578,9 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   </tr>
   <tr>
     <td class="mono">2</td>
-    <td>Subsystem screening was hardcoded to <code>apps/policycore/</code>, so the Spring target was scored against
+    <td>Subsystem screening was hardcoded to <code>apps/policycore/</code>, so the ClaimsPortal target was scored against
         mockapp's decoy subsystems</td>
-    <td>Panel wrongly reported <code>legacy_java_platform/settlement</code> 0.49 for AMS-103</td>
+    <td>Panel wrongly reported <code>legacy_platform/settlement</code> 0.49 for AMS-103</td>
     <td><span class="pass">Fixed</span> — target-scoped, 2 regression tests</td>
   </tr>
   <tr>
@@ -629,7 +629,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   <tr>
     <td>:8081 or :8082 refuses to connect</td>
     <td>Neither service is running — start with <code>apps/run-policy-service.sh</code> /
-        <code>apps/run-claims-service.sh</code> (or <code>demo/run_s3_springdemo.sh</code> for both).</td>
+        <code>apps/run-claims-service.sh</code> (or <code>demo/run_s3_claimsportal.sh</code> for both).</td>
   </tr>
   <tr>
     <td>Applied a CR but the ClaimsPortal console is unchanged</td>

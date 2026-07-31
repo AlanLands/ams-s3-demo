@@ -75,13 +75,13 @@ NEVER_EXTRA: frozenset[str] = targets.MOCKAPP_COVERAGE_UPGRADE.never_extra
 
 # "target" is Maven's build-output directory (the Spring Boot target's root
 # contains two Maven services) and ".baseline" is that target's pristine
-# pre-CR snapshot (demo/reset_s3_springdemo.sh restores from it) — sources
+# pre-CR snapshot (demo/reset_s3_claimsportal.sh restores from it) — sources
 # under either must never enter the candidate pool, same reasoning as
 # __pycache__ for Python.
 #
 # "test"/"tests" joins them because test sources are not implementation
 # context for codegen, and — more importantly — including them made the pool
-# depend on demo *order*: the Spring target's generated ClaimRulesTest.java
+# depend on demo *order*: the ClaimsPortal target's generated ClaimRulesTest.java
 # lands under its own root, so re-running codegen after testgen scored
 # against a pool one file larger than the first run did. Excluding them keeps
 # a target's candidate pool identical no matter which beats have already run,
@@ -270,7 +270,7 @@ def _extract_scope_keywords(design_doc_text: str) -> str:
 
 
 # Empirically measured against this repo's own decoy subsystems: the six
-# apps/policycore/systems/legacy_java_platform/* DESIGN.md docs top out at 0.336
+# apps/policycore/systems/legacy_platform/* DESIGN.md docs top out at 0.336
 # cosine similarity against the real CR-2026-041 text (settlement, the
 # closest decoy) -- well above where TF-IDF's sparse cosine sits for the same
 # pairs (<= 0.012). 0.45 sits with margin above that decoy ceiling; re-verify

@@ -32,7 +32,7 @@ for beat 4 if using the harness path):
    codebase. (live LLM call, read-only)
    Use the transparency panel here: this app is a small ~6-file modern Python
    policy/claims app sitting in front of a ~50-file legacy Java estate
-   (`apps/policycore/systems/legacy_java_platform/`), mirroring the kind of heterogeneous
+   (`apps/policycore/systems/legacy_platform/`), mirroring the kind of heterogeneous
    stack the client runs in AMS — a real system underneath, not a slide.
    Selection runs in two stages, live: first the AI reads each legacy
    subsystem's `DESIGN.md` (billing, underwriting, risk, settlement, audit,

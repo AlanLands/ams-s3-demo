@@ -113,7 +113,7 @@ def _generate_tests_once(
 ) -> TestgenResult:
     if target.cache_namespace == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace:
         prompt = build_endorsement_prompt(cr_text, target=target)
-    elif target.cache_namespace == targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE.cache_namespace:
+    elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
         prompt = build_spring_prompt(cr_text, target=target)
     else:
         prompt = build_prompt(tier_name, cr_text)

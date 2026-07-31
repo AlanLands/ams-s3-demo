@@ -2,12 +2,12 @@
 
 > **S3 target**: this app doubles as the S3 pipeline's second enhancement
 > target — "ClaimsPortal", CR-2026-043 (`crs/CR-2026-043.md`), registered as
-> `springdemo-claims-deductible` in `s3_enhancement/targets.py` and linked to
+> `claimsportal-claims-deductible` in `s3_enhancement/targets.py` and linked to
 > Jira ticket AMS-103 in the AMS console. The checked-in source is the
 > **pre-CR baseline** (mirrored in `.baseline/`); the AI pipeline adds the
 > deductible feature live (or from the committed replay cache), generates
 > `tests/test_s3_claims_deductible.py`, and proves it with `pytest`. Reset
-> between rehearsals with `demo/reset_s3_springdemo.sh`.
+> between rehearsals with `demo/reset_s3_claimsportal.sh`.
 
 Two small FastAPI applications that demo service-to-service communication
 over REST. All data is synthetic — no real client data.

@@ -22,7 +22,7 @@ def test_warm_covers_every_registered_target():
     assert {
         targets.DEFAULT_TARGET_ID,
         targets.ENDORSEMENT_TARGET_ID,
-        targets.SPRING_TARGET_ID,
+        targets.CLAIMSPORTAL_TARGET_ID,
     } <= warmable_ids
 
     for mock in (mock_effort, mock_impact, mock_design_doc, mock_release_notes):

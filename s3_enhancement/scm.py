@@ -204,7 +204,7 @@ def _slug(text: str) -> str:
 
 
 def branch_name_for(ticket: str, target_id: str) -> str:
-    """`feature/AMS-103-springdemo-claims-deductible`.
+    """`feature/AMS-103-claimsportal-claims-deductible`.
 
     The ticket keeps its own casing — that is how a Jira key is written
     everywhere else, and lowercasing it makes the branch harder to match back

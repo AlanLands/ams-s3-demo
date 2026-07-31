@@ -14,11 +14,11 @@ them.
 |---|---|
 | `run_s3.sh` | Streamlit S3 console (the legacy view; the React console at `apps/console/web/` + `api/` is the primary surface) |
 | `run_mockapp.sh` | Serves `apps/policycore/app.py` on :8501/sl_policycore — the "client's app" window for the before/after proof |
-| `run_s3_springdemo.sh` | Runs the two Python/FastAPI ClaimsPortal services (:8081, :8082) |
+| `run_s3_claimsportal.sh` | Runs the two Python/FastAPI ClaimsPortal services (:8081, :8082) |
 | `run_s3_harness.sh` | The live agent-harness variant of the codegen beat — see below |
 | `reset_s3.sh` | CR-2026-041 (mockapp coverage tier) back to pre-CR baseline; also clears shared state |
 | `reset_s3_endorsement.sh` | CR-2026-042 (mockapp endorsement Priority field) back to baseline, via the `s3-endorsement-baseline` git tag |
-| `reset_s3_springdemo.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `apps/claimsportal/.baseline/` |
+| `reset_s3_claimsportal.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `apps/claimsportal/.baseline/` |
 | `warm_s3_cache.sh` | Pre-warms `.cache/llm` for the narrative drafts before presenting |
 | `seed_problem_record_ticket.sh` | Seeds the problem-record intake ticket |
 

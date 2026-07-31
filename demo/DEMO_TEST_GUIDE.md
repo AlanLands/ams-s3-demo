@@ -169,7 +169,7 @@ Streamlit :8501/sl_policycore via `demo/run_mockapp.sh`).
 ## Scenario 3 — CR-2026-043: Claims Deductible Handling (AMS-103, ClaimsPortal)
 
 Second repo, second language *until 2026-07-30* — ClaimsPortal was rebuilt
-from Java/Spring Boot to Python/FastAPI so it runs without a JVM/Maven. Same
+to Python/FastAPI so it runs on nothing but the venv. Same
 pipeline, same pytest-based test/regression path as the other two scenarios;
 what this beat now proves is a second independent repo/target, not a second
 language.
@@ -177,7 +177,7 @@ language.
 **Reset:**
 ```bash
 demo/reset_s3.sh              # shared out/, ticket events, .cache/llm
-demo/reset_s3_springdemo.sh   # ClaimsPortal back to pre-CR baseline
+demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-CR baseline
 ```
 
 **Run (3 terminals):**
@@ -189,7 +189,7 @@ uvicorn apps.console.api.main:app --port 8000
 cd apps/console/web && npm run dev
 
 # terminal 3 — the two Python/FastAPI services
-demo/run_s3_springdemo.sh
+demo/run_s3_claimsportal.sh
 ```
 
 **Steps:**
@@ -212,7 +212,7 @@ demo/run_s3_springdemo.sh
 7. Restart the services to pick up the change:
    ```bash
    # Ctrl-C terminal 3, then:
-   demo/run_s3_springdemo.sh
+   demo/run_s3_claimsportal.sh
    ```
    Resubmit the same $80 claim on MS-1004 → **REJECTED_BELOW_DEDUCTIBLE**.
    Submit a $1,200 claim on MS-1001 → ACCEPTED with **payableAmount 700**.
@@ -221,7 +221,7 @@ demo/run_s3_springdemo.sh
 
 **Reset between rehearsals:**
 ```bash
-demo/reset_s3_springdemo.sh
+demo/reset_s3_claimsportal.sh
 demo/reset_s3.sh
 ```
 
@@ -259,7 +259,7 @@ python -m tools.verify_s3_live --gate 10     # rehearsal gate: live codegen must
 For the "why," the risk framing, and word-for-word talk track (not just the
 click-path), see:
 - `demo/presenter_notes/s3_enhancement.md` — CR-2026-041 narrative
-- `demo/presenter_notes/s3_springdemo_beat.md` — CR-2026-043 narrative
+- `demo/presenter_notes/s3_claimsportal_beat.md` — CR-2026-043 narrative
 
 CR-2026-042 has no separate presenter-notes file yet — it's the newest
 scenario; this guide's Scenario 2 section above is the only script for it
