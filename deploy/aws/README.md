@@ -390,7 +390,7 @@ the Bedrock path, the proxy, or the warmed cache. Do it here.
 
 Open `http://<public-ip>/` and walk the full script in
 `demo/DEMO_TEST_GUIDE.md`. Check the mockapp at
-`http://<public-ip>/apps/policycore/` too.
+`http://<public-ip>/sl_policycore/` too.
 
 Watch for any beat that pauses where rehearsal was instant — that is an
 unwarmed cache entry going live. Re-run Step 10 if you see one.
@@ -473,7 +473,7 @@ instance and its security group, not the unit file.
 |---|---|---|---|
 | FastAPI console | 8000 (localhost) | `ams-s3-console` | `/api/*` and the built React SPA |
 | Streamlit mockapp | 8501 (localhost) | `ams-s3-mockapp` | MapleSure portal — the CR target |
-| nginx | 80 (public) | `nginx` | `/` → console, `/apps/policycore/` → mockapp |
+| nginx | 80 (public) | `nginx` | `/` → console, `/sl_policycore/` → mockapp |
 
 ## Appendix B — files in this directory
 

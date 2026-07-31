@@ -110,12 +110,14 @@ uvicorn apps.console.api.main:app --port 8000
 cd apps/console/web && npm run dev
 
 # terminal 3 — the client's app (Streamlit view of MapleSure mockapp)
-demo/run_mockapp.sh           # serves apps/policycore/app.py on :8501
+demo/run_mockapp.sh           # apps/policycore/app.py on :8501/sl_policycore
 ```
 
 **Steps:**
-1. Open `http://localhost:8501` — the MapleSure portal. Show policies/claims.
-   No coverage-upgrade option exists yet.
+1. Open `http://localhost:8501/sl_policycore` — the MapleSure portal. Show
+   policies/claims. No coverage-upgrade option exists yet. (The portal serves
+   under a base path so all four apps can share a host; override it with
+   `STREAMLIT_BASE_URL_PATH` in `.env`.)
 2. Open `http://localhost:5173`, log in as **Ravi Kumar / 1001**.
 3. Open ticket **AMS-101**. Ask an audience member to name the new top tier
    (e.g. "Elite") — it's a free variable, only ever lands in string labels.
@@ -125,7 +127,7 @@ demo/run_mockapp.sh           # serves apps/policycore/app.py on :8501
 5. Generate the change, review the diff, Apply.
 6. Generate tests + run — expect a green pytest run
    (`tests/test_s3_coverage_upgrade.py` gets created).
-7. Back in the mockapp Streamlit view (:8501, refresh), open a policy →
+7. Back in the mockapp Streamlit view (:8501/sl_policycore, refresh), open a policy →
    confirm the new tier is selectable and premium recalculates.
 8. Generate release notes (labeled *"AI suggestion — verify with your
    specialist before applying."*).
@@ -145,11 +147,11 @@ demo/reset_s3_endorsement.sh
 ```
 
 **Run:** same 3 terminals as Scenario 1 (API :8000, console :5173, mockapp
-Streamlit :8501 via `demo/run_mockapp.sh`).
+Streamlit :8501/sl_policycore via `demo/run_mockapp.sh`).
 
 **Steps:**
-1. On :8501, show the "Request a Policy Endorsement" form — 5 fields, no
-   Priority.
+1. On :8501/sl_policycore, show the "Request a Policy Endorsement" form —
+   5 fields, no Priority.
 2. Log in to the console (:5173) and open ticket **AMS-102**.
 3. Run impact analysis — file-selection panel should scope to the
    endorsement form/model files only.
@@ -157,7 +159,7 @@ Streamlit :8501 via `demo/run_mockapp.sh`).
    Standard), review diff, Apply.
 5. Generate tests + run — expect
    `tests/test_s3_endorsement_priority.py` green.
-6. On :8501 (refresh), submit an endorsement — Priority field now present,
+6. On :8501/sl_policycore (refresh), submit an endorsement — Priority field now present,
    defaults to Standard, existing submit flow unaffected.
 
 **Reset between rehearsals:** `demo/reset_s3_endorsement.sh`.
