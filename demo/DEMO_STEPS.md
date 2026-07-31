@@ -18,7 +18,7 @@ tooling that drives them. You do **not** need all four for every beat.
 | # | Application | Start | Port | Needed for |
 |---|-------------|-------|------|------------|
 | 1 | **Console** — FastAPI + React. The screen you present from. | `apps/run-console.sh` | 8000 + 5173 | Every beat |
-| 2 | **PolicyCore** — the client's policy portal (Streamlit). The window the audience watches change. | `apps/run-policycore.sh` | 8501 | CR-2026-041, CR-2026-042 |
+| 2 | **PolicyCore** — the client's policy portal (Streamlit). The window the audience watches change. | `apps/run-policycore.sh` | 8501 (open `/sl_policycore`) | CR-2026-041, CR-2026-042 |
 | 3 | **Policy-Service** — ClaimsPortal policy side (Python/FastAPI). | `apps/run-policy-service.sh` | 8081 | CR-2026-043 |
 | 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI). Start after #3. | `apps/run-claims-service.sh` | 8082 | CR-2026-043 |
 
@@ -154,7 +154,7 @@ two.
 
 ```bash
 apps/run-console.sh           # terminal 1 — API :8000 + UI :5173
-apps/run-policycore.sh        # terminal 2 — portal :8501
+apps/run-policycore.sh        # terminal 2 — portal :8501/sl_policycore
 
 # only for the ClaimsPortal CR (CR-2026-043):
 apps/run-policy-service.sh    # terminal 3 — :8081  (start before claims)
@@ -201,7 +201,7 @@ need to reset between the two.
 | 2 | Impact analysis + effort estimate | Vague tickets get a clarifying question first, rather than a confident guess |
 | 3 | Generate code | Only the files the relevance funnel selected are sent — the token panel shows scoped vs naive cost |
 | 4 | **Review file by file**: Ask, Apply this file, Reject | Developers accept or reject one file at a time; a rejection records a reason to the ticket's audit trail and is excluded from Apply |
-| 5 | Apply, then look at PolicyCore on :8501 | The client's running application changed |
+| 5 | Apply, then look at PolicyCore on :8501/sl_policycore | The client's running application changed |
 | 5b | **Source control panel**: branch → commit → push | The change lands on a feature branch cut off `main` before anything is written, the commit is gated on the tests passing, and the push hands off to the pipeline — the flow, not a direct edit to main |
 | 6 | **Revert** (per file or all) | Anything applied can be undone without a full demo reset |
 | 6b | **Design doc: change map + Download PDF** | The hand-off document carries a diagram of what the change touches, and leaves as a real PDF you can attach to the ticket |
@@ -289,7 +289,7 @@ For the full per-scenario talk track and the fallback ladder, see
 - [ ] All three reset scripts ran clean, in order
 - [ ] `demo/warm_s3_cache.sh` ran *after* the resets
 - [ ] Console reachable at `:5173`; you are logged in
-- [ ] PolicyCore reachable at `:8501` in a second window
+- [ ] PolicyCore reachable at `:8501/sl_policycore` in a second window
 - [ ] For the ClaimsPortal CR: `:8081` and `:8082` both responding
 - [ ] You have walked beats 1–13 once, end to end, on this machine
 

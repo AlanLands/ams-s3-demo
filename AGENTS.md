@@ -74,7 +74,7 @@ API keys runs the whole pipeline offline. Two consequences:
 ```bash
 uvicorn apps.console.api.main:app --port 8000     # backend — do NOT use --reload (see README)
 cd apps/console/web && npm run dev           # console on :5173
-demo/run_mockapp.sh                  # the client's app on :8501, when a beat needs it
+demo/run_mockapp.sh                  # the client's app on :8501/sl_policycore, when a beat needs it
 ```
 
 Reset between rehearsals with `demo/reset_s3.sh`,

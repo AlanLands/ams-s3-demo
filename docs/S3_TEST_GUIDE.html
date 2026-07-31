@@ -135,11 +135,11 @@
   <tr>
     <td class="mono">5173</td><td><strong>AMS Console</strong> — start here<div class="tiny">login, then <code>/s3</code></div></td>
     <td class="mono">localhost:5173</td>
-    <td class="mono">cd frontend &amp;&amp; npm run dev</td>
+    <td class="mono">cd apps/console/web &amp;&amp; npm run dev</td>
   </tr>
   <tr>
     <td class="mono">8501</td><td>MapleSure portal (CR-041 / CR-042 target)<div class="tiny">"the client's app"</div></td>
-    <td class="mono">localhost:8501</td>
+    <td class="mono">localhost:8501/sl_policycore<div class="tiny">base path — the bare root 404s</div></td>
     <td class="mono">demo/run_mockapp.sh</td>
   </tr>
   <tr>
@@ -241,14 +241,14 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
   </tr>
   <tr>
     <td class="mono">AMS-101<div class="tiny">CR-2026-041</div></td>
-    <td>Portal :8501<div class="tiny">Policy Detail</div></td>
+    <td>Portal :8501/sl_policycore<div class="tiny">Policy Detail</div></td>
     <td class="before">No coverage tier anywhere in the app.</td>
     <td class="after">Tier per policy (Standard / Premium / <em>the name the audience picked</em>), upgrade control on the detail view, premium recalculates and persists.</td>
     <td>Browser refresh</td>
   </tr>
   <tr>
     <td class="mono">AMS-102<div class="tiny">CR-2026-042</div></td>
-    <td>Portal :8501<div class="tiny">Request a Policy Endorsement</div></td>
+    <td>Portal :8501/sl_policycore<div class="tiny">Request a Policy Endorsement</div></td>
     <td class="before">Exactly 5 fields — endorsement type, description, effective date, contact phone, contact email.</td>
     <td class="after">A 6th field, <strong>Priority</strong> (Standard / Urgent, defaults Standard). Existing submit flow unchanged.</td>
     <td>Browser refresh</td>
@@ -284,8 +284,10 @@ ls s3_enhancement/out/ | wc -l                             # 0</code></pre>
 <p>Then confirm all five services are up <em>and fresh</em> — every start time must be later than your
 last reset:</p>
 <pre><code>for p in 8000 5173 8501 8081 8082; do
+  url="http://localhost:$p/"
+  [ "$p" = 8501 ] &amp;&amp; url="http://localhost:8501/sl_policycore/"   # Streamlit base path
   pid=$(lsof -ti tcp:$p -sTCP:LISTEN | head -1)
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:$p/)
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url")
   printf "%-5s http=%-3s pid=%-6s %s\n" "$p" "$code" "${pid:-DOWN}" \
     "$(ps -o lstart= -p ${pid:-0} 2>/dev/null)"
 done</code></pre>
@@ -377,7 +379,7 @@ listener and you read the wrong process's start time.</p>
     <li>Token panel shows a real multiplier against whole-app context.</li>
     <li>Your chosen tier name appears verbatim in the generated <code>coverage.py</code> —
         one recording serves any name.</li>
-    <li>Refresh <strong>:8501</strong> → the portal now has the coverage-upgrade control.</li>
+    <li>Refresh <strong>:8501/sl_policycore</strong> → the portal now has the coverage-upgrade control.</li>
     <li>Mutation weakens the same-tier guard <code>&lt;=</code> → <code>&lt;</code>; the suite goes red, then reverts.</li>
   </ul>
 </section>
@@ -402,7 +404,7 @@ listener and you read the wrong process's start time.</p>
 
   <ul class="check">
     <li>Diff shows only three files with pending changes — the fourth returned byte-identical and was dropped.</li>
-    <li>If applied: <strong>:8501</strong> endorsement form gains a <em>Priority</em> dropdown
+    <li>If applied: <strong>:8501/sl_policycore</strong> endorsement form gains a <em>Priority</em> dropdown
         (Standard / Urgent, Standard default).</li>
   </ul>
 </section>

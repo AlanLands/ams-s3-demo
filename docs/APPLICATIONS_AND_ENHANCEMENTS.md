@@ -15,7 +15,7 @@ All data in every application below is **synthetic** — a fictional insurer
 | Application | Port | Role |
 |---|---|---|
 | **AMS Console** | 8000 (API) + 5173 (UI) | The console the change is driven from — a developer opens a ticket here, an AI drafts the change, a reviewer approves it file by file, and it's applied to one of the three apps below. |
-| **PolicyCore** | 8501 | The policyholder-facing portal — see below. Target of CR-2026-041 and CR-2026-042. |
+| **PolicyCore** | 8501 (path `/sl_policycore`) | The policyholder-facing portal — see below. Target of CR-2026-041 and CR-2026-042. |
 | **policy-service** | 8081 | Half of ClaimsPortal — serves policy records. |
 | **claims-service** | 8082 | Half of ClaimsPortal — claims intake. Target of CR-2026-043. |
 
@@ -25,13 +25,13 @@ policy-service before claims-service, since claims-service calls it):
 ```
 Console       :8000  ->  200
 Console UI    :5173  ->  200
-PolicyCore    :8501  ->  200
+PolicyCore    :8501/sl_policycore  ->  200
 policy-service:8081  ->  {"status": "ok"}
 claims-service:8082  ->  {"status": "ok"}
 ```
 
 ![PolicyCore's policy list](screenshots/policycore-list.jpg)
-*PolicyCore (`:8501`) — the policy list every enhancement below builds on.*
+*PolicyCore (`:8501/sl_policycore`) — the policy list every enhancement below builds on.*
 
 ![policy-service's Policy Team console](screenshots/policyservice-list.jpg)
 *policy-service (`:8081`) — half of ClaimsPortal.*
