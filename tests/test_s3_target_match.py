@@ -123,3 +123,80 @@ def test_cr_id_tier_takes_priority_over_application_header():
     mock_complete.assert_not_called()
     assert match.method == "cr_id"
     assert match.target is real
+
+
+def _ai_response(**extra) -> str:
+    return json.dumps(
+        {
+            "target_id": targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.target_id,
+            "confidence": "high",
+            "reasoning": "Closest match.",
+            **extra,
+        }
+    )
+
+
+def test_ai_tier_ranks_every_candidate_best_first():
+    """The ranking is what makes an AI pick reviewable — a reviewer needs to
+    see the runner-up's score, not just the winner's name."""
+    canned = _ai_response(
+        ranking=[
+            {"target_id": targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE.target_id, "score": 5, "reasoning": "c"},
+            {"target_id": targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.target_id, "score": 95, "reasoning": "a"},
+            {"target_id": targets.MOCKAPP_COVERAGE_UPGRADE.target_id, "score": 20, "reasoning": "b"},
+        ]
+    )
+    with patch("s3_enhancement.target_match.complete", return_value=canned):
+        match = resolve_target_for_cr("CR-2026-995: Unlabeled.\n")
+    assert [c.score for c in match.ranking] == [95, 20, 5]
+    assert match.ranking[0].target_id == match.target.target_id
+    # Display names come from the registry, never from the model's echo.
+    assert match.ranking[0].display_name == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.display_name
+
+
+def test_ranking_drops_candidates_that_are_not_registered_targets():
+    """A ranking row for a repo this console doesn't have would be a
+    confident-looking fabrication, so it is dropped rather than rendered."""
+    canned = _ai_response(
+        ranking=[
+            {"target_id": targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.target_id, "score": 90},
+            {"target_id": "some-repo-that-does-not-exist", "score": 80},
+        ]
+    )
+    with patch("s3_enhancement.target_match.complete", return_value=canned):
+        match = resolve_target_for_cr("CR-2026-994: Unlabeled.\n")
+    assert [c.target_id for c in match.ranking] == [
+        targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.target_id
+    ]
+
+
+def test_malformed_ranking_costs_the_explanation_not_the_match():
+    """A missing or junk ranking must degrade the card, never the result."""
+    for bad in ("not-a-list", [], [{"score": 10}], [["wrong", "shape"]], None):
+        with patch("s3_enhancement.target_match.complete", return_value=_ai_response(ranking=bad)):
+            match = resolve_target_for_cr("CR-2026-993: Unlabeled.\n")
+        assert match.target is targets.MOCKAPP_ENDORSEMENT_FIELD_ADD, bad
+        assert match.ranking == (), bad
+
+
+def test_deterministic_tiers_rank_nothing():
+    """Tiers 1 and 2 never compared candidates, so they must not imply they
+    did by reporting a ranking."""
+    cr_text = "CR-2026-042: Endorsement Priority Field\n"
+    with patch("s3_enhancement.target_match.complete") as mock_complete:
+        match = resolve_target_for_cr(cr_text)
+    mock_complete.assert_not_called()
+    assert match.method == "cr_id"
+    assert match.ranking == ()
+
+
+def test_ranking_scores_are_clamped_to_0_100():
+    canned = _ai_response(
+        ranking=[
+            {"target_id": targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.target_id, "score": 900},
+            {"target_id": targets.MOCKAPP_COVERAGE_UPGRADE.target_id, "score": -50},
+        ]
+    )
+    with patch("s3_enhancement.target_match.complete", return_value=canned):
+        match = resolve_target_for_cr("CR-2026-992: Unlabeled.\n")
+    assert [c.score for c in match.ranking] == [100, 0]

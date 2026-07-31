@@ -458,6 +458,35 @@ class TargetResolveRequest(BaseModel):
     ticket_number: str | None = None
 
 
+def _read_cr_file_or_4xx(cr_file: str) -> str:
+    """Read a CR by bare filename from `crs/`.
+
+    Filename only, no path components — the client names *which* CR, never
+    *where* to read from, so this can never escape crs/.
+    """
+    if "/" in cr_file or "\\" in cr_file or not cr_file.endswith(".md"):
+        raise HTTPException(status_code=422, detail="cr_file must be a bare *.md filename")
+    cr_path = _CRS_ROOT / cr_file
+    if not cr_path.is_file():
+        raise HTTPException(status_code=404, detail=f"no such CR file: {cr_file}")
+    return cr_path.read_text(encoding="utf-8").strip()
+
+
+@router.get("/cr/file")
+def cr_file(cr_file: str, identity: Identity = Depends(require_identity)) -> dict:
+    """A CR's own text, by filename, with no target involved.
+
+    `/s3/cr` renders a *target's* registered CR template, which presupposes
+    the target is already known. This endpoint exists for the case where it
+    isn't yet: a CR that names no target system has to be read and analyzed
+    before anything can resolve it to a repo (see the console's ad-hoc
+    analysis path). Serving the file verbatim keeps that flow reading the
+    same CR the resolver reads, rather than a second copy of the request
+    pasted into a ticket description.
+    """
+    return {"cr_file": cr_file, "cr_text": _read_cr_file_or_4xx(cr_file)}
+
+
 def _target_match_dict(match: TargetMatch) -> dict:
     return {
         "method": match.method,
@@ -467,6 +496,17 @@ def _target_match_dict(match: TargetMatch) -> dict:
         "reasoning": match.reasoning if match.method == "ai" else "",
         "target_id": match.target.target_id if match.target is not None else None,
         "display_name": match.target.display_name if match.target is not None else None,
+        # Every candidate the AI tier weighed, best first — empty for the
+        # deterministic tiers, which compared nothing (see RankedCandidate).
+        "ranking": [
+            {
+                "target_id": candidate.target_id,
+                "display_name": candidate.display_name,
+                "score": candidate.score,
+                "reasoning": candidate.reasoning,
+            }
+            for candidate in match.ranking
+        ],
     }
 
 
@@ -489,14 +529,7 @@ def resolve_target(
             status_code=422, detail="pass exactly one of cr_file or cr_text, not both"
         )
     if payload.cr_file:
-        # Filename only, no path components — the client names *which* CR,
-        # never *where* to read from, so this can never escape crs/.
-        if "/" in payload.cr_file or "\\" in payload.cr_file or not payload.cr_file.endswith(".md"):
-            raise HTTPException(status_code=422, detail="cr_file must be a bare *.md filename")
-        cr_path = _CRS_ROOT / payload.cr_file
-        if not cr_path.is_file():
-            raise HTTPException(status_code=404, detail=f"no such CR file: {payload.cr_file}")
-        cr_text = cr_path.read_text(encoding="utf-8").strip()
+        cr_text = _read_cr_file_or_4xx(payload.cr_file)
     elif payload.cr_text:
         cr_text = payload.cr_text.strip()
     else:
@@ -1396,15 +1429,11 @@ def scm_checkout(
     """
     branch = scm.branch_name_for(payload.ticket_number, payload.target_id)
     if not scm_live.live_mode_enabled():
-        detail = (
-            f"{branch} would be checked out off {scm.BASE_BRANCH}. This console "
-            "does not run git — set SCM_MODE=live to run a real local checkout."
-        )
         record_event(
             payload.ticket_number,
             "human",
             "repo_checked_out",
-            detail=f"{branch} — simulated",
+            detail=branch,
         )
         return {
             "mode": "simulated",
@@ -1414,7 +1443,7 @@ def scm_checkout(
             "created": None,
             "already_current": None,
             "dirty_files": [],
-            "detail": detail,
+            "detail": None,
         }
 
     try:
@@ -1422,25 +1451,13 @@ def scm_checkout(
     except scm_live.ScmLiveError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    if result.already_current:
-        detail = f"Already on {result.branch}."
-    elif result.created:
-        detail = f"Created {result.branch} off {result.base}."
-    else:
-        detail = f"Switched to {result.branch}."
-    if result.dirty_files:
-        count = len(result.dirty_files)
-        detail += (
-            f" Note: {count} file{'s' if count != 1 else ''} were already modified "
-            "before this checkout — not touched by it, just carried over."
-        )
     record_event(
         payload.ticket_number,
         "human",
         "repo_checked_out",
         detail=f"{result.branch} @ {result.sha}",
     )
-    return {**result.to_dict(), "detail": detail}
+    return {**result.to_dict(), "detail": None}
 
 
 class ScmRequest(BaseModel):

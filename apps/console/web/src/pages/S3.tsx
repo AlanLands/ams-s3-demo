@@ -30,6 +30,7 @@ import {
   type PostApplyResult,
   type QuickChatResponse,
   type TestCaseResult,
+  type TargetResolveResponse,
   type TestsGenerateResponse,
   type TestsRunResponse,
   type TicketEvent,
@@ -90,6 +91,13 @@ const TICKET_CRS: Record<string, { crFile: string | null; tierName: string }> = 
   // pipeline handles a second repo. tierName is a required placeholder like
   // AMS-102's; CR-2026-043 has no {{TIER_NAME}}.
   'AMS-103': { crFile: 'CR-2026-043.md', tierName: 'Elite' },
+  // Raised on the support floor, so its CR names the application but no
+  // target system: CR-2026-044's title is no registered target's
+  // cr_template_path.stem, and its "Application: PolicyCore" header narrows
+  // to two targets rather than one. Both deterministic tiers therefore miss
+  // and target_match falls through to the AI tier -- this is the ticket that
+  // exercises repo selection on stage (see the Repo selection card below).
+  'AMS-104': { crFile: 'CR-2026-044.md', tierName: 'Elite' },
 }
 
 function crLabelFromFile(crFile: string | null): string {
@@ -634,13 +642,24 @@ export default function S3() {
   const [screenshotBefore, setScreenshotBefore] = useState<string | null>(null)
   const [screenshotAfter, setScreenshotAfter] = useState<string | null>(null)
 
-  // target_id resolved server-side from each ticket's CR file — undefined
-  // means "not resolved yet" (see the effect below), null means "resolved to
-  // nothing" (no linked CR, or the resolve call failed). Everything else
-  // about a ticket's linked CR (tierName, crLabel) is static and needs no
-  // round trip; only target_id has to come from the server, since that's the
-  // one thing this console must not hardcode per ticket (see TICKET_CRS).
-  const [resolvedTargetId, setResolvedTargetId] = useState<Record<string, string | null>>({})
+  // Which target each ticket's CR resolved to, server-side, and how it got
+  // there — undefined means "not resolved yet" (see the effect below), null
+  // means the resolve call itself failed. Everything else about a ticket's
+  // linked CR (tierName, crLabel) is static and needs no round trip; only
+  // the target has to come from the server, since that's the one thing this
+  // console must not hardcode per ticket (see TICKET_CRS).
+  //
+  // The whole match is kept, not just target_id: `method`, `reasoning` and
+  // `confidence` are what the Repo selection card shows, and
+  // `needs_confirmation` is what gates checkout. A console that silently
+  // used an AI guess would be claiming a repo nobody picked.
+  const [resolvedTarget, setResolvedTarget] = useState<
+    Record<string, TargetResolveResponse | null>
+  >({})
+  // Tickets whose AI-picked target the engineer has explicitly accepted.
+  // Deterministic matches never enter this map — they have nothing to
+  // confirm (see targetConfirmed below).
+  const [targetConfirmed, setTargetConfirmed] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -650,11 +669,11 @@ export default function S3() {
         .resolveTarget(cr.crFile, ticketKey)
         .then((result) => {
           if (cancelled) return
-          setResolvedTargetId((prev) => ({ ...prev, [ticketKey]: result.target_id }))
+          setResolvedTarget((prev) => ({ ...prev, [ticketKey]: result }))
         })
         .catch(() => {
           if (cancelled) return
-          setResolvedTargetId((prev) => ({ ...prev, [ticketKey]: null }))
+          setResolvedTarget((prev) => ({ ...prev, [ticketKey]: null }))
         })
     }
     return () => {
@@ -669,7 +688,7 @@ export default function S3() {
     const cr = TICKET_CRS[ticketKey]
     if (!cr) return undefined
     return {
-      targetId: cr.crFile ? resolvedTargetId[ticketKey] ?? null : null,
+      targetId: cr.crFile ? resolvedTarget[ticketKey]?.target_id ?? null : null,
       tierName: cr.tierName,
       crLabel: crLabelFromFile(cr.crFile),
     }
@@ -1641,12 +1660,22 @@ export default function S3() {
 
   async function handleRunAnalysisForTicket(ticketKey: string, clarificationAnswer?: string) {
     const linked = getLinked(ticketKey)
+    // A CR that had to be matched by the AI tier named no target system of
+    // its own, so there is no repo to scope an analysis to yet — /analyze
+    // would have to pick one first and then present file selection from it,
+    // which is the answer this beat is supposed to be working towards. Those
+    // tickets analyze their text directly instead (no target, no file
+    // selection), and the repo is chosen afterwards. Derived from the
+    // resolution rather than a per-ticket flag, so a new ambiguous CR gets
+    // this automatically — see TICKET_CRS on why there is no lookup table.
+    const crNamesTarget = resolvedTarget[ticketKey]?.method !== 'ai'
+    const targetScoped = !!linked?.targetId && crNamesTarget
     setTicketAnalysisLoading((prev) => ({ ...prev, [ticketKey]: true }))
     setTicketAnalysisError((prev) => ({ ...prev, [ticketKey]: '' }))
     try {
       let result: AnalyzeResponse
       const pendingQuestion = ticketClarificationQuestion[ticketKey]
-      if (linked) {
+      if (targetScoped && linked) {
         let answer: string | undefined
         if (pendingQuestion) {
           // A clarifying question is outstanding (e.g. an unstated field
@@ -1684,14 +1713,23 @@ export default function S3() {
           token_panel: analyzeResult.token_panel,
         }
       } else {
-        // No CR/target registered for this ticket (e.g. a cross-team ticket
-        // for another application) — analyze its own text directly instead.
+        // Either no CR/target registered for this ticket at all (e.g. a
+        // cross-team ticket for another application), or a CR that names no
+        // target system (see crNamesTarget above) — analyze the text
+        // directly, with no repo scoping it.
         let crText: string
         if (pendingQuestion) {
           // A clarifying question is outstanding — this call carries the
           // engineer's answer, not the original ticket text again (the
           // server keeps the transcript server-side).
           crText = (clarificationAnswer || '').trim()
+          if (!crText) return
+        } else if (TICKET_CRS[ticketKey]?.crFile) {
+          // There *is* a CR, it just doesn't say which repo it's for. Read
+          // it rather than falling back to the ticket's summary, so the
+          // analysis and the resolver both work from the same document.
+          const crFile = TICKET_CRS[ticketKey].crFile as string
+          crText = (await s3Api.crFile(crFile)).cr_text.trim()
           if (!crText) return
         } else {
           const issue = (boardIssues || []).find((candidate) => candidate.key === ticketKey)
@@ -1953,13 +1991,50 @@ export default function S3() {
   const inQa = activeIssue?.status === 'QA' || activeIssue?.status === 'Done'
   const isActiveAssignee = !!identity && activeIssue?.assignee === identity.name
 
-  const generateLockedReason = !activeTicketKey
+  // The active ticket's repo resolution. `undefined` while the mount-time
+  // resolve call is still in flight, `null` if it failed outright — the card
+  // distinguishes the two, since "still looking" and "couldn't tell" are very
+  // different things to show someone.
+  const activeMatch = activeTicketKey ? resolvedTarget[activeTicketKey] : undefined
+  const matchPending = activeTicketKey ? !(activeTicketKey in resolvedTarget) : false
+  // A deterministic match needs no sign-off — tiers 1 and 2 matched the CR's
+  // own identifier or application header structurally, and never guessed.
+  // Every AI pick does, deliberately stricter than the server's
+  // `needs_confirmation` (which trusts a high-confidence guess outright):
+  // the confidence string is itself model output, so gating a human review on
+  // it means the model decides when it gets reviewed. "A model chose the
+  // repo" is the reviewable event here, not "a model admitted doubt".
+  const targetConfirmationRequired = activeMatch?.method === 'ai'
+  const targetAccepted =
+    !!activeMatch?.resolved &&
+    (!targetConfirmationRequired || !!(activeTicketKey && targetConfirmed[activeTicketKey]))
+
+  // Checkout needs a target to branch for, so it stays locked until the repo
+  // is both resolved and (when the AI guessed) accepted by a human — and
+  // until the analysis that justifies doing the work at all has run.
+  const checkOutLockedReason = !activeTicketKey
     ? 'Select a ticket assigned to you on the Jira board above.'
     : !analysisDoneForActive
       ? 'Open the ticket above and run AI impact analysis first.'
-      : openDependencies.length > 0
-        ? `Waiting on ${openDependencies.length} other team${openDependencies.length > 1 ? 's' : ''} to finish their tickets.`
-        : null
+      : matchPending
+        ? 'Identifying which repo this ticket belongs to…'
+        : !activeMatch?.resolved
+          ? "This ticket's CR didn't resolve to a repo this console can automate."
+          : targetConfirmationRequired && !targetAccepted
+            ? 'Confirm the repo above before checking out.'
+            : null
+
+  const generateLockedReason = !activeTicketKey
+    ? 'Select a ticket assigned to you on the Jira board above.'
+    : // Generate writes against the resolved target, so an AI pick nobody
+      // accepted must not reach it either — not just checkout.
+      targetConfirmationRequired && !targetAccepted
+      ? 'Confirm the repo above before generating.'
+      : !analysisDoneForActive
+        ? 'Open the ticket above and run AI impact analysis first.'
+        : openDependencies.length > 0
+          ? `Waiting on ${openDependencies.length} other team${openDependencies.length > 1 ? 's' : ''} to finish their tickets.`
+          : null
   const canGenerate = generateLockedReason === null
 
   const canDesignDoc = generated !== null && (generated.diff_text.trim() === '' || applied)
@@ -2168,43 +2243,6 @@ export default function S3() {
 
       {isEngineer && (
       <>
-      <div className="ams-card" style={{ marginBottom: '1.25rem' }}>
-        <strong style={{ display: 'block', marginBottom: '0.3rem' }}>
-          Step 0 · Check out the repo
-        </strong>
-        {!checkOutResult && !checkOutError && (
-          <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
-            Cuts this CR's feature branch. Simulated by default — a real local git
-            branch only if the server has <code>SCM_MODE=live</code> set; no remote is
-            ever contacted either way.
-          </p>
-        )}
-        <button
-          className="ams-button"
-          onClick={handleCheckOut}
-          disabled={checkingOut || !activeTicketKey}
-        >
-          {checkingOut ? 'Checking out…' : 'Check out mockapp'}
-        </button>
-        {checkedOut && !checkingOut && checkOutResult && (
-          <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
-            ✓ {checkOutResult.mode === 'live' ? 'Checked out' : 'Would check out'}{' '}
-            <code>{checkOutResult.branch}</code> off <code>{checkOutResult.base}</code>
-            {checkOutResult.sha && <> (<code>{checkOutResult.sha}</code>)</>}
-          </p>
-        )}
-        {checkOutResult && (
-          <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0' }}>
-            {checkOutResult.detail}
-          </p>
-        )}
-        {checkOutError && (
-          <p className="ams-scm-error" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
-            {checkOutError}
-          </p>
-        )}
-      </div>
-
       {/* Jira board */}
       <div id="board" className="ams-card" style={{ marginBottom: '1.25rem' }}>
         <strong>Jira board</strong>
@@ -2336,6 +2374,246 @@ export default function S3() {
               </div>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Repo selection — which of the team's repos this ticket belongs to.
+          Deterministic tiers resolve silently; the AI tier shows its reasoning
+          and, below high confidence, waits for a human to accept it. */}
+      <div className="ams-card" style={{ marginBottom: '1.25rem' }}>
+        <strong style={{ display: 'block', marginBottom: '0.3rem' }}>
+          Repo selection
+        </strong>
+        {!activeTicketKey && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0' }}>
+            Pick a ticket on the board above.
+          </p>
+        )}
+        {activeTicketKey && !analysisDoneForActive && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0' }}>
+            Run the impact analysis on the ticket above first — for a CR that names
+            no target system, that analysis is what there is to go on.
+          </p>
+        )}
+        {activeTicketKey && analysisDoneForActive && matchPending && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0' }}>
+            Identifying the repo…
+          </p>
+        )}
+        {activeTicketKey && analysisDoneForActive && !matchPending && !activeMatch?.resolved && (
+          <p style={{ fontSize: '0.85rem', margin: '0.3rem 0 0' }}>
+            Couldn't identify a repo for this ticket from its CR — a human needs to
+            route it.
+          </p>
+        )}
+        {activeTicketKey && analysisDoneForActive && activeMatch?.resolved && (
+          <>
+            <p style={{ fontSize: '0.85rem', margin: '0.3rem 0 0.5rem' }}>
+              {activeMatch.method === 'ai' ? (
+                <>
+                  {AI_LABEL} This ticket names an application but no target system, and{' '}
+                  <strong>PolicyCore</strong> owns more than one repo — so the match was
+                  inferred:
+                </>
+              ) : (
+                <>Resolved from the CR itself — no model call needed.</>
+              )}
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                flexWrap: 'wrap',
+                margin: '0.4rem 0',
+              }}
+            >
+              <code>{activeMatch.display_name}</code>
+              <span className="ams-pill ams-pill-general">
+                {activeMatch.method === 'cr_id'
+                  ? 'matched on CR identifier'
+                  : activeMatch.method === 'application_header'
+                    ? 'matched on application header'
+                    : 'AI match'}
+              </span>
+              {activeMatch.confidence && (
+                <span className="ams-pill ams-pill-general">
+                  {activeMatch.confidence} confidence
+                </span>
+              )}
+            </div>
+            {activeMatch.reasoning && (
+              <p
+                style={{
+                  fontSize: '0.85rem',
+                  fontStyle: 'italic',
+                  color: 'var(--ams-ink-soft)',
+                  margin: '0.3rem 0 0',
+                }}
+              >
+                {activeMatch.reasoning}
+              </p>
+            )}
+            {activeMatch.ranking.length > 1 && (
+              <div style={{ marginTop: '0.9rem' }}>
+                <div
+                  style={{
+                    fontSize: '0.8rem',
+                    color: 'var(--ams-ink-soft)',
+                    marginBottom: '0.45rem',
+                  }}
+                >
+                  All {activeMatch.ranking.length} repos considered — the runner-up
+                  matters as much as the winner:
+                </div>
+                {activeMatch.ranking.map((candidate, index) => {
+                  const isPick = candidate.target_id === activeMatch.target_id
+                  return (
+                    <div
+                      key={candidate.target_id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1.4rem minmax(0, 1fr) 2.5rem',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.35rem 0',
+                        borderTop: index === 0 ? 'none' : '1px solid var(--ams-line)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: isPick ? 'var(--ams-accent)' : 'var(--ams-ink-soft)',
+                        }}
+                      >
+                        {index + 1}
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: '0.83rem',
+                            fontWeight: isPick ? 700 : 400,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={candidate.display_name}
+                        >
+                          {candidate.display_name}
+                          {isPick && (
+                            <span
+                              style={{
+                                color: 'var(--ams-accent)',
+                                fontWeight: 700,
+                                marginLeft: '0.4rem',
+                              }}
+                            >
+                              ← picked
+                            </span>
+                          )}
+                        </div>
+                        {/* Bar width is the model's own score, so a close
+                            second reads as close rather than as also-ran. */}
+                        <div
+                          style={{
+                            height: 5,
+                            borderRadius: 3,
+                            background: 'var(--ams-line)',
+                            marginTop: '0.25rem',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${candidate.score}%`,
+                              height: '100%',
+                              borderRadius: 3,
+                              background: isPick
+                                ? 'var(--ams-accent)'
+                                : 'var(--ams-ink-soft)',
+                              opacity: isPick ? 1 : 0.4,
+                            }}
+                          />
+                        </div>
+                        {candidate.reasoning && (
+                          <div
+                            style={{
+                              fontSize: '0.76rem',
+                              color: 'var(--ams-ink-soft)',
+                              marginTop: '0.2rem',
+                            }}
+                          >
+                            {candidate.reasoning}
+                          </div>
+                        )}
+                      </div>
+                      <span
+                        style={{
+                          fontSize: '0.8rem',
+                          fontVariantNumeric: 'tabular-nums',
+                          textAlign: 'right',
+                          color: isPick ? 'var(--ams-ink)' : 'var(--ams-ink-soft)',
+                          fontWeight: isPick ? 700 : 400,
+                        }}
+                      >
+                        {candidate.score}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            {targetConfirmationRequired && !targetAccepted && (
+              <div style={{ marginTop: '0.6rem' }}>
+                <p style={{ fontSize: '0.85rem', margin: '0 0 0.4rem' }}>
+                  A model chose this, so nothing proceeds until you accept it.
+                </p>
+                <button
+                  className="ams-button"
+                  onClick={() =>
+                    setTargetConfirmed((prev) => ({ ...prev, [activeTicketKey]: true }))
+                  }
+                >
+                  Confirm this repo
+                </button>
+              </div>
+            )}
+            {targetConfirmationRequired && targetAccepted && (
+              <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                ✓ Confirmed by {identity?.name}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="ams-card" style={{ marginBottom: '1.25rem' }}>
+        <strong style={{ display: 'block', marginBottom: '0.3rem' }}>
+          Step 0 · Check out the repo
+        </strong>
+        {!checkOutResult && !checkOutError && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
+            {checkOutLockedReason ?? "Cuts this CR's feature branch."}
+          </p>
+        )}
+        <button
+          className="ams-button"
+          onClick={handleCheckOut}
+          disabled={checkingOut || checkOutLockedReason !== null}
+        >
+          {checkingOut ? 'Checking out…' : 'Check out the repo'}
+        </button>
+        {checkedOut && !checkingOut && checkOutResult && (
+          <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+            ✓ Checked out <code>{checkOutResult.branch}</code> off <code>{checkOutResult.base}</code>
+            {checkOutResult.sha && <> (<code>{checkOutResult.sha}</code>)</>}
+          </p>
+        )}
+        {checkOutError && (
+          <p className="ams-scm-error" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+            {checkOutError}
+          </p>
         )}
       </div>
 
