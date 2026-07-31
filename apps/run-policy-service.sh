@@ -9,5 +9,9 @@ cd "$(dirname "$0")/.."
 source .venv/bin/activate
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
-echo "  Policy-Service -> http://localhost:8081/"
-uvicorn apps.claimsportal.policy_service.main:app --port 8081
+# Port comes from .env (POLICY_SERVICE_PORT). If you change it, also point
+# POLICY_SERVICE_URL at the new port — that's the URL Claims-Service calls.
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+
+echo "  Policy-Service -> http://localhost:${POLICY_SERVICE_PORT:-8081}/"
+uvicorn apps.claimsportal.policy_service.main:app --port "${POLICY_SERVICE_PORT:-8081}"

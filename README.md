@@ -22,7 +22,7 @@ need all four for every beat.
 | # | Application | Start | Port | Needed for |
 |---|-------------|-------|------|------------|
 | 1 | **Console** — FastAPI + React. The screen you present from. | `apps/run-console.sh` | 8000 + **5173** | every beat |
-| 2 | **PolicyCore** — the client's policy portal (Streamlit) | `apps/run-policycore.sh` | 8501 | CR-2026-041, CR-2026-042 |
+| 2 | **PolicyCore** — the client's policy portal (Streamlit) | `apps/run-policycore.sh` | 8501 (open `/sl_policycore`) | CR-2026-041, CR-2026-042 |
 | 3 | **Policy-Service** — ClaimsPortal policy side (Python/FastAPI) | `apps/run-policy-service.sh` | 8081 | CR-2026-043 |
 | 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI) | `apps/run-claims-service.sh` | 8082 | CR-2026-043 |
 

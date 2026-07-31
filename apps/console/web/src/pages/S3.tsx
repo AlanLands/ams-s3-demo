@@ -40,8 +40,11 @@ const AI_LABEL = 'AI suggestion — verify with your specialist before applying.
 
 // The MapleSure mockapp's own Streamlit UI (apps/policycore/app.py) — launched
 // separately from the AMS console (see demo/run_mockapp.sh), same
-// port .env.example documents as MOCKAPP_URL.
-const MOCKAPP_URL = 'http://localhost:8501'
+// port/path .env.example documents as MOCKAPP_URL. Overridable at build time
+// via VITE_MOCKAPP_URL (see web/.env.example) so the link still resolves when
+// the portal is served from another host or behind a reverse proxy.
+const MOCKAPP_URL =
+  import.meta.env.VITE_MOCKAPP_URL || 'http://localhost:8501/sl_policycore'
 
 // Where an applied change can actually be seen running, per target. Keyed by
 // target id so the post-apply "go look at it" link names the app the change
@@ -51,7 +54,7 @@ const MOCKAPP_URL = 'http://localhost:8501'
 // so the claims console is the one worth opening.
 const TARGET_APPS: Record<string, { url: string; label: string }> = {
   'springdemo-claims-deductible': {
-    url: 'http://localhost:8082/',
+    url: import.meta.env.VITE_CLAIMS_SERVICE_URL || 'http://localhost:8082/',
     label: 'open the Claims Team console',
   },
 }

@@ -23,7 +23,10 @@ Stage = Literal["before", "after"]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _CACHE_ROOT = REPO_ROOT / "s3_enhancement" / "cache" / "screenshots"
-_DEFAULT_MOCKAPP_URL = "http://localhost:8501"
+# Includes the Streamlit base path the launchers serve under
+# (STREAMLIT_BASE_URL_PATH, default sl_policycore) — the bare port root is a
+# 404 now, and a live/record capture of a 404 page is a silent failure.
+_DEFAULT_MOCKAPP_URL = "http://localhost:8501/sl_policycore"
 _TIMEOUT_MS = 10_000
 
 

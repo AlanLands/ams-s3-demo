@@ -12,8 +12,14 @@ export class ApiError extends Error {
   }
 }
 
+// Backend origin, e.g. "https://ams.example.com". Empty (the default) means
+// same-origin: dev goes through vite.config.ts's /api proxy, and the packaged
+// build is served by api/main.py's SPA fallback on the same host. Set it only
+// when the API is deployed on a different origin than the static frontend.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },

@@ -8,4 +8,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
-streamlit run apps/policycore/app.py --server.port "${PORT:-8501}"
+# Same base path as apps/run-policycore.sh — the two launchers must agree or
+# MOCKAPP_URL / VITE_MOCKAPP_URL point at a 404 depending on which one ran.
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+streamlit run apps/policycore/app.py \
+    --server.port "${PORT:-8501}" \
+    --server.baseUrlPath "${STREAMLIT_BASE_URL_PATH:-sl_policycore}"

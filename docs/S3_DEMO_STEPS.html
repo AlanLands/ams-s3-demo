@@ -150,7 +150,7 @@ tooling that drives them. You do <strong>not</strong> need all four for every be
 <td>2</td>
 <td><strong>PolicyCore</strong> — the client's policy portal (Streamlit). The window the audience watches change.</td>
 <td><code>apps/run-policycore.sh</code></td>
-<td>8501</td>
+<td>8501 (open <code>/sl_policycore</code>)</td>
 <td>CR-2026-041, CR-2026-042</td>
 </tr>
 <tr>
@@ -307,7 +307,7 @@ ClaimsPortal source baseline restored; generated files removed.
 <p>One terminal per application. For the PolicyCore CRs you need only the first
 two.</p>
 <pre><code class="language-bash">apps/run-console.sh           # terminal 1 — API :8000 + UI :5173
-apps/run-policycore.sh        # terminal 2 — portal :8501
+apps/run-policycore.sh        # terminal 2 — portal :8501/sl_policycore
 
 # only for the ClaimsPortal CR (CR-2026-043):
 apps/run-policy-service.sh    # terminal 3 — :8081  (start before claims)
@@ -389,7 +389,7 @@ need to reset between the two.</p>
 </tr>
 <tr>
 <td>5</td>
-<td>Apply, then look at PolicyCore on :8501</td>
+<td>Apply, then look at PolicyCore on :8501/sl_policycore</td>
 <td>The client's running application changed</td>
 </tr>
 <tr>
@@ -540,7 +540,7 @@ the tool reports gaps instead of hiding them.</li>
 <li>All three reset scripts ran clean, in order</li>
 <li><code>demo/warm_s3_cache.sh</code> ran <em>after</em> the resets</li>
 <li>Console reachable at <code>:5173</code>; you are logged in</li>
-<li>PolicyCore reachable at <code>:8501</code> in a second window</li>
+<li>PolicyCore reachable at <code>:8501/sl_policycore</code> in a second window</li>
 <li>For the ClaimsPortal CR: <code>:8081</code> and <code>:8082</code> both responding</li>
 <li>You have walked beats 1–13 once, end to end, on this machine</li>
 </ul>

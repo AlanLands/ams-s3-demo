@@ -107,7 +107,7 @@
 
   async function load() {
     try {
-      policies = await (await fetch("/api/policies")).json();
+      policies = await (await fetch("api/policies")).json();
     } catch {
       document.getElementById("rows").innerHTML =
         '<tr><td colspan="5" class="empty">Could not reach policy-service API</td></tr>';

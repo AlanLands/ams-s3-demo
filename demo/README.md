@@ -13,7 +13,7 @@ them.
 | Script | What it does |
 |---|---|
 | `run_s3.sh` | Streamlit S3 console (the legacy view; the React console at `apps/console/web/` + `api/` is the primary surface) |
-| `run_mockapp.sh` | Serves `apps/policycore/app.py` on :8501 — the "client's app" window for the before/after proof |
+| `run_mockapp.sh` | Serves `apps/policycore/app.py` on :8501/sl_policycore — the "client's app" window for the before/after proof |
 | `run_s3_springdemo.sh` | Runs the two Python/FastAPI ClaimsPortal services (:8081, :8082) |
 | `run_s3_harness.sh` | The live agent-harness variant of the codegen beat — see below |
 | `reset_s3.sh` | CR-2026-041 (mockapp coverage tier) back to pre-CR baseline; also clears shared state |
