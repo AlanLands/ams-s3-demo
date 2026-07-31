@@ -103,8 +103,14 @@ def test_naive_prompt_tokens_falls_back_when_usage_is_unknown() -> None:
 
 def test_discover_subsystem_design_docs_finds_all_legacy_subsystems() -> None:
     docs = relevance.discover_subsystem_design_docs()
-    assert len(docs) == 6
-    assert all(name.startswith("apps/policycore/systems/") for name in docs)
+    legacy = {name for name in docs if name.startswith("apps/policycore/systems/")}
+    assert len(legacy) == 6
+
+    # Not every design-doc-bearing directory is a decoy any more. PolicyCore's
+    # own subsystems carry one too, which is the point: the screen then has to
+    # reject a same-language, same-shape part of the live app on its domain
+    # rather than waving through anything that is not Java.
+    assert docs.keys() - legacy == {"apps/policycore/enrolment"}
 
 
 def test_canonical_cr_screens_out_every_legacy_subsystem() -> None:
