@@ -1,4 +1,4 @@
-"""Endorsement-request business logic for the MapleSure mock app.
+"""Endorsement-request business logic for the MapleSure group benefits app.
 
 Kept separate from db.py so the Streamlit view (app.py) never has to
 construct endorsement numbers or timestamps itself — it only calls
@@ -35,6 +35,7 @@ def submit_endorsement(
     effective_date: str,
     contact_phone: str,
     contact_email: str,
+    priority: str = "Standard"
 ) -> Endorsement:
     """Create and persist a new endorsement request, returning the record."""
     endorsement = Endorsement(
@@ -46,6 +47,7 @@ def submit_endorsement(
         contact_phone=contact_phone,
         contact_email=contact_email,
         filed_at=datetime.now(UTC).isoformat(timespec="seconds"),
+        priority=priority
     )
     insert_endorsement(endorsement)
     return endorsement

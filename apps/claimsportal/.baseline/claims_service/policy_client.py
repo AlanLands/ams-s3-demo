@@ -9,11 +9,13 @@ POLICY_SERVICE_URL = os.getenv("POLICY_SERVICE_URL", "http://localhost:8081")
 
 
 class PolicyView(BaseModel):
+    """The subset of a group contract the claims service needs at intake."""
+
     policyNumber: str
     holderName: str
     product: str
     status: str
-    coverageLimit: float
+    annualMaximum: float
 
 
 def list_policies() -> list[PolicyView]:

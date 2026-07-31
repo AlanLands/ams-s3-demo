@@ -5,15 +5,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
-# Step 0 (SCM_MODE=live) can leave the repo on a real feature branch cut for
-# a previous rehearsal's CR — those never diverge from main (this pass never
-# commits, see s3_enhancement/scm_live.py), so returning to main is safe
-# there. Best-effort only, and deliberately not fatal: a developer running
-# this from their own long-lived work branch (real, unrelated uncommitted
-# changes) must not have this step abort the restore below, which is the
-# part of this script that actually matters.
+# Step 0 (SCM_MODE=live) can leave the repo on a branch this demo cut for a
+# previous rehearsal's CR (`feature/AMS-nnn-<target>`, see
+# scm.branch_name_for). Those never diverge from main — this pass never
+# commits, see s3_enhancement/scm_live.py — so returning to main is safe.
+#
+# Any other branch is a developer's own work and is left alone. The guard used
+# to be "try main, carry on if it fails", which is wrong: with a clean tree
+# `git checkout main` SUCCEEDS, and every restore below would then come from
+# main rather than the branch under test, silently reverting it.
 _current_branch="$(git rev-parse --abbrev-ref HEAD)"
-if [[ "$_current_branch" != "main" ]] && ! git checkout main 2>/dev/null; then
+if [[ "$_current_branch" == feature/AMS-* ]] && ! git checkout main 2>/dev/null; then
   echo "note: staying on '$_current_branch' — switching to main would conflict with local changes"
 fi
 # Restored from HEAD, not from the `s3-baseline` tag — see the same note in

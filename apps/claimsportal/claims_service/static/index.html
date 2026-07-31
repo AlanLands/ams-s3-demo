@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MapleSure — Claims Team</title>
+<title>MapleSure — Benefit Claims</title>
 <style>
   :root {
     --accent: #b45309;
@@ -86,16 +86,16 @@
   <div class="card">
     <h2>Submit a claim</h2>
     <form id="claimForm">
-      <label>Policy
+      <label>Group contract
         <select id="policyNumber" required>
-          <option value="">Loading policies…</option>
+          <option value="">Loading contracts…</option>
         </select>
       </label>
       <label>Amount (CAD)
         <input id="amount" type="number" min="1" step="1" required placeholder="e.g. 1200">
       </label>
       <label>Description
-        <textarea id="description" rows="3" required placeholder="What happened?"></textarea>
+        <textarea id="description" rows="3" required placeholder="Service received, provider, and date"></textarea>
       </label>
       <button type="submit">Submit claim</button>
     </form>
@@ -106,7 +106,7 @@
     <h2>Submitted claims</h2>
     <table>
       <thead>
-        <tr><th>#</th><th>Policy</th><th>Holder</th><th>Amount</th><th>Status</th></tr>
+        <tr><th>#</th><th>Contract</th><th>Plan sponsor</th><th>Amount</th><th>Status</th></tr>
       </thead>
       <tbody id="claimRows"><tr><td colspan="5" class="empty">No claims yet</td></tr></tbody>
     </table>

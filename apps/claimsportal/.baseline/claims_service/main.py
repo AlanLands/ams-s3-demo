@@ -23,6 +23,8 @@ class ClaimRequest(BaseModel):
     policyNumber: str
     amount: float
     description: str
+    memberId: str = ""
+    serviceType: str = "Other"
 
 
 @app.get("/api/claims")
@@ -46,7 +48,7 @@ def submit_claim(request: ClaimRequest) -> Claim:
 
     if policy.status != "ACTIVE":
         status = f"REJECTED_POLICY_{policy.status}"
-    elif request.amount > policy.coverageLimit:
+    elif request.amount > policy.annualMaximum:
         status = "REJECTED_OVER_LIMIT"
     else:
         status = "ACCEPTED"
@@ -55,6 +57,8 @@ def submit_claim(request: ClaimRequest) -> Claim:
         id=next(_next_id),
         policyNumber=policy.policyNumber,
         holderName=policy.holderName,
+        memberId=request.memberId,
+        serviceType=request.serviceType,
         amount=request.amount,
         description=request.description,
         status=status,

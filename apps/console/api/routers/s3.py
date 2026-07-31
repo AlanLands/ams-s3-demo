@@ -91,6 +91,7 @@ from s3_enhancement.repo_match import (
 )
 from s3_enhancement.scenarios import (
     draft_scenarios,
+    resolve_criteria_refs,
     scenario_from_dict,
     uncovered_criteria,
     validate_scenarios,
@@ -1769,7 +1770,9 @@ def tests_scenarios_approve(
     target = targets.get_target(payload.target_id)
     cr_text = _cr_text_or_400(payload.tier_name, target=target)
     criteria = parse_acceptance_criteria(cr_text)
-    scenarios = [scenario_from_dict(raw) for raw in payload.scenarios]
+    scenarios = resolve_criteria_refs(
+        [scenario_from_dict(raw) for raw in payload.scenarios], criteria
+    )
     try:
         validate_scenarios(scenarios, criteria)
     except LLMError as exc:

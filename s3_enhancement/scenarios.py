@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
 from common.llm import LLMError, complete
 from s3_enhancement import targets
@@ -104,6 +104,49 @@ def scenario_from_dict(raw: dict) -> Scenario:
         steps=tuple(str(step).strip() for step in steps if str(step).strip()),
         expected=str(raw.get("expected", "")).strip(),
     )
+
+
+def _ref_key(text: str) -> str:
+    """Normalise a criterion citation for comparison — case, surrounding
+    whitespace, trailing punctuation and internal run-length all vary."""
+    return re.sub(r"\s+", " ", text).strip().rstrip(".").casefold()
+
+
+def resolve_criteria_refs(
+    scenarios: list[Scenario], criteria: list[Criterion]
+) -> list[Scenario]:
+    """Map each scenario's criterion citations onto AC ids where possible.
+
+    The prompt asks for ids ("AC-1"), but a model will sometimes cite the
+    criterion's *text* instead — which is a citation a tester can still
+    follow, so resolving it beats failing the beat mid-demo. An exact
+    normalised match wins; failing that, an unambiguous prefix match handles
+    the model quoting only the first clause of a long criterion. Anything
+    matching neither is left untouched for `validate_scenarios` to reject,
+    so a genuinely untraceable scenario still fails.
+    """
+    known = {criterion.id for criterion in criteria}
+    by_text = {_ref_key(criterion.text): criterion.id for criterion in criteria}
+
+    resolved: list[Scenario] = []
+    for scenario in scenarios:
+        refs: list[str] = []
+        for ref in scenario.acceptance_criteria:
+            if ref in known:
+                refs.append(ref)
+                continue
+            key = _ref_key(ref)
+            if key in by_text:
+                refs.append(by_text[key])
+                continue
+            prefixed = [cid for text, cid in by_text.items() if text.startswith(key)]
+            refs.append(prefixed[0] if len(prefixed) == 1 else ref)
+        # dict.fromkeys dedupes while keeping citation order — two texts can
+        # normalise onto the same id.
+        resolved.append(
+            replace(scenario, acceptance_criteria=tuple(dict.fromkeys(refs)))
+        )
+    return resolved
 
 
 def validate_scenarios(scenarios: list[Scenario], criteria: list[Criterion]) -> None:
@@ -256,7 +299,7 @@ def draft_scenarios(cr_text: str, *, target: Target | None = None) -> ScenarioDr
         retries=0 if os.environ.get("LLM_MODE", "replay").lower() == "replay" else 2,
         usage_out=usage,
     )
-    scenarios = _parse_response(response)
+    scenarios = resolve_criteria_refs(_parse_response(response), criteria)
     validate_scenarios(scenarios, criteria)
     return ScenarioDraft(
         scenarios=scenarios,

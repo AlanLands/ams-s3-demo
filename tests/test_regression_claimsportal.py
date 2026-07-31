@@ -1,9 +1,9 @@
-"""Pre-existing regression suite for the ClaimsPortal policy lookup API.
+"""Pre-existing regression suite for the ClaimsPortal contract lookup API.
 
 Checked in, human-authored, and named by no target's testgen allowlist — S3
 can neither write nor overwrite it. CR-2026-043 edits policy_service (it adds
-a deductible to the policy record), so "the existing policy lookup is
-unaffected" is a claim that needs a test rather than a promise.
+a deductible to the group contract record), so "the existing contract lookup
+is unaffected" is a claim that needs a test rather than a promise.
 
 Two constraints keep this passing on both sides of the CR:
 
@@ -28,10 +28,10 @@ from apps.claimsportal.policy_service.main import app
 
 client = TestClient(app)
 
-REQUIRED_FIELDS = ["policyNumber", "holderName", "product", "status", "coverageLimit"]
+REQUIRED_FIELDS = ["policyNumber", "holderName", "product", "status", "annualMaximum"]
 
 
-def test_policy_directory_lists_all_seeded_policies():
+def test_contract_directory_lists_all_seeded_contracts():
     response = client.get("/api/policies")
 
     assert response.status_code == 200
@@ -41,7 +41,7 @@ def test_policy_directory_lists_all_seeded_policies():
     assert [p["policyNumber"] for p in policies] == ["MS-1001", "MS-1002", "MS-1003", "MS-1004"]
 
 
-def test_every_policy_exposes_the_fields_claims_service_reads():
+def test_every_contract_exposes_the_fields_claims_service_reads():
     policies = client.get("/api/policies").json()
     assert policies
 
@@ -50,27 +50,27 @@ def test_every_policy_exposes_the_fields_claims_service_reads():
             assert field in policy, f"policy {policy['policyNumber']} lost field {field}"
 
 
-def test_single_policy_lookup_returns_the_known_record():
+def test_single_contract_lookup_returns_the_known_record():
     response = client.get("/api/policies/MS-1001")
 
     assert response.status_code == 200
     policy = response.json()
     assert policy["policyNumber"] == "MS-1001"
-    assert policy["holderName"] == "Avery Chen"
-    assert policy["product"] == "Auto"
+    assert policy["holderName"] == "Northwind Logistics Ltd."
+    assert policy["product"] == "Health"
     assert policy["status"] == "ACTIVE"
-    assert policy["coverageLimit"] == 25000
+    assert policy["annualMaximum"] == 25000
 
 
-def test_unknown_policy_still_returns_not_found():
+def test_unknown_contract_still_returns_not_found():
     response = client.get("/api/policies/MS-9999")
 
     assert response.status_code == 404
 
 
-def test_lapsed_policy_status_survives_the_round_trip():
+def test_lapsed_contract_status_survives_the_round_trip():
     # claims_service rejects on this exact string; if the CR normalised or
-    # re-cased status values, every lapsed-policy rejection would silently
+    # re-cased status values, every lapsed-contract rejection would silently
     # turn into an acceptance.
     policy = client.get("/api/policies/MS-1003").json()
 

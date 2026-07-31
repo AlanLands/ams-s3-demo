@@ -1,4 +1,4 @@
-"""SQLite-backed storage for the MapleSure policy/claims mock app.
+"""SQLite-backed storage for the MapleSure group benefits mock app.
 
 Plain stdlib sqlite3 only — no external DB. Database file lives at
 data/mockapp.db (generated, gitignored — never hand-edit; regenerate via
@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from apps.policycore.core.models import Claim, Endorsement, Policy
+from apps.policycore.core.models import Claim, Endorsement, PlanMember, Policy
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = REPO_ROOT / "data"
@@ -27,6 +27,15 @@ CREATE TABLE IF NOT EXISTS policies (
     coverage_tier TEXT NOT NULL DEFAULT 'Standard'
 );
 
+CREATE TABLE IF NOT EXISTS plan_members (
+    member_id     TEXT PRIMARY KEY,
+    policy_number TEXT NOT NULL REFERENCES policies (policy_number),
+    member_name   TEXT NOT NULL,
+    dependents    INTEGER NOT NULL DEFAULT 0,
+    enrolled_on   TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'Active'
+);
+
 CREATE TABLE IF NOT EXISTS claims (
     claim_number  TEXT PRIMARY KEY,
     policy_number TEXT NOT NULL REFERENCES policies (policy_number),
@@ -34,7 +43,8 @@ CREATE TABLE IF NOT EXISTS claims (
     amount        REAL NOT NULL,
     status        TEXT NOT NULL,
     filed_at      TEXT NOT NULL,
-    notes         TEXT NOT NULL DEFAULT ''
+    notes         TEXT NOT NULL DEFAULT '',
+    member_id     TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS endorsements (
@@ -45,7 +55,8 @@ CREATE TABLE IF NOT EXISTS endorsements (
     effective_date     TEXT NOT NULL,
     contact_phone      TEXT NOT NULL,
     contact_email      TEXT NOT NULL,
-    filed_at           TEXT NOT NULL
+    filed_at           TEXT NOT NULL,
+    priority           TEXT NOT NULL DEFAULT 'Standard'
 );
 """
 
@@ -69,6 +80,13 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
             ALTER TABLE policies
             ADD COLUMN coverage_tier TEXT NOT NULL DEFAULT 'Standard'
             """
+        )
+    claim_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(claims)").fetchall()
+    }
+    if "member_id" not in claim_cols:
+        conn.execute(
+            "ALTER TABLE claims ADD COLUMN member_id TEXT NOT NULL DEFAULT ''"
         )
 
 
@@ -106,6 +124,18 @@ def _row_to_claim(row: sqlite3.Row) -> Claim:
         status=row["status"],
         filed_at=row["filed_at"],
         notes=row["notes"],
+        member_id=row["member_id"] if "member_id" in row.keys() else "",
+    )
+
+
+def _row_to_plan_member(row: sqlite3.Row) -> PlanMember:
+    return PlanMember(
+        member_id=row["member_id"],
+        policy_number=row["policy_number"],
+        member_name=row["member_name"],
+        dependents=row["dependents"],
+        enrolled_on=row["enrolled_on"],
+        status=row["status"],
     )
 
 
@@ -119,6 +149,7 @@ def _row_to_endorsement(row: sqlite3.Row) -> Endorsement:
         contact_phone=row["contact_phone"],
         contact_email=row["contact_email"],
         filed_at=row["filed_at"],
+        priority=row["priority"] if "priority" in row.keys() else "Standard",
     )
 
 
@@ -155,6 +186,31 @@ def list_claims(policy_number: str) -> list[Claim]:
             (policy_number,),
         ).fetchall()
         return [_row_to_claim(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def list_plan_members(policy_number: str) -> list[PlanMember]:
+    """Return all plan members enrolled under a group contract, by member id."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM plan_members WHERE policy_number = ? ORDER BY member_id",
+            (policy_number,),
+        ).fetchall()
+        return [_row_to_plan_member(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_plan_member(member_id: str) -> PlanMember | None:
+    """Return a single plan member by id, or None if not found."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM plan_members WHERE member_id = ?", (member_id,)
+        ).fetchone()
+        return _row_to_plan_member(row) if row is not None else None
     finally:
         conn.close()
 
@@ -198,6 +254,30 @@ def insert_policy(policy: Policy) -> None:
         conn.close()
 
 
+def insert_plan_member(member: PlanMember) -> None:
+    """Insert (or replace) a plan-member row. Used by the seed script."""
+    conn = _connect()
+    try:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO plan_members
+                (member_id, policy_number, member_name, dependents, enrolled_on, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                member.member_id,
+                member.policy_number,
+                member.member_name,
+                member.dependents,
+                member.enrolled_on,
+                member.status,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def insert_claim(claim: Claim) -> None:
     """Insert (or replace) a claim row."""
     conn = _connect()
@@ -205,8 +285,9 @@ def insert_claim(claim: Claim) -> None:
         conn.execute(
             """
             INSERT OR REPLACE INTO claims
-                (claim_number, policy_number, claim_type, amount, status, filed_at, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (claim_number, policy_number, claim_type, amount, status, filed_at,
+                 notes, member_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 claim.claim_number,
@@ -216,6 +297,7 @@ def insert_claim(claim: Claim) -> None:
                 claim.status,
                 claim.filed_at,
                 claim.notes,
+                claim.member_id,
             ),
         )
         conn.commit()
@@ -231,8 +313,8 @@ def insert_endorsement(endorsement: Endorsement) -> None:
             """
             INSERT OR REPLACE INTO endorsements
                 (endorsement_number, policy_number, endorsement_type, requested_change,
-                 effective_date, contact_phone, contact_email, filed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 effective_date, contact_phone, contact_email, filed_at, priority)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 endorsement.endorsement_number,
@@ -243,6 +325,7 @@ def insert_endorsement(endorsement: Endorsement) -> None:
                 endorsement.contact_phone,
                 endorsement.contact_email,
                 endorsement.filed_at,
+                endorsement.priority,
             ),
         )
         conn.commit()
@@ -257,6 +340,7 @@ def wipe_db() -> None:
         conn.executescript(
             "DROP TABLE IF EXISTS endorsements; "
             "DROP TABLE IF EXISTS claims; "
+            "DROP TABLE IF EXISTS plan_members; "
             "DROP TABLE IF EXISTS policies;"
         )
         conn.commit()
