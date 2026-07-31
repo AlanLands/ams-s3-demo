@@ -67,6 +67,18 @@ export interface RouteDecision {
   candidate_targets: { target_id: string; display_name: string }[]
 }
 
+export type TargetResolveMethod = 'cr_id' | 'application_header' | 'ai' | 'unresolved'
+
+export interface TargetResolveResponse {
+  method: TargetResolveMethod
+  resolved: boolean
+  needs_confirmation: boolean
+  confidence: string | null
+  reasoning: string
+  target_id: string | null
+  display_name: string | null
+}
+
 export interface ApplicationsResponse {
   applications: (RoutedApplication & {
     ci_names: string[]
@@ -648,6 +660,18 @@ export const s3Api = {
       body: JSON.stringify({
         ci: ci ?? null,
         business_service: businessService ?? null,
+        ticket_number: ticketNumber ?? null,
+      }),
+    }),
+  // Resolves which registered target a ticket's CR belongs to, from the CR's
+  // own text -- crFile names a bare filename under the repo's top-level
+  // crs/ (the server reads it), so onboarding a new repo/target never means
+  // hand-editing a ticket-key -> target_id table in this file.
+  resolveTarget: (crFile: string, ticketNumber?: string) =>
+    request<TargetResolveResponse>('/api/s3/target/resolve', {
+      method: 'POST',
+      body: JSON.stringify({
+        cr_file: crFile,
         ticket_number: ticketNumber ?? null,
       }),
     }),

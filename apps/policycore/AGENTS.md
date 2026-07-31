@@ -4,7 +4,7 @@ Kept in sync with `apps/policycore/CLAUDE.md` — update both together. This fil
 only for the S3 live agent-harness demo beat (`s3_enhancement/harness.py`); it
 does not apply to any other work in this repository.
 
-You are implementing change request `apps/policycore/crs/CR-2026-041.md` (a new top
+You are implementing change request `crs/CR-2026-041.md` (a new top
 coverage tier) against this small Python policy/claims mock app for
 MapleSure Insurance, a fictional demo insurer. Follow this contract exactly —
 it is pinned for a live, timed demo and another generated file

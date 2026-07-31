@@ -12,7 +12,7 @@ tech stack.)
 **Cast**: `apps/claimsportal` = "ClaimsPortal". policy_service (:8081, Policy
 Team console) serves policies; claims_service (:8082, Claims Team console)
 validates each submitted claim by calling policy_service over REST. CR-2026-043
-(`apps/claimsportal/crs/CR-2026-043.md`, Jira AMS-103, assignee Ravi Kumar)
+(`crs/CR-2026-043.md`, Jira AMS-103, assignee Ravi Kumar)
 adds a per-policy deductible: below-deductible claims are rejected, accepted
 claims record a payable amount. Fixed contract: `claim_rules.decide`/`payable`
 module-level functions.

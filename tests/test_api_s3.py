@@ -136,6 +136,91 @@ def test_gitlab_scope_401s_without_login():
     assert response.status_code == 401
 
 
+def test_target_resolve_401s_without_login():
+    client = TestClient(app)
+    response = client.post("/api/s3/target/resolve", json={"cr_text": "some CR text"})
+    assert response.status_code == 401
+
+
+def test_target_resolve_rejects_empty_cr_text():
+    client = _client()
+    response = client.post("/api/s3/target/resolve", json={"cr_text": "   "})
+    assert response.status_code == 422
+
+
+def test_target_resolve_matches_pinned_cr_by_id_with_no_target_id_needed():
+    """The whole point: the caller sends the CR text of an already-registered
+    target and gets its target_id back -- no ticket-key table involved."""
+    from s3_enhancement import targets
+
+    target = targets.SPRINGDEMO_CLAIMS_DEDUCTIBLE
+    cr_text = target.cr_template_path.read_text(encoding="utf-8")
+
+    client = _client()
+    response = client.post("/api/s3/target/resolve", json={"cr_text": cr_text})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["method"] == "cr_id"
+    assert body["resolved"] is True
+    assert body["target_id"] == target.target_id
+    assert body["needs_confirmation"] is False
+
+
+def test_target_resolve_by_cr_file_reads_from_crs_directory():
+    client = _client()
+    response = client.post("/api/s3/target/resolve", json={"cr_file": "CR-2026-041.md"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["method"] == "cr_id"
+    assert body["target_id"] == "mockapp-coverage-upgrade"
+
+
+def test_target_resolve_rejects_both_cr_file_and_cr_text():
+    client = _client()
+    response = client.post(
+        "/api/s3/target/resolve", json={"cr_file": "CR-2026-041.md", "cr_text": "x"}
+    )
+    assert response.status_code == 422
+
+
+def test_target_resolve_rejects_neither_cr_file_nor_cr_text():
+    client = _client()
+    response = client.post("/api/s3/target/resolve", json={})
+    assert response.status_code == 422
+
+
+def test_target_resolve_rejects_cr_file_with_path_components():
+    client = _client()
+    response = client.post(
+        "/api/s3/target/resolve", json={"cr_file": "../CLAUDE.md"}
+    )
+    assert response.status_code == 422
+
+
+def test_target_resolve_404s_on_unknown_cr_file():
+    client = _client()
+    response = client.post("/api/s3/target/resolve", json={"cr_file": "CR-2026-000.md"})
+    assert response.status_code == 404
+
+
+def test_target_resolve_records_ticket_event_when_ticket_number_given():
+    from s3_enhancement import targets
+
+    target = targets.MOCKAPP_ENDORSEMENT_FIELD_ADD
+    cr_text = target.cr_template_path.read_text(encoding="utf-8")
+
+    client = _client()
+    with patch("apps.console.api.routers.s3.record_event") as record:
+        response = client.post(
+            "/api/s3/target/resolve",
+            json={"cr_text": cr_text, "ticket_number": "AMS-102"},
+        )
+    assert response.status_code == 200
+    record.assert_called_once()
+    assert record.call_args.args[0] == "AMS-102"
+    assert record.call_args.args[2] == "target_resolved"
+
+
 def test_gitlab_scope_auto_401s_without_login():
     client = TestClient(app)
     response = client.post("/api/s3/gitlab/scope-auto", json={"tier_name": "Elite"})

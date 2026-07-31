@@ -69,16 +69,28 @@ const ASSIGNEE_ROSTER = ['Ravi Kumar', 'Elena Cruz', 'Priya Nair']
 // tester (logged in as themselves) can generate/run tests and close out.
 const TESTER_ROSTER = ['Priya Nair', 'Tom Becker']
 
-// Which CR/target a given Jira board ticket links to, so clicking it can run
-// impact analysis against the right target — the AMS-098 cleanup ticket has
-// no linked CR (it's a seeded example of unrelated work also on the board).
-const TICKET_TARGETS: Record<string, { targetId: string | null; tierName: string; crLabel: string }> = {
-  'AMS-101': { targetId: null, tierName: 'Elite', crLabel: 'CR-2026-041' },
-  'AMS-102': { targetId: 'mockapp-endorsement-field-add', tierName: 'Elite', crLabel: 'CR-2026-042' },
+// Which CR a given Jira board ticket links to, so clicking it can run impact
+// analysis against the right target — the AMS-098 cleanup ticket has no
+// linked CR (it's a seeded example of unrelated work also on the board).
+// Deliberately NOT a ticket -> target_id table: crFile names a bare filename
+// under the repo's top-level crs/, and the console resolves it to a
+// target_id server-side (POST /api/s3/target/resolve, see useEffect below
+// and s3_enhancement/target_match.py) from the CR's own text — its
+// `CR-YYYY-NNN:` identifier, or failing that its `Application:` header.
+// Onboarding a new repo/target is then: register the Target in targets.py,
+// drop its CR under crs/, and add its ticket key here with just a filename
+// — no target_id to look up or keep in sync by hand.
+const TICKET_CRS: Record<string, { crFile: string | null; tierName: string }> = {
+  'AMS-101': { crFile: 'CR-2026-041.md', tierName: 'Elite' },
+  'AMS-102': { crFile: 'CR-2026-042.md', tierName: 'Elite' },
   // The ClaimsPortal target (apps/claimsportal) — S3's proof that the
   // pipeline handles a second repo. tierName is a required placeholder like
   // AMS-102's; CR-2026-043 has no {{TIER_NAME}}.
-  'AMS-103': { targetId: 'springdemo-claims-deductible', tierName: 'Elite', crLabel: 'CR-2026-043' },
+  'AMS-103': { crFile: 'CR-2026-043.md', tierName: 'Elite' },
+}
+
+function crLabelFromFile(crFile: string | null): string {
+  return crFile ? crFile.replace(/\.md$/, '') : ''
 }
 
 // Persists the impact-analysis result and the in-progress code proposal per
@@ -592,7 +604,7 @@ export default function S3() {
   const [expandedTicket, setExpandedTicket] = useState<string | null>(null)
   const [ticketAnalysis, setTicketAnalysis] = useState<Record<string, AnalyzeResponse>>(() => {
     const restored: Record<string, AnalyzeResponse> = {}
-    for (const ticketKey of Object.keys(TICKET_TARGETS)) {
+    for (const ticketKey of Object.keys(TICKET_CRS)) {
       const persisted = loadTicketState(ticketKey).analysis
       if (persisted) restored[ticketKey] = persisted
     }
@@ -619,9 +631,50 @@ export default function S3() {
   const [screenshotBefore, setScreenshotBefore] = useState<string | null>(null)
   const [screenshotAfter, setScreenshotAfter] = useState<string | null>(null)
 
+  // target_id resolved server-side from each ticket's CR file — undefined
+  // means "not resolved yet" (see the effect below), null means "resolved to
+  // nothing" (no linked CR, or the resolve call failed). Everything else
+  // about a ticket's linked CR (tierName, crLabel) is static and needs no
+  // round trip; only target_id has to come from the server, since that's the
+  // one thing this console must not hardcode per ticket (see TICKET_CRS).
+  const [resolvedTargetId, setResolvedTargetId] = useState<Record<string, string | null>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    for (const [ticketKey, cr] of Object.entries(TICKET_CRS)) {
+      if (!cr.crFile) continue
+      s3Api
+        .resolveTarget(cr.crFile, ticketKey)
+        .then((result) => {
+          if (cancelled) return
+          setResolvedTargetId((prev) => ({ ...prev, [ticketKey]: result.target_id }))
+        })
+        .catch(() => {
+          if (cancelled) return
+          setResolvedTargetId((prev) => ({ ...prev, [ticketKey]: null }))
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function getLinked(
+    ticketKey: string | null | undefined
+  ): { targetId: string | null; tierName: string; crLabel: string } | undefined {
+    if (!ticketKey) return undefined
+    const cr = TICKET_CRS[ticketKey]
+    if (!cr) return undefined
+    return {
+      targetId: cr.crFile ? resolvedTargetId[ticketKey] ?? null : null,
+      tierName: cr.tierName,
+      crLabel: crLabelFromFile(cr.crFile),
+    }
+  }
+
   async function handleCheckOut() {
     if (!activeTicketKey) return
-    const targetId = TICKET_TARGETS[activeTicketKey]?.targetId
+    const targetId = getLinked(activeTicketKey)?.targetId
     if (!targetId) return
     setCheckingOut(true)
     setCheckedOut(false)
@@ -648,7 +701,7 @@ export default function S3() {
 
   async function handleGenerate() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setGenerating(true)
     setGenerateError(null)
     setApplied(false)
@@ -757,7 +810,7 @@ export default function S3() {
         generated.proposal_id,
         activeTicketKey,
         undefined,
-        TICKET_TARGETS[activeTicketKey]?.targetId,
+        getLinked(activeTicketKey)?.targetId,
       )
       const nextAppliedFiles = { ...appliedFiles }
       for (const path of result.applied_files) nextAppliedFiles[path] = true
@@ -812,7 +865,7 @@ export default function S3() {
       const result = await s3Api.scmCommit(
         generated.proposal_id,
         activeTicketKey,
-        TICKET_TARGETS[activeTicketKey]?.targetId,
+        getLinked(activeTicketKey)?.targetId,
       )
       setScmState(result.scm)
       setScmBlockers(result.commit_blockers)
@@ -849,7 +902,7 @@ export default function S3() {
   // able to fail the apply beat. The endpoint itself answers checked:false
   // rather than erroring, so this catch is only for transport failures.
   async function runDesignSync(proposalId: string, appliedPaths: string[], ticketKey: string) {
-    const active = TICKET_TARGETS[ticketKey]
+    const active = getLinked(ticketKey)
     try {
       const result = await s3Api.designSync(
         proposalId,
@@ -923,7 +976,7 @@ export default function S3() {
         generated.proposal_id,
         activeTicketKey,
         path,
-        TICKET_TARGETS[activeTicketKey]?.targetId,
+        getLinked(activeTicketKey)?.targetId,
       )
       const nextAppliedFiles = { ...appliedFiles, [path]: true }
       setAppliedFiles(nextAppliedFiles)
@@ -1068,7 +1121,7 @@ export default function S3() {
 
   async function handleDraftScenarios() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setDraftingScenarios(true)
     setTestError(null)
     try {
@@ -1107,7 +1160,7 @@ export default function S3() {
 
   async function handleApproveScenarios() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setApprovingScenarios(true)
     setTestError(null)
     try {
@@ -1131,7 +1184,7 @@ export default function S3() {
 
   async function handleBuildTraceability() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setBuildingMatrix(true)
     setTestError(null)
     try {
@@ -1158,7 +1211,7 @@ export default function S3() {
   // same document to PDF itself, so fall back to that instead.
   async function handleExportDesignDoc(format: 'pdf' | 'html') {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setExportingDoc(format)
     setDesignDocError(null)
     try {
@@ -1169,7 +1222,7 @@ export default function S3() {
         activeTicketKey,
         (ticketCrossTeam[activeTicketKey] ?? []).map((impact) => impact.app_name)
       )
-      downloadBlob(`${TICKET_TARGETS[activeTicketKey]?.crLabel ?? 'design'}-design-doc.${format}`, blob)
+      downloadBlob(`${getLinked(activeTicketKey)?.crLabel ?? 'design'}-design-doc.${format}`, blob)
     } catch (err) {
       if (format === 'pdf' && err instanceof ApiError && err.status === 503) {
         printDesignDoc()
@@ -1185,7 +1238,7 @@ export default function S3() {
   // let the browser print it. Uses the same HTML the server would have sent.
   async function printDesignDoc() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     try {
       const blob = await s3Api.designDocDocument(
         active?.tierName ?? 'Elite',
@@ -1208,7 +1261,7 @@ export default function S3() {
 
   async function handleGenerateTests() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setGeneratingTests(true)
     setTestError(null)
     try {
@@ -1236,7 +1289,7 @@ export default function S3() {
 
   async function handleRunTests() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setRunningTests(true)
     setTestError(null)
     try {
@@ -1263,7 +1316,7 @@ export default function S3() {
   // and re-run it after — the pair is the "we broke nothing" evidence.
   async function handleRunRegression() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setRunningRegression(true)
     setTestError(null)
     try {
@@ -1284,7 +1337,7 @@ export default function S3() {
 
   async function handleMutationCheck() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setMutating(true)
     setTestError(null)
     try {
@@ -1304,7 +1357,7 @@ export default function S3() {
 
   async function handleDraftDesignDoc() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setDraftingDesignDoc(true)
     setDesignDocError(null)
     try {
@@ -1331,7 +1384,7 @@ export default function S3() {
 
   async function handleDraftReleaseNotes() {
     if (!activeTicketKey) return
-    const active = TICKET_TARGETS[activeTicketKey]
+    const active = getLinked(activeTicketKey)
     setDraftingNotes(true)
     setReleaseError(null)
     try {
@@ -1359,7 +1412,7 @@ export default function S3() {
   // deliberately absent — the server reads those from its own event log
   // rather than taking the client's word for who signed what.
   function releaseRecordPayload(format: 'pdf' | 'html') {
-    const active = activeTicketKey ? TICKET_TARGETS[activeTicketKey] : undefined
+    const active = activeTicketKey ? getLinked(activeTicketKey) : undefined
     return {
       tier_name: active?.tierName ?? 'Elite',
       target_id: active?.targetId ?? null,
@@ -1392,7 +1445,7 @@ export default function S3() {
     setReleaseError(null)
     try {
       const blob = await s3Api.releaseRecord(releaseRecordPayload('pdf'))
-      const label = TICKET_TARGETS[activeTicketKey]?.crLabel ?? 'release'
+      const label = getLinked(activeTicketKey)?.crLabel ?? 'release'
       downloadBlob(`${label}-release-record.pdf`, blob)
     } catch (err) {
       setReleaseError(err instanceof ApiError ? err.message : 'Could not build the record.')
@@ -1554,7 +1607,7 @@ export default function S3() {
 
   function handleTicketClick(ticketKey: string) {
     setExpandedTicket(ticketKey)
-    const linked = TICKET_TARGETS[ticketKey]
+    const linked = getLinked(ticketKey)
     // Only tickets with a real codegen target (AMS-101/102 today) should
     // change what "Generate the change" below acts on — a cross-team
     // ticket like AMS-500 has no target, and silently falling back to the
@@ -1584,7 +1637,7 @@ export default function S3() {
   }
 
   async function handleRunAnalysisForTicket(ticketKey: string, clarificationAnswer?: string) {
-    const linked = TICKET_TARGETS[ticketKey]
+    const linked = getLinked(ticketKey)
     setTicketAnalysisLoading((prev) => ({ ...prev, [ticketKey]: true }))
     setTicketAnalysisError((prev) => ({ ...prev, [ticketKey]: '' }))
     try {
@@ -1703,7 +1756,7 @@ export default function S3() {
   }
 
   async function handleCheckCrossTeamForTicket(ticketKey: string) {
-    const linked = TICKET_TARGETS[ticketKey]
+    const linked = getLinked(ticketKey)
     if (!linked) return
     setTicketCrossTeamLoading((prev) => ({ ...prev, [ticketKey]: true }))
     try {
@@ -1804,7 +1857,7 @@ export default function S3() {
         return prev
       }
       const mine = boardIssues.find(
-        (issue) => issue.assignee === identity?.name && TICKET_TARGETS[issue.key]
+        (issue) => issue.assignee === identity?.name && TICKET_CRS[issue.key]
       )
       return mine ? mine.key : null
     })
@@ -1884,7 +1937,7 @@ export default function S3() {
   const orderedFilePaths = Array.from(
     new Set([...filePaths, ...diffFiles.map((file) => file.path)])
   ).filter((path) => diffByPath.has(path))
-  const activeLinked = activeTicketKey ? TICKET_TARGETS[activeTicketKey] : undefined
+  const activeLinked = activeTicketKey ? getLinked(activeTicketKey) : undefined
   // Which running app an applied change should send the reviewer to. Falls back
   // to the mockapp portal for the two mockapp targets (and for a ticket with no
   // linked target at all, where nothing is applyable anyway).
@@ -3379,7 +3432,7 @@ export default function S3() {
       {expandedTicket && boardIssues && (() => {
         const issue = boardIssues.find((candidate) => candidate.key === expandedTicket)
         if (!issue) return null
-        const linked = TICKET_TARGETS[expandedTicket]
+        const linked = getLinked(expandedTicket)
         return (
           <TicketModal
             issue={issue}
