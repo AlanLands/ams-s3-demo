@@ -66,6 +66,24 @@ SYSTEM_PROMPT = (
 
 
 @dataclass(frozen=True)
+class RankedCandidate:
+    """One target the AI tier considered, with how strongly it fit.
+
+    `score` is the model's own 0-100 rating, not a probability and not
+    comparable across runs — it exists so a reviewer can see *what else was
+    in the running and how close it came*, which is the difference between
+    "the AI picked this" and "the AI picked this over that". Only ever
+    populated for `method == "ai"`; the deterministic tiers rank nothing
+    because they never compared anything.
+    """
+
+    target_id: str
+    display_name: str
+    score: int
+    reasoning: str = ""
+
+
+@dataclass(frozen=True)
 class TargetMatch:
     """One resolution outcome, carrying how it was reached.
 
@@ -80,6 +98,11 @@ class TargetMatch:
     method: MatchMethod
     confidence: str = "high"
     reasoning: str = ""
+    # Every candidate the AI tier weighed, best first. Empty for the
+    # deterministic tiers, and empty for an AI response that omitted or
+    # malformed its ranking — a missing ranking degrades the explanation,
+    # never the match itself.
+    ranking: tuple[RankedCandidate, ...] = ()
 
     @property
     def resolved(self) -> bool:
@@ -149,11 +172,22 @@ Candidate internal targets:
 Which target_id is this change request most likely for? Base this only on the
 target descriptions above.
 
+Rank every candidate listed, including the ones you reject — a reviewer needs
+to see what else was in the running and how close it came, not just the
+winner.
+
 Return JSON exactly matching:
 {{
   "target_id": "the id of the single most likely target, as a string",
   "confidence": "high, medium, or low",
-  "reasoning": "one sentence explaining the match"
+  "reasoning": "one sentence explaining the match",
+  "ranking": [
+    {{
+      "target_id": "candidate id",
+      "score": 0-100 how well this candidate fits, as a number,
+      "reasoning": "a few words on why it scored there"
+    }}
+  ]
 }}"""
 
 
@@ -184,7 +218,44 @@ def _match_by_ai(cr_text: str) -> TargetMatch:
         method="ai",
         confidence=str(data.get("confidence", "medium")),
         reasoning=str(data.get("reasoning", "")),
+        ranking=_parse_ranking(data.get("ranking"), by_id),
     )
+
+
+def _parse_ranking(raw: object, by_id: dict[str, Target]) -> tuple[RankedCandidate, ...]:
+    """Parse the model's ranked candidate list, defensively.
+
+    Everything here is best-effort: a malformed or missing ranking costs the
+    card its explanation, never the match. Entries naming a target that isn't
+    a real candidate are dropped rather than rendered — a ranking row for a
+    repo this console doesn't have would be a confident-looking fabrication.
+    """
+    if not isinstance(raw, list):
+        return ()
+    ranked: list[RankedCandidate] = []
+    seen: set[str] = set()
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        target_id = str(entry.get("target_id", ""))
+        target = by_id.get(target_id)
+        if target is None or target_id in seen:
+            continue
+        seen.add(target_id)
+        try:
+            score = int(float(entry.get("score", 0)))
+        except (TypeError, ValueError):
+            score = 0
+        ranked.append(
+            RankedCandidate(
+                target_id=target_id,
+                display_name=target.display_name,
+                score=max(0, min(100, score)),
+                reasoning=str(entry.get("reasoning", "")),
+            )
+        )
+    ranked.sort(key=lambda candidate: candidate.score, reverse=True)
+    return tuple(ranked)
 
 
 def resolve_target_for_cr(cr_text: str) -> TargetMatch:

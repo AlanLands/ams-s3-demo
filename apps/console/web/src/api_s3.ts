@@ -69,6 +69,16 @@ export interface RouteDecision {
 
 export type TargetResolveMethod = 'cr_id' | 'application_header' | 'ai' | 'unresolved'
 
+export interface RankedTargetCandidate {
+  target_id: string
+  display_name: string
+  // The model's own 0-100 fit rating. Not a probability, and not comparable
+  // across runs -- it shows what else was in the running and how close it
+  // came, which is what makes an AI pick reviewable rather than just stated.
+  score: number
+  reasoning: string
+}
+
 export interface TargetResolveResponse {
   method: TargetResolveMethod
   resolved: boolean
@@ -77,6 +87,8 @@ export interface TargetResolveResponse {
   reasoning: string
   target_id: string | null
   display_name: string | null
+  // Empty for the deterministic tiers -- they compared nothing.
+  ranking: RankedTargetCandidate[]
 }
 
 export interface ApplicationsResponse {
@@ -675,6 +687,14 @@ export const s3Api = {
         ticket_number: ticketNumber ?? null,
       }),
     }),
+  // A CR's own text, with no target involved -- for a CR that names no
+  // target system, which therefore has to be read and analyzed before
+  // anything can resolve it to a repo. `cr` (below) renders a *target's*
+  // registered template and so presupposes the target is already known.
+  crFile: (crFile: string) =>
+    request<{ cr_file: string; cr_text: string }>(
+      `/api/s3/cr/file?cr_file=${encodeURIComponent(crFile)}`
+    ),
   applications: () => request<ApplicationsResponse>('/api/s3/applications'),
   generate: (tierName: string, targetId?: string | null, ticketNumber?: string) =>
     request<GenerateResponse>('/api/s3/generate', {

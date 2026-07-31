@@ -29,11 +29,39 @@ from s3_enhancement.docgen import (
     draft_release_notes,
 )
 from s3_enhancement.scenarios import draft_scenarios
+from s3_enhancement.target_match import resolve_target_for_cr
 from s3_enhancement.testgen import generate_tests
 
 
-def warm(tier_name: str = "Elite") -> list[str]:
+def _warm_target_resolution() -> list[str]:
+    """Warm `/s3/target/resolve` for every CR under `crs/`.
+
+    Only the AI tier costs anything — a CR whose title matches a registered
+    target's `cr_template_path.stem`, or whose `Application:` header narrows
+    to exactly one target, resolves deterministically with no model call, so
+    calling this for every CR warms precisely the ones that need it.
+
+    Without this the AI tier is a guaranteed cold call on stage:
+    `demo/reset_s3.sh` wipes `.cache/llm` every rehearsal, and
+    `target_match._match_by_ai` caches by content hash (no pinned
+    `cache_key`), so its entry lives in that wiped directory rather than the
+    committed `s3_enhancement/cache/`. A cold call there does not fail
+    loudly either — `_match_by_ai` swallows `LLMError` into an `unresolved`
+    match, which the console would show as "couldn't identify the repo".
+    """
     messages = []
+    crs_root = targets.REPO_ROOT / "crs"
+    for cr_path in sorted(crs_root.glob("*.md")):
+        match = resolve_target_for_cr(cr_path.read_text(encoding="utf-8"))
+        messages.append(
+            f"{cr_path.name} -> {match.target.target_id if match.resolved else 'unresolved'}"
+            f" via {match.method}"
+        )
+    return messages
+
+
+def warm(tier_name: str = "Elite") -> list[str]:
+    messages = _warm_target_resolution()
     for target in targets.all_targets():
         # GitLab-sourced targets are read-only discovery/relevance previews
         # (see targets.py's module docstring) with no local CR template to
