@@ -11,35 +11,35 @@ app = FastAPI(title="policy-service")
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-# Synthetic demo data only.
+# Synthetic demo data only — plan sponsors are fictional employers.
 POLICIES: list[Policy] = [
     Policy(
         policyNumber="MS-1001",
-        holderName="Avery Chen",
-        product="Auto",
+        holderName="Northwind Logistics Ltd.",
+        product="Health",
         status="ACTIVE",
-        coverageLimit=25000,
+        annualMaximum=25000,
     ),
     Policy(
         policyNumber="MS-1002",
-        holderName="Jordan Patel",
-        product="Home",
+        holderName="Cedarline Manufacturing Inc.",
+        product="Dental",
         status="ACTIVE",
-        coverageLimit=500000,
+        annualMaximum=5000,
     ),
     Policy(
         policyNumber="MS-1003",
-        holderName="Sam Okafor",
-        product="Auto",
+        holderName="Quill & Fenwick LLP",
+        product="Health",
         status="LAPSED",
-        coverageLimit=15000,
+        annualMaximum=15000,
     ),
     Policy(
         policyNumber="MS-1004",
-        holderName="Riley Tremblay",
-        product="Travel",
+        holderName="Talus Software Co.",
+        product="Critical Illness",
         status="ACTIVE",
-        coverageLimit=10000,
+        annualMaximum=10000,
     ),
 ]
 BY_NUMBER: dict[str, Policy] = {p.policyNumber: p for p in POLICIES}

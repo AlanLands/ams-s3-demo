@@ -36,7 +36,7 @@ class Policy:
 
 def test_restores_docstring_the_model_dropped() -> None:
     repaired = _restore_module_docstring("apps/policycore/core/models.py", STRIPPED_MODELS)
-    assert repaired.startswith('"""Data models for the MapleSure policy/claims mock app.')
+    assert repaired.startswith('"""Data models for the MapleSure group benefits mock app.')
     assert "Storage lives" in repaired
     # The model's actual change must survive the repair untouched.
     assert "class Policy:" in repaired

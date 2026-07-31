@@ -15,7 +15,7 @@ All data in every application below is **synthetic** — a fictional insurer
 | Application | Port | Role |
 |---|---|---|
 | **AMS Console** | 8000 (API) + 5173 (UI) | The console the change is driven from — a developer opens a ticket here, an AI drafts the change, a reviewer approves it file by file, and it's applied to one of the three apps below. |
-| **PolicyCore** | 8501 | The policyholder-facing portal — see below. Target of CR-2026-041 and CR-2026-042. |
+| **PolicyCore** | 8501 (path `/sl_policycore`) | The policyholder-facing portal — see below. Target of CR-2026-041 and CR-2026-042. |
 | **policy-service** | 8081 | Half of ClaimsPortal — serves policy records. |
 | **claims-service** | 8082 | Half of ClaimsPortal — claims intake. Target of CR-2026-043. |
 
@@ -25,13 +25,13 @@ policy-service before claims-service, since claims-service calls it):
 ```
 Console       :8000  ->  200
 Console UI    :5173  ->  200
-PolicyCore    :8501  ->  200
+PolicyCore    :8501/sl_policycore  ->  200
 policy-service:8081  ->  {"status": "ok"}
 claims-service:8082  ->  {"status": "ok"}
 ```
 
 ![PolicyCore's policy list](screenshots/policycore-list.jpg)
-*PolicyCore (`:8501`) — the policy list every enhancement below builds on.*
+*PolicyCore (`:8501/sl_policycore`) — the policy list every enhancement below builds on.*
 
 ![policy-service's Policy Team console](screenshots/policyservice-list.jpg)
 *policy-service (`:8081`) — half of ClaimsPortal.*
@@ -64,11 +64,11 @@ today that requires a manual back-office process.
 
 **What's being added**: an upgrade control directly on the policy detail
 view. Selecting a higher tier recalculates the premium automatically and
-saves it — no downgrades in this change, and every existing flow (policy
-list, claim submission) keeps working unchanged.
+saves it — no downgrades in this change, and every existing flow (contract
+list, plan-member roster, claim submission) keeps working unchanged.
 
-**Worked example** — policy `POL-10001` (Maria Torres, Auto), premium $812.50
-at the "Standard" tier:
+**Worked example** — group contract `POL-10001` (Northwind Logistics Ltd.,
+Health), monthly premium $4,820.50 at the "Standard" tier:
 
 | Action | Result |
 |---|---|
@@ -102,11 +102,11 @@ and routine requests sit in the same unsorted queue.
 
 **What's being added**: a 6th field on the endorsement request form,
 "Priority," with exactly two choices — "Standard" or "Urgent" — defaulting
-to "Standard." A policyholder who doesn't touch the new field gets the exact
+to "Standard." A plan sponsor who doesn't touch the new field gets the exact
 same behavior as before this change.
 
-**Worked example** — a policyholder requests an address change on
-`POL-10001` (Maria Torres):
+**Worked example** — a plan sponsor requests an address change on
+`POL-10001` (Northwind Logistics Ltd.):
 
 | Field | Before the CR | After the CR |
 |---|---|---|
@@ -162,12 +162,12 @@ then at-or-below the deductible, otherwise accepted. Every existing flow
 
 **Worked example** — real values from the demo's seed data:
 
-| Policy | Coverage limit | Deductible (new) | Claim amount | Before the CR | After the CR |
+| Group contract | Annual maximum | Deductible (new) | Claim amount | Before the CR | After the CR |
 |---|---|---|---|---|---|
-| `MS-1004` (Riley Tremblay, Travel) | $10,000 | $100 | **$80** | ACCEPTED | **REJECTED_BELOW_DEDUCTIBLE** |
-| `MS-1001` (Avery Chen, Auto) | $25,000 | $500 | **$1,200** | ACCEPTED | ACCEPTED — **payableAmount $700** |
+| `MS-1004` (Talus Software Co., Critical Illness) | $10,000 | $100 | **$80** | ACCEPTED | **REJECTED_BELOW_DEDUCTIBLE** |
+| `MS-1001` (Northwind Logistics Ltd., Health) | $25,000 | $500 | **$1,200** | ACCEPTED | ACCEPTED — **payableAmount $700** |
 | `MS-1004` | $10,000 | $100 | $99,000 | REJECTED_OVER_LIMIT | REJECTED_OVER_LIMIT *(unchanged)* |
-| `MS-1003` (Sam Okafor, lapsed policy) | $15,000 | $500 | $500 | REJECTED_POLICY_LAPSED | REJECTED_POLICY_LAPSED *(unchanged — status still wins)* |
+| `MS-1003` (Quill & Fenwick LLP, lapsed contract) | $15,000 | $500 | $500 | REJECTED_POLICY_LAPSED | REJECTED_POLICY_LAPSED *(unchanged — status still wins)* |
 
 The $80-on-MS-1004 row is the clearest "before/after" moment: identical
 claim, identical policy, and the only thing that changed is that it's now

@@ -821,7 +821,7 @@ Rules:
 - "at or below the deductible" means `amount <= deductible` is rejected;
   strictly above the deductible (and within the limit) is accepted.
 - policy.py's `Policy` model gains a `deductible: float` field as the LAST
-  field, after coverageLimit. main.py's seeded policies use the CR's
+  field, after annualMaximum. main.py's seeded contracts use the CR's
   deductible values. policy_client.py's `PolicyView` model gains the
   matching last field.
 - claim.py's `Claim` model gains a `payableAmount: float` field as the LAST
@@ -1034,7 +1034,7 @@ def _validate_policy_backward_compatible(models_content: str) -> None:
     try:
         exec(compile(models_content, "apps/policycore/core/models.py", "exec"), namespace)  # noqa: S102
         policy_cls = namespace["Policy"]
-        policy_cls("POL-TEST", "Test Holder", "Auto", 100.0, "2024-01-01", "Active")
+        policy_cls("POL-TEST", "Test Sponsor Ltd.", "Health", 100.0, "2024-01-01", "Active")
     except Exception as exc:
         raise LLMError(
             "S3 generated apps/policycore/core/models.py breaks apps/policycore/core/seed.py's "

@@ -324,7 +324,7 @@ def _validate_models_backward_compatible() -> None:
     try:
         exec(compile(models_content, "apps/policycore/core/models.py", "exec"), namespace)  # noqa: S102
         policy_cls = namespace["Policy"]
-        policy_cls("POL-TEST", "Test Holder", "Auto", 100.0, "2024-01-01", "Active")
+        policy_cls("POL-TEST", "Test Sponsor Ltd.", "Health", 100.0, "2024-01-01", "Active")
     except Exception as exc:
         raise HarnessError(
             "harness generated apps/policycore/core/models.py breaks apps/policycore/core/seed.py's "

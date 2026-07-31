@@ -5,8 +5,8 @@ request, and no target's `testgen_allowlist` names it — the AI can neither
 write it nor overwrite it. That is the entire point: every CR in this console
 ends with an acceptance criterion of the form
 
-    "Existing policy list, policy detail, claim submission, and claim list
-     flows are unaffected."
+    "Existing contract list, contract detail, plan-member roster, claim
+     submission, and claim list flows are unaffected."
 
 and until this file existed, nothing in the pipeline verified that. The
 generated suite proves the *new* behaviour; this one proves the old behaviour
@@ -37,6 +37,7 @@ from apps.policycore.core.db import (
     get_policy,
     list_claims,
     list_endorsements,
+    list_plan_members,
     list_policies,
 )
 from apps.policycore.core.endorsements import submit_endorsement
@@ -46,10 +47,11 @@ from apps.policycore.core.seed import reseed
 # assertions below lean on. Pinned here so a seed change fails loudly in one
 # place instead of subtly skewing several tests.
 SEEDED_POLICY_COUNT = 18
+SEEDED_MEMBER_COUNT = 13
 SEEDED_CLAIM_COUNT = 6
 KNOWN_POLICY = "POL-10001"
-KNOWN_POLICY_HOLDER = "Maria Torres"
-KNOWN_POLICY_PREMIUM = 812.50
+KNOWN_POLICY_HOLDER = "Northwind Logistics Ltd."
+KNOWN_POLICY_PREMIUM = 4820.50
 LAPSED_POLICY = "POL-10006"
 UNKNOWN_POLICY = "POL-99999"
 
@@ -74,20 +76,26 @@ def test_policy_list_returns_every_seeded_policy() -> None:
 
 def test_policy_list_preserves_core_fields() -> None:
     """The list view reads these six fields off every row; a schema change
-    that drops or renames one breaks the portal's policy table."""
+    that drops or renames one breaks the portal's group contract table."""
     for policy in list_policies():
         assert policy.policy_number.startswith("POL-")
         assert policy.holder_name
-        assert policy.product_type in {"Auto", "Home", "Life"}
+        assert policy.product_type in {
+            "Health",
+            "Dental",
+            "Group Life",
+            "Disability",
+            "Critical Illness",
+        }
         assert isinstance(policy.premium, float)
         assert policy.premium > 0
-        assert policy.status in {"Active", "Lapsed", "Cancelled"}
+        assert policy.status in {"Active", "Lapsed", "Terminated"}
 
 
 def test_policy_list_includes_non_active_policies() -> None:
-    """The list is unfiltered — lapsed and cancelled policies still appear."""
+    """The list is unfiltered — lapsed and terminated contracts still appear."""
     statuses = {p.status for p in list_policies()}
-    assert {"Active", "Lapsed", "Cancelled"} <= statuses
+    assert {"Active", "Lapsed", "Terminated"} <= statuses
 
 
 # --- Policy detail flow -----------------------------------------------------
@@ -98,7 +106,7 @@ def test_policy_detail_returns_the_requested_policy() -> None:
     assert policy is not None
     assert policy.policy_number == KNOWN_POLICY
     assert policy.holder_name == KNOWN_POLICY_HOLDER
-    assert policy.product_type == "Auto"
+    assert policy.product_type == "Health"
     assert policy.premium == KNOWN_POLICY_PREMIUM
     assert policy.status == "Active"
 
@@ -112,10 +120,10 @@ def test_policy_detail_for_unknown_policy_returns_none() -> None:
 
 
 def test_claim_submission_persists_and_defaults_to_submitted() -> None:
-    claim = submit_claim(KNOWN_POLICY, "Collision", 1450.00, notes="Regression check")
+    claim = submit_claim(KNOWN_POLICY, "Paramedical", 1450.00, notes="Regression check")
 
     assert claim.policy_number == KNOWN_POLICY
-    assert claim.claim_type == "Collision"
+    assert claim.claim_type == "Paramedical"
     assert claim.amount == 1450.00
     assert claim.status == "Submitted"
     assert claim.notes == "Regression check"
@@ -128,20 +136,20 @@ def test_claim_submission_persists_and_defaults_to_submitted() -> None:
 
 
 def test_claim_submission_defaults_notes_to_empty() -> None:
-    claim = submit_claim(KNOWN_POLICY, "Windshield", 320.00)
+    claim = submit_claim(KNOWN_POLICY, "Vision", 320.00)
     assert claim.notes == ""
 
 
 def test_two_claims_on_one_policy_get_distinct_numbers() -> None:
-    first = submit_claim(KNOWN_POLICY, "Collision", 900.00)
-    second = submit_claim(KNOWN_POLICY, "Theft", 1200.00)
+    first = submit_claim(KNOWN_POLICY, "Paramedical", 900.00)
+    second = submit_claim(KNOWN_POLICY, "Vision", 1200.00)
     assert first.claim_number != second.claim_number
 
 
 def test_claim_can_be_filed_against_a_lapsed_policy() -> None:
-    """PolicyCore does not gate submission on policy status — adjusters
+    """PolicyCore does not gate submission on contract status — adjudicators
     triage that downstream. Pinned because it is easy to "fix" by accident."""
-    claim = submit_claim(LAPSED_POLICY, "Collision", 500.00)
+    claim = submit_claim(LAPSED_POLICY, "Paramedical", 500.00)
     assert claim.status == "Submitted"
 
 
@@ -151,12 +159,12 @@ def test_claim_can_be_filed_against_a_lapsed_policy() -> None:
 def test_claim_list_returns_seeded_claims_for_a_policy() -> None:
     claims = list_claims(KNOWN_POLICY)
     assert [c.claim_number for c in claims] == ["CLM-50001"]
-    assert claims[0].claim_type == "Collision"
+    assert claims[0].claim_type == "Paramedical"
     assert claims[0].status == "Approved"
 
 
 def test_claim_list_is_scoped_to_one_policy() -> None:
-    submit_claim(KNOWN_POLICY, "Collision", 100.00)
+    submit_claim(KNOWN_POLICY, "Paramedical", 100.00)
     assert all(c.policy_number == KNOWN_POLICY for c in list_claims(KNOWN_POLICY))
     assert list_claims("POL-10003") == []
 
@@ -180,7 +188,7 @@ def test_endorsement_submission_with_the_original_field_set_still_succeeds() -> 
         "Update mailing address to 44 Rosewood Ave",
         "2026-09-01",
         "555-0142",
-        "policyholder@example.invalid",
+        "sponsor@example.invalid",
     )
 
     assert endorsement.policy_number == KNOWN_POLICY
@@ -188,7 +196,7 @@ def test_endorsement_submission_with_the_original_field_set_still_succeeds() -> 
     assert endorsement.requested_change == "Update mailing address to 44 Rosewood Ave"
     assert endorsement.effective_date == "2026-09-01"
     assert endorsement.contact_phone == "555-0142"
-    assert endorsement.contact_email == "policyholder@example.invalid"
+    assert endorsement.contact_email == "sponsor@example.invalid"
     assert endorsement.endorsement_number.startswith("END-")
     assert endorsement.filed_at
 
@@ -200,14 +208,55 @@ def test_endorsement_round_trips_through_the_list_view() -> None:
         "Correct surname spelling",
         "2026-10-15",
         "555-0177",
-        "holder@example.invalid",
+        "sponsor@example.invalid",
     )
 
     stored = list_endorsements(KNOWN_POLICY)
     assert len(stored) == 1
     assert stored[0].endorsement_type == "Name Correction"
-    assert stored[0].contact_email == "holder@example.invalid"
+    assert stored[0].contact_email == "sponsor@example.invalid"
 
 
 def test_endorsement_list_is_empty_for_a_policy_with_none() -> None:
     assert list_endorsements("POL-10003") == []
+
+
+# --- Plan member roster flow ------------------------------------------------
+
+
+def test_member_roster_returns_every_seeded_member() -> None:
+    """The contract detail view renders the roster off this call; the totals
+    are pinned so a seed change fails here rather than skewing the view."""
+    total = sum(len(list_plan_members(p.policy_number)) for p in list_policies())
+    assert total == SEEDED_MEMBER_COUNT
+
+
+def test_member_roster_is_scoped_to_one_contract() -> None:
+    members = list_plan_members(KNOWN_POLICY)
+    assert [m.member_id for m in members] == [
+        "MBR-30001",
+        "MBR-30002",
+        "MBR-30003",
+        "MBR-30013",
+    ]
+    assert all(m.policy_number == KNOWN_POLICY for m in members)
+
+
+def test_member_roster_preserves_core_fields() -> None:
+    for member in list_plan_members(KNOWN_POLICY):
+        assert member.member_id.startswith("MBR-")
+        assert member.member_name
+        assert isinstance(member.dependents, int)
+        assert member.dependents >= 0
+        assert member.status in {"Active", "Terminated"}
+
+
+def test_member_roster_includes_terminated_members() -> None:
+    """Unfiltered, same as the contract list — a terminated member stays on
+    the roster so prior claims still resolve to a name."""
+    statuses = {m.status for m in list_plan_members(KNOWN_POLICY)}
+    assert {"Active", "Terminated"} <= statuses
+
+
+def test_member_roster_is_empty_for_a_contract_with_no_enrolments() -> None:
+    assert list_plan_members("POL-10003") == []

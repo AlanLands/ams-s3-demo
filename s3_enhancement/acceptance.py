@@ -86,6 +86,12 @@ def parse_acceptance_criteria(cr_text: str) -> list[Criterion]:
     groups: list[list[str]] = []
     for line in lines[start:]:
         if not line.strip():
+            if not groups:
+                # A blank line between the heading and the first bullet is
+                # ordinary markdown, not an empty section — skip it. Breaking
+                # here silently returned zero criteria and emptied the
+                # traceability matrix with no error anywhere.
+                continue
             break  # end of the section — a later list is a different section
         if _BULLET_RE.match(line):
             groups.append([line.strip()])

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MapleSure — Policy Team</title>
+<title>MapleSure — Group Contracts</title>
 <style>
   :root {
     --accent: #0e7490;
@@ -69,13 +69,13 @@
 </header>
 <main>
   <div class="toolbar">
-    <input id="search" type="text" placeholder="Filter by policy number, holder, or product…">
+    <input id="search" type="text" placeholder="Filter by contract number, plan sponsor, or benefit…">
     <button id="refresh">Refresh</button>
   </div>
   <div class="card">
     <table>
       <thead>
-        <tr><th>Policy #</th><th>Holder</th><th>Product</th><th>Status</th><th>Coverage limit</th></tr>
+        <tr><th>Contract #</th><th>Plan sponsor</th><th>Benefit</th><th>Status</th><th>Annual maximum</th></tr>
       </thead>
       <tbody id="rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
     </table>
@@ -101,13 +101,13 @@
         <td>${p.holderName}</td>
         <td>${p.product}</td>
         <td><span class="badge ${p.status === "ACTIVE" ? "active" : "lapsed"}">${p.status}</span></td>
-        <td class="num">${fmt.format(p.coverageLimit)}</td>
+        <td class="num">${fmt.format(p.annualMaximum)}</td>
       </tr>`).join("");
   }
 
   async function load() {
     try {
-      policies = await (await fetch("/api/policies")).json();
+      policies = await (await fetch("api/policies")).json();
     } catch {
       document.getElementById("rows").innerHTML =
         '<tr><td colspan="5" class="empty">Could not reach policy-service API</td></tr>';
