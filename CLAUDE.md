@@ -21,7 +21,7 @@ AI analysis → codegen → tests → docs → release notes.
 
 ## Layout — things `ls` won't tell you
 
-- `apps/` holds the four *running* applications, one launch script each (see
+- `apps/` holds the five *running* applications, one launch script each (see
   `apps/README.md`). Everything else at the root is tooling, not an app:
   `s3_enhancement/` is the AI pipeline, `common/` the shared clients, `demo/`
   the presenter scripts.
@@ -45,13 +45,31 @@ AI analysis → codegen → tests → docs → release notes.
   with `demo/reset_s3_claimsportal.sh`. Its generated test and regression suite
   now live in the top-level `tests/` dir like the other two targets (the
   Java-only exception for in-target-root test discovery no longer applies).
+- `apps/enroldirect/` is S3's third target — "EnrolDirect"
+  (Python/FastAPI, CR-2026-045, target id `enroldirect-prospect-access`,
+  cache namespace `enroldirect_prospect_access`). The online enrolment
+  channel: two access preferences own who may self-serve, and a third
+  population — prospects, on the roster with no active benefit — that
+  neither preference was written for.
+  **Its baseline is a removal, which is what makes it different from the
+  other two.** The checked-in source is the state after the impact analysis
+  and before the gate acts on it: `eligibility.preference_for_category`
+  returns `None` for a prospect, so they are refused. The CR settles the
+  classification. `impact.py` is in `core_files` but deliberately NOT in
+  `codegen_allowlist` — the model must read the analysis to understand the
+  change and must not edit it, which is why this target has its own
+  `_validate_enroldirect_file_set` (core recall over the editable core files
+  only, plus a loud failure if a read-only file comes back modified).
+  Baseline snapshot in `.baseline/`; reset with
+  `demo/reset_s3_enroldirect.sh`.
 - `apps/console/` is the console: `api/` (FastAPI, run as
   `uvicorn apps.console.api.main:app`) and `web/` (React, was `frontend/`).
 - `s3_enhancement/cache/` is the committed replay cache that makes the demo
   deterministic; `s3_enhancement/out/` is gitignored and regenerated per run.
 - `tests/` holds both the pipeline's own tests **and** the target apps'
   checked-in regression suites (`test_regression_policycore.py`,
-  `test_regression_claimsportal.py`). The regression suites are deliberately
+  `test_regression_claimsportal.py`, `test_regression_enroldirect.py`). The
+  regression suites are deliberately
   outside every target root: anything ending `.py` under a target root joins
   the codegen candidate pool (see below). Until the 2026-07-30 Python rewrite,
   ClaimsPortal's Java regression suite was the one exception, living at

@@ -144,6 +144,8 @@ def _propose_change_once(
         prompt = build_endorsement_prompt(cr_text, selection=selection)
     elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
         prompt = build_spring_prompt(cr_text, selection=selection)
+    elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
+        prompt = build_enroldirect_prompt(cr_text, selection=selection, target=target)
     else:
         prompt = build_prompt(tier_name, cr_text, selection=selection)
     usage: dict = {}
@@ -176,6 +178,8 @@ def _propose_change_once(
         _validate_endorsement_file_set(files, selection)
     elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
         _validate_spring_file_set(files, selection)
+    elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
+        _validate_enroldirect_file_set(files, selection, target)
     else:
         _validate_file_set(files, selection)
     # Validation runs on the full response (core recall requires every core
@@ -841,6 +845,153 @@ Rules:
   policy-directory passthrough, claim submission, and claim listing."""
 
 
+_ENROLDIRECT_READ_ONLY_REASONS = {
+    "apps/enroldirect/impact.py": (
+        "the impact analysis this CR acts on — it must keep sizing BOTH "
+        "options after one is adopted, and its JSON field names are consumed "
+        "by the console"
+    ),
+    "apps/enroldirect/preferences.py": (
+        "the two preference strings are the integration contract with "
+        "PolicyCore and arrive verbatim on the contract record — renaming one "
+        "silently disables the gate it controls"
+    ),
+    "apps/enroldirect/benefits.py": (
+        "`plans_open_to` already takes an effective category and needs no "
+        "change to receive a resolved one"
+    ),
+}
+
+
+def build_enroldirect_prompt(
+    cr_text: str, *, selection: relevance.SelectionResult, target: Target
+) -> str:
+    """Prompt for CR-2026-045 (prospect access) against the EnrolDirect target.
+
+    No audience-picked placeholder, like the endorsement and ClaimsPortal CRs.
+
+    The instruction with no counterpart in the other builders is the read-only
+    set. Three of this target's selected files are context the model needs and
+    must not return — `impact.py` above all, since the analysis surface is the
+    obvious thing to "finish" and editing it would rewrite the evidence the CR
+    is acting on. Editability is read off `target.codegen_allowlist` rather
+    than listed here, so the prompt and the validator cannot disagree.
+    """
+    current_files = []
+    for rel_path, content in selection.selected.items():
+        marker = "" if rel_path in target.codegen_allowlist else "   [CONTEXT ONLY]"
+        current_files.append(f"--- {rel_path} ---{marker}\n{content}")
+    editable = [p for p in selection.selected if p in target.codegen_allowlist]
+    read_only_rules = "\n".join(
+        f"- {rel_path} is CONTEXT ONLY: do not return it and do not change it — "
+        f"{_ENROLDIRECT_READ_ONLY_REASONS.get(rel_path, 'it is outside this change')}."
+        for rel_path in selection.selected
+        if rel_path not in target.codegen_allowlist
+    )
+    json_shape = json.dumps(
+        {
+            "files": [
+                {
+                    "path": rel_path,
+                    "content": "<complete replacement>",
+                    "reason": "<one short sentence: why this file needs to change>",
+                }
+                for rel_path in editable
+            ]
+        },
+        indent=2,
+    )
+
+    return f"""Change request:
+{cr_text}
+
+Current contents of the files in scope. Only the ones NOT marked
+[CONTEXT ONLY] may be returned:
+{chr(10).join(current_files)}
+
+Return structured JSON only with this exact shape:
+{json_shape}
+
+Rules:
+- Return every file listed in the shape above, each as a complete replacement,
+  not a patch or diff. Return nothing else.
+- "reason" is one short sentence (plain English, no code) a reviewer can read
+  at a glance to know why that specific file is part of this change.
+- These are FastAPI sources for one service (the EnrolDirect enrolment channel).
+{read_only_rules}
+- applicants.py gains the prospect policy as module-level configuration, not a
+  per-call parameter, by these exact names — a fixed contract the generated
+  test suite depends on:
+  - `TREAT_AS_MEMBER = "MEMBER"` and `TREAT_AS_GUEST = "GUEST"` — the two
+    options, whose values are also the effective category each produces.
+  - `PROSPECT_POLICIES: tuple[str, ...]` — both options, in that order.
+  - `PROSPECT_POLICY` — the policy in force, set to `TREAT_AS_GUEST`.
+- eligibility.py:
+  - `preference_for_category(category: str) -> str | None` keeps its single
+    parameter. MEMBER resolves to MEMBER_ACCESS, GUEST to GUEST_ACCESS, and
+    PROSPECT resolves through `PROSPECT_POLICY` to MEMBER_ACCESS when the
+    policy is `TREAT_AS_MEMBER` and GUEST_ACCESS otherwise. Anything else
+    still returns None.
+  - add `effective_category(category: str) -> str` — the category an applicant
+    is treated as: a prospect's is `PROSPECT_POLICY`'s value, everyone else's
+    is their own category.
+  - `EligibilityDecision` gains `prospectPolicyApplied: str | None`, populated
+    with `PROSPECT_POLICY` for prospects and None for every other category, on
+    every return path including the denials.
+  - The three gates keep their existing order: contract status first, then the
+    category-to-preference resolution, then the sponsor's enabled preferences.
+    A prospect on a LAPSED contract must still be denied at the first gate.
+- enrolments.py resolves the effective category once via
+  `eligibility.effective_category` and uses it for the member-only plan check
+  (`plan.memberOnly and effective != "MEMBER"`). `EnrolmentRecord` gains
+  `effectiveCategory: str` and `prospectPolicyApplied: str | None`, both
+  placed after `category`. The access gate is reused, never reimplemented.
+- main.py's `/api/eligibility/check` response gains `prospectPolicyApplied`
+  from the decision. `/api/applicants/{{applicant_id}}/plans` resolves the
+  effective category, filters `benefits.plans_open_to` on it, and returns it
+  as `effectiveCategory` alongside the existing `category`. No request model
+  gains a prospect-policy field — the gate enforces one policy.
+- Do not add an endpoint that sets or overrides the policy.
+- Do not touch the static HTML console — it is not in your file list and must
+  keep working unchanged.
+- Imports are where this change goes wrong. Two files have exactly one correct
+  import statement each, and rewriting either of them differently is a
+  NameError at request time rather than a test failure you would see here.
+  Reproduce these two lines verbatim:
+  - eligibility.py — replace its existing
+    `from apps.enroldirect.applicants import GUEST, MEMBER, Applicant`
+    with exactly:
+    `from apps.enroldirect.applicants import (GUEST, MEMBER, PROSPECT,
+    PROSPECT_POLICY, TREAT_AS_MEMBER, Applicant)` — wrapped across lines in
+    that order. `Applicant` is still used by `check_eligibility`'s signature
+    and must not be dropped. Do not import `TREAT_AS_GUEST`; the code compares
+    against `TREAT_AS_MEMBER` only.
+  - enrolments.py — its import of eligibility becomes exactly
+    `from apps.enroldirect.eligibility import check_eligibility,
+    effective_category`. Add nothing else to it.
+- In enrolments.py's member-only check, KEEP the existing `"MEMBER"` string
+  literal and change only the left-hand side: `if plan.memberOnly and
+  applicant.category != "MEMBER":` becomes
+  `if plan.memberOnly and effective != "MEMBER":`. Do not replace the literal
+  with a bare `MEMBER` name — it is not imported in that file.
+- A dataclass field with no default cannot follow one that has a default —
+  `EligibilityDecision.reasons` already has `field(default_factory=list)`, so
+  put any new field BEFORE it, not after.
+- applicants.py's module docstring currently states that no preference has
+  been assigned to prospects and that the gate refuses them. That is no longer
+  true after this change — rewrite that paragraph to describe the policy now
+  in force. Leave the rest of the docstring alone.
+{_PRESERVATION_RULES}
+- Use modern built-in generics for every type hint (`list[str]`, `dict[str,
+  float]`, `X | None`) — never `typing.List`, `typing.Dict`, `typing.Tuple`,
+  or `typing.Optional`; this repo's ruff config rejects them.
+- Keep every line at 100 characters or fewer (this repo's ruff line-length
+  limit) — wrap long f-strings and comments rather than exceeding it.
+- Existing flows must keep working: the contract and applicant directories,
+  the access check for members and guests, the benefit catalogue, enrolment
+  submission and refusal recording, and the analysis endpoints."""
+
+
 def _parse_files_response(response: str) -> tuple[dict[str, str], dict[str, str]]:
     """Returns (files, reasons) — `reasons` is the optional one-line "why this
     file changed" the prompt asks for, keyed by path. Older callers that only
@@ -923,6 +1074,49 @@ def _validate_file_set(files: dict[str, str], selection: relevance.SelectionResu
     for rel_path, content in files.items():
         _validate_content(rel_path, content)
     _validate_policy_backward_compatible(files["apps/policycore/core/models.py"])
+
+
+def _validate_enroldirect_file_set(
+    files: dict[str, str], selection: relevance.SelectionResult, target: Target
+) -> None:
+    """File-set check for a target whose prompt shows a file it may not change.
+
+    `impact.py` is one of this target's `core_files` — the model has to read
+    the analysis to understand what the CR is acting on — but it is not in the
+    `codegen_allowlist`, so demanding it back the way `verify_core_recall`
+    does for every other target would fail every well-behaved response. Core
+    recall therefore runs over the editable core files only.
+
+    The read-only files are still checked, in the direction that matters: the
+    model may echo one back unchanged (harmless, and `_drop_unchanged_files`
+    removes it), but a *modified* one is the CR's "not to be changed by this
+    CR" clause being broken, and that fails loudly rather than being silently
+    discarded.
+    """
+    editable_core = tuple(p for p in selection.core_files if p in target.codegen_allowlist)
+    relevance.verify_core_recall(files, core_files=editable_core)
+
+    unexpected = set(files) - set(selection.selected)
+    if unexpected:
+        raise LLMError(
+            "S3 codegen returned unexpected file set: "
+            f"outside selected scope {sorted(unexpected)}; selected {sorted(selection.selected)}"
+        )
+
+    modified_read_only = sorted(
+        rel_path
+        for rel_path, content in files.items()
+        if rel_path not in target.codegen_allowlist
+        and content != selection.selected.get(rel_path)
+    )
+    if modified_read_only:
+        raise LLMError(
+            "S3 codegen modified files this CR forbids changing: "
+            f"{modified_read_only}; allowlist {sorted(target.codegen_allowlist)}"
+        )
+
+    for rel_path, content in files.items():
+        _validate_content(rel_path, content)
 
 
 def _validate_endorsement_file_set(

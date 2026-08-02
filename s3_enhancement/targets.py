@@ -350,6 +350,66 @@ CLAIMSPORTAL_CLAIMS_DEDUCTIBLE = Target(
 register_target(CLAIMSPORTAL_CLAIMS_DEDUCTIBLE)
 
 
+ENROLDIRECT_TARGET_ID = "enroldirect-prospect-access"
+
+_ENROLDIRECT_ROOT = REPO_ROOT / "apps" / "enroldirect"
+_ENROLDIRECT_SRC = "apps/enroldirect"
+
+# EnrolDirect's third target-shaped property is that its baseline is a
+# *removal*: the checked-in source is the state after the impact analysis and
+# before the gate was changed, so a prospect resolves to no preference and is
+# refused. The CR settles the classification. `.baseline/` holds the pristine
+# copy and is excluded from the codegen corpus by relevance._EXCLUDED_DIR_NAMES
+# — the only way a `.py` snapshot can sit inside a target root without joining
+# the candidate pool.
+#
+# `impact.py` is a core file but deliberately NOT in the codegen allowlist. It
+# is the analysis this CR acts on, not part of the change: it has to keep
+# sizing both options after one is adopted, and it is the input the model needs
+# to read to understand what the CR means. Core-file recall gets it into the
+# prompt; the allowlist keeps it out of the diff.
+ENROLDIRECT_PROSPECT_ACCESS = Target(
+    target_id=ENROLDIRECT_TARGET_ID,
+    source_kind="local",
+    display_name="EnrolDirect — prospect access at the enrolment gate (CR-2026-045)",
+    application_id=applications.ENROL_DIRECT_ID,
+    root=_ENROLDIRECT_ROOT,
+    cr_template_path=REPO_ROOT / "crs" / "CR-2026-045.md",
+    cr_placeholder="",  # no audience-picked placeholder token
+    core_files=(
+        f"{_ENROLDIRECT_SRC}/applicants.py",
+        f"{_ENROLDIRECT_SRC}/eligibility.py",
+        f"{_ENROLDIRECT_SRC}/enrolments.py",
+        f"{_ENROLDIRECT_SRC}/main.py",
+        f"{_ENROLDIRECT_SRC}/preferences.py",
+        f"{_ENROLDIRECT_SRC}/impact.py",
+    ),
+    codegen_allowlist=(
+        f"{_ENROLDIRECT_SRC}/applicants.py",
+        f"{_ENROLDIRECT_SRC}/eligibility.py",
+        f"{_ENROLDIRECT_SRC}/enrolments.py",
+        f"{_ENROLDIRECT_SRC}/main.py",
+    ),
+    testgen_allowlist=("tests/test_s3_prospect_access.py",),
+    regression_paths=("tests/test_regression_enroldirect.py",),
+    harness_expected_files=(),
+    mutations=(
+        Mutation(
+            rel_path=f"{_ENROLDIRECT_SRC}/eligibility.py",
+            old_snippet="if category == PROSPECT:",
+            new_snippet="if category == GUEST:",
+            description=(
+                "Redirected the prospect branch to match guests instead — "
+                "prospects fall through to no preference and are refused "
+                "again, silently reverting the CR at the gate."
+            ),
+        ),
+    ),
+    cache_namespace="enroldirect_prospect_access",
+)
+register_target(ENROLDIRECT_PROSPECT_ACCESS)
+
+
 def get_target(target_id: str | None) -> Target:
     """Resolve a target by id, defaulting to today's one demo target."""
     return _REGISTRY[target_id or DEFAULT_TARGET_ID]

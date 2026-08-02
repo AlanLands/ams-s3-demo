@@ -1,4 +1,4 @@
-# apps/ — the four applications the demo runs
+# apps/ — the five applications the demo runs
 
 Everything in here is a *running application*. Nothing in here is S3 tooling —
 the AI pipeline itself lives in `s3_enhancement/`, shared clients in `common/`,
@@ -13,9 +13,11 @@ below; only the last two depend on each other.
 | 2 | **PolicyCore** | `apps/run-policycore.sh` | 8501 | The client's policy-administration portal (Python/Streamlit/SQLite). The window the audience watches change. Open **:8501/sl_policycore** — see below. |
 | 3 | **Policy-Service** | `apps/run-policy-service.sh` | 8081 | ClaimsPortal's policy side (Python/FastAPI). Start before Claims-Service. |
 | 4 | **Claims-Service** | `apps/run-claims-service.sh` | 8082 | ClaimsPortal's claims side (Python/FastAPI). Target of CR-2026-043. |
+| 5 | **EnrolDirect** | `apps/run-enroldirect.sh` | 8083 | The online enrolment channel and its access-preference analysis (Python/FastAPI). Target of CR-2026-045. |
 
-You do **not** need all four for every beat. The mockapp CRs (CR-2026-041,
-CR-2026-042) need apps 1 and 2. CR-2026-043 needs apps 1, 3 and 4.
+You do **not** need all five for every beat. The mockapp CRs (CR-2026-041,
+CR-2026-042) need apps 1 and 2. CR-2026-043 needs apps 1, 3 and 4. CR-2026-045
+needs apps 1 and 5, and EnrolDirect runs on nothing but the venv.
 
 ## Ports and paths come from `.env`
 
@@ -29,6 +31,7 @@ it used before, so a plain `localhost` run needs nothing set:
 | `POLICY_SERVICE_PORT` | Policy-Service | `8081` |
 | `CLAIMS_SERVICE_PORT` | Claims-Service | `8082` |
 | `POLICY_SERVICE_URL` | Claims-Service → Policy-Service lookups | `http://localhost:8081` |
+| `ENROLDIRECT_PORT` | EnrolDirect | `8083` |
 
 The one behavior change: **PolicyCore now serves under a base path**, at
 `http://localhost:8501/sl_policycore` rather than the bare port root, so all
@@ -56,6 +59,16 @@ before any AI step runs (`s3_enhancement/applications.py`):
 The last two exist on purpose: they show a ticket reaching the correct team
 for an application this console has no code for, instead of the console
 pretending it can generate a fix.
+
+| `enroldirect/` | EnrolDirect | App Support — PolicyCore | **yes** — `enroldirect-prospect-access` (CR-2026-045) |
+
+EnrolDirect was the third kind of row until CR-2026-045: the console had its
+code but no registered target, so it carried an empty `repo_path` and reported
+`automation_available=False`. Both halves exist now. The property still
+answers "can we act on this ticket" rather than "is the source on disk", and
+`RouteDecision.automation_available` still requires a repo *and* a registered
+target — remove either and this row goes back to routing-only rather than to a
+beat that fails when a presenter clicks it.
 
 ## Layout notes that aren't obvious
 

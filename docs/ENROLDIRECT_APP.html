@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EnrolDirect — What the Application Does, and What It Deliberately Does Not</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm; }
+
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #5c5c5c;
+    --ink-faint: #8a8a8a;
+    --line: #d8d8d8;
+    --accent: #8b1e2d;
+    --accent-soft: #f6ecee;
+    --ok: #1c6b3c;
+    --ok-soft: #edf5f0;
+    --warn: #8a5a00;
+    --warn-soft: #fdf6e6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    /* Chart roles. Colour follows the POLICY (the entity) and is identical in
+       every figure — never reassigned by rank within one figure. Validated as
+       a categorical pair against this print surface: CVD ΔE 24.7, normal-vision
+       ΔE 33.6, both ≥ 3:1 contrast. Every bar also carries a direct value
+       label, so identity is never colour-alone. */
+    --surface-1: #fcfcfb;
+    --policy-member: #2a78d6;
+    --policy-guest: #eb6834;
+    --grid: #e6e6e4;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font: 10.5pt/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    margin: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1 { font-size: 21pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
+  h2 {
+    font-size: 13pt; margin: 0 0 3mm; padding-bottom: 1.5mm;
+    border-bottom: 2px solid var(--accent); letter-spacing: -0.2pt;
+  }
+  h3 { font-size: 10.5pt; margin: 4.5mm 0 1.5mm; }
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  p { margin: 0 0 2.5mm; }
+
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  code { background: #f2f2f2; padding: 0.5pt 2pt; border-radius: 2px; }
+  pre {
+    font-family: var(--mono); font-size: 8.5pt; line-height: 1.45;
+    background: #f7f7f7; border-left: 2.5pt solid var(--line);
+    padding: 2.5mm 3mm; margin: 2mm 0 3mm; white-space: pre-wrap;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3.5mm; font-size: 9.5pt; }
+  th, td { text-align: left; padding: 1.6mm 2mm; border-bottom: 0.5pt solid var(--line); vertical-align: top; }
+  th { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.4pt; color: var(--ink-soft); border-bottom: 1pt solid var(--ink-soft); }
+  td.mono { font-family: var(--mono); font-size: 9pt; line-height: 1.5; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  ol, ul { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.5mm; }
+
+  .section { margin-bottom: 6mm; }
+
+  .cover { border-bottom: 3pt solid var(--accent); padding-bottom: 4mm; margin-bottom: 5mm; }
+  .kicker { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.6pt; color: var(--accent); font-weight: 700; margin-bottom: 2mm; }
+  .subtitle { font-size: 11pt; color: var(--ink-soft); margin: 0; }
+  .meta { font-size: 8.5pt; color: var(--ink-soft); margin-top: 3mm; }
+
+  .callout {
+    background: var(--accent-soft); border-left: 2.5pt solid var(--accent);
+    padding: 3mm 3.5mm; margin: 3mm 0; break-inside: avoid;
+  }
+  .callout .lead { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; color: var(--accent); font-weight: 700; margin-bottom: 1.5mm; }
+  .callout p:last-child { margin-bottom: 0; }
+  .say { font-size: 11pt; line-height: 1.45; font-style: italic; }
+
+  .caution {
+    background: var(--warn-soft); border-left: 2.5pt solid var(--warn);
+    padding: 3mm 3.5mm; margin: 3mm 0; break-inside: avoid; font-size: 9.5pt;
+  }
+  .caution .lead { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; color: var(--warn); font-weight: 700; margin-bottom: 1.5mm; }
+  .caution p:last-child { margin-bottom: 0; }
+
+  figure { margin: 3mm 0 4mm; break-inside: avoid; page-break-inside: avoid; }
+  figcaption {
+    font-size: 8.5pt; color: var(--ink-soft); margin-top: 1.5mm;
+    padding-top: 1.2mm; border-top: 0.5pt solid var(--line);
+  }
+  figcaption strong { color: var(--ink); }
+  .fig-title { font-size: 9.5pt; font-weight: 700; margin-bottom: 0.5mm; }
+  .fig-sub { font-size: 8.5pt; color: var(--ink-soft); margin-bottom: 2mm; }
+  svg { display: block; width: 100%; height: auto; }
+
+  .chip {
+    display: inline-block; font-size: 7.5pt; font-weight: 700; text-transform: uppercase;
+    padding: 0.5mm 1.6mm; border-radius: 2px; white-space: nowrap;
+  }
+  .chip-ok { background: var(--ok-soft); color: var(--ok); border: 0.5pt solid var(--ok); }
+  .chip-no { background: var(--warn-soft); color: var(--warn); border: 0.5pt solid var(--warn); }
+  .tiny { font-size: 8pt; color: var(--ink-soft); margin-top: 0.5mm; }
+
+  .legend { display: flex; gap: 6mm; font-size: 8.5pt; color: var(--ink-soft); margin-bottom: 2mm; }
+  .legend span { display: inline-flex; align-items: center; gap: 1.4mm; }
+  .sw { width: 2.6mm; height: 2.6mm; border-radius: 0.6mm; display: inline-block; }
+
+  .pagebreak { break-before: page; page-break-before: always; }
+  .footnote { font-size: 8.5pt; color: var(--ink-soft); border-top: 0.5pt solid var(--line); padding-top: 2mm; margin-top: 4mm; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="kicker">MapleSure Insurance demo estate · Application Brief</div>
+  <h1>EnrolDirect</h1>
+  <p class="subtitle">The online enrolment channel, the access question nobody had
+    counted, and an analysis surface that refuses to overstate its own evidence.</p>
+  <p class="meta">Fifth application in <span class="mono">apps/</span> · Python / FastAPI ·
+    Verified against a live run on 1 August 2026 · 28 regression tests passing</p>
+</div>
+
+<div class="callout">
+  <div class="lead">The one-line answer</div>
+  <p class="say">"EnrolDirect is the self-serve enrolment channel. It gates access on
+  preferences a sponsor agreed at contract inception — and it carries a second
+  surface that answers the question those preferences never anticipated: what to do
+  with the people on the roster who hold no coverage yet. It computes that answer
+  from configuration rather than asserting it, and it states plainly what the
+  computation does not cover."</p>
+</div>
+
+<div class="section">
+  <h2>Where it came from</h2>
+  <p>The client shared an analysis spike from their own estate: two online-enrolment
+  access controls, a third population that fitted neither, and a list of questions to
+  answer before anyone wrote code. The spike's deliverable was a document.</p>
+  <p>EnrolDirect is that scenario rebuilt as a <strong>running application</strong>, fully
+  de-identified — fictional sponsors, invented applicants, MapleSure system names
+  throughout. Nothing from the client's systems, people or issue keys appears in the
+  code, the data, or this brief. The interesting move is that the analysis is not a
+  document here: it is three endpoints that recompute themselves from whatever the
+  configuration currently says.</p>
+</div>
+
+<div class="section">
+  <h2>What the application does</h2>
+  <p>Access to the self-serve channel is gated by two preferences the plan sponsor
+  agrees at contract inception. They live on the contract record in <strong>PolicyCore</strong>;
+  EnrolDirect enforces them and does not own them. A change to what a preference
+  <em>means</em> is therefore a change to a contract between two systems, not a local edit.</p>
+
+  <table>
+    <thead><tr><th style="width:38%">Access preference</th><th>Written for</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">Online Enrolment - Member</td><td>People already holding an active benefit under the contract, changing their own coverage.</td></tr>
+      <tr><td class="mono">Online Enrolment - Guest</td><td>People with no active benefit who still have reason to enrol — retiree continuations, spousal transfers, sponsor-agreed exceptions.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The gate runs three checks, in this order</h3>
+  <ol>
+    <li><strong>The contract is active.</strong> A lapsed contract keeps whatever preferences
+      it was configured with, so this runs first — reading preferences off a lapsed
+      contract would let stale configuration grant access.</li>
+    <li><strong>The applicant's category resolves to a preference.</strong></li>
+    <li><strong>The sponsor enabled that preference.</strong></li>
+  </ol>
+  <p>Decisions carry their reasons, not just a boolean. A denial that cannot say which
+  gate closed becomes a support ticket, and avoiding a wave of those is most of why
+  the classification question was worth answering deliberately.</p>
+
+  <div class="caution">
+    <div class="lead">Ordering is the fragile part</div>
+    <p>Gates 1 and 3 are reversible without breaking a single category-level test, and
+    reversing them reintroduces the stale-configuration hole silently. That is why the
+    regression suite asserts the ordering directly rather than only asserting outcomes.</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Three populations, two preferences</h2>
+  <p>Two categories map cleanly onto a preference because the preferences were designed
+  around them. The third does not — and it is not a halfway state on the way to
+  becoming a member. It is a population the sponsor has already accepted onto the
+  roster who has not taken up coverage.</p>
+
+  <table>
+    <thead><tr><th>Category</th><th>On roster</th><th>Active benefit</th><th>Preference</th><th>Seeded</th></tr></thead>
+    <tbody>
+      <tr><td><strong>MEMBER</strong></td><td>yes</td><td>yes</td><td>Member</td><td class="num">4</td></tr>
+      <tr><td><strong>GUEST</strong></td><td>no</td><td>no</td><td>Guest</td><td class="num">2</td></tr>
+      <tr><td><strong>PROSPECT</strong></td><td><strong>yes</strong></td><td><strong>no</strong></td><td><span class="chip chip-no">none</span></td><td class="num">6</td></tr>
+    </tbody>
+  </table>
+
+  <p>Treating a prospect as a guest — a stranger to the contract — is uncomfortable.
+  Treating them as a member — someone with coverage to change — is inaccurate. The
+  application makes that a configured policy (<span class="mono">DEFAULT_PROSPECT_POLICY</span>),
+  overridable per call, so the analysis can evaluate both without mutating state the
+  runtime gate is also reading.</p>
+</div>
+
+<div class="section">
+  <h2>The classification bites twice</h2>
+  <p>The obvious effect is at the gate: how many prospects get in. The second effect is
+  past it, in the catalogue — some plans attach to existing coverage and are open to
+  members only, so a prospect admitted <em>as a guest</em> also reaches a smaller
+  catalogue. The two effects run in opposite directions, and reporting only the first
+  would understate the gap between the policies.</p>
+
+  <figure>
+    <div class="fig-title">What each policy changes, measured against the seeded book</div>
+    <div class="fig-sub">Left: prospects admitted at the gate, of 6. Right: plan openings
+      those admitted prospects can reach.</div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--policy-member)"></span>Prospects treated as members</span>
+      <span><span class="sw" style="background:var(--policy-guest)"></span>Prospects treated as guests</span>
+    </div>
+    <svg viewBox="0 0 640 168" role="img" aria-label="Prospects admitted: member policy 3, guest policy 2. Plan openings reachable: member policy 7, guest policy 4.">
+      <!-- left panel: admitted at gate (max 6) -->
+      <text x="0" y="12" font-size="11" font-weight="700" fill="#1a1a1a">Admitted at the gate</text>
+      <text x="0" y="26" font-size="10" fill="#8a8a8a">of 6 prospects</text>
+      <line x1="96" y1="36" x2="96" y2="120" stroke="#e6e6e4" stroke-width="1"/>
+      <text x="90" y="56" font-size="10" fill="#5c5c5c" text-anchor="end">as member</text>
+      <rect x="96" y="44" width="102" height="16" rx="4" fill="#2a78d6"/>
+      <text x="206" y="56" font-size="11" font-weight="700" fill="#1a1a1a">3</text>
+      <text x="90" y="88" font-size="10" fill="#5c5c5c" text-anchor="end">as guest</text>
+      <rect x="96" y="76" width="68" height="16" rx="4" fill="#eb6834"/>
+      <text x="172" y="88" font-size="11" font-weight="700" fill="#1a1a1a">2</text>
+      <text x="96" y="116" font-size="9" fill="#8a8a8a">disagreement on 3 prospects, in both directions</text>
+
+      <!-- right panel: catalogue reach (max 7) -->
+      <text x="340" y="12" font-size="11" font-weight="700" fill="#1a1a1a">Plan openings reachable</text>
+      <text x="340" y="26" font-size="10" fill="#8a8a8a">for the prospects each policy admits</text>
+      <line x1="436" y1="36" x2="436" y2="120" stroke="#e6e6e4" stroke-width="1"/>
+      <text x="430" y="56" font-size="10" fill="#5c5c5c" text-anchor="end">as member</text>
+      <rect x="436" y="44" width="140" height="16" rx="4" fill="#2a78d6"/>
+      <text x="584" y="56" font-size="11" font-weight="700" fill="#1a1a1a">7</text>
+      <text x="430" y="88" font-size="10" fill="#5c5c5c" text-anchor="end">as guest</text>
+      <rect x="436" y="76" width="80" height="16" rx="4" fill="#eb6834"/>
+      <text x="524" y="88" font-size="11" font-weight="700" fill="#1a1a1a">4</text>
+      <text x="436" y="116" font-size="9" fill="#8a8a8a">2 further openings blocked as member-only</text>
+
+      <line x1="0" y1="140" x2="640" y2="140" stroke="#e6e6e4" stroke-width="1"/>
+      <text x="0" y="158" font-size="9" fill="#8a8a8a">Reach is counted only for prospects the gate admits — a plan you cannot reach because you were refused at the door is already a denial.</text>
+    </svg>
+    <figcaption><strong>Both figures use the same colour for the same policy.</strong>
+      Colour follows the entity, never its rank within a chart, and every bar carries
+      its value directly so identity never depends on colour alone.</figcaption>
+  </figure>
+</div>
+
+<div class="section">
+  <h2>The analysis surface</h2>
+  <p>Three endpoints, all pure functions of the seeded directory and the real
+  eligibility rules. <strong>No model call anywhere in them</strong> — so there is no cache key,
+  nothing to warm, and nothing that can be confidently wrong the way generated prose
+  can. Same reasoning that keeps <span class="mono">diagram.py</span> and
+  <span class="mono">acceptance.py</span> deterministic on the S3 side.</p>
+
+  <table>
+    <thead><tr><th style="width:42%">Endpoint</th><th>Answers</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/api/analysis/consumers</td><td>Which systems read or write these preferences, and in which direction — upstream, enforcing, downstream.</td></tr>
+      <tr><td class="mono">/api/analysis/preference-usage</td><td>Which contracts enable which preference; headcount per applicant category.</td></tr>
+      <tr><td class="mono">/api/analysis/prospect-impact</td><td>Both policies' grant counts, catalogue reach, every applicant they disagree about, and a recommendation.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The dependency map</h3>
+  <figure>
+    <svg viewBox="0 0 640 132" role="img" aria-label="PolicyCore configures the preferences; EnrolDirect enforces them; DocumentHub, NightlyBatch and IntegrationBridge consume the outcome.">
+      <rect x="0" y="34" width="132" height="42" rx="5" fill="#f6ecee" stroke="#8b1e2d" stroke-width="1"/>
+      <text x="66" y="52" font-size="10.5" font-weight="700" text-anchor="middle" fill="#1a1a1a">PolicyCore</text>
+      <text x="66" y="66" font-size="8.5" text-anchor="middle" fill="#5c5c5c">configures · upstream</text>
+
+      <line x1="132" y1="55" x2="176" y2="55" stroke="#8a8a8a" stroke-width="1.2"/>
+      <polygon points="176,55 169,51.5 169,58.5" fill="#8a8a8a"/>
+
+      <rect x="178" y="28" width="146" height="54" rx="5" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.4"/>
+      <text x="251" y="48" font-size="10.5" font-weight="700" text-anchor="middle" fill="#1a1a1a">EnrolDirect</text>
+      <text x="251" y="62" font-size="8.5" text-anchor="middle" fill="#5c5c5c">enforces the gate</text>
+      <text x="251" y="74" font-size="8.5" text-anchor="middle" fill="#5c5c5c">this application</text>
+
+      <line x1="324" y1="55" x2="368" y2="55" stroke="#8a8a8a" stroke-width="1.2"/>
+      <polygon points="368,55 361,51.5 361,58.5" fill="#8a8a8a"/>
+
+      <rect x="370" y="4" width="180" height="32" rx="5" fill="#fcfcfb" stroke="#d8d8d8" stroke-width="1"/>
+      <text x="382" y="18" font-size="9.5" font-weight="700" fill="#1a1a1a">DocumentHub</text>
+      <text x="382" y="29" font-size="8" fill="#5c5c5c">confirmation pack wording</text>
+
+      <rect x="370" y="42" width="180" height="32" rx="5" fill="#fcfcfb" stroke="#d8d8d8" stroke-width="1"/>
+      <text x="382" y="56" font-size="9.5" font-weight="700" fill="#1a1a1a">NightlyBatch</text>
+      <text x="382" y="67" font-size="8" fill="#5c5c5c">reconciles by authorising preference</text>
+
+      <rect x="370" y="80" width="180" height="32" rx="5" fill="#fcfcfb" stroke="#d8d8d8" stroke-width="1"/>
+      <text x="382" y="94" font-size="9.5" font-weight="700" fill="#1a1a1a">IntegrationBridge</text>
+      <text x="382" y="105" font-size="8" fill="#5c5c5c">publishes enrolment events</text>
+
+      <text x="370" y="126" font-size="8.5" fill="#8a8a8a">downstream — notified of a change, not consulted about one</text>
+    </svg>
+    <figcaption><strong>Declared, not discovered.</strong> EnrolDirect cannot see the other
+      systems' code, so claiming to have derived this by inspection would be a lie. It is
+      the analysis's stated input, and it is wrong the moment a consumer appears without
+      the table being updated — which the risk list and the UI both say out loud.</figcaption>
+  </figure>
+</div>
+
+<div class="section">
+  <h2>The recommendation, and what it refuses to claim</h2>
+  <p>The application recommends <strong>Guest</strong>: it is the narrower grant, a prospect
+  holds no coverage for the member screens to show, and widening access later is easier
+  to justify than withdrawing it. The recommendation explains the configured default
+  rather than deriving it from the counts — a recommendation that flipped with the seed
+  data would be curve-fitting, not policy. What the counts do is <em>size</em> it.</p>
+
+  <div class="callout">
+    <div class="lead">It reports its own cost</div>
+    <p>Two seeded prospects are denied under the recommended policy that the alternative
+    would admit — both on contracts whose sponsor enabled member access only. Those
+    sponsors would have to enable guest access for their prospects to self-serve. That
+    number is on the same screen as the recommendation, not in a footnote.</p>
+  </div>
+
+  <h3>Not evidenced by this analysis</h3>
+  <p>Four consequences are real and not computable from configuration data. They are
+  named in the payload, rendered in the UI, and asserted by a test — because an analysis
+  that lists only the numbers supporting its recommendation is advocacy, and this one
+  feeds a decision owner.</p>
+  <ul>
+    <li><strong>Regulatory position.</strong> Whether a prospect admitted under member access
+      has been represented as a plan member is a compliance question. No count answers it.</li>
+    <li><strong>Support load.</strong> Denied prospects call the service desk; admitted
+      prospects reaching member screens with no coverage to display also call. The seed
+      cannot say which volume is larger.</li>
+    <li><strong>Downstream subscriber behaviour.</strong> The consumer list is declared. A
+      subscriber filtering on the authorising preference that nobody recorded will change
+      behaviour unannounced.</li>
+    <li><strong>Prospect expectation.</strong> What the sponsor told these people they would
+      be able to do is not in the contract record.</li>
+  </ul>
+
+  <p>The decision owner is named explicitly as plan administration jointly with
+  compliance. The application's stated position is that it sizes the options and does
+  not have standing to choose between them.</p>
+</div>
+
+<div class="section">
+  <h2>Running it</h2>
+  <pre>apps/run-enroldirect.sh          # http://localhost:8083/</pre>
+  <p>Standalone. It seeds contracts, applicants and plans in-process and calls no other
+  service, so it needs nothing running beside it and nothing beyond the venv — FastAPI
+  and uvicorn were already pinned. Port comes from <span class="mono">ENROLDIRECT_PORT</span>
+  in <span class="mono">.env</span>, defaulting to 8083 (8081 and 8082 belong to
+  ClaimsPortal, 8501 to PolicyCore). It survives a port to a locked-down environment:
+  no cloud services, no Docker, no OS-specific paths.</p>
+
+  <table>
+    <thead><tr><th style="width:32%">Screen</th><th>What it is for</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Overview</strong></td><td>Estate counts, both comparison figures, and the recommendation with its cost.</td></tr>
+      <tr><td><strong>Enrol</strong></td><td>The real journey: identify, see your catalogue, pick a tier, submit. Unavailable plans stay listed with their reason.</td></tr>
+      <tr><td><strong>Access check</strong></td><td>Run the gate for any applicant under either policy and read the reasons back.</td></tr>
+      <tr><td><strong>Contracts &amp; plans</strong></td><td>Every contract, its enabled preferences, and the plans behind them.</td></tr>
+      <tr><td><strong>Preference analysis</strong></td><td>Impact, catalogue reach, preference usage, consumers.</td></tr>
+      <tr><td><strong>Audit log</strong></td><td>Every attempt, successful or refused, with the preference that authorised it.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Modules</h3>
+  <table>
+    <thead><tr><th style="width:30%">File</th><th>Owns</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">preferences.py</td><td>The two access preferences and the PolicyCore integration contract.</td></tr>
+      <tr><td class="mono">applicants.py</td><td>The three categories, the prospect policy, and the validation that a MEMBER without coverage is a data fault.</td></tr>
+      <tr><td class="mono">directory.py</td><td>Seeded contracts and applicants, shaped so the two policies genuinely disagree.</td></tr>
+      <tr><td class="mono">benefits.py</td><td>Plans, coverage tiers, and <span class="mono">memberOnly</span> — the second bite.</td></tr>
+      <tr><td class="mono">eligibility.py</td><td>The three-gate access check and the effective-category resolution.</td></tr>
+      <tr><td class="mono">enrolments.py</td><td>Submission, the four refusal codes, and the audit store.</td></tr>
+      <tr><td class="mono">impact.py</td><td>The whole analysis surface. No model call.</td></tr>
+      <tr><td class="mono">main.py</td><td>FastAPI wiring and the payload shapes.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>What the tests protect</h2>
+  <p><span class="mono">tests/test_regression_enroldirect.py</span> — 28 tests, checked in,
+  human-authored, and named by no target's codegen or testgen allowlist. It lives in
+  <span class="mono">tests/</span> rather than under the app because anything ending
+  <span class="mono">.py</span> under a target root joins the codegen candidate pool, and
+  a suite the pipeline can rewrite is not an independent check of anything.</p>
+
+  <table>
+    <thead><tr><th style="width:44%">What is asserted</th><th>Why it needs a test</th></tr></thead>
+    <tbody>
+      <tr><td>The contract gate runs before the preference gate</td><td>Reversing them lets a lapsed contract's stale preferences grant access, and every category-level assertion still passes.</td></tr>
+      <tr><td>The prospect policy never moves a member's or guest's outcome</td><td>That is the promise the reclassification makes to every other consumer of these preferences.</td></tr>
+      <tr><td>The two policies genuinely disagree, in both directions</td><td>A comparison reporting two identical columns looks like agreement and is in fact a broken parameter.</td></tr>
+      <tr><td>Nothing the gate refuses can be enrolled by any route</td><td>The enrolment path reuses the gate rather than reimplementing it; this is the observable consequence.</td></tr>
+      <tr><td>Catalogue reach counts only prospects the gate admits</td><td>Otherwise a prospect refused at the door is counted twice and the gap is inflated.</td></tr>
+      <tr><td>Unavailable plans are marked, not hidden</td><td>A plan that silently vanishes generates the support call an explained one does not.</td></tr>
+      <tr><td>The analysis states what it does not establish</td><td>The honesty clause is load-bearing, so it is enforced rather than trusted.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>What it deliberately is not</h2>
+
+  <h3>Not an S3 enhancement target</h3>
+  <p>EnrolDirect is registered in <span class="mono">applications.py</span> so a ticket
+  naming it reaches the right team, but with no <span class="mono">repo_path</span> — so
+  the console reports <span class="mono">automation_available=False</span>. The code is on
+  disk; what is absent is a registered S3 target. <span class="mono">automation_available</span>
+  answers "can we act on this ticket", not "is the source there", and setting the field
+  would make the console offer a code-generation beat that fails the moment a presenter
+  clicks it.</p>
+  <p>Registering a target is a deliberate, costed step: a <span class="mono">cache_namespace</span>,
+  a codegen allowlist, and a <strong>live re-record</strong> of the streamed codegen and testgen
+  beats, which bills real API calls. That was left as an explicit decision rather than
+  taken quietly.</p>
+
+  <h3>Not the same thing as PolicyCore's enrolment subsystem</h3>
+  <table>
+    <thead><tr><th style="width:34%">Module</th><th>Question it answers</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">policycore/enrolment/</td><td><em>When</em> may this person join? Waiting periods, eligibility dates, life events, dependant age-out.</td></tr>
+      <tr><td class="mono">enroldirect/</td><td>May this person use the <em>online channel</em> at all? Access preferences, categories, the gate.</td></tr>
+    </tbody>
+  </table>
+  <p>They compose and neither imports the other. Someone can be eligible to join and have
+  no online access, or the reverse. Merging them produces one function answering two
+  questions that can only report one reason.</p>
+
+  <h3>Not persistent</h3>
+  <p>The enrolment log is in-process and resettable from the UI. Nothing survives a
+  restart, and nothing is supposed to — the demo has to run in a locked-down sandbox, so
+  a datastore is a dependency it cannot take.</p>
+
+  <div class="caution">
+    <div class="lead">Data</div>
+    <p>All synthetic. Plan sponsors are fictional employers, every applicant name is
+    invented, and nothing derives from a real roster. The source material that prompted
+    this build is excluded from version control.</p>
+  </div>
+</div>
+
+<p class="footnote">MapleSure Insurance demo estate · <span class="mono">apps/enroldirect/</span> ·
+Companion to <span class="mono">apps/enroldirect/README.md</span>. Figures verified against a
+live run on 1 August 2026; re-measure before quoting them after a seed change.</p>
+
+</body>
+</html>

@@ -11,8 +11,15 @@ This repo has **one pipeline, three CR scenarios** riding on it:
 | 1 | AMS-101 | CR-2026-041 | MapleSure mockapp (policy portal) | Python | A new top coverage tier (audience picks the name) |
 | 2 | AMS-102 | CR-2026-042 | MapleSure mockapp (same app) | Python | A "Priority" field on the endorsement request form |
 | 3 | AMS-103 | CR-2026-043 | ClaimsPortal (`apps/claimsportal`) | Python / FastAPI | Per-policy deductible handling, across two microservices |
+| 4 | *(none yet)* | CR-2026-045 | EnrolDirect (`apps/enroldirect`) | Python / FastAPI | Prospect classification at the online enrolment gate |
 
-All three run through the same AMS console (FastAPI + React, `apps/console/api/` +
+CR-2026-045 has **no seeded Jira ticket on the board yet** — the target, the
+CR and both replay recordings exist and the beat runs when driven by
+`target_id`, but nothing seeds an AMS-1xx issue for it the way
+`demo/seed_s3_repo_selection_ticket.py` does for CR-2026-044. Add one before
+presenting it from the ticket list.
+
+All four run through the same AMS console (FastAPI + React, `apps/console/api/` +
 `apps/console/web/`) — the ticket you click just determines which registered
 `target_id` the pipeline analyzes/codegens against (see
 `s3_enhancement/targets.py` and `apps/console/web/src/pages/S3.tsx`'s

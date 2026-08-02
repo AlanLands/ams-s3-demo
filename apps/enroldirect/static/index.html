@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MapleSure — EnrolDirect</title>
+<style>
+  :root {
+    --accent: #0f766e;
+    --accent-dark: #115e59;
+    --accent-soft: #f0fdfa;
+    --ink: #16202e;
+    --ink-soft: #4a5768;
+    --muted: #7c8899;
+    --line: #e3e8ee;
+    --line-soft: #eef2f6;
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --ok: #15803d;
+    --ok-soft: #f0fdf4;
+    --no: #b91c1c;
+    --no-soft: #fef2f2;
+    --warn: #a16207;
+    --warn-soft: #fefce8;
+
+    /* Chart roles. Colour follows the POLICY (the entity), consistently
+       across every figure — never the rank within one figure. Validated as a
+       categorical pair on a white surface: CVD ΔE 24.7, normal-vision 33.6,
+       both >= 3:1 contrast. */
+    --policy-member: #2a78d6;
+    --policy-guest: #eb6834;
+    --grid: #e8ecf1;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); min-height: 100vh;
+    font-size: 14px; line-height: 1.5;
+  }
+
+  /* ---------- shell ---------- */
+  .shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+  aside {
+    background: #0c2a2a; color: #cfe6e3; padding: 0 0 2rem;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .brand { padding: 1.4rem 1.4rem 1.1rem; border-bottom: 1px solid rgba(255,255,255,.09); }
+  .brand h1 { font-size: 1rem; font-weight: 700; color: #fff; letter-spacing: -.01em; }
+  .brand p { font-size: .72rem; color: #7fb3ad; margin-top: .15rem; letter-spacing: .04em; text-transform: uppercase; }
+  nav { padding: .9rem .7rem; display: grid; gap: .15rem; }
+  nav button {
+    width: 100%; text-align: left; background: none; border: none; color: #b6d6d2;
+    font: inherit; font-size: .875rem; padding: .5rem .75rem; border-radius: 7px;
+    cursor: pointer; display: flex; align-items: center; gap: .6rem;
+  }
+  nav button:hover { background: rgba(255,255,255,.06); color: #fff; }
+  nav button[aria-current="true"] { background: var(--accent); color: #fff; font-weight: 600; }
+  nav .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .55; flex: none; }
+  .sidenote {
+    margin: 1rem .95rem 0; padding: .7rem .8rem; border-radius: 8px;
+    background: rgba(255,255,255,.05); font-size: .72rem; line-height: 1.5; color: #8fbdb8;
+  }
+  main { padding: 1.75rem 2rem 3rem; max-width: 1180px; }
+
+  /* ---------- headings ---------- */
+  .page-head { margin-bottom: 1.35rem; }
+  .page-head h2 { font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em; }
+  .page-head p { color: var(--ink-soft); margin-top: .3rem; max-width: 68ch; }
+
+  /* ---------- cards ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+    box-shadow: 0 1px 2px rgba(16,32,54,.04); margin-bottom: 1.15rem; overflow: hidden;
+  }
+  .card > h3 {
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--ink-soft); padding: .75rem 1.15rem; border-bottom: 1px solid var(--line-soft);
+    background: #fbfcfd; font-weight: 700;
+  }
+  .card .body { padding: 1.15rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.15rem; align-items: start; }
+  @media (max-width: 1000px) { .grid2 { grid-template-columns: 1fr; } .shell { grid-template-columns: 1fr; } aside { position: static; height: auto; } }
+
+  /* ---------- stat tiles ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: .8rem; margin-bottom: 1.15rem; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px; padding: .95rem 1.05rem;
+  }
+  .tile .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+  .tile .value { font-size: 1.85rem; font-weight: 700; letter-spacing: -.03em; margin-top: .2rem; font-variant-numeric: tabular-nums; }
+  .tile .sub { font-size: .76rem; color: var(--ink-soft); margin-top: .1rem; }
+
+  /* ---------- tables ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { text-align: left; padding: .6rem .75rem; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; }
+
+  /* ---------- chips ---------- */
+  .chip {
+    display: inline-flex; align-items: center; gap: .3rem; font-size: .7rem; font-weight: 700;
+    padding: .18rem .5rem; border-radius: 999px; letter-spacing: .03em; white-space: nowrap;
+  }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); border: 1px solid #bbf7d0; }
+  .chip.no { background: var(--no-soft); color: var(--no); border: 1px solid #fecaca; }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid #fde68a; }
+  .chip.neutral { background: #f1f5f9; color: var(--ink-soft); border: 1px solid var(--line); }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+
+  /* ---------- forms ---------- */
+  form { display: grid; gap: .85rem; }
+  label { font-size: .76rem; font-weight: 600; color: var(--ink-soft); display: grid; gap: .3rem; }
+  select, button.primary {
+    padding: .55rem .75rem; border: 1px solid var(--line); border-radius: 8px;
+    font-size: .9rem; font-family: inherit; width: 100%; background: #fff; color: var(--ink);
+  }
+  button.primary { background: var(--accent); color: #fff; border: none; font-weight: 600; cursor: pointer; }
+  button.primary:hover { background: var(--accent-dark); }
+  button.ghost {
+    background: #fff; border: 1px solid var(--line); color: var(--ink-soft);
+    padding: .4rem .8rem; border-radius: 7px; font: inherit; font-size: .8rem; cursor: pointer;
+  }
+  button.ghost:hover { background: #f8fafc; }
+  .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+
+  /* ---------- plan cards ---------- */
+  .plans { display: grid; gap: .6rem; }
+  .plan {
+    border: 1px solid var(--line); border-radius: 9px; padding: .75rem .9rem;
+    display: grid; grid-template-columns: 1fr auto; gap: .5rem; align-items: center; cursor: pointer;
+    background: #fff;
+  }
+  .plan:hover { border-color: #b9d9d5; background: #fbfefe; }
+  .plan[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+  .plan[data-available="false"] { opacity: .62; cursor: not-allowed; background: #fafbfc; }
+  .plan[data-available="false"]:hover { border-color: var(--line); }
+  .plan .name { font-weight: 600; font-size: .9rem; }
+  .plan .meta { font-size: .76rem; color: var(--muted); margin-top: .1rem; }
+  .plan .price { font-size: .85rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+
+  /* ---------- misc ---------- */
+  .note {
+    background: var(--warn-soft); border-left: 3px solid var(--warn); padding: .75rem .95rem;
+    font-size: .82rem; line-height: 1.55; border-radius: 0 7px 7px 0; margin-top: .9rem;
+  }
+  .note.info { background: var(--accent-soft); border-left-color: var(--accent); }
+  .note strong { color: var(--ink); }
+  ul.reasons { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; font-size: .84rem; }
+  dl.kv { display: grid; grid-template-columns: auto 1fr; gap: .35rem .9rem; font-size: .84rem; }
+  dl.kv dt { color: var(--muted); }
+  dl.kv dd { margin: 0; }
+  .tabs { display: flex; gap: .35rem; padding: .8rem 1.15rem 0; flex-wrap: wrap; border-bottom: 1px solid var(--line-soft); }
+  .tabs button {
+    background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted);
+    font: inherit; font-size: .84rem; font-weight: 600; padding: .4rem .55rem .6rem; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+  .muted { color: var(--muted); font-size: .8rem; }
+  .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .78rem; color: var(--ink-soft); margin-bottom: .7rem; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; }
+  figure { margin: 0; }
+  figcaption { font-size: .76rem; color: var(--muted); margin-top: .6rem; padding-top: .5rem; border-top: 1px solid var(--line-soft); line-height: 1.5; }
+  .bar-row { display: grid; grid-template-columns: 128px 1fr 44px; gap: .6rem; align-items: center; margin-bottom: .45rem; font-size: .82rem; }
+  .bar-track { background: var(--grid); border-radius: 4px; height: 20px; position: relative; overflow: hidden; }
+  /* display:block matters — the fill is a <span>, and height:100% is ignored on
+     an inline box, which renders every bar as an empty track. */
+  .bar-fill { display: block; height: 100%; border-radius: 4px; transition: width .3s ease; }
+  .bar-val { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="brand">
+      <h1>EnrolDirect</h1>
+      <p>MapleSure Insurance</p>
+    </div>
+    <nav id="nav">
+      <button data-view="overview" aria-current="true"><span class="dot"></span>Overview</button>
+      <button data-view="enrol"><span class="dot"></span>Enrol</button>
+      <button data-view="access"><span class="dot"></span>Access check</button>
+      <button data-view="contracts"><span class="dot"></span>Contracts &amp; plans</button>
+      <button data-view="analysis"><span class="dot"></span>Preference analysis</button>
+      <button data-view="audit"><span class="dot"></span>Audit log</button>
+    </nav>
+    <div class="sidenote">
+      All data on this instance is synthetic. Sponsors are fictional employers
+      and no applicant is a real person.
+    </div>
+  </aside>
+
+  <main id="main"><p class="muted">Loading…</p></main>
+</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = (n) => n == null ? '—' : '$' + Number(n).toFixed(2);
+const get = (u) => fetch(u).then(r => r.json());
+const post = (u, b) => fetch(u, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(b || {}) })
+  .then(async r => ({ ok: r.ok, status: r.status, data: await r.json() }));
+
+const POLICY_COLOR = { MEMBER: 'var(--policy-member)', GUEST: 'var(--policy-guest)' };
+
+const state = { view: 'overview', applicants: [], contracts: [], plans: [], impact: null, usage: null, consumers: [], analysisTab: 'impact', selectedPlan: null };
+
+async function boot() {
+  [state.applicants, state.contracts, state.plans, state.impact, state.usage, state.consumers] = await Promise.all([
+    get('/api/applicants'), get('/api/contracts'), get('/api/plans'),
+    get('/api/analysis/prospect-impact'), get('/api/analysis/preference-usage'), get('/api/analysis/consumers'),
+  ]);
+  render();
+}
+
+$('#nav').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn) return;
+  state.view = btn.dataset.view;
+  state.selectedPlan = null;
+  document.querySelectorAll('#nav button').forEach(b => b.setAttribute('aria-current', String(b === btn)));
+  render();
+});
+
+function render() {
+  const views = { overview: viewOverview, enrol: viewEnrol, access: viewAccess, contracts: viewContracts, analysis: viewAnalysis, audit: viewAudit };
+  views[state.view]();
+}
+
+/* ---------------- Overview ---------------- */
+async function viewOverview() {
+  const summary = await get('/api/enrolments/summary');
+  const d = state.impact;
+  const opt = Object.fromEntries(d.options.map(o => [o.option, o]));
+  const reach = d.catalogueReach;
+  const maxAdmitted = Math.max(...d.options.map(o => o.prospectsGranted), 1);
+  const maxReach = Math.max(...Object.values(reach).map(r => r.planOpeningsReachable), 1);
+
+  $('#main').innerHTML = `
+    <div class="page-head">
+      <h2>Overview</h2>
+      <p>The self-serve enrolment channel, and the open question about who is
+         allowed to use it. ${d.prospectCount} people on sponsor rosters hold no
+         active benefit — a population neither access preference was written for.</p>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="label">Contracts</div><div class="value">${state.contracts.length}</div><div class="sub">${state.contracts.filter(c=>c.status==='ACTIVE').length} active</div></div>
+      <div class="tile"><div class="label">Benefit plans</div><div class="value">${state.plans.length}</div><div class="sub">${state.plans.filter(p=>p.memberOnly).length} member-only</div></div>
+      <div class="tile"><div class="label">Applicants</div><div class="value">${state.applicants.length}</div><div class="sub">across all contracts</div></div>
+      <div class="tile"><div class="label">Unclassified</div><div class="value">${d.prospectCount}</div><div class="sub">prospects</div></div>
+      <div class="tile"><div class="label">Enrolments</div><div class="value">${summary.submitted}</div><div class="sub">${summary.refused} refused</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Prospects admitted at the gate</h3>
+        <div class="body">
+          <div class="legend">
+            <span><span class="swatch" style="background:${POLICY_COLOR.MEMBER}"></span>Treated as member</span>
+            <span><span class="swatch" style="background:${POLICY_COLOR.GUEST}"></span>Treated as guest</span>
+          </div>
+          <figure>
+            ${barRow('Treated as member', opt.MEMBER.prospectsGranted, maxAdmitted, POLICY_COLOR.MEMBER)}
+            ${barRow('Treated as guest', opt.GUEST.prospectsGranted, maxAdmitted, POLICY_COLOR.GUEST)}
+            <figcaption>Of ${d.prospectCount} prospects. The two policies disagree
+              about ${d.disagreementCount} — in both directions, because sponsors
+              enabled different preferences.</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Plan openings those prospects can reach</h3>
+        <div class="body">
+          <div class="legend">
+            <span><span class="swatch" style="background:${POLICY_COLOR.MEMBER}"></span>Treated as member</span>
+            <span><span class="swatch" style="background:${POLICY_COLOR.GUEST}"></span>Treated as guest</span>
+          </div>
+          <figure>
+            ${barRow('Treated as member', reach.MEMBER.planOpeningsReachable, maxReach, POLICY_COLOR.MEMBER)}
+            ${barRow('Treated as guest', reach.GUEST.planOpeningsReachable, maxReach, POLICY_COLOR.GUEST)}
+            <figcaption>Counted only for prospects the gate admits under that
+              policy. Guest access blocks a further
+              ${reach.GUEST.planOpeningsBlockedAsMemberOnly} member-only opening(s)
+              past the door — the classification bites twice.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Recommendation</h3>
+      <div class="body">
+        <div class="row" style="margin-bottom:.7rem">
+          <span class="chip ok">Recommended: ${esc(d.recommendation.option)}</span>
+          <span class="muted">Decision owner: ${esc(d.recommendation.decisionOwner)}</span>
+        </div>
+        <p>${esc(d.recommendation.rationale)}</p>
+        <div class="note"><strong>Cost of this choice.</strong> ${esc(d.recommendation.costOfThisChoice)}</div>
+      </div>
+    </div>`;
+}
+
+function barRow(label, value, max, color) {
+  const pct = Math.max((value / max) * 100, value > 0 ? 4 : 0);
+  return `<div class="bar-row">
+    <span>${esc(label)}</span>
+    <span class="bar-track"><span class="bar-fill" style="width:${pct}%;background:${color}"></span></span>
+    <span class="bar-val">${value}</span>
+  </div>`;
+}
+
+/* ---------------- Enrol ---------------- */
+async function viewEnrol() {
+  $('#main').innerHTML = `
+    <div class="page-head">
+      <h2>Enrol in a benefit</h2>
+      <p>The journey a member actually takes: identify yourself, see the catalogue
+         your contract offers you, pick a coverage tier, submit.</p>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="card">
+          <h3>Who is enrolling</h3>
+          <div class="body">
+            <form id="who">
+              <label>Applicant<select id="e-applicant">${applicantOptions()}</select></label>
+            </form>
+          </div>
+        </div>
+        <div class="card"><h3>Access</h3><div class="body" id="e-access"><p class="muted">Checking…</p></div></div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>Available benefits</h3>
+          <div class="body" id="e-catalogue"><p class="muted">Loading…</p></div>
+        </div>
+        <div class="card" id="e-result-card" style="display:none">
+          <h3>Submission</h3><div class="body" id="e-result"></div>
+        </div>
+      </div>
+    </div>`;
+
+  $('#e-applicant').addEventListener('change', loadCatalogue);
+  loadCatalogue();
+}
+
+function applicantOptions() {
+  return state.applicants.map(a =>
+    `<option value="${esc(a.applicantId)}">${esc(a.fullName)} — ${esc(a.category)} · ${esc(a.contractNumber)}</option>`).join('');
+}
+
+async function loadCatalogue() {
+  state.selectedPlan = null;
+  const id = $('#e-applicant').value;
+
+  const [cat, access] = await Promise.all([
+    get(`/api/applicants/${id}/plans`),
+    post('/api/eligibility/check', { applicantId: id }),
+  ]);
+
+  const a = access.data;
+  $('#e-access').innerHTML = `
+    <div class="row" style="margin-bottom:.6rem">
+      <span class="chip ${a.granted ? 'ok' : 'no'}">${a.granted ? 'CHANNEL OPEN' : 'CHANNEL CLOSED'}</span>
+      <strong>${esc(a.fullName)}</strong>
+    </div>
+    <dl class="kv">
+      <dt>Contract</dt><dd>${esc(a.contractNumber)} — ${esc(a.sponsorName)}</dd>
+      <dt>Category</dt><dd>${esc(a.category)}</dd>
+      <dt>Authorised by</dt><dd>${esc(a.authorisingPreference ?? '—')}</dd>
+    </dl>
+    <ul class="reasons" style="margin-top:.6rem">${a.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>`;
+
+  if (!cat.plans.length) {
+    $('#e-catalogue').innerHTML = `<p class="muted">This contract offers no plans.</p>`;
+    return;
+  }
+  $('#e-catalogue').innerHTML = `
+    <div class="plans">${cat.plans.map(p => `
+      <div class="plan" data-code="${esc(p.planCode)}" data-available="${p.available && a.granted}" aria-selected="false">
+        <div>
+          <div class="name">${esc(p.name)}</div>
+          <div class="meta">${esc(p.category)} · ${esc(p.planCode)}${p.memberOnly ? ' · member-only' : ''}</div>
+          ${!p.available ? `<div class="meta" style="color:var(--warn)">${esc(p.unavailableReason)}</div>` : ''}
+          ${!a.granted ? `<div class="meta" style="color:var(--no)">Channel closed for this applicant.</div>` : ''}
+        </div>
+        <div class="price">${money(p.monthlyPremium[p.offeredTiers[0]])}<div class="meta" style="font-weight:400">from / month</div></div>
+      </div>`).join('')}
+    </div>
+    <div id="tier-box" style="display:none;margin-top:.9rem">
+      <form id="enrol-form">
+        <label>Coverage tier<select id="e-tier"></select></label>
+        <button class="primary" type="submit">Submit enrolment</button>
+      </form>
+    </div>
+    <div class="note info" style="font-size:.78rem">Unavailable plans stay listed with their
+      reason rather than disappearing — a plan that silently vanishes generates the
+      support call that an explained one does not.</div>`;
+
+  $('#e-catalogue').querySelectorAll('.plan').forEach(el => {
+    el.addEventListener('click', () => {
+      if (el.dataset.available !== 'true') return;
+      state.selectedPlan = cat.plans.find(p => p.planCode === el.dataset.code);
+      $('#e-catalogue').querySelectorAll('.plan').forEach(x => x.setAttribute('aria-selected', String(x === el)));
+      $('#tier-box').style.display = 'block';
+      $('#e-tier').innerHTML = state.selectedPlan.offeredTiers.map(t =>
+        `<option value="${esc(t)}">${esc(t)} — ${money(state.selectedPlan.monthlyPremium[t])}/month</option>`).join('');
+    });
+  });
+
+  $('#enrol-form')?.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const body = { applicantId: id, planCode: state.selectedPlan.planCode, coverageTier: $('#e-tier').value };
+    const res = await post('/api/enrolments', body);
+    const r = res.data;
+    $('#e-result-card').style.display = 'block';
+    $('#e-result').innerHTML = `
+      <div class="row" style="margin-bottom:.6rem">
+        <span class="chip ${r.status === 'SUBMITTED' ? 'ok' : 'no'}">${esc(r.status)}</span>
+        <strong>${esc(r.reference)}</strong>
+      </div>
+      <dl class="kv">
+        <dt>Plan</dt><dd>${esc(r.planName ?? r.planCode)}</dd>
+        <dt>Tier</dt><dd>${esc(r.coverageTier ?? '—')}</dd>
+        <dt>Premium</dt><dd>${money(r.monthlyPremium)}${r.monthlyPremium ? ' / month' : ''}</dd>
+        <dt>Authorised by</dt><dd>${esc(r.authorisingPreference ?? '—')}</dd>
+        ${r.refusalCode ? `<dt>Refusal</dt><dd>${esc(r.refusalCode)}</dd>` : ''}
+      </dl>
+      <ul class="reasons" style="margin-top:.6rem">${r.reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  });
+}
+
+/* ---------------- Access check ---------------- */
+function viewAccess() {
+  $('#main').innerHTML = `
+    <div class="page-head">
+      <h2>Access check</h2>
+      <p>Three gates, in order: the contract is active, the applicant's category
+         resolves to a preference, and the sponsor enabled that preference.</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Run a check</h3>
+        <div class="body">
+          <form id="a-form">
+            <label>Applicant<select id="a-applicant">${applicantOptions()}</select></label>
+            <button class="primary" type="submit">Check access</button>
+          </form>
+          <div class="note info" style="font-size:.78rem">Every decision carries its
+            reasons. A denial that cannot say which gate closed becomes a support ticket.</div>
+        </div>
+      </div>
+      <div class="card"><h3>Decision</h3><div class="body" id="a-out"><p class="muted">Run a check to see the outcome.</p></div></div>
+    </div>`;
+
+  $('#a-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = { applicantId: $('#a-applicant').value };
+    const res = await post('/api/eligibility/check', body);
+    const d = res.data;
+    if (!res.ok) { $('#a-out').innerHTML = `<p class="muted">${esc(d.detail)}</p>`; return; }
+    $('#a-out').innerHTML = `
+      <div class="row" style="margin-bottom:.7rem">
+        <span class="chip ${d.granted ? 'ok' : 'no'}">${d.granted ? 'GRANTED' : 'DENIED'}</span>
+        <strong>${esc(d.fullName)}</strong>
+      </div>
+      <dl class="kv">
+        <dt>Contract</dt><dd>${esc(d.contractNumber)} — ${esc(d.sponsorName)}</dd>
+        <dt>Category</dt><dd>${esc(d.category)}</dd>
+        <dt>Preference required</dt><dd>${esc(d.requiredPreference ?? '—')}</dd>
+        <dt>Authorised by</dt><dd>${esc(d.authorisingPreference ?? '—')}</dd>
+      </dl>
+      <ul class="reasons" style="margin-top:.7rem">${d.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>`;
+  });
+}
+
+/* ---------------- Contracts ---------------- */
+function viewContracts() {
+  $('#main').innerHTML = `
+    <div class="page-head">
+      <h2>Contracts &amp; plans</h2>
+      <p>Access preferences are agreed by the plan sponsor at contract inception and
+         held in PolicyCore. EnrolDirect enforces them; it does not own them.</p>
+    </div>
+    ${state.contracts.map(c => {
+      const plans = state.plans.filter(p => p.contractNumber === c.contractNumber);
+      const people = state.applicants.filter(a => a.contractNumber === c.contractNumber);
+      return `<div class="card">
+        <h3>${esc(c.contractNumber)} — ${esc(c.sponsorName)}</h3>
+        <div class="body">
+          <div class="row" style="margin-bottom:.8rem">
+            <span class="chip ${c.status === 'ACTIVE' ? 'ok' : 'warn'}">${esc(c.status)}</span>
+            ${c.enabledPreferences.length
+              ? c.enabledPreferences.map(p => `<span class="chip neutral">${esc(p)}</span>`).join('')
+              : '<span class="chip no">No online enrolment</span>'}
+            <span class="muted">${people.length} applicant(s) · ${plans.length} plan(s)</span>
+          </div>
+          ${c.unrecognisedPreferences.length ? `<div class="note">Unrecognised preference(s): ${c.unrecognisedPreferences.map(esc).join(', ')}. Treated as absent — denies rather than grants.</div>` : ''}
+          <div class="table-wrap"><table>
+            <thead><tr><th>Plan</th><th>Category</th><th>Open to</th><th>Tiers</th><th class="num">From / month</th></tr></thead>
+            <tbody>${plans.map(p => `<tr>
+              <td><strong>${esc(p.name)}</strong><br><span class="muted">${esc(p.planCode)}</span></td>
+              <td>${esc(p.category)}</td>
+              <td>${p.memberOnly ? '<span class="chip warn">Members only</span>' : '<span class="chip neutral">Members &amp; guests</span>'}</td>
+              <td>${p.offeredTiers.join(', ')}</td>
+              <td class="num">${money(p.monthlyPremium[p.offeredTiers[0]])}</td>
+            </tr>`).join('') || '<tr><td colspan="5" class="muted">No plans on this contract.</td></tr>'}</tbody>
+          </table></div>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
+/* ---------------- Analysis ---------------- */
+function viewAnalysis() {
+  $('#main').innerHTML = `
+    <div class="page-head">
+      <h2>Preference analysis</h2>
+      <p>Which systems consume the access preferences, how they are configured across
+         the book, and what changes if prospects are classified one way or the other.
+         Every figure is computed from the directory — no model call.</p>
+    </div>
+    <div class="card">
+      <div class="tabs" id="an-tabs">
+        <button data-pane="impact" aria-selected="true">Prospect impact</button>
+        <button data-pane="reach" aria-selected="false">Catalogue reach</button>
+        <button data-pane="usage" aria-selected="false">Preference usage</button>
+        <button data-pane="consumers" aria-selected="false">Consumers</button>
+      </div>
+      <div class="body" id="an-body"></div>
+    </div>`;
+  $('#an-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-pane]');
+    if (!b) return;
+    state.analysisTab = b.dataset.pane;
+    $('#an-tabs').querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+    renderAnalysisPane();
+  });
+  renderAnalysisPane();
+}
+
+function renderAnalysisPane() {
+  const d = state.impact;
+  const el = $('#an-body');
+  if (state.analysisTab === 'impact') {
+    el.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Policy</th><th>Requires preference</th><th class="num">Granted</th><th class="num">Denied</th></tr></thead>
+        <tbody>${d.options.map(o => `<tr>
+          <td><span class="chip neutral"><span class="swatch" style="background:${POLICY_COLOR[o.option]}"></span>${esc(o.option)}</span>
+            ${o.option === d.recommendation.option ? ' <span class="chip ok">recommended</span>' : ''}</td>
+          <td>${esc(o.requiresPreference)}</td>
+          <td class="num">${o.prospectsGranted}</td><td class="num">${o.prospectsDenied}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <h4 style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:1.1rem 0 .4rem">Where the two policies disagree</h4>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Applicant</th><th>Contract</th><th>Sponsor enabled</th><th>Granted only by</th></tr></thead>
+        <tbody>${d.disagreements.map(x => `<tr>
+          <td>${esc(x.applicantId)}</td><td>${esc(x.contractNumber)} — ${esc(x.sponsorName)}</td>
+          <td>${x.enabledPreferences.map(esc).join(', ')}</td>
+          <td><span class="chip neutral"><span class="swatch" style="background:${POLICY_COLOR[x.grantedOnlyBy]}"></span>${esc(x.grantedOnlyBy)}</span></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="note"><strong>Recommendation: ${esc(d.recommendation.option)}.</strong> ${esc(d.recommendation.rationale)}
+        <br><br><strong>Cost of this choice.</strong> ${esc(d.recommendation.costOfThisChoice)}
+        <br><br><strong>Decision owner.</strong> ${esc(d.recommendation.decisionOwner)}</div>
+      <h4 style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:1.1rem 0 .4rem">Not evidenced by this analysis</h4>
+      <ul class="reasons">${d.notEvidencedByThisAnalysis.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      <h4 style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:1.1rem 0 .4rem">Standing risks</h4>
+      <ul class="reasons">${d.standingRisks.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  } else if (state.analysisTab === 'reach') {
+    const r = d.catalogueReach;
+    el.innerHTML = `
+      <p class="muted" style="margin-bottom:.8rem">Counted only for prospects the gate
+        would admit under that option — a plan you cannot reach because you were
+        refused at the door is already counted as a denial.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Policy</th><th class="num">Prospects admitted</th><th class="num">Plan openings reachable</th><th class="num">Blocked as member-only</th></tr></thead>
+        <tbody>${Object.entries(r).map(([policy, v]) => `<tr>
+          <td><span class="chip neutral"><span class="swatch" style="background:${POLICY_COLOR[policy]}"></span>${esc(policy)}</span></td>
+          <td class="num">${v.prospectsAdmitted}</td><td class="num">${v.planOpeningsReachable}</td><td class="num">${v.planOpeningsBlockedAsMemberOnly}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="note info">The classification bites twice. Guest access admits fewer
+        prospects at the gate <em>and</em> gives the ones it admits a smaller catalogue,
+        because member-only plans attach to coverage a prospect does not hold.</div>`;
+  } else if (state.analysisTab === 'usage') {
+    const u = state.usage;
+    el.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Preference</th><th class="num">Contracts</th><th>Enabled on</th></tr></thead>
+        <tbody>${u.preferences.map(p => `<tr>
+          <td><strong>${esc(p.preference)}</strong><br><span class="muted">${esc(p.purpose)}</span></td>
+          <td class="num">${p.contractCount}</td><td>${p.enabledOnContracts.join(', ') || '—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <h4 style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:1.1rem 0 .4rem">Applicant population</h4>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Category</th><th class="num">People</th><th>Has a preference</th></tr></thead>
+        <tbody>${u.categories.map(c => `<tr>
+          <td><strong>${esc(c.category)}</strong><br><span class="muted">${esc(c.description)}</span></td>
+          <td class="num">${c.applicantCount}</td>
+          <td>${c.classifiedByAPreference ? '<span class="chip ok">yes</span>' : '<span class="chip warn">no</span>'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  } else {
+    el.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr><th>Application</th><th>Relation</th><th>Owning team</th><th>Access behaviour</th></tr></thead>
+        <tbody>${state.consumers.map(c => `<tr>
+          <td><strong>${esc(c.application)}</strong><br><span class="muted">${esc(c.purpose)}</span></td>
+          <td><span class="chip neutral">${esc(c.relation)}</span></td>
+          <td>${esc(c.owningTeam)}</td><td class="muted">${esc(c.accessBehaviour)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="note">This inventory is <strong>declared, not discovered</strong> —
+        EnrolDirect cannot see the other systems' code. It is the analysis's stated
+        input, and it is wrong the moment a consumer appears without it being updated.</div>`;
+  }
+}
+
+/* ---------------- Audit ---------------- */
+async function viewAudit() {
+  const [records, summary] = await Promise.all([get('/api/enrolments'), get('/api/enrolments/summary')]);
+  $('#main').innerHTML = `
+    <div class="page-head">
+      <h2>Audit log</h2>
+      <p>Every enrolment attempt, successful or refused, with the preference that
+         authorised it.</p>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="label">Attempts</div><div class="value">${summary.totalAttempts}</div></div>
+      <div class="tile"><div class="label">Enrolled</div><div class="value" style="color:var(--ok)">${summary.submitted}</div></div>
+      <div class="tile"><div class="label">Refused</div><div class="value" style="color:var(--no)">${summary.refused}</div></div>
+      <div class="tile"><div class="label">Monthly premium</div><div class="value">${money(summary.monthlyPremiumEnrolled)}</div><div class="sub">enrolled total</div></div>
+    </div>
+    <div class="card">
+      <h3>Attempts — newest first</h3>
+      <div class="body">
+        <div class="row" style="margin-bottom:.8rem">
+          <button class="ghost" id="reset-log">Clear log</button>
+          <span class="muted">In-process only; nothing persists across a restart.</span>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Reference</th><th>Applicant</th><th>Plan</th><th>Status</th><th>Authorised by</th><th>Submitted</th></tr></thead>
+          <tbody>${records.length ? records.map(r => `<tr>
+            <td class="mono"><strong>${esc(r.reference)}</strong></td>
+            <td>${esc(r.fullName)}<br><span class="muted">${esc(r.category)}</span></td>
+            <td>${esc(r.planName ?? r.planCode)}${r.coverageTier ? `<br><span class="muted">${esc(r.coverageTier)}</span>` : ''}</td>
+            <td><span class="chip ${r.status === 'SUBMITTED' ? 'ok' : 'no'}">${esc(r.status)}</span>${r.refusalCode ? `<br><span class="muted">${esc(r.refusalCode)}</span>` : ''}</td>
+            <td class="muted">${esc(r.authorisingPreference ?? '—')}</td>
+            <td class="muted">${esc(r.submittedAt)}</td>
+          </tr>`).join('') : '<tr><td colspan="6" class="muted">No attempts recorded yet. Submit one from the Enrol screen.</td></tr>'}</tbody>
+        </table></div>
+        ${Object.keys(summary.refusalsByCode).length ? `
+        <h4 style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:1.1rem 0 .4rem">Why attempts were refused</h4>
+        <div class="table-wrap"><table><thead><tr><th>Reason</th><th class="num">Count</th></tr></thead>
+        <tbody>${Object.entries(summary.refusalsByCode).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${v}</td></tr>`).join('')}</tbody></table></div>
+        <div class="note info" style="font-size:.78rem">Refusals are recorded, not discarded.
+          "How many failed" is a number nobody can act on; "how many failed because the plan
+          needed existing coverage" changes a decision.</div>` : ''}
+      </div>
+    </div>`;
+  $('#reset-log').addEventListener('click', async () => { await post('/api/enrolments/reset'); viewAudit(); });
+}
+
+boot();
+</script>
+</body>
+</html>

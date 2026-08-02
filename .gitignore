@@ -49,6 +49,12 @@ output/
 # reference material with real client name/faces — never commit (hard rule #2)
 DemoThatAnotherTeam created/
 
+# Photographs of the client's own Jira/Copilot screens, shared for scoping.
+# They carry real employee names, real internal system names and real issue
+# keys — hard rules #1 and #2. Read them, de-identify what you take from them,
+# never commit them.
+scenario/
+
 # Vite's dependency pre-bundling cache. Written wherever a dev server is
 # started from, including stale paths — never a source artifact.
 .vite/

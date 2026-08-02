@@ -19,6 +19,7 @@ them.
 | `reset_s3.sh` | CR-2026-041 (mockapp coverage tier) back to pre-CR baseline; also clears shared state |
 | `reset_s3_endorsement.sh` | CR-2026-042 (mockapp endorsement Priority field) back to baseline, via the `s3-endorsement-baseline` git tag |
 | `reset_s3_claimsportal.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `apps/claimsportal/.baseline/` |
+| `reset_s3_enroldirect.sh` | CR-2026-045 (EnrolDirect) back to baseline, from `apps/enroldirect/.baseline/` |
 | `warm_s3_cache.sh` | Pre-warms `.cache/llm` for the narrative drafts before presenting |
 | `seed_problem_record_ticket.sh` | Seeds the problem-record intake ticket |
 

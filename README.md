@@ -17,7 +17,7 @@ project rules (no real client data, no client names, secrets only via `.env`).
 ## The four applications
 
 Everything runnable lives under `apps/`, one launch script each. You do not
-need all four for every beat.
+need all five for every beat.
 
 | # | Application | Start | Port | Needed for |
 |---|-------------|-------|------|------------|
@@ -25,6 +25,7 @@ need all four for every beat.
 | 2 | **PolicyCore** — the client's policy portal (Streamlit) | `apps/run-policycore.sh` | 8501 (open `/sl_policycore`) | CR-2026-041, CR-2026-042 |
 | 3 | **Policy-Service** — ClaimsPortal policy side (Python/FastAPI) | `apps/run-policy-service.sh` | 8081 | CR-2026-043 |
 | 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI) | `apps/run-claims-service.sh` | 8082 | CR-2026-043 |
+| 5 | **EnrolDirect** — the online enrolment channel (Python/FastAPI) | `apps/run-enroldirect.sh` | 8083 | CR-2026-045 |
 
 Open **`http://localhost:5173`** and log in with a name/passcode from
 `common/roster.py` (the scheme is `1001 + roster position`, so the first
@@ -114,6 +115,7 @@ this order**, because the endorsement baseline builds on the database
 demo/reset_s3.sh               # CR-2026-041 (PolicyCore coverage tier) + shared state
 demo/reset_s3_endorsement.sh   # CR-2026-042 (PolicyCore endorsement priority)
 demo/reset_s3_claimsportal.sh    # CR-2026-043 (ClaimsPortal)
+demo/reset_s3_enroldirect.sh   # CR-2026-045 (EnrolDirect prospect access)
 demo/warm_s3_cache.sh          # ALWAYS last — reset_s3.sh wipes .cache/llm
 ```
 
@@ -130,6 +132,10 @@ provider path deliberately booby-trapped — the pre-demo confidence check.
   - `apps/claimsportal/` — S3's second target, "ClaimsPortal" (Python/FastAPI,
     CR-2026-043). One folder, two services: the CR edits both, so S3
     treats it as a single target root
+  - `apps/enroldirect/` — S3's third target, "EnrolDirect" (Python/FastAPI,
+    CR-2026-045). Its checked-in state is the pre-CR baseline, which is a
+    *removal*: the impact analysis is done and the gate has not yet been
+    changed to act on it
 - `s3_enhancement/` — the S3 pipeline: `analyze.py` (requirement analysis),
   `codegen.py` (code generation, per-file apply/reject/revert),
   `testgen.py`/`testrun.py` (test generation, execution, mutation proof),

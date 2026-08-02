@@ -115,6 +115,8 @@ def _generate_tests_once(
         prompt = build_endorsement_prompt(cr_text, target=target)
     elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
         prompt = build_spring_prompt(cr_text, target=target)
+    elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
+        prompt = build_enroldirect_prompt(cr_text, target=target)
     else:
         prompt = build_prompt(tier_name, cr_text)
     prompt += _format_scenarios(scenarios)
@@ -349,6 +351,107 @@ only: no FastAPI TestClient, no server startup, no mocking, no network. Use
 modern built-in generics for any type hint (never `typing.Optional` etc.) and
 keep every line at 100 characters or fewer. The test file must be
 deterministic."""
+
+
+def build_enroldirect_prompt(cr_text: str, *, target: Target) -> str:
+    """Prompt for CR-2026-045's generated pytest suite.
+
+    Plain unit tests of the gate, built from `Applicant`/`GroupContract`
+    literals rather than the seeded directory — no HTTP, no app startup, so it
+    stays fast and deterministic and does not double up on
+    `tests/test_regression_enroldirect.py`, which already covers the seeded
+    book through the API. This suite tests the change; that one tests what the
+    change must not break.
+    """
+    test_path = target.testgen_allowlist[0]
+
+    reference = """Tests should cover:
+- effective_category("PROSPECT") is the value of PROSPECT_POLICY, and
+  effective_category is the identity for "MEMBER" and "GUEST"
+- preference_for_category("PROSPECT") resolves through PROSPECT_POLICY. Write
+  it exactly as:
+      expected = MEMBER_ACCESS if PROSPECT_POLICY == TREAT_AS_MEMBER else GUEST_ACCESS
+      assert preference_for_category(PROSPECT) == expected
+  PROSPECT_POLICY is module-level configuration: READ it, never reassign it.
+  Do not use `global`, monkeypatch, setattr, or any fixture that changes it —
+  a test that mutates it is testing a setting the running app does not have
+- preference_for_category is unchanged for "MEMBER" and "GUEST", and still
+  returns None for an unrecognised category
+- a prospect on an ACTIVE contract enabling the resolved preference is granted,
+  and the decision's authorisingPreference is that preference
+- a prospect on an ACTIVE contract that enables only the OTHER preference is
+  denied, with requiredPreference set and authorisingPreference None
+- a prospect on a LAPSED contract is denied at the contract gate even when the
+  contract enables both preferences — gate order, and it must not depend on
+  the policy
+- prospectPolicyApplied is PROSPECT_POLICY on a prospect's decision and None on
+  a member's and a guest's
+"""
+
+    context_files = []
+    context_paths = [
+        rel_path
+        for rel_path in target.codegen_allowlist
+        if rel_path.endswith(("applicants.py", "eligibility.py"))
+    ]
+    for rel_path in context_paths:
+        path = REPO_ROOT / rel_path
+        content = path.read_text(encoding="utf-8") if path.exists() else ""
+        context_files.append(f"--- {rel_path} ---\n{content}")
+
+    return f"""Change request:
+{cr_text}
+
+Current generated app files are already applied. Generate only this test file:
+{test_path}
+
+{reference}
+
+Exact API to test — this is a fixed, known contract, do not guess names and
+do not add fallback logic:
+{chr(10).join(context_files)}
+
+Return structured JSON only with this exact shape:
+{{
+  "files": [
+    {{"path": "{test_path}", "content": "<complete replacement>"}}
+  ]
+}}
+
+Use plain pytest functions. Start the file with exactly these four imports,
+and add nothing else — every name the tests below need is in them:
+
+from apps.enroldirect.applicants import (
+    GUEST, MEMBER, PROSPECT, PROSPECT_POLICY, TREAT_AS_GUEST, TREAT_AS_MEMBER, Applicant
+)
+from apps.enroldirect.directory import GroupContract
+from apps.enroldirect.eligibility import (
+    ACTIVE, check_eligibility, effective_category, preference_for_category
+)
+from apps.enroldirect.preferences import GUEST_ACCESS, MEMBER_ACCESS
+
+Construct real `Applicant` and `GroupContract` instances inline in each test.
+Do NOT define a mock or stub contract class, and do NOT use
+`directory.CONTRACTS` or `directory.APPLICANTS` — the class is the contract,
+the seeded book is not, so a change to the seed cannot break this suite.
+`GroupContract(contractNumber=..., sponsorName=..., status=...,
+enabledPreferences=(...))` takes a TUPLE of preferences. `Applicant` is
+positional: (applicantId, fullName, contractNumber, category, hasActiveBenefit),
+and its `__post_init__` rejects a MEMBER with no active benefit and a PROSPECT
+holding one — construct prospects with hasActiveBenefit=False and members with
+True. An applicant's contractNumber must match the contract's or the gate
+raises.
+Assert against the imported constants (MEMBER_ACCESS, GUEST_ACCESS, ACTIVE),
+never against a string literal of the constant's own name.
+No FastAPI TestClient, no server startup, no mocking, no network. Use modern
+built-in generics for any type hint (never `typing.Optional` etc.) and keep
+every line at 100 characters or fewer. The test file must be deterministic.
+
+Write every import as valid Python. A multi-name import that needs wrapping
+must use parentheses — `from m import (A, B, C)` across lines, never
+`from m import A, B,` with a trailing comma and no parentheses, which is a
+SyntaxError. Prefer one unwrapped import per module where the names fit on a
+single line under 100 characters."""
 
 
 def _parse_files_response(response: str) -> dict[str, str]:
