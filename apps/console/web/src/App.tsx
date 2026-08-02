@@ -4,6 +4,12 @@ import AppShell from './AppShell'
 import Login from './pages/Login'
 import Home from './pages/Home'
 import S3 from './pages/S3'
+import BoardStage from './pages/s3/BoardStage'
+import TargetStage from './pages/s3/TargetStage'
+import GenerateStage from './pages/s3/GenerateStage'
+import DesignDocStage from './pages/s3/DesignDocStage'
+import TestsStage from './pages/s3/TestsStage'
+import ReleaseStage from './pages/s3/ReleaseStage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { identity, loading } = useAuth()
@@ -24,7 +30,15 @@ function AppRoutes() {
         }
       >
         <Route path="/" element={<Home />} />
-        <Route path="/s3" element={<S3 />} />
+        <Route path="/s3" element={<S3 />}>
+          <Route index element={<Navigate to="board" replace />} />
+          <Route path="board" element={<BoardStage />} />
+          <Route path="target" element={<TargetStage />} />
+          <Route path="generate" element={<GenerateStage />} />
+          <Route path="design-doc" element={<DesignDocStage />} />
+          <Route path="tests" element={<TestsStage />} />
+          <Route path="release" element={<ReleaseStage />} />
+        </Route>
       </Route>
     </Routes>
   )

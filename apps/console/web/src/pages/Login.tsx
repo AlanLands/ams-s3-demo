@@ -38,12 +38,12 @@ export default function Login() {
   return (
     <div style={{ maxWidth: 640, margin: '4rem auto', padding: '0 1.5rem' }}>
       <span className="ams-eyebrow">{INSURER_NAME} · AMS Console</span>
-      <h2 style={{ marginTop: '0.75rem', fontSize: '1.6rem' }}>Log in</h2>
+      <h2 style={{ marginTop: '0.75rem', fontSize: 'var(--ams-text-2xl)' }}>Log in</h2>
       <p style={{ color: 'var(--ams-ink-soft)', marginTop: '0.25rem' }}>
         Pick your name and enter your passcode to see your queue.
       </p>
       <form onSubmit={handleSubmit} className="ams-card" style={{ marginTop: '1.25rem' }}>
-        <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
+        <label style={{ display: 'block', fontSize: 'var(--ams-text-sm)', marginBottom: '0.3rem' }}>
           Name
         </label>
         <select
@@ -61,7 +61,7 @@ export default function Login() {
         <label
           style={{
             display: 'block',
-            fontSize: '0.85rem',
+            fontSize: 'var(--ams-text-sm)',
             marginTop: '1rem',
             marginBottom: '0.3rem',
           }}
@@ -76,7 +76,7 @@ export default function Login() {
         />
 
         {error && (
-          <p style={{ color: 'var(--ams-error)', fontSize: '0.88rem', marginTop: '0.75rem' }}>
+          <p style={{ color: 'var(--ams-error)', fontSize: 'var(--ams-text-sm)', marginTop: '0.75rem' }}>
             {error}
           </p>
         )}

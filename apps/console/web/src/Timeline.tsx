@@ -23,7 +23,7 @@ function Chip({ actor }: { actor: string }) {
 
 export default function Timeline({ events }: { events: TimelineEvent[] }) {
   if (events.length === 0) {
-    return <p style={{ color: 'var(--ams-ink-soft)', fontSize: '0.85rem' }}>No timeline events recorded yet.</p>
+    return <p style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-sm)' }}>No timeline events recorded yet.</p>
   }
   return (
     <div className="ams-timeline">

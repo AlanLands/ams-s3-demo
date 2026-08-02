@@ -38,6 +38,9 @@ export default function AppShell() {
 
   return (
     <div className="ams-shell">
+      <a className="ams-skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <header className="ams-topbar">
         <div className="ams-topbar-brand">
           <span className="ams-topbar-brand-name">MapleSure AMS Console</span>
@@ -51,7 +54,7 @@ export default function AppShell() {
           <div className="ams-topbar-avatar">{initial}</div>
           <button
             className="ams-button ams-button-secondary"
-            style={{ fontSize: '0.82rem', padding: '0.35rem 0.7rem' }}
+            style={{ fontSize: 'var(--ams-text-xs)', padding: 'var(--ams-space-2) var(--ams-space-3)' }}
             onClick={async () => {
               await logout()
               navigate('/login')
@@ -99,29 +102,10 @@ export default function AppShell() {
                 </span>
               </NavLink>
             ))}
-            {identity?.role === 'manager' && (
-              <div className="ams-sidebar-subnav">
-                <a href="/s3#quick-question" className="ams-sidebar-sublink">
-                  Quick question
-                </a>
-                <a href="/s3#ticket-dashboard" className="ams-sidebar-sublink">
-                  Ticket dashboard
-                </a>
-              </div>
-            )}
-            {identity?.role === 'engineer' && (
-              <div className="ams-sidebar-subnav">
-                <a href="/s3#board" className="ams-sidebar-sublink">
-                  Jira board
-                </a>
-                <a href="/s3#codegen" className="ams-sidebar-sublink">
-                  Codegen &amp; release
-                </a>
-              </div>
-            )}
           </nav>
+          <div id="ams-sidebar-slot" />
         </aside>
-        <main className="ams-shell-main">
+        <main id="main-content" className="ams-shell-main" tabIndex={-1}>
           <Outlet />
         </main>
       </div>
