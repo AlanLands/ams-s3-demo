@@ -1,7 +1,7 @@
 {
   "response": {
     "key": "AMS-104",
-    "summary": "Flag urgent endorsement requests (from Support Ops)",
+    "summary": "Flag urgent amendment requests (from Support Ops)",
     "status": "To Do",
     "assignee": "Ravi Kumar",
     "issue_type": "Task",

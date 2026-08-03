@@ -76,6 +76,24 @@ def require_identity(
     return session["identity"]
 
 
+def require_manager(identity: Identity = Depends(require_identity)) -> Identity:
+    """Manager-only gate, layered on the identity dependency.
+
+    Lives here rather than in one router because two now need it, and because
+    "which routes are manager-only" has to be answerable by grep rather than by
+    reading every handler body.
+
+    The reason this is server-side at all is the same reason the commit gate
+    and the release record's approvals are (see CLAUDE.md): a role the client
+    asserts is a role the client can claim. Assignment decides who owns a
+    ticket and whose name lands in its event log, so a UI-only manager check
+    means any authenticated caller can reassign any ticket by hand.
+    """
+    if identity.role != "manager":
+        raise HTTPException(status_code=403, detail="Manager role required.")
+    return identity
+
+
 def require_session_id(
     session_id: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> str:

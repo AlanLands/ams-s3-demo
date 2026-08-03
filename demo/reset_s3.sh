@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# S3's demo beat mutates mockapp source files and SQLite state. Restore the
-# pre-codegen mockapp files from the baseline tag, remove generated runtime
-# artifacts, then reseed to restore pristine policy/claim state between rehearsals.
+# S3's demo beat mutates PolicyCore source files and SQLite state. Restore the
+# pre-codegen PolicyCore files from HEAD (not from a tag — see the note above
+# the checkout below), remove generated runtime artifacts, then reseed to
+# restore pristine contract/claim state between rehearsals.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
@@ -19,17 +20,18 @@ if [[ "$_current_branch" == feature/AMS-* ]] && ! git checkout main 2>/dev/null;
   echo "note: staying on '$_current_branch' — switching to main would conflict with local changes"
 fi
 # Restored from HEAD, not from the `s3-baseline` tag — see the same note in
-# demo/reset_s3_endorsement.sh. The tag predates both the apps/ restructure
-# (its paths are `mockapp/...`, which no longer resolve) and the endorsements
-# table (its `wipe_db()` drops `policies` while `endorsements` still
-# references it, so reseeding fails with a FOREIGN KEY error and the reset
-# can never finish).
+# demo/reset_s3_endorsement.sh. The tag predates every directory move this repo
+# has had (its paths are `mockapp/...`; the targets went to `apps/` in 2026-07
+# and to `repos/` on 2026-08-03) and it predates the amendments table (its
+# `wipe_db()` drops `policies` while the amendment table — named `endorsements`
+# before the 2026-08-03 GRS reskin — still references it, so reseeding fails
+# with a FOREIGN KEY error and the reset can never finish).
 git checkout HEAD -- \
-  apps/policycore/app.py \
-  apps/policycore/core/models.py \
-  apps/policycore/core/db.py
-rm -f apps/policycore/core/coverage.py tests/test_s3_coverage_upgrade.py
-python -m apps.policycore.core.seed
+  repos/policycore/app.py \
+  repos/policycore/core/models.py \
+  repos/policycore/core/db.py
+rm -f repos/policycore/core/tiers.py tests/test_s3_tier_upgrade.py
+python -m repos.policycore.core.seed
 rm -rf .cache/llm
 # Every staged proposal (Generate/Ask/Apply's working state) and harness run,
 # not just harness subdirs — s3_enhancement/out/ is gitignored/regenerated
@@ -47,4 +49,4 @@ git checkout -- 's3_enhancement/cache/jira_*.json' 2>/dev/null || true
 # common.ticket_events.events_log_marker().
 mkdir -p data
 date +%s%N > data/.s3_reset_marker
-echo "S3 source baseline restored, mockapp reseeded, LLM cache cleared, and ticket timeline cleared."
+echo "S3 source baseline restored, PolicyCore reseeded, LLM cache cleared, and ticket timeline cleared."

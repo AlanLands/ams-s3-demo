@@ -1,4 +1,4 @@
-"""Live S3 code generation for the coverage-upgrade change.
+"""Live S3 code generation for the plan-tier-upgrade change.
 
 The model returns complete file replacements for a tight allowlist only. This
 module validates the JSON and Python syntax, stages the files, writes an
@@ -33,8 +33,8 @@ from s3_enhancement.targets import Target
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_ROOT = REPO_ROOT / "s3_enhancement" / "out"
-CACHE_KEY = targets.MOCKAPP_COVERAGE_UPGRADE.stream_cache_key("codegen")
-ALLOWLIST = targets.MOCKAPP_COVERAGE_UPGRADE.codegen_allowlist
+CACHE_KEY = targets.MOCKAPP_TIER_UPGRADE.stream_cache_key("codegen")
+ALLOWLIST = targets.MOCKAPP_TIER_UPGRADE.codegen_allowlist
 
 SYSTEM_PROMPT = (
     "You are an AI pair programmer for a live AMS demo. Return structured JSON "
@@ -140,10 +140,12 @@ def _propose_change_once(
     selection = relevance.select_relevant_files(
         cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
     )
-    if target.cache_namespace == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace:
-        prompt = build_endorsement_prompt(cr_text, selection=selection)
+    if target.cache_namespace == targets.MOCKAPP_AMENDMENT_FIELD_ADD.cache_namespace:
+        prompt = build_amendment_prompt(cr_text, selection=selection)
     elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
         prompt = build_spring_prompt(cr_text, selection=selection)
+    elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
+        prompt = build_enroldirect_prompt(cr_text, selection=selection, target=target)
     else:
         prompt = build_prompt(tier_name, cr_text, selection=selection)
     usage: dict = {}
@@ -172,10 +174,12 @@ def _propose_change_once(
     # before this line). A live response has no token — no-op.
     response = "".join(chunks).replace("{{TIER_NAME}}", tier_name)
     files, file_reasons = _parse_files_response(response)
-    if target.cache_namespace == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace:
-        _validate_endorsement_file_set(files, selection)
+    if target.cache_namespace == targets.MOCKAPP_AMENDMENT_FIELD_ADD.cache_namespace:
+        _validate_amendment_file_set(files, selection)
     elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
         _validate_spring_file_set(files, selection)
+    elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
+        _validate_enroldirect_file_set(files, selection, target)
     else:
         _validate_file_set(files, selection)
     # Validation runs on the full response (core recall requires every core
@@ -658,15 +662,15 @@ Rules:
 - Return every listed file, each as a complete replacement, not a patch or diff.
 - "reason" is one short sentence (plain English, no code) a reviewer can read
   at a glance to know why that specific file is part of this change.
-- apps/policycore/core/coverage.py's public API is a fixed contract other generated
+- repos/policycore/core/tiers.py's public API is a fixed contract other generated
   modules (tests) depend on by these exact names — do not rename or restructure
   them:
-  - `COVERAGE_TIERS: list[str]` — ordered lowest to highest, exactly
+  - `PLAN_TIERS: list[str]` — ordered lowest to highest, exactly
     `["Standard", "Premium", "{tier_name}"]` (or, only when recording with the
     placeholder CR, `["Standard", "Premium", "{{{{TIER_NAME}}}}"]`).
-  - `TIER_MULTIPLIERS: dict[str, float]` — premium multiplier per tier name in
-    `COVERAGE_TIERS`.
-  - `upgrade_coverage(policy_number: str, new_tier: str) -> Policy` — the only
+  - `TIER_MULTIPLIERS: dict[str, float]` — contribution multiplier per tier name
+    in `PLAN_TIERS`.
+  - `upgrade_tier(policy_number: str, new_tier: str) -> Policy` — the only
     function other code calls.
 - The top tier name appears only in string literals or list elements, never as
   a Python identifier and never in a path.
@@ -681,34 +685,35 @@ Rules:
 - Keep every line at 100 characters or fewer (this repo's ruff line-length
   limit) — wrap long f-strings, SQL column lists, and comments rather than
   exceeding it.
-- apps/policycore/core/coverage.py must have a module docstring matching the plain
-  business-logic tone of apps/policycore/core/claims.py.
-- upgrade_coverage(policy_number, new_tier) must reject unknown tiers, same-tier
-  changes, downgrades, and unknown policies with ValueError. Exact error
+- repos/policycore/core/tiers.py must have a module docstring matching the plain
+  business-logic tone of repos/policycore/core/claims.py.
+- upgrade_tier(policy_number, new_tier) must reject unknown tiers, same-tier
+  changes, downgrades, and unknown contracts with ValueError. Exact error
   wording is a fixed contract (S4's talk-to-code demo cites it):
-  - unknown tier: message contains "Unknown coverage tier"
+  - unknown tier: message contains "Unknown plan tier"
   - same-tier or downgrade: message is
     f"{{policy_number}} is already at {{old_tier!r}}; cannot upgrade to {{new_tier!r}}"
-  - unknown policy: message contains "not found"
-- Premium must be recalculated as premium / old_multiplier * new_multiplier,
-  rounded to 2 decimals with round(..., 2), and persisted with insert_policy().
-- Existing policy list, policy detail, claim submission, and claim list flows
-  must keep working.
-- apps/policycore/core/seed.py is NOT one of the files you may change, and it
+  - unknown contract: message contains "not found"
+- Contribution must be recalculated as
+  contribution / old_multiplier * new_multiplier, rounded to 2 decimals with
+  round(..., 2), and persisted with insert_policy().
+- Existing contract list, contract detail, claim submission, and claim list
+  flows must keep working.
+- repos/policycore/core/seed.py is NOT one of the files you may change, and it
   constructs `Policy(...)` with 6 **positional** arguments in the field order
-  shown above (policy_number, holder_name, product_type, premium, start_date,
-  status) — no `coverage_tier` argument. You MUST add `coverage_tier` as the
-  LAST field on the `Policy` dataclass, after `status`, with a default value
-  of `"Standard"` (e.g. `coverage_tier: str = "Standard"`), so those existing
+  shown above (policy_number, sponsor_name, product_type, contribution,
+  start_date, status) — no `plan_tier` argument. You MUST add `plan_tier` as
+  the LAST field on the `Policy` dataclass, after `status`, with a default
+  value of `"Standard"` (e.g. `plan_tier: str = "Standard"`), so those existing
   positional calls keep working unmodified. Do not insert it earlier in the
   field order and do not make it a required (no-default) field."""
 
 
-def build_endorsement_prompt(
+def build_amendment_prompt(
     cr_text: str, *, selection: relevance.SelectionResult
 ) -> str:
-    """Prompt for CR-2026-042 (endorsement priority field) — no audience-picked
-    placeholder, unlike the coverage-upgrade CR's {{TIER_NAME}}."""
+    """Prompt for CR-2026-042 (amendment priority field) — no audience-picked
+    placeholder, unlike the tier-upgrade CR's {{TIER_NAME}}."""
     current_files = []
     for rel_path, content in selection.selected.items():
         current_files.append(f"--- {rel_path} ---\n{content}")
@@ -739,21 +744,21 @@ Rules:
 - Return every listed file, each as a complete replacement, not a patch or diff.
 - "reason" is one short sentence (plain English, no code) a reviewer can read
   at a glance to know why that specific file is part of this change.
-- Add a `priority: str = "Standard"` field to the `Endorsement` dataclass in
-  apps/policycore/core/models.py — it must be the LAST field on the dataclass, after
+- Add a `priority: str = "Standard"` field to the `Amendment` dataclass in
+  repos/policycore/core/models.py — it must be the LAST field on the dataclass, after
   `filed_at`, with a default value of exactly `"Standard"`. Do not insert it
   earlier in the field order and do not make it a required (no-default) field.
-- apps/policycore/core/db.py: add a `priority` column to the `endorsements` table
+- repos/policycore/core/db.py: add a `priority` column to the `amendments` table
   schema (`TEXT NOT NULL DEFAULT 'Standard'`), thread it through
-  `_row_to_endorsement()` and `insert_endorsement()`'s column list and
+  `_row_to_amendment()` and `insert_amendment()`'s column list and
   parameters.
-- apps/policycore/core/endorsements.py: `submit_endorsement(...)` gains a
+- repos/policycore/core/amendments.py: `submit_amendment(...)` gains a
   `priority: str = "Standard"` keyword parameter (last parameter, defaulted)
-  and passes it through to the `Endorsement` it constructs.
-- apps/policycore/app.py: the "Request a Policy Endorsement" form gains a "Priority"
+  and passes it through to the `Amendment` it constructs.
+- repos/policycore/app.py: the "Request a Contract Amendment" form gains a "Priority"
   selectbox with choices exactly `["Standard", "Urgent"]` (in that order, so
   "Standard" is the default selection), and passes the selected value to
-  `submit_endorsement(...)`.
+  `submit_amendment(...)`.
 - Submitting the form without touching the new Priority control must behave
   exactly as before this CR (defaults to "Standard").
 {_PRESERVATION_RULES}
@@ -767,14 +772,14 @@ Rules:
 - Keep every line at 100 characters or fewer (this repo's ruff line-length
   limit) — wrap long f-strings, SQL column lists, and comments rather than
   exceeding it.
-- Existing policy list, policy detail, claim submission, and claim list flows
-  must keep working, and existing endorsement submissions with no priority
+- Existing contract list, contract detail, claim submission, and claim list
+  flows must keep working, and existing amendment submissions with no priority
   chosen must still succeed."""
 
 
 def build_spring_prompt(cr_text: str, *, selection: relevance.SelectionResult) -> str:
     """Prompt for CR-2026-043 (claims deductible) against the ClaimsPortal
-    target — no audience-picked placeholder, like the endorsement CR. Name
+    target — no audience-picked placeholder, like the amendment CR. Name
     kept from this target's Java-era history (see CLAUDE.md); the source is
     Python since the 2026-07-30 rewrite."""
     current_files = []
@@ -839,6 +844,153 @@ Rules:
   limit) — wrap long f-strings and comments rather than exceeding it.
 - Existing flows must keep working: policy list/detail, the claims service's
   policy-directory passthrough, claim submission, and claim listing."""
+
+
+_ENROLDIRECT_READ_ONLY_REASONS = {
+    "repos/enroldirect/impact.py": (
+        "the impact analysis this CR acts on — it must keep sizing BOTH "
+        "options after one is adopted, and its JSON field names are consumed "
+        "by the console"
+    ),
+    "repos/enroldirect/preferences.py": (
+        "the two preference strings are the integration contract with "
+        "PolicyCore and arrive verbatim on the contract record — renaming one "
+        "silently disables the gate it controls"
+    ),
+    "repos/enroldirect/benefits.py": (
+        "`plans_open_to` already takes an effective category and needs no "
+        "change to receive a resolved one"
+    ),
+}
+
+
+def build_enroldirect_prompt(
+    cr_text: str, *, selection: relevance.SelectionResult, target: Target
+) -> str:
+    """Prompt for CR-2026-045 (prospect access) against the EnrolDirect target.
+
+    No audience-picked placeholder, like the amendment and ClaimsPortal CRs.
+
+    The instruction with no counterpart in the other builders is the read-only
+    set. Three of this target's selected files are context the model needs and
+    must not return — `impact.py` above all, since the analysis surface is the
+    obvious thing to "finish" and editing it would rewrite the evidence the CR
+    is acting on. Editability is read off `target.codegen_allowlist` rather
+    than listed here, so the prompt and the validator cannot disagree.
+    """
+    current_files = []
+    for rel_path, content in selection.selected.items():
+        marker = "" if rel_path in target.codegen_allowlist else "   [CONTEXT ONLY]"
+        current_files.append(f"--- {rel_path} ---{marker}\n{content}")
+    editable = [p for p in selection.selected if p in target.codegen_allowlist]
+    read_only_rules = "\n".join(
+        f"- {rel_path} is CONTEXT ONLY: do not return it and do not change it — "
+        f"{_ENROLDIRECT_READ_ONLY_REASONS.get(rel_path, 'it is outside this change')}."
+        for rel_path in selection.selected
+        if rel_path not in target.codegen_allowlist
+    )
+    json_shape = json.dumps(
+        {
+            "files": [
+                {
+                    "path": rel_path,
+                    "content": "<complete replacement>",
+                    "reason": "<one short sentence: why this file needs to change>",
+                }
+                for rel_path in editable
+            ]
+        },
+        indent=2,
+    )
+
+    return f"""Change request:
+{cr_text}
+
+Current contents of the files in scope. Only the ones NOT marked
+[CONTEXT ONLY] may be returned:
+{chr(10).join(current_files)}
+
+Return structured JSON only with this exact shape:
+{json_shape}
+
+Rules:
+- Return every file listed in the shape above, each as a complete replacement,
+  not a patch or diff. Return nothing else.
+- "reason" is one short sentence (plain English, no code) a reviewer can read
+  at a glance to know why that specific file is part of this change.
+- These are FastAPI sources for one service (the EnrolDirect enrolment channel).
+{read_only_rules}
+- applicants.py gains the prospect policy as module-level configuration, not a
+  per-call parameter, by these exact names — a fixed contract the generated
+  test suite depends on:
+  - `TREAT_AS_MEMBER = "MEMBER"` and `TREAT_AS_GUEST = "GUEST"` — the two
+    options, whose values are also the effective category each produces.
+  - `PROSPECT_POLICIES: tuple[str, ...]` — both options, in that order.
+  - `PROSPECT_POLICY` — the policy in force, set to `TREAT_AS_GUEST`.
+- eligibility.py:
+  - `preference_for_category(category: str) -> str | None` keeps its single
+    parameter. MEMBER resolves to MEMBER_ACCESS, GUEST to GUEST_ACCESS, and
+    PROSPECT resolves through `PROSPECT_POLICY` to MEMBER_ACCESS when the
+    policy is `TREAT_AS_MEMBER` and GUEST_ACCESS otherwise. Anything else
+    still returns None.
+  - add `effective_category(category: str) -> str` — the category an applicant
+    is treated as: a prospect's is `PROSPECT_POLICY`'s value, everyone else's
+    is their own category.
+  - `EligibilityDecision` gains `prospectPolicyApplied: str | None`, populated
+    with `PROSPECT_POLICY` for prospects and None for every other category, on
+    every return path including the denials.
+  - The three gates keep their existing order: contract status first, then the
+    category-to-preference resolution, then the sponsor's enabled preferences.
+    A prospect on a LAPSED contract must still be denied at the first gate.
+- enrolments.py resolves the effective category once via
+  `eligibility.effective_category` and uses it for the member-only plan check
+  (`plan.memberOnly and effective != "MEMBER"`). `EnrolmentRecord` gains
+  `effectiveCategory: str` and `prospectPolicyApplied: str | None`, both
+  placed after `category`. The access gate is reused, never reimplemented.
+- main.py's `/api/eligibility/check` response gains `prospectPolicyApplied`
+  from the decision. `/api/applicants/{{applicant_id}}/plans` resolves the
+  effective category, filters `benefits.plans_open_to` on it, and returns it
+  as `effectiveCategory` alongside the existing `category`. No request model
+  gains a prospect-policy field — the gate enforces one policy.
+- Do not add an endpoint that sets or overrides the policy.
+- Do not touch the static HTML console — it is not in your file list and must
+  keep working unchanged.
+- Imports are where this change goes wrong. Two files have exactly one correct
+  import statement each, and rewriting either of them differently is a
+  NameError at request time rather than a test failure you would see here.
+  Reproduce these two lines verbatim:
+  - eligibility.py — replace its existing
+    `from repos.enroldirect.applicants import GUEST, MEMBER, Applicant`
+    with exactly:
+    `from repos.enroldirect.applicants import (GUEST, MEMBER, PROSPECT,
+    PROSPECT_POLICY, TREAT_AS_MEMBER, Applicant)` — wrapped across lines in
+    that order. `Applicant` is still used by `check_eligibility`'s signature
+    and must not be dropped. Do not import `TREAT_AS_GUEST`; the code compares
+    against `TREAT_AS_MEMBER` only.
+  - enrolments.py — its import of eligibility becomes exactly
+    `from repos.enroldirect.eligibility import check_eligibility,
+    effective_category`. Add nothing else to it.
+- In enrolments.py's member-only check, KEEP the existing `"MEMBER"` string
+  literal and change only the left-hand side: `if plan.memberOnly and
+  applicant.category != "MEMBER":` becomes
+  `if plan.memberOnly and effective != "MEMBER":`. Do not replace the literal
+  with a bare `MEMBER` name — it is not imported in that file.
+- A dataclass field with no default cannot follow one that has a default —
+  `EligibilityDecision.reasons` already has `field(default_factory=list)`, so
+  put any new field BEFORE it, not after.
+- applicants.py's module docstring currently states that no preference has
+  been assigned to prospects and that the gate refuses them. That is no longer
+  true after this change — rewrite that paragraph to describe the policy now
+  in force. Leave the rest of the docstring alone.
+{_PRESERVATION_RULES}
+- Use modern built-in generics for every type hint (`list[str]`, `dict[str,
+  float]`, `X | None`) — never `typing.List`, `typing.Dict`, `typing.Tuple`,
+  or `typing.Optional`; this repo's ruff config rejects them.
+- Keep every line at 100 characters or fewer (this repo's ruff line-length
+  limit) — wrap long f-strings and comments rather than exceeding it.
+- Existing flows must keep working: the contract and applicant directories,
+  the access check for members and guests, the benefit catalogue, enrolment
+  submission and refusal recording, and the analysis endpoints."""
 
 
 def _parse_files_response(response: str) -> tuple[dict[str, str], dict[str, str]]:
@@ -922,10 +1074,53 @@ def _validate_file_set(files: dict[str, str], selection: relevance.SelectionResu
         )
     for rel_path, content in files.items():
         _validate_content(rel_path, content)
-    _validate_policy_backward_compatible(files["apps/policycore/core/models.py"])
+    _validate_policy_backward_compatible(files["repos/policycore/core/models.py"])
 
 
-def _validate_endorsement_file_set(
+def _validate_enroldirect_file_set(
+    files: dict[str, str], selection: relevance.SelectionResult, target: Target
+) -> None:
+    """File-set check for a target whose prompt shows a file it may not change.
+
+    `impact.py` is one of this target's `core_files` — the model has to read
+    the analysis to understand what the CR is acting on — but it is not in the
+    `codegen_allowlist`, so demanding it back the way `verify_core_recall`
+    does for every other target would fail every well-behaved response. Core
+    recall therefore runs over the editable core files only.
+
+    The read-only files are still checked, in the direction that matters: the
+    model may echo one back unchanged (harmless, and `_drop_unchanged_files`
+    removes it), but a *modified* one is the CR's "not to be changed by this
+    CR" clause being broken, and that fails loudly rather than being silently
+    discarded.
+    """
+    editable_core = tuple(p for p in selection.core_files if p in target.codegen_allowlist)
+    relevance.verify_core_recall(files, core_files=editable_core)
+
+    unexpected = set(files) - set(selection.selected)
+    if unexpected:
+        raise LLMError(
+            "S3 codegen returned unexpected file set: "
+            f"outside selected scope {sorted(unexpected)}; selected {sorted(selection.selected)}"
+        )
+
+    modified_read_only = sorted(
+        rel_path
+        for rel_path, content in files.items()
+        if rel_path not in target.codegen_allowlist
+        and content != selection.selected.get(rel_path)
+    )
+    if modified_read_only:
+        raise LLMError(
+            "S3 codegen modified files this CR forbids changing: "
+            f"{modified_read_only}; allowlist {sorted(target.codegen_allowlist)}"
+        )
+
+    for rel_path, content in files.items():
+        _validate_content(rel_path, content)
+
+
+def _validate_amendment_file_set(
     files: dict[str, str], selection: relevance.SelectionResult
 ) -> None:
     relevance.verify_core_recall(files, core_files=selection.core_files)
@@ -937,7 +1132,7 @@ def _validate_endorsement_file_set(
         )
     for rel_path, content in files.items():
         _validate_content(rel_path, content)
-    _validate_endorsement_priority_field(files["apps/policycore/core/models.py"])
+    _validate_amendment_priority_field(files["repos/policycore/core/models.py"])
 
 
 def _validate_spring_file_set(
@@ -986,63 +1181,63 @@ def _validate_claim_rules_contract(files: dict[str, str]) -> None:
             raise LLMError(f"S3 generated {suffix} does not carry the new deductible field")
 
 
-def _validate_endorsement_priority_field(models_content: str) -> None:
-    """`priority` must be the Endorsement dataclass's last field, with a
-    default — otherwise existing endorsement submissions with no priority
+def _validate_amendment_priority_field(models_content: str) -> None:
+    """`priority` must be the Amendment dataclass's last field, with a
+    default — otherwise existing amendment submissions with no priority
     chosen would break (CR-2026-042's explicit acceptance criterion)."""
     try:
-        tree = ast.parse(models_content, filename="apps/policycore/core/models.py")
+        tree = ast.parse(models_content, filename="repos/policycore/core/models.py")
     except SyntaxError as exc:
-        raise LLMError(f"S3 generated invalid Python for apps/policycore/core/models.py: {exc}") from exc
+        raise LLMError(f"S3 generated invalid Python for repos/policycore/core/models.py: {exc}") from exc
 
-    endorsement_cls = next(
+    amendment_cls = next(
         (
             node
             for node in ast.walk(tree)
-            if isinstance(node, ast.ClassDef) and node.name == "Endorsement"
+            if isinstance(node, ast.ClassDef) and node.name == "Amendment"
         ),
         None,
     )
-    if endorsement_cls is None:
+    if amendment_cls is None:
         raise LLMError(
-            "S3 generated apps/policycore/core/models.py is missing the Endorsement dataclass"
+            "S3 generated repos/policycore/core/models.py is missing the Amendment dataclass"
         )
 
     field_stmts = [
         stmt
-        for stmt in endorsement_cls.body
+        for stmt in amendment_cls.body
         if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
     ]
     field_names = [stmt.target.id for stmt in field_stmts]
     if not field_names or field_names[-1] != "priority":
         raise LLMError(
-            "S3 generated Endorsement.priority must be the last field on the dataclass; "
+            "S3 generated Amendment.priority must be the last field on the dataclass; "
             f"got field order {field_names}"
         )
     if field_stmts[-1].value is None:
         raise LLMError(
-            "S3 generated Endorsement.priority must have a default value, e.g. "
+            "S3 generated Amendment.priority must have a default value, e.g. "
             '`priority: str = "Standard"`'
         )
 
 
 def _validate_policy_backward_compatible(models_content: str) -> None:
-    """apps/policycore/core/seed.py is off the allowlist and constructs `Policy(...)`
-    with 6 positional args (no coverage_tier) — this must still work after the
-    generated models.py adds coverage_tier, or the app crashes on startup."""
+    """repos/policycore/core/seed.py is off the allowlist and constructs `Policy(...)`
+    with 6 positional args (no plan_tier) — this must still work after the
+    generated models.py adds plan_tier, or the app crashes on startup."""
     namespace: dict = {}
     try:
-        exec(compile(models_content, "apps/policycore/core/models.py", "exec"), namespace)  # noqa: S102
+        exec(compile(models_content, "repos/policycore/core/models.py", "exec"), namespace)  # noqa: S102
         policy_cls = namespace["Policy"]
         policy_cls("POL-TEST", "Test Sponsor Ltd.", "Health", 100.0, "2024-01-01", "Active")
     except Exception as exc:
         raise LLMError(
-            "S3 generated apps/policycore/core/models.py breaks apps/policycore/core/seed.py's "
+            "S3 generated repos/policycore/core/models.py breaks repos/policycore/core/seed.py's "
             f"existing 6-positional-arg Policy(...) construction: {exc}"
         ) from exc
 
 
-_REQUIRED_COVERAGE_SYMBOLS = ("COVERAGE_TIERS", "TIER_MULTIPLIERS", "upgrade_coverage")
+_REQUIRED_TIER_SYMBOLS = ("PLAN_TIERS", "TIER_MULTIPLIERS", "upgrade_tier")
 
 # ruff (UP006/UP035) rejects these legacy typing aliases in favor of the
 # built-in generics (list[str], dict[str, float], X | None) — catch a live
@@ -1073,7 +1268,7 @@ def _validate_content(rel_path: str, content: str) -> None:
     if _SECRET_RE.search(content):
         raise LLMError(f"S3 generated secret-shaped content in {rel_path}")
 
-    if rel_path == "apps/policycore/core/coverage.py":
+    if rel_path == "repos/policycore/core/tiers.py":
         top_level_names = {
             node.id
             for node in ast.walk(tree)
@@ -1083,10 +1278,10 @@ def _validate_content(rel_path: str, content: str) -> None:
             for node in ast.walk(tree)
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
         }
-        missing = [name for name in _REQUIRED_COVERAGE_SYMBOLS if name not in top_level_names]
+        missing = [name for name in _REQUIRED_TIER_SYMBOLS if name not in top_level_names]
         if missing:
             raise LLMError(
-                f"S3 generated apps/policycore/core/coverage.py is missing required public "
+                f"S3 generated repos/policycore/core/tiers.py is missing required public "
                 f"symbol(s) {missing} — got {sorted(top_level_names)}"
             )
 
@@ -1141,7 +1336,7 @@ def _qualified_docstring_owners(
     tree: ast.Module,
 ) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef]:
     """Dotted-name -> node for every function/class in `tree`, e.g.
-    `"Endorsement"` or `"Foo.bar"` for a method `bar` on class `Foo`. Used to
+    `"Amendment"` or `"Foo.bar"` for a method `bar` on class `Foo`. Used to
     match a function/class between the original file and the model's
     replacement by name rather than by position, since the model is free to
     reorder or insert around it."""

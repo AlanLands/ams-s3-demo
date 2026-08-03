@@ -14,4 +14,4 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
 echo "  Policy-Service -> http://localhost:${POLICY_SERVICE_PORT:-8081}/"
-uvicorn apps.claimsportal.policy_service.main:app --port "${POLICY_SERVICE_PORT:-8081}"
+uvicorn repos.claimsportal.policy_service.main:app --port "${POLICY_SERVICE_PORT:-8081}"

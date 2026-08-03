@@ -4,7 +4,8 @@
 # below; "one keypress" means pressing Enter here at the scripted moment
 # (beat 4 in demo/presenter_notes/s3_enhancement.md), right after beats 1-2
 # (impact analysis, effort estimate) finish in the console launched by
-# demo/run_s3.sh.
+# apps/run-console.sh (the React console on :5173 — demo/run_s3.sh is the
+# older Streamlit fallback).
 #
 # Replay-primary (CLAUDE.md demo-reliability rule): the default invocation
 # replays the rehearsed recording — deterministic, offline, cannot fail live.
@@ -20,6 +21,11 @@
 # in the same pane without --live to fall back to the recording, or abandon
 # the beat and use the console "Generate the change" / "Generate tests + run"
 # buttons (the unmodified pipeline, itself replay-primary).
+#
+# A --live run edits repos/policycore/ in the working tree. The way back is
+# demo/reset_s3.sh, which restores those files from HEAD — so it only works
+# while HEAD carries the paths it names. Commit any target move before you
+# rehearse the live path; see the note at the top of that script.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
@@ -37,7 +43,7 @@ fi
 TIER_NAME="${1:-Elite}"
 
 if [[ "$MODE" == "run" ]]; then
-  read -r -p "Press Enter to launch the agent harness live against mockapp (tier: ${TIER_NAME})..." _
+  read -r -p "Press Enter to launch the agent harness live against PolicyCore (tier: ${TIER_NAME})..." _
 else
   echo "Replaying the rehearsed harness recording (tier: ${TIER_NAME})..."
 fi

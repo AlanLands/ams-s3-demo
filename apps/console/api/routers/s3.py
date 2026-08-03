@@ -7,6 +7,7 @@ already called.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import subprocess
@@ -30,7 +31,7 @@ from common.ticket_events import (
     events_log_marker,
     record_event,
 )
-from s3_enhancement import applications, routing, scm, scm_live, targets, testrun
+from s3_enhancement import applications, cr_intake, routing, scm, scm_live, targets, testrun
 from s3_enhancement.acceptance import parse_acceptance_criteria
 from s3_enhancement.analyze import (
     build_assumption_question,
@@ -217,8 +218,40 @@ def _run_suite_or_502(target: Target) -> testrun.SuiteRun:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+_MISSING_FEATURE_ERRORS = ("AttributeError", "TypeError", "NameError", "ImportError")
+
+
+def _unapplied_change_hint(run: testrun.SuiteRun) -> str | None:
+    """Set when a failing run looks like the CR was never applied.
+
+    The generated suite is written against the *post*-CR code. Run it against
+    the baseline and every test dies on the attribute or keyword the CR was
+    supposed to add — which on screen reads as "the AI wrote broken tests",
+    the single most damaging way this beat can fail in front of an audience.
+    The failures are indistinguishable from a genuine bug unless something
+    says so, so this says so.
+
+    Deliberately phrased as a suspicion, not a diagnosis: a real regression
+    can raise the same exception types, and claiming certainty we do not have
+    is how a presenter gets sent down the wrong path live.
+    """
+    failed = [case for case in run.cases if case.status not in ("passed", "skipped")]
+    if not failed or run.passed:
+        return None
+    if not all(
+        any(err in (case.message or "") for err in _MISSING_FEATURE_ERRORS) for case in failed
+    ):
+        return None
+    return (
+        "Every failure is a missing attribute, keyword or name — the signature of "
+        "running the generated suite against code the change was never applied to. "
+        'Check "Generate the change" and apply the proposal, then run these again.'
+    )
+
+
 def _suite_run_dict(run: testrun.SuiteRun) -> dict:
     return {
+        "unapplied_change_hint": _unapplied_change_hint(run),
         "passed": run.passed,
         "returncode": run.returncode,
         "output": run.output,
@@ -402,6 +435,35 @@ def _origin_fields(key: str) -> dict:
         "ci": latest.get("ci", ""),
         "business_service": latest.get("business_service", ""),
     }
+
+
+def _cr_link_fields(key: str) -> dict:
+    """Which CR file a ticket was auto-opened from, and the target that CR
+    resolved to — `{}` for every ticket that wasn't (the seeded demo CRs,
+    cross-team, problem-record).
+
+    Derived fresh from the ticket-events log every call, exactly like
+    `_origin_fields`, so nothing has to be stored on the issue itself. This
+    is also what keeps `resolve_target_for_cr` off the board's hot path: the
+    resolution is done once, when the CR is first seen, and read back from
+    here on every board load afterwards (see `_cr_board_rows`).
+    """
+    latest: dict[str, str] | None = None
+    for event in events_for(key):
+        if event.get("action") == cr_intake.TICKET_CREATED_ACTION:
+            latest = _parse_detail_fields(event.get("detail", ""))
+    if latest is None:
+        return {}
+    fields = {"cr_file": latest.get("cr_file", "")}
+    # Absent, not empty, when the CR resolved to no registered target — an
+    # unresolved CR is a perfectly valid ticket (the console's own
+    # /target/resolve is still there to try again), and a blank target_id
+    # would read as "resolved to nothing" rather than "not resolved".
+    if latest.get("target_id"):
+        fields["target_id"] = latest["target_id"]
+        fields["target_display_name"] = latest.get("target_display_name", "")
+        fields["target_method"] = latest.get("target_method", "")
+    return fields
 
 
 class RouteRequest(BaseModel):
@@ -1014,22 +1076,61 @@ def create_problem_record_ticket(
 
 class AssignTicketRequest(BaseModel):
     key: str
-    assignee: str
+    # None (or omitted) unassigns, putting the ticket back in the manager's
+    # queue. Reassignment needs no separate field: this endpoint has always
+    # been unconditional, and `assign_issue` overwrites.
+    assignee: str | None = None
 
 
 @router.post("/jira/assign-ticket")
 def assign_ticket(
     payload: AssignTicketRequest, identity: Identity = Depends(require_identity)
 ) -> dict:
-    """Assign an already-created ticket — split from creation so a ticket can
-    land as open/unassigned first and a manager can pick the assignee later,
-    on their own schedule."""
+    """Assign, reassign, or unassign an already-created ticket — split from
+    creation so a ticket can land as open/unassigned first and a manager can
+    pick the assignee later, on their own schedule, and change their mind
+    afterwards.
+
+    Not manager-only, and the reason is the QA hand-off: the engineer assigns
+    the tester and moves the ticket to QA themselves. Gating the whole endpoint
+    on the manager role breaks that beat with "Manager role required" at the
+    hand-off card.
+
+    What is actually worth refusing is one caller taking a ticket **off**
+    someone else. So: a manager may do anything; anyone else may pick up an
+    unassigned ticket or hand on a ticket already assigned to them. Checked
+    server-side against the ticket's current assignee, never against a role the
+    client posts — same rule as `scm.commit_blockers` and the release record's
+    approvals (see CLAUDE.md).
+    """
+    assignee = (payload.assignee or "").strip() or None
+    if identity.role != "manager":
+        try:
+            current = (get_jira_client().get_issue(payload.key) or {}).get("assignee")
+        except JiraError:
+            # Never let an inability to read the current holder turn into a
+            # silent grant — refuse and let a manager do it.
+            current = None
+        if current not in (None, "", identity.name):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"{payload.key} is assigned to {current}. Only a manager can "
+                    f"reassign someone else's ticket."
+                ),
+            )
     try:
-        issue = get_jira_client().assign_issue(payload.key, payload.assignee)
+        issue = get_jira_client().assign_issue(payload.key, assignee)
     except JiraError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    record_event(payload.key, "human", "ticket_assigned", detail=payload.assignee)
+    # Separate actions, not one action with an empty detail: the timeline is
+    # the audit trail a reviewer reads, and "unassigned" is a different event
+    # from "assigned to nobody".
+    if assignee is None:
+        record_event(payload.key, "human", "ticket_unassigned", detail="")
+    else:
+        record_event(payload.key, "human", "ticket_assigned", detail=assignee)
     return {"label": AI_SUGGESTION_LABEL, "issue": issue}
 
 
@@ -1663,10 +1764,10 @@ def add_file(payload: AddFileRequest, identity: Identity = Depends(require_ident
 @router.get("/screenshots/{stage}")
 def screenshot(
     stage: Literal["before", "after"],
-    namespace: str = targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace,
+    namespace: str = targets.MOCKAPP_AMENDMENT_FIELD_ADD.cache_namespace,
     identity: Identity = Depends(require_identity),
 ) -> dict:
-    """Base64-encoded before/after PNG for the endorsement-form demo beat
+    """Base64-encoded before/after PNG for the amendment-form demo beat
     (see s3_enhancement/screenshots.py). 404s if that stage hasn't been
     captured yet — run demo/warm_s3_cache.sh or capture live with
     SCREENSHOT_MODE=record."""
@@ -1682,18 +1783,134 @@ def screenshot(
     }
 
 
+# Resolutions already computed in this process, keyed by CR identifier and a
+# digest of the CR's text so editing a CR re-resolves it. Belt to the
+# ticket-events log's braces: the log makes the resolve a once-ever cost, and
+# this makes it a once-ever cost even for the burst of board polls that can
+# arrive before the first record lands.
+_CR_TARGET_MEMO: dict[str, TargetMatch] = {}
+
+
+def _cr_target_match(ticket: cr_intake.CrTicket) -> TargetMatch:
+    """Resolve one CR to a registered target, at most once per CR revision.
+
+    `resolve_target_for_cr`'s third tier is an LLM call (CR-2026-044 is the
+    CR that lands there), and the board is polled — so this must never run
+    per request. Only ever called on a CR's *first* sighting; every board
+    load after that reads the answer back out of the ticket-events log via
+    `_cr_link_fields`.
+    """
+    memo_key = f"{ticket.cr_id}:{hashlib.sha256(ticket.text.encode('utf-8')).hexdigest()[:16]}"
+    match = _CR_TARGET_MEMO.get(memo_key)
+    if match is None:
+        match = resolve_target_for_cr(ticket.text)
+        _CR_TARGET_MEMO[memo_key] = match
+    return match
+
+
+def _detail_value(value: str) -> str:
+    """`k=v;k=v` details are parsed by splitting on those two characters, so
+    a value carrying either would silently corrupt every field after it."""
+    return value.replace(";", ",").replace("=", "-")
+
+
+def _record_cr_ticket(ticket: cr_intake.CrTicket) -> None:
+    """First sighting of a CR file: resolve its target once and write the
+    ticket into the same append-only log the cross-team and problem-record
+    tickets use. `record_event` is idempotent per (key, actor, action,
+    detail), so this is safe to reach twice; the `_cr_link_fields` guard
+    above it is what stops the *resolve* from running twice."""
+    match = _cr_target_match(ticket)
+    detail = f"cr_file={_detail_value(ticket.cr_file)}"
+    if match.resolved and match.target is not None:
+        detail += (
+            f";target_id={_detail_value(match.target.target_id)}"
+            f";target_display_name={_detail_value(match.target.display_name)}"
+            f";target_method={_detail_value(match.method)}"
+        )
+    record_event(ticket.key, "system", cr_intake.TICKET_CREATED_ACTION, detail=detail)
+    if match.resolved and match.target is not None:
+        record_event(
+            ticket.key,
+            "system",
+            "target_resolved",
+            detail=f"{match.target.display_name} via {match.method}",
+        )
+
+
+def _cr_board_rows(issues: list[dict], project_key: str) -> list[dict]:
+    """Board rows for every CR under `crs/` that no existing ticket covers.
+
+    The third intake source, alongside the recorded Jira search and the
+    ticket-events log. "Covered" is read out of the tickets already on the
+    board — a CR identifier in their summary or description (see
+    `cr_intake.cr_ids_on_issue`) — so the four seeded demo CRs keep their
+    hand-seeded keys (AMS-101..104) and are never duplicated, and nothing
+    here renumbers or disturbs them.
+
+    The row is derived rather than created through `JiraClient.create_issue`,
+    for two reasons. The key stays a pure function of the CR identifier in
+    every mode (create_issue mints its own key, in the AMS-100..999 band the
+    seeded tickets already occupy), and a GET that a polling board issues
+    every few seconds does not write to the Jira store. Everything that makes
+    it a real ticket downstream — the timeline, the manager's Assign control,
+    the status transitions — reads the ticket-events log and the per-issue
+    cache, both of which this feeds.
+    """
+    covered_ids: set[str] = set()
+    for issue in issues:
+        covered_ids |= cr_intake.cr_ids_on_issue(issue)
+    existing_keys = {issue.get("key") for issue in issues}
+
+    rows: list[dict] = []
+    for ticket in cr_intake.all_cr_tickets(project_key):
+        if ticket.cr_id in covered_ids or ticket.key in existing_keys:
+            continue
+        if not _cr_link_fields(ticket.key):
+            try:
+                _record_cr_ticket(ticket)
+            except Exception:  # noqa: BLE001 - see below
+                # A CR that cannot be resolved (or recorded) still belongs on
+                # the board — the manager assigning it is the recovery path,
+                # and a resolver that throws must not take the whole board
+                # down with it. `_match_by_ai` already degrades an LLMError to
+                # "unresolved" on its own; this is the backstop for everything
+                # else, including a read-only events log.
+                pass
+        rows.append(
+            {
+                "key": ticket.key,
+                "id": ticket.key,
+                "self": None,
+                "summary": ticket.summary,
+                "status": "To Do",
+                "issue_type": "Task",
+                # Unassigned on purpose: an unassigned ticket is what puts the
+                # CR in front of the manager, who already sees exactly those
+                # on the dashboard with an Assign control. Nothing here picks
+                # an engineer.
+                "assignee": None,
+                "description": ticket.description,
+            }
+        )
+    return rows
+
+
 @router.get("/jira/board")
 def jira_board(identity: Identity = Depends(require_identity)) -> dict:
     """Compact issue list driving the engineer's Jira-styled board view.
 
-    The seeded/recorded search result only ever reflects the fixed demo
-    tickets (AMS-101/102/098) — it has no way to know about a cross-team or
-    problem-record ticket created moments ago. Those are tracked instead via
-    the ticket-events log (every creation records a `cross_team_ticket_created`
-    or `problem_record_ticket_created` event on the new key), so this merges
-    that list in — this is how an assignee logging in separately actually
-    sees their new ticket on the shared board, not just via the dependency
-    lookup.
+    Three sources, merged. The seeded/recorded search result only ever
+    reflects the fixed demo tickets (AMS-101/102/098) — it has no way to know
+    about a cross-team or problem-record ticket created moments ago. Those
+    are tracked instead via the ticket-events log (every creation records a
+    `cross_team_ticket_created` or `problem_record_ticket_created` event on
+    the new key), so this merges that list in — this is how an assignee
+    logging in separately actually sees their new ticket on the shared board,
+    not just via the dependency lookup. Third, every CR file under `crs/`
+    that no ticket covers yet gets one opened for it (see `_cr_board_rows`),
+    so onboarding a change means dropping its CR in, not seeding a ticket by
+    hand as well.
     """
     project_key = os.environ.get("JIRA_PROJECT_KEY", "AMS")
     client = get_jira_client()
@@ -1712,27 +1929,37 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
         except JiraError:
             continue
 
+    issues.extend(_cr_board_rows(issues, project_key))
+
     # Overlay each issue's current status/assignee from the per-issue cache:
     # the seeded search recording is static, but assign/status changes made
     # during a session (analysis started -> In Progress, QA handoff) update
     # the get_issue cache — without this merge the board would show stale
     # columns after any workflow transition. Origin/problem_id (see
-    # _origin_fields) are likewise derived fresh every call, not stored on
-    # the issue itself, so they stay correct even for a ticket created in an
-    # earlier session.
+    # _origin_fields) and the CR link (see _cr_link_fields) are likewise
+    # derived fresh every call, not stored on the issue itself, so they stay
+    # correct even for a ticket created in an earlier session.
     merged = []
     for issue in issues:
         key = issue.get("key")
         try:
             fresh = client.get_issue(str(key))
         except JiraError:
-            merged.append({**issue, **_origin_fields(str(key))})
+            merged.append({**issue, **_origin_fields(str(key)), **_cr_link_fields(str(key))})
             continue
+        overlay = {k: v for k, v in fresh.items() if v is not None}
+        # An explicitly null assignee is a real value, not a missing one:
+        # unassigning a ticket back to the manager's queue has to beat the
+        # static search recording's stale assignee, which the filter above
+        # would otherwise let win.
+        if "assignee" in fresh:
+            overlay["assignee"] = fresh["assignee"]
         merged.append(
             {
                 **issue,
-                **{k: v for k, v in fresh.items() if v is not None},
+                **overlay,
                 **_origin_fields(str(key)),
+                **_cr_link_fields(str(key)),
             }
         )
 

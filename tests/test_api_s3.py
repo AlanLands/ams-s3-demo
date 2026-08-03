@@ -12,13 +12,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apps.console.api.main import app
+from apps.console.api.routers import s3 as s3_router
 from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError
 from common.llm import LLMError
 from common.roster import PASSCODE_BY_NAME
 from common.ticket_events import record_event
-from s3_enhancement import scm
+from s3_enhancement import cr_intake, scm
 from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS
+from s3_enhancement.target_match import TargetMatch
 
 
 @pytest.fixture(autouse=True)
@@ -206,7 +208,7 @@ def test_target_resolve_404s_on_unknown_cr_file():
 def test_target_resolve_records_ticket_event_when_ticket_number_given():
     from s3_enhancement import targets
 
-    target = targets.MOCKAPP_ENDORSEMENT_FIELD_ADD
+    target = targets.MOCKAPP_AMENDMENT_FIELD_ADD
     cr_text = target.cr_template_path.read_text(encoding="utf-8")
 
     client = _client()
@@ -512,7 +514,7 @@ def test_analyze_adhoc_asks_about_the_drafts_own_assumptions():
     ):
         response = client.post(
             "/api/s3/analyze-adhoc",
-            json={"cr_text": "BillingGateway needs to handle recalculated premiums."},
+            json={"cr_text": "BillingGateway needs to handle recalculated contributions."},
         )
 
     body = response.json()
@@ -592,7 +594,7 @@ def test_analyze_adhoc_returns_impact_and_effort_without_file_selection(tmp_path
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={
-                "cr_text": "BillingGateway needs to handle recalculated premiums.",
+                "cr_text": "BillingGateway needs to handle recalculated contributions.",
                 "ticket_number": "AMS-132",
             },
         )
@@ -660,7 +662,7 @@ def test_analyze_adhoc_asks_about_a_gap_once_text_clarity_passes():
     with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect):
         response = client.post(
             "/api/s3/analyze-adhoc",
-            json={"cr_text": "Apply a loyalty discount to renewal premiums."},
+            json={"cr_text": "Apply a loyalty discount to renewal contributions."},
         )
 
     assert response.status_code == 200
@@ -706,7 +708,7 @@ def test_analyze_adhoc_reset_clarification_clears_history():
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={
-                "cr_text": "BillingGateway needs to handle recalculated premiums.",
+                "cr_text": "BillingGateway needs to handle recalculated contributions.",
                 "reset_clarification": True,
             },
         )
@@ -793,7 +795,7 @@ def test_analyze_adhoc_includes_high_confidence_target_repo_in_final_result(tmp_
     ):
         response = client.post(
             "/api/s3/analyze-adhoc",
-            json={"cr_text": "BillingGateway needs to handle recalculated premiums."},
+            json={"cr_text": "BillingGateway needs to handle recalculated contributions."},
         )
 
     assert response.status_code == 200
@@ -811,7 +813,7 @@ def test_analyze_adhoc_skips_repo_check_when_gitlab_unavailable():
     ), patch("apps.console.api.routers.s3.get_client", side_effect=GitLabError("no token")) as mock_get_client:
         response = client.post(
             "/api/s3/analyze-adhoc",
-            json={"cr_text": "BillingGateway needs to handle recalculated premiums."},
+            json={"cr_text": "BillingGateway needs to handle recalculated contributions."},
         )
 
     assert response.status_code == 200
@@ -904,6 +906,243 @@ def test_problem_record_ticket_appears_on_board_tagged_by_origin(tmp_path, monke
     assert other_keys, "expected at least one other seeded ticket on the board"
     assert issues[other_keys[0]]["origin"] == "business_cr"
     assert "problem_id" not in issues[other_keys[0]]
+
+
+def _write_scratch_cr(crs_root, name: str, title: str) -> None:
+    crs_root.mkdir(parents=True, exist_ok=True)
+    (crs_root / name).write_text(
+        f"{title}\n\n"
+        "Requested by: MapleSure Product Team\n"
+        "Application: PolicyCore (group benefits plan administration portal)\n"
+        "Priority: P4 - small enhancement\n\n"
+        "Description:\nSomething small.\n",
+        encoding="utf-8",
+    )
+
+
+def test_board_opens_a_ticket_for_a_cr_with_none(tmp_path, monkeypatch):
+    """The board's third intake source: a CR dropped into crs/ shows up as a
+    ticket without anyone seeding one, unassigned so it lands in the
+    manager's queue."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    monkeypatch.setattr(cr_intake, "CRS_ROOT", tmp_path / "crs")
+    _write_scratch_cr(tmp_path / "crs", "CR-2027-007.md", "CR-2027-007: Renewal Notice Channel")
+    monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+    client = _client()
+
+    # The resolver is stubbed rather than run: its third tier is a live LLM
+    # call, and a scratch CR that matches no registered target lands exactly
+    # there.
+    match = TargetMatch(
+        target=SimpleNamespace(target_id="policycore-demo", display_name="PolicyCore demo"),
+        method="application_header",
+    )
+    with patch.object(s3_router, "resolve_target_for_cr", return_value=match):
+        board = client.get("/api/s3/jira/board")
+
+    assert board.status_code == 200
+    issues = {issue["key"]: issue for issue in board.json()["issues"]}
+    assert "AMS-1007" in issues
+    auto = issues["AMS-1007"]
+    assert auto["summary"] == "CR-2027-007: Renewal Notice Channel"
+    # Unassigned is the whole routing mechanism: the manager's dashboard is
+    # what shows unassigned tickets with an Assign control.
+    assert auto["assignee"] is None
+    assert auto["cr_file"] == "CR-2027-007.md"
+    assert auto["target_id"] == "policycore-demo"
+
+
+def test_board_does_not_duplicate_or_renumber_the_seeded_cr_tickets(tmp_path, monkeypatch):
+    """The four demo CRs already have hand-seeded tickets (AMS-101..104).
+    Auto-intake must recognise them from the CR identifier in their own
+    summary/description and leave them exactly as they are."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+    client = _client()
+
+    with patch.object(
+        s3_router, "resolve_target_for_cr", side_effect=AssertionError("resolved a seeded CR")
+    ):
+        board = client.get("/api/s3/jira/board")
+
+    keys = [issue["key"] for issue in board.json()["issues"]]
+    assert {"AMS-101", "AMS-102", "AMS-103", "AMS-104", "AMS-098"} <= set(keys)
+    assert len(keys) == len(set(keys))
+    # The seeded CRs are covered, so none of their derived keys is opened.
+    for cr_id in ("CR-2026-041", "CR-2026-042", "CR-2026-043", "CR-2026-044"):
+        assert cr_intake.ticket_key_for(cr_id) not in keys
+
+
+def test_board_resolves_a_cr_target_once_not_per_request(tmp_path, monkeypatch):
+    """resolve_target_for_cr's third tier is an LLM call and the board is
+    polled — the resolution has to be a once-ever cost, read back out of the
+    ticket-events log on every load after the first."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    monkeypatch.setattr(cr_intake, "CRS_ROOT", tmp_path / "crs")
+    _write_scratch_cr(tmp_path / "crs", "CR-2027-008.md", "CR-2027-008: Something New")
+    monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+    client = _client()
+
+    match = TargetMatch(
+        target=SimpleNamespace(target_id="policycore-demo", display_name="PolicyCore demo"),
+        method="ai",
+    )
+    with patch.object(s3_router, "resolve_target_for_cr", return_value=match) as resolver:
+        client.get("/api/s3/jira/board")
+        assert resolver.call_count == 1
+        # A fresh process would have an empty memo; only the events log can
+        # carry the answer across, so clear it and prove the log is enough.
+        monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+        second = client.get("/api/s3/jira/board")
+        assert resolver.call_count == 1
+
+    issues = {issue["key"]: issue for issue in second.json()["issues"]}
+    assert issues["AMS-1008"]["target_id"] == "policycore-demo"
+    assert issues["AMS-1008"]["target_method"] == "ai"
+
+
+def test_board_shows_an_unresolved_cr_without_a_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    monkeypatch.setattr(cr_intake, "CRS_ROOT", tmp_path / "crs")
+    _write_scratch_cr(tmp_path / "crs", "CR-2027-009.md", "CR-2027-009: Unrecognised Work")
+    monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+    client = _client()
+
+    with patch.object(
+        s3_router,
+        "resolve_target_for_cr",
+        return_value=TargetMatch(target=None, method="unresolved"),
+    ):
+        board = client.get("/api/s3/jira/board")
+
+    issues = {issue["key"]: issue for issue in board.json()["issues"]}
+    assert "AMS-1009" in issues
+    assert issues["AMS-1009"]["cr_file"] == "CR-2027-009.md"
+    # Absent, not blank: "not resolved" is not "resolved to nothing".
+    assert "target_id" not in issues["AMS-1009"]
+
+
+def test_assign_ticket_reassigns_and_unassigns(tmp_path, monkeypatch):
+    """The manager can change an existing assignee and hand a ticket back to
+    their own queue. The endpoint is the one writer for all three; the
+    timeline distinguishes them."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    client = TestClient(app)
+    _login(client, "Manager")
+    jira = MagicMock()
+    jira.assign_issue.side_effect = lambda key, assignee: {"key": key, "assignee": assignee}
+
+    with patch("apps.console.api.routers.s3.get_jira_client", return_value=jira):
+        first = client.post(
+            "/api/s3/jira/assign-ticket", json={"key": "AMS-102", "assignee": "Elena Cruz"}
+        )
+        second = client.post(
+            "/api/s3/jira/assign-ticket", json={"key": "AMS-102", "assignee": "Priya Nair"}
+        )
+        cleared = client.post("/api/s3/jira/assign-ticket", json={"key": "AMS-102"})
+
+    assert first.json()["issue"]["assignee"] == "Elena Cruz"
+    assert second.json()["issue"]["assignee"] == "Priya Nair"
+    assert cleared.json()["issue"]["assignee"] is None
+    # None, not "" — an empty name would be an assignment to nobody rather
+    # than Jira's own null assignee.
+    assert jira.assign_issue.call_args_list[-1].args == ("AMS-102", None)
+
+    events = client.get("/api/s3/ticket-events?ticket_number=AMS-102").json()["events"]
+    actions = [(event["action"], event["detail"]) for event in events]
+    assert ("ticket_assigned", "Elena Cruz") in actions
+    assert ("ticket_assigned", "Priya Nair") in actions
+    assert ("ticket_unassigned", "") in actions
+
+
+def test_engineer_can_hand_off_their_own_ticket_to_qa():
+    """The QA hand-off is an engineer action, not a manager one.
+
+    Gating the whole endpoint on the manager role broke this beat with
+    "Manager role required" on the hand-off card, which is what this pins.
+    """
+    jira = MagicMock()
+    jira.get_issue.return_value = {"key": "AMS-102", "assignee": "Ravi Kumar"}
+    jira.assign_issue.side_effect = lambda key, assignee: {"key": key, "assignee": assignee}
+
+    client = _client()  # Ravi Kumar, AMS-102's current assignee
+    with patch("apps.console.api.routers.s3.get_jira_client", return_value=jira):
+        handed_off = client.post(
+            "/api/s3/jira/assign-ticket", json={"key": "AMS-102", "assignee": "Priya Nair"}
+        )
+
+    assert handed_off.status_code == 200
+    assert handed_off.json()["issue"]["assignee"] == "Priya Nair"
+
+
+def test_an_engineer_cannot_take_a_ticket_off_someone_else():
+    """What the role check is actually for. Read from the ticket's current
+    assignee server-side, never from a role the client posts — same rule as
+    the commit gate and the release record's approvals.
+    """
+    jira = MagicMock()
+    jira.get_issue.return_value = {"key": "AMS-101", "assignee": "Priya Nair"}
+
+    client = _client()  # Ravi Kumar, who does not hold AMS-101
+    with patch("apps.console.api.routers.s3.get_jira_client", return_value=jira):
+        refused = client.post(
+            "/api/s3/jira/assign-ticket", json={"key": "AMS-101", "assignee": "Ravi Kumar"}
+        )
+
+    assert refused.status_code == 403
+    assert "Priya Nair" in refused.json()["detail"]
+    jira.assign_issue.assert_not_called()
+
+
+def test_a_manager_can_reassign_anyone(tmp_path, monkeypatch):
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    jira = MagicMock()
+    jira.get_issue.return_value = {"key": "AMS-101", "assignee": "Priya Nair"}
+    jira.assign_issue.side_effect = lambda key, assignee: {"key": key, "assignee": assignee}
+
+    manager = TestClient(app)
+    _login(manager, "Manager")
+    with patch("apps.console.api.routers.s3.get_jira_client", return_value=jira):
+        moved = manager.post(
+            "/api/s3/jira/assign-ticket", json={"key": "AMS-101", "assignee": "Tom Becker"}
+        )
+
+    assert moved.status_code == 200
+    assert moved.json()["issue"]["assignee"] == "Tom Becker"
+
+
+def test_assign_ticket_401s_without_login():
+    anonymous = TestClient(app)
+    assert (
+        anonymous.post(
+            "/api/s3/jira/assign-ticket", json={"key": "AMS-102", "assignee": "Elena Cruz"}
+        ).status_code
+        == 401
+    )
+
+def test_board_prefers_an_explicitly_cleared_assignee_over_the_seeded_search(tmp_path, monkeypatch):
+    """Unassigning has to stick. The board overlays the per-issue cache onto
+    the static search recording while dropping None values — without the
+    special case for `assignee`, the recording's stale name would win and the
+    ticket would look assigned again on the next load."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    monkeypatch.setattr(cr_intake, "CRS_ROOT", tmp_path / "crs")
+    client = _client()
+
+    jira = MagicMock()
+    jira.search_issues.return_value = [
+        {"key": "AMS-102", "summary": "CR-2026-042: Amendment Priority Field",
+         "status": "In Progress", "issue_type": "Task", "assignee": "Ravi Kumar"}
+    ]
+    jira.get_issue.return_value = {"key": "AMS-102", "assignee": None}
+
+    with patch("apps.console.api.routers.s3.get_jira_client", return_value=jira):
+        board = client.get("/api/s3/jira/board")
+
+    issues = {issue["key"]: issue for issue in board.json()["issues"]}
+    assert issues["AMS-102"]["assignee"] is None
+    # Everything else the partial cache entry says nothing about survives.
+    assert issues["AMS-102"]["status"] == "In Progress"
 
 
 def test_generate_llm_error_returns_502():
@@ -1032,16 +1271,16 @@ def test_tests_run_returns_parsed_cases():
         cases=[
             TestCase(
                 name="test_default_tier_is_standard",
-                classname="tests.test_s3_coverage_upgrade",
+                classname="tests.test_s3_tier_upgrade",
                 description="Default tier is standard",
                 status="passed",
                 time_s=0.01,
                 message=None,
             ),
             TestCase(
-                name="test_upgrade_recalculates_premium",
-                classname="tests.test_s3_coverage_upgrade",
-                description="Upgrade recalculates premium",
+                name="test_upgrade_recalculates_contribution",
+                classname="tests.test_s3_tier_upgrade",
+                description="Upgrade recalculates the contribution",
                 status="passed",
                 time_s=0.02,
                 message=None,
@@ -1062,7 +1301,7 @@ def test_tests_run_returns_parsed_cases():
     assert body["summary"] == {"total": 2, "passed": 2, "failed": 0, "errors": 0, "skipped": 0}
     assert [case["description"] for case in body["cases"]] == [
         "Default tier is standard",
-        "Upgrade recalculates premium",
+        "Upgrade recalculates the contribution",
     ]
 
 
@@ -1076,7 +1315,7 @@ def test_tests_mutation_returns_verdict_and_reverted_flag():
         cases=[
             TestCase(
                 name="test_same_tier_raises",
-                classname="tests.test_s3_coverage_upgrade",
+                classname="tests.test_s3_tier_upgrade",
                 description="Same tier raises",
                 status="failed",
                 time_s=0.01,
@@ -1087,8 +1326,8 @@ def test_tests_mutation_returns_verdict_and_reverted_flag():
     )
     fake_mutation = MutationRun(
         description="Weakened the same-tier guard",
-        rel_path="apps/policycore/core/coverage.py",
-        mutation_diff="--- a/apps/policycore/core/coverage.py\n+++ b/apps/policycore/core/coverage.py\n",
+        rel_path="repos/policycore/core/tiers.py",
+        mutation_diff="--- a/repos/policycore/core/tiers.py\n+++ b/repos/policycore/core/tiers.py\n",
         run=fake_run,
         tests_caught_bug=True,
     )
@@ -1100,7 +1339,7 @@ def test_tests_mutation_returns_verdict_and_reverted_flag():
     body = response.json()
     assert body["tests_caught_bug"] is True
     assert body["reverted"] is True
-    assert body["file"] == "apps/policycore/core/coverage.py"
+    assert body["file"] == "repos/policycore/core/tiers.py"
     assert body["cases"][0]["status"] == "failed"
 
 
@@ -1191,13 +1430,13 @@ def test_apply_calls_apply_change_with_file_path():
 
 
 def test_apply_mockapp_files_runs_post_apply_migration():
-    """Applying files under apps/policycore/ must rebuild the SQLite schema in a
+    """Applying files under repos/policycore/ must rebuild the SQLite schema in a
     subprocess (the applied CR may have added a column the existing DB
     predates) — the crash-after-apply regression."""
     client = _client()
 
     with (
-        patch("apps.console.api.routers.s3.apply_change", return_value=["apps/policycore/core/db.py"]),
+        patch("apps.console.api.routers.s3.apply_change", return_value=["repos/policycore/core/db.py"]),
         patch("apps.console.api.routers.s3.subprocess.run") as run,
     ):
         run.return_value.returncode = 0
@@ -1208,7 +1447,7 @@ def test_apply_mockapp_files_runs_post_apply_migration():
     assert response.status_code == 200
     assert run.call_count == 1
     argv = run.call_args.args[0]
-    assert argv[1:] == ["-m", "apps.policycore.core.seed"]
+    assert argv[1:] == ["-m", "repos.policycore.core.seed"]
     post_apply = response.json()["post_apply"]
     assert post_apply["ok"] is True
     assert post_apply["steps"][0]["returncode"] == 0
@@ -1224,7 +1463,7 @@ def test_apply_post_apply_failure_carried_in_response(tmp_path, monkeypatch):
     client = _client()
 
     with (
-        patch("apps.console.api.routers.s3.apply_change", return_value=["apps/policycore/core/db.py"]),
+        patch("apps.console.api.routers.s3.apply_change", return_value=["repos/policycore/core/db.py"]),
         patch("apps.console.api.routers.s3.subprocess.run") as run,
     ):
         run.return_value.returncode = 1
@@ -1868,7 +2107,7 @@ def _scenario_payload(**overrides) -> dict:
         "preconditions": "A seeded policy exists",
         "test_data": "POL-10001",
         "steps": ["Submit without touching priority"],
-        "expected": "The stored endorsement has priority Standard",
+        "expected": "The stored amendment has priority Standard",
     }
     base.update(overrides)
     return base

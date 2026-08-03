@@ -53,17 +53,17 @@ start() {
 start console-api python -m uvicorn apps.console.api.main:app \
     --host "$BIND_HOST" --port "$API_PORT"
 
-start policycore python -m streamlit run apps/policycore/app.py \
+start policycore python -m streamlit run repos/policycore/app.py \
     --server.port "$STREAMLIT_PORT" \
     --server.address "$BIND_HOST" \
     --server.baseUrlPath "$BASE_URL_PATH" \
     --server.headless true \
     --browser.gatherUsageStats false
 
-start policy-service python -m uvicorn apps.claimsportal.policy_service.main:app \
+start policy-service python -m uvicorn repos.claimsportal.policy_service.main:app \
     --host "$BIND_HOST" --port "$POLICY_SERVICE_PORT"
 
-start claims-service python -m uvicorn apps.claimsportal.claims_service.main:app \
+start claims-service python -m uvicorn repos.claimsportal.claims_service.main:app \
     --host "$BIND_HOST" --port "$CLAIMS_SERVICE_PORT"
 
 echo

@@ -141,7 +141,7 @@ def test_checkout_refuses_when_target_root_is_ams_s3_demo_itself(monkeypatch):
 
 
 def test_checkout_refuses_when_target_root_is_nested_inside_ams_s3_demo(monkeypatch):
-    nested = scm_live._AMS_S3_DEMO_ROOT / "apps" / "policycore"
+    nested = scm_live._AMS_S3_DEMO_ROOT / "repos" / "policycore"
     monkeypatch.setenv("SCM_LIVE_TARGET_ROOT", str(nested))
     with pytest.raises(ScmLiveError, match="ams-s3-demo itself"):
         checkout_branch("AMS-103", "claimsportal-claims-deductible")

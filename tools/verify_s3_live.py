@@ -55,8 +55,8 @@ from tools.verify_common import (  # noqa: E402
     snapshot_cache,
 )
 
-_BASELINE_FILES = ("apps/policycore/app.py", "apps/policycore/core/models.py", "apps/policycore/core/db.py")
-_GENERATED_FILES = ("apps/policycore/core/coverage.py", "tests/test_s3_coverage_upgrade.py")
+_BASELINE_FILES = ("repos/policycore/app.py", "repos/policycore/core/models.py", "repos/policycore/core/db.py")
+_GENERATED_FILES = ("repos/policycore/core/tiers.py", "tests/test_s3_tier_upgrade.py")
 
 _REFUSAL_MARKERS = ("as an ai", "i cannot", "i'm sorry, but", "i am unable to")
 _MIN_LENGTH = 40
@@ -110,7 +110,7 @@ def _restore_committed_state() -> None:
 
 def _reseed() -> None:
     subprocess.run(
-        [sys.executable, "-m", "apps.policycore.core.seed"],
+        [sys.executable, "-m", "repos.policycore.core.seed"],
         cwd=REPO_ROOT,
         env=_child_env(),
         capture_output=True,
@@ -126,7 +126,7 @@ def _child_env() -> dict[str, str]:
 
 def _run_generated_tests() -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/test_s3_coverage_upgrade.py", "-q"],
+        [sys.executable, "-m", "pytest", "tests/test_s3_tier_upgrade.py", "-q"],
         cwd=REPO_ROOT,
         env=_child_env(),
         capture_output=True,
@@ -230,11 +230,11 @@ def check_two_tier_names_replay(state: VerificationState) -> str:
         _restore_baseline()
         with _env("LLM_MODE", "replay"):
             _run_full_generation(tier)
-        coverage = (REPO_ROOT / "apps/policycore/core/coverage.py").read_text(encoding="utf-8")
-        if tier not in coverage:
-            raise AssertionError(f"tier {tier!r} missing from replayed coverage.py")
-        if "{{TIER_NAME}}" in coverage:
-            raise AssertionError("placeholder token leaked into replayed coverage.py")
+        tiers_src = (REPO_ROOT / "repos/policycore/core/tiers.py").read_text(encoding="utf-8")
+        if tier not in tiers_src:
+            raise AssertionError(f"tier {tier!r} missing from replayed tiers.py")
+        if "{{TIER_NAME}}" in tiers_src:
+            raise AssertionError("placeholder token leaked into replayed tiers.py")
         result = _run_generated_tests()
         if result.returncode != 0:
             raise AssertionError(f"tests failed for tier {tier!r}:\n{result.stdout}")
@@ -253,11 +253,11 @@ def check_reset_speed(state: VerificationState) -> str:
         raise AssertionError(f"reset_s3.sh failed:\n{result.stderr}")
     if elapsed >= 10:
         raise AssertionError(f"reset took {elapsed:.1f}s, must be <10s")
-    if (REPO_ROOT / "apps/policycore/core/coverage.py").exists():
+    if (REPO_ROOT / "repos/policycore/core/tiers.py").exists():
         raise AssertionError("coverage.py still present after reset")
-    app_text = (REPO_ROOT / "apps/policycore/app.py").read_text(encoding="utf-8")
+    app_text = (REPO_ROOT / "repos/policycore/app.py").read_text(encoding="utf-8")
     if "Upgrade Coverage" in app_text:
-        raise AssertionError("upgrade UI still present in apps/policycore/app.py after reset")
+        raise AssertionError("upgrade UI still present in repos/policycore/app.py after reset")
     return f"reset in {elapsed:.1f}s, baseline restored"
 
 
@@ -276,11 +276,11 @@ def check_decoys_never_selected(state: VerificationState) -> str:
     selected_decoys = [
         path
         for path in (*selection.selected, *selection.extra_files)
-        if path.startswith("apps/policycore/systems/")
+        if path.startswith("repos/policycore/systems/")
     ]
     if selected_decoys:
         raise AssertionError(f"decoy files selected for canonical CR: {selected_decoys}")
-    return "canonical CR selected no apps/policycore/systems decoys"
+    return "canonical CR selected no repos/policycore/systems decoys"
 
 
 def check_design_doc_gate_screens_all_legacy_subsystems(state: VerificationState) -> str:
@@ -290,7 +290,7 @@ def check_design_doc_gate_screens_all_legacy_subsystems(state: VerificationState
     not just that individual files end up unselected downstream."""
     docs = relevance.discover_subsystem_design_docs()
     if not docs:
-        raise AssertionError("no apps/policycore/systems/*/DESIGN.md docs found")
+        raise AssertionError("no repos/policycore/systems/*/DESIGN.md docs found")
     for tier in ("Elite", "Titanium", "Aurora"):
         screen = relevance.screen_subsystems(render_cr(tier), docs)
         if screen.in_scope:
@@ -495,7 +495,7 @@ def main() -> int:
     results: list[CheckResult] = []
 
     # Architecture checks first — deterministic, no live model involved. These
-    # mutate apps/policycore/tests and restore the committed state afterwards.
+    # mutate repos/policycore/tests and restore the committed state afterwards.
     try:
         results.append(
             run_check("replay fully offline", state, check_replay_fully_offline)

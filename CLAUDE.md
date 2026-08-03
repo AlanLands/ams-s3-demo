@@ -21,14 +21,25 @@ AI analysis → codegen → tests → docs → release notes.
 
 ## Layout — things `ls` won't tell you
 
-- `apps/` holds the four *running* applications, one launch script each (see
-  `apps/README.md`). Everything else at the root is tooling, not an app:
-  `s3_enhancement/` is the AI pipeline, `common/` the shared clients, `demo/`
-  the presenter scripts.
-- `apps/policycore/` (was `mockapp/`) is the MapleSure portal AND S3's first
+- `repos/` holds the target repositories S3 operates *on*, one directory per
+  repo — this is the drop folder. A repo directory carrying a
+  `.s3targets.json` manifest registers itself at import via
+  `s3_enhancement/discovery.py`; no edit to `targets.py` is needed. CRs go in
+  the top-level `crs/` and are picked up on the board automatically, landing
+  unassigned so the manager routes them. See `repos/README.md` for the
+  manifest contract and what a dropped-in repo does and does not get.
+  The three built-in targets stay declared by hand in `targets.py` because
+  they carry bespoke codegen file-set validators a manifest cannot express;
+  built-ins win on an id clash, but two dropped repos colliding still raises.
+- `apps/` holds the *tooling* — the console and the launch scripts (see
+  `apps/README.md`). The distinction is load-bearing: a repo under `repos/` is
+  something S3 changes; an app under `apps/` is what does the changing.
+  Everything else at the root is also tooling: `s3_enhancement/` is the AI
+  pipeline, `common/` the shared clients, `demo/` the presenter scripts.
+- `repos/policycore/` (was `mockapp/`) is the MapleSure portal AND S3's first
   target — CR-2026-041 and CR-2026-042. Its Python package moved with it, so
-  imports are `apps.policycore.core.*`.
-- `apps/claimsportal/` is S3's second target — "ClaimsPortal"
+  imports are `repos.policycore.core.*`.
+- `repos/claimsportal/` is S3's second target — "ClaimsPortal"
   (Python/FastAPI, CR-2026-043, ticket AMS-103, target id
   `claimsportal-claims-deductible`). Runs on nothing but the venv, so a
   locked-down sandbox can host it. Its `target_id` and `cache_namespace` were
@@ -45,25 +56,73 @@ AI analysis → codegen → tests → docs → release notes.
   with `demo/reset_s3_claimsportal.sh`. Its generated test and regression suite
   now live in the top-level `tests/` dir like the other two targets (the
   Java-only exception for in-target-root test discovery no longer applies).
+- `repos/enroldirect/` is S3's third target — "EnrolDirect"
+  (Python/FastAPI, CR-2026-045, target id `enroldirect-prospect-access`,
+  cache namespace `enroldirect_prospect_access`). The online enrolment
+  channel: two access preferences own who may self-serve, and a third
+  population — prospects, on the roster with no active benefit — that
+  neither preference was written for.
+  **Its baseline is a removal, which is what makes it different from the
+  other two.** The checked-in source is the state after the impact analysis
+  and before the gate acts on it: `eligibility.preference_for_category`
+  returns `None` for a prospect, so they are refused. The CR settles the
+  classification. `impact.py` is in `core_files` but deliberately NOT in
+  `codegen_allowlist` — the model must read the analysis to understand the
+  change and must not edit it, which is why this target has its own
+  `_validate_enroldirect_file_set` (core recall over the editable core files
+  only, plus a loud failure if a read-only file comes back modified).
+  Baseline snapshot in `.baseline/`; reset with
+  `demo/reset_s3_enroldirect.sh`.
 - `apps/console/` is the console: `api/` (FastAPI, run as
   `uvicorn apps.console.api.main:app`) and `web/` (React, was `frontend/`).
 - `s3_enhancement/cache/` is the committed replay cache that makes the demo
   deterministic; `s3_enhancement/out/` is gitignored and regenerated per run.
 - `tests/` holds both the pipeline's own tests **and** the target apps'
   checked-in regression suites (`test_regression_policycore.py`,
-  `test_regression_claimsportal.py`). The regression suites are deliberately
+  `test_regression_claimsportal.py`, `test_regression_enroldirect.py`). The
+  regression suites are deliberately
   outside every target root: anything ending `.py` under a target root joins
   the codegen candidate pool (see below). Until the 2026-07-30 Python rewrite,
   ClaimsPortal's Java regression suite was the one exception, living at
-  `apps/claimsportal/policy-service/src/test/` — safe only because
+  `repos/claimsportal/policy-service/src/test/` — safe only because
   `relevance.py` excludes `test`/`tests` directories from discovery. That
   exclusion stays in `relevance.py` (harmless, still guards decoy test dirs)
   but no target now depends on it — all three keep their regression suite and
   generated-test output in `tests/`.
 - The demo reset scripts restore from `HEAD`, **not** from the `s3-baseline` /
   `s3-endorsement-baseline` tags. Those tags predate both this layout and the
-  endorsements table, and restoring from them breaks reseeding with a FOREIGN
+  amendments table, and restoring from them breaks reseeding with a FOREIGN
   KEY error that cannot be recovered without deleting `data/mockapp.db`.
+
+## PolicyCore speaks GRS, not P&C (2026-08-03 reskin)
+
+The demo audience is Group Retirement Services / group benefits, so PolicyCore's
+vocabulary was reskinned off P&C wording: **endorsement → amendment**
+(`core/endorsements.py` → `core/amendments.py`, `Endorsement` → `Amendment`,
+`endorsements` table → `amendments`), **coverage tier / coverage level → plan
+tier** (`coverage_tier` → `plan_tier`, `core/coverage.py` → `core/tiers.py`,
+`COVERAGE_TIERS`/`upgrade_coverage` → `PLAN_TIERS`/`upgrade_tier`), **premium →
+contribution** (`premium` → `contribution`), and **policyholder → plan sponsor**
+(`holder_name` → `sponsor_name`). Tier names (Standard/Premium/Plus) are
+generic and unchanged, as are `plan member`, `group contract`, `dependant`,
+`roster` and `effective date` — those were already correct.
+
+Plain "coverage" meaning *what a benefit covers* (`enrolment/dependants.py`,
+marketing copy) is correct group-benefits English and was deliberately left
+alone. ClaimsPortal and EnrolDirect were out of scope.
+
+Three things kept their pre-reskin spelling on purpose, because they are cache
+identity rather than display strings: `DEFAULT_TARGET_ID`
+(`mockapp-coverage-upgrade`), `AMENDMENT_TARGET_ID`
+(`mockapp-endorsement-field-add`) and `cache_namespace`
+(`endorsement_field_add`), plus the `_LEGACY_CACHE_KEYS` literals. See the
+comment above `DEFAULT_TARGET_ID` in `s3_enhancement/targets.py`.
+
+`db.wipe_db()` drops the legacy `endorsements` table first and unconditionally.
+That is not dead code: a `data/mockapp.db` created before the reskin still has
+it, it references `policies`, and one row left in it makes the `policies` drop
+fail with `FOREIGN KEY constraint failed` — the unrecoverable reseed this file
+warns about above.
 
 ## File paths are load-bearing — don't move targets
 
@@ -85,6 +144,52 @@ own `import` statements, so both had to be rewritten together, and both
 targets were re-verified generate → apply → revert afterwards. A live
 re-record was NOT needed. If you move one again, expect the same two-part
 rewrite plus a fresh end-to-end pass.
+
+Done a second time on 2026-08-03, moving all three targets from `apps/` into
+the new `repos/` drop folder: 128 files rewritten across code, docs and the
+committed recordings together, and again **no live re-record was needed** —
+all four targets replayed, their mutation snippets still matched, and the
+regression suites passed pre- and post-CR. Two traps that pass a `grep` but
+break at run time: paths built as split literals (`REPO_ROOT / "apps" /
+"policycore"`) are invisible to an `apps/policycore` search, and files with
+unusual extensions (`.env.example`, `deploy/aws/*.service`) fall out of an
+extension allowlist. Both bit on the first pass. Verify with
+`s3_enhancement/discovery.py`-aware end-to-end run, not with grep alone.
+
+## `repos/policycore/app.py` is mirrored inside two recordings
+
+`app.py` is in the `codegen_allowlist` for **both** PolicyCore targets, and both
+committed recordings return it as a **whole-file replacement**. So the recorded
+copy has to stay equal to the on-disk file plus that CR's delta. Restructure the
+portal without re-authoring the recordings and Apply stages a revert of the
+restructure — mid-demo, with the diff showing the layout being deleted.
+
+The two live recordings are `s3_enhancement/cache/s3_codegen.json` (CR-2026-041,
+`cache_namespace=""`) and `s3_codegen__endorsement_field_add.json` (CR-2026-042).
+Re-author them by applying the CR's delta to the current `app.py` as exact string
+substitutions, not by hand-editing the JSON — then assert the replayed diff is
+purely additive. **No live re-record is needed**, the same way the two target
+moves did not need one. Done once on 2026-08-03 for the sidebar/section
+redesign.
+
+Three things make this safe rather than fragile, all verified:
+- Replay keys off the **cache namespace, not a prompt hash**
+  (`common/llm.py::stream_complete`), so editing `app.py` cannot cause a miss.
+- `relevance.select_relevant_files` **excludes core files from the candidate
+  pool** before scoring, so `app.py`'s content never shifts which extra files
+  are selected — the "unexpected file set" trap does not apply to core files.
+- `_drop_unchanged_files` compares against the repo, so a recorded file that
+  matches disk is dropped and the diff shows only the CR.
+
+The recordings' JSON encoding is not uniform: the **outer** document is
+`ensure_ascii=True`, the **inner** `response` string is `ensure_ascii=False`,
+and there is no trailing newline. Round-trip an untouched copy and assert it is
+byte-identical before writing, or the diff becomes the whole file.
+
+The two `s3_codegen__revise__*.json` recordings that also carry `app.py`
+(`2f4f481…`, `b99921d…`) are **already stale** — they import the pre-reskin
+`core.coverage` / `COVERAGE_TIERS` / `holder_name`, which no longer exist. They
+predate the GRS reskin and were not repaired by the redesign.
 
 ## Release artifacts
 

@@ -1,6 +1,6 @@
 """Templated change request driving the S3 Enhancement Delivery demo beat.
 
-The audience chooses the top coverage tier name at runtime. The baseline repo
+The audience chooses the top plan tier name at runtime. The baseline repo
 therefore stores the CR with a literal placeholder and renders it only inside
 the S3 console flow.
 """
@@ -11,8 +11,8 @@ from common.constants import INSURER_NAME
 from s3_enhancement import targets
 from s3_enhancement.targets import Target
 
-CR_TEMPLATE_PATH = targets.MOCKAPP_COVERAGE_UPGRADE.cr_template_path
-PLACEHOLDER = targets.MOCKAPP_COVERAGE_UPGRADE.cr_placeholder
+CR_TEMPLATE_PATH = targets.MOCKAPP_TIER_UPGRADE.cr_template_path
+PLACEHOLDER = targets.MOCKAPP_TIER_UPGRADE.cr_placeholder
 
 _BAD_INPUT_CHARS = ('"', "'", "/", "\\")
 
@@ -21,7 +21,7 @@ def sanitize_tier_name(raw: str) -> tuple[str | None, str | None]:
     """Validate an audience-picked tier name. Returns (tier_name, error_message)."""
     tier_name = raw.strip()
     if not tier_name:
-        return None, "Enter a coverage tier name."
+        return None, "Enter a plan tier name."
     if len(tier_name) > 24:
         return None, "Keep the tier name to 24 characters or fewer."
     if any(char in tier_name for char in _BAD_INPUT_CHARS):

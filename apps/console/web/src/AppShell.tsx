@@ -31,13 +31,26 @@ function ScenarioIcon() {
   )
 }
 
+function AdminIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+      <path d="M8 2v2M8 12v2M2 8h2M12 8h2M4.1 4.1l1.4 1.4M10.5 10.5l1.4 1.4M11.9 4.1l-1.4 1.4M5.5 10.5l-1.4 1.4" strokeLinecap="round" />
+      <circle cx="8" cy="8" r="2.4" />
+    </svg>
+  )
+}
+
 export default function AppShell() {
   const { identity, logout } = useAuth()
   const navigate = useNavigate()
   const initial = identity?.name?.trim().charAt(0).toUpperCase() ?? '?'
+  const isManager = identity?.role === 'manager'
 
   return (
     <div className="ams-shell">
+      <a className="ams-skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <header className="ams-topbar">
         <div className="ams-topbar-brand">
           <span className="ams-topbar-brand-name">MapleSure AMS Console</span>
@@ -51,7 +64,7 @@ export default function AppShell() {
           <div className="ams-topbar-avatar">{initial}</div>
           <button
             className="ams-button ams-button-secondary"
-            style={{ fontSize: '0.82rem', padding: '0.35rem 0.7rem' }}
+            style={{ fontSize: 'var(--ams-text-xs)', padding: 'var(--ams-space-2) var(--ams-space-3)' }}
             onClick={async () => {
               await logout()
               navigate('/login')
@@ -99,29 +112,39 @@ export default function AppShell() {
                 </span>
               </NavLink>
             ))}
-            {identity?.role === 'manager' && (
-              <div className="ams-sidebar-subnav">
-                <a href="/s3#quick-question" className="ams-sidebar-sublink">
-                  Quick question
-                </a>
-                <a href="/s3#ticket-dashboard" className="ams-sidebar-sublink">
-                  Ticket dashboard
-                </a>
-              </div>
-            )}
-            {identity?.role === 'engineer' && (
-              <div className="ams-sidebar-subnav">
-                <a href="/s3#board" className="ams-sidebar-sublink">
-                  Jira board
-                </a>
-                <a href="/s3#codegen" className="ams-sidebar-sublink">
-                  Codegen &amp; release
-                </a>
-              </div>
-            )}
           </nav>
+
+          {/* S3 portals its stage rail into this slot, so it has to stay
+              directly under the scenario it belongs to. */}
+          <div id="ams-sidebar-slot" />
+
+          {/* Manager-only, and absent rather than disabled for an engineer:
+              a visible-but-dead entry advertises a page they cannot use, and
+              every route behind it 403s server-side anyway. Last in the rail —
+              it is housekeeping, not a step in the scenario flow. */}
+          {isManager && (
+            <>
+              <div className="ams-sidebar-divider" />
+              <nav className="ams-sidebar-nav">
+                <NavLink
+                  to="/admin"
+                  className={({ isActive }) =>
+                    isActive ? 'ams-sidebar-link ams-sidebar-link-active' : 'ams-sidebar-link'
+                  }
+                >
+                  <span className="ams-sidebar-link-icon">
+                    <AdminIcon />
+                  </span>
+                  <span>
+                    Admin
+                    <span className="ams-sidebar-link-desc">Demo control</span>
+                  </span>
+                </NavLink>
+              </nav>
+            </>
+          )}
         </aside>
-        <main className="ams-shell-main">
+        <main id="main-content" className="ams-shell-main" tabIndex={-1}>
           <Outlet />
         </main>
       </div>

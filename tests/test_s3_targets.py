@@ -23,9 +23,9 @@ def test_default_target_cache_keys_match_legacy_literals():
     assert default.cache_key("release_notes") == "s3_release_notes:coverage_upgrade"
 
 
-def test_get_target_defaults_to_mockapp_coverage_upgrade():
-    assert targets.get_target(None) is targets.MOCKAPP_COVERAGE_UPGRADE
-    assert targets.get_target(targets.DEFAULT_TARGET_ID) is targets.MOCKAPP_COVERAGE_UPGRADE
+def test_get_target_defaults_to_mockapp_tier_upgrade():
+    assert targets.get_target(None) is targets.MOCKAPP_TIER_UPGRADE
+    assert targets.get_target(targets.DEFAULT_TARGET_ID) is targets.MOCKAPP_TIER_UPGRADE
 
 
 def test_second_target_has_distinct_cache_identity(tmp_path):
@@ -86,12 +86,12 @@ def test_post_apply_commands_matched_by_root_not_target_id():
     every mockapp target, current or future, without the API being told the
     target id. Matching is by root, so sibling targets inherit the step."""
     repo_root = targets.REPO_ROOT
-    commands = targets.post_apply_commands_for(["apps/policycore/core/db.py"], repo_root)
-    assert commands == [("{python}", "-m", "apps.policycore.core.seed")]
+    commands = targets.post_apply_commands_for(["repos/policycore/core/db.py"], repo_root)
+    assert commands == [("{python}", "-m", "repos.policycore.core.seed")]
 
     # Both mockapp targets declare the same command — it must run once, not twice.
     commands = targets.post_apply_commands_for(
-        ["apps/policycore/core/db.py", "apps/policycore/app.py"], repo_root
+        ["repos/policycore/core/db.py", "repos/policycore/app.py"], repo_root
     )
     assert len(commands) == 1
 
@@ -99,7 +99,7 @@ def test_post_apply_commands_matched_by_root_not_target_id():
 def test_post_apply_commands_empty_for_non_stateful_targets():
     repo_root = targets.REPO_ROOT
     claimsportal_file = (
-        "apps/claimsportal/claims-service/src/main/java/com/maplesure/claims/ClaimRules.java"
+        "repos/claimsportal/claims-service/src/main/java/com/maplesure/claims/ClaimRules.java"
     )
     assert targets.post_apply_commands_for([claimsportal_file], repo_root) == []
     assert targets.post_apply_commands_for([], repo_root) == []
@@ -111,7 +111,7 @@ def test_every_mockapp_rooted_target_declares_post_apply():
     for target in targets.all_targets():
         if target.root is not None and target.root.name == "policycore":
             assert target.post_apply_command, (
-                f"{target.target_id} is rooted at apps/policycore/ but declares no "
+                f"{target.target_id} is rooted at repos/policycore/ but declares no "
                 "post_apply_command — applied schema changes would crash the portal"
             )
 
@@ -133,5 +133,5 @@ def test_discover_files_for_target_scopes_to_local_target_root(tmp_path):
 
     assert set(files) == {"app.py", "helper.py"}
     assert "hello from synthetic repo" in files["app.py"]
-    # Proves scoping to the target's own root, not apps/policycore/.
-    assert "apps/policycore/core/models.py" not in files
+    # Proves scoping to the target's own root, not repos/policycore/.
+    assert "repos/policycore/core/models.py" not in files

@@ -73,8 +73,8 @@ def test_returns_empty_for_a_ticket_with_no_criteria():
 
 def test_every_demo_cr_states_criteria_including_a_regression_one():
     for target in (
-        targets.MOCKAPP_COVERAGE_UPGRADE,
-        targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
+        targets.MOCKAPP_TIER_UPGRADE,
+        targets.MOCKAPP_AMENDMENT_FIELD_ADD,
         targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
     ):
         criteria = parse_acceptance_criteria(cr.render_cr("Elite", target=target))
@@ -100,7 +100,7 @@ def test_match_declines_an_ambiguous_pairing():
 
 
 def test_match_declines_on_a_single_shared_token():
-    scenario = _scenario("TS-01", "Verify existing coverage tiers are displayed", ["AC-1"])
+    scenario = _scenario("TS-01", "Verify existing plan tiers are displayed", ["AC-1"])
     assert match_scenario(scenario, [_case("test_default_tier_is_standard")]) is None
 
 

@@ -9,7 +9,7 @@ on the board is ambiguous.
 
 CR-2026-044 is. Its title is no registered target's stem, and its
 `Application: PolicyCore` header narrows to *two* targets rather than one
-(`targets_for_application` returns both the coverage-tier and endorsement
+(`targets_for_application` returns both the plan-tier and amendment
 targets), so tier 2 declines to guess and falls through to the AI tier. That
 is the ambiguity a team owning several repos actually has, and the console
 gates checkout/generate on a human accepting whatever the model picked.
@@ -39,7 +39,7 @@ ASSIGNEE = "Ravi Kumar"
 
 ISSUE = {
     "key": KEY,
-    "summary": "Flag urgent endorsement requests (from Support Ops)",
+    "summary": "Flag urgent amendment requests (from Support Ops)",
     "status": "To Do",
     "assignee": ASSIGNEE,
     "issue_type": "Task",

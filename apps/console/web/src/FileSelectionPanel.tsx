@@ -6,7 +6,7 @@ import type { FileSelection } from './api_s3'
 // the AI pick which part of the repo to touch" should look the same in both
 // places instead of only ever showing up in one of them.
 //
-// apps/policycore/systems/*/DESIGN.md is a bank of decoy subsystems (several of them
+// repos/policycore/systems/*/DESIGN.md is a bank of decoy subsystems (several of them
 // Java) this demo's screening step is meant to rule out — for CRs whose real
 // core files aren't behind their own design doc, in_scope ends up empty and
 // screened_out is the whole decoy bank. Screened-out entries must never look
@@ -26,11 +26,11 @@ export default function FileSelectionPanel({ selection }: { selection: FileSelec
     <div className="ams-card" style={{ marginTop: '0.75rem' }}>
       <div style={{ display: 'flex', gap: '2rem' }}>
         <div>
-          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>Files in this app</div>
+          <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Files in this app</div>
           <div style={{ fontWeight: 700 }}>{selection.candidate_pool_size}</div>
         </div>
         <div>
-          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>
+          <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>
             Files used for this change
           </div>
           <div style={{ fontWeight: 700 }}>{selection.selected_files.length}</div>
@@ -38,7 +38,7 @@ export default function FileSelectionPanel({ selection }: { selection: FileSelec
       </div>
 
       <div style={{ marginTop: '0.75rem' }}>
-        <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem', marginBottom: '0.35rem' }}>
+        <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)', marginBottom: '0.35rem' }}>
           Which part of the repo the AI matched this change to
         </div>
         {inScope.length > 0 ? (
@@ -48,7 +48,7 @@ export default function FileSelectionPanel({ selection }: { selection: FileSelec
             ))}
           </div>
         ) : (
-          <p style={{ fontSize: '0.82rem', color: 'var(--ams-ink-soft)', margin: 0 }}>
+          <p style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)', margin: 0 }}>
             No subsystem doc matched closely enough — this change used the CR's fixed core file
             list directly (see "Selected source files" below), not a subsystem guess.
           </p>
@@ -57,7 +57,7 @@ export default function FileSelectionPanel({ selection }: { selection: FileSelec
 
       {screenedOut.length > 0 && (
         <details style={{ marginTop: '0.6rem' }}>
-          <summary style={{ fontSize: '0.82rem', color: 'var(--ams-ink-soft)' }}>
+          <summary style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>
             {screenedOut.length} other subsystem{screenedOut.length > 1 ? 's' : ''} screened out as
             not relevant (not part of this change)
           </summary>
@@ -71,7 +71,7 @@ export default function FileSelectionPanel({ selection }: { selection: FileSelec
 
       <details style={{ marginTop: '0.75rem' }}>
         <summary>Selected source files</summary>
-        <ul style={{ fontSize: '0.85rem' }}>
+        <ul style={{ fontSize: 'var(--ams-text-sm)' }}>
           {selection.selected_files.map((path) => (
             <li key={path}>{path}</li>
           ))}
@@ -109,7 +109,7 @@ function SubsystemRow({ name, score, inScope }: { name: string; score: number; i
           }}
         />
       </div>
-      <span style={{ fontSize: '0.78rem', color: 'var(--ams-ink-soft)' }}>
+      <span style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>
         {typeof score === 'number' ? score.toFixed(2) : '—'}
       </span>
     </div>

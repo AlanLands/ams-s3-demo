@@ -2,7 +2,65 @@
    common/ui_theme.py's CSS variables so the Streamlit remnants (still live
    during migration) and the React app render as one consistent product. */
 
-@import url('https://fonts.googleapis.com/css2?family=Asap:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap');
+/* Fonts are self-hosted from public/fonts/, NOT pulled from the Google Fonts
+   CDN. Hard rule 4 in CLAUDE.md — the demo must survive a port to a
+   locked-down environment — makes a render-blocking cross-origin @import a
+   liability: with no egress the console silently renders in the wrong
+   typeface, and nothing on screen says why.
+
+   Both families are variable fonts, so Google serves ONE file per subset
+   covering the whole weight range (verified: the per-weight URLs in its css2
+   response are byte-identical). Hence four files, not ten, and a weight
+   *range* in each @font-face. The ranges below are exactly the weights
+   requested from css2 — do not widen them without re-fetching, or a weight
+   outside the file's axis will clamp to the nearest one.
+
+   Both are SIL Open Font License 1.1, so redistributing them in-repo is fine.
+   To refresh: re-fetch css2 with a woff2-capable UA and mirror its
+   unicode-range values verbatim. */
+
+@font-face {
+  font-family: 'Asap';
+  font-style: normal;
+  font-weight: 600 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/asap-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Asap';
+  font-style: normal;
+  font-weight: 600 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/asap-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/source-sans-3-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/source-sans-3-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 
 :root {
   --ams-ink: #363530;
@@ -13,13 +71,39 @@
   --ams-accent-soft: #f5e6e9;
   --ams-secondary: #005656;
   --ams-line: rgba(54, 53, 48, 0.16);
+  /* Same hue as --ams-line but opaque and dark enough to clear WCAG 1.4.11's
+     3:1 for UI component boundaries. --ams-line itself is ~1.2:1 on white,
+     which is fine for a decorative hairline but not for a border that is the
+     only thing distinguishing one control state from another. */
+  --ams-line-strong: #878680;
   --ams-bg: #eef1f4;
   --ams-surface: #f7f7f6;
-  --ams-shadow: 0 2px 10px rgba(147, 148, 142, 0.3);
-  --ams-success: #007f7f;
-  --ams-warning: #b08824;
+  --ams-text-xs: 0.8125rem;
+  --ams-text-sm: 0.875rem;
+  --ams-text-base: 1rem;
+  --ams-text-lg: 1.125rem;
+  --ams-text-xl: 1.375rem;
+  --ams-text-2xl: 1.75rem;
+  --ams-space-1: 0.25rem;
+  --ams-space-2: 0.5rem;
+  --ams-space-3: 0.75rem;
+  --ams-space-4: 1rem;
+  --ams-space-5: 1.5rem;
+  --ams-space-6: 2rem;
+  --ams-shadow-sm: 0 1px 2px rgba(54, 53, 48, 0.06), 0 1px 3px rgba(54, 53, 48, 0.08);
+  --ams-shadow-md: 0 2px 4px rgba(54, 53, 48, 0.05), 0 4px 12px rgba(54, 53, 48, 0.08);
+  --ams-shadow: var(--ams-shadow-sm);
+  --ams-radius-sm: 3px;
+  --ams-radius-md: 6px;
+  /* Status colours are used as TEXT (pass/fail counts, gate messages), so they
+     are held to WCAG AA 4.5:1 against the darkest surface they sit on
+     (--ams-bg #eef1f4), not just against white. The original
+     success #007f7f / warning #b08824 / info #007cbf measured 4.27 / 2.90 /
+     4.00 there and failed. Re-check with a contrast tool before changing. */
+  --ams-success: #00706f;
+  --ams-warning: #7d5f13;
   --ams-error: #d20d35;
-  --ams-info: #007cbf;
+  --ams-info: #00629a;
 }
 
 * {
@@ -34,6 +118,8 @@ body,
   background: var(--ams-bg);
   color: var(--ams-ink);
   font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
+  font-size: var(--ams-text-base);
+  line-height: 1.5;
 }
 
 h1,
@@ -41,18 +127,50 @@ h2,
 h3 {
   font-family: 'Asap', system-ui, sans-serif;
   font-weight: 700;
+  line-height: 1.25;
   margin: 0;
 }
 
 a {
   color: var(--ams-accent);
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
+    box-shadow 160ms ease;
 }
 a:hover {
   color: var(--ams-accent-hover);
 }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[role='button']:focus-visible,
+.ams-stage-rail-item:focus-visible {
+  outline: 3px solid var(--ams-accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px var(--ams-accent-soft);
+}
+
+.ams-skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1000;
+  transform: translateY(-160%);
+  background: #fff;
+  color: var(--ams-accent-ink);
+  border: 2px solid var(--ams-accent);
+  border-radius: 2px;
+  padding: 0.5rem 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.ams-skip-link:focus {
+  transform: translateY(0);
+}
+
 .ams-eyebrow {
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -66,45 +184,56 @@ a:hover {
 .ams-card {
   background: #fff;
   border: 1px solid var(--ams-line);
-  box-shadow: var(--ams-shadow);
-  border-radius: 6px;
-  padding: 1.25rem;
+  box-shadow: var(--ams-shadow-sm);
+  border-radius: var(--ams-radius-md);
+  padding: var(--ams-space-5);
 }
 
 .ams-button {
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: var(--ams-text-sm);
   font-weight: 700;
   color: #fff;
   background: var(--ams-accent);
   border: 1px solid var(--ams-accent);
-  border-radius: 2px;
+  border-radius: var(--ams-radius-sm);
   padding: 0.5rem 1.1rem;
   cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
+    box-shadow 160ms ease, transform 160ms ease;
 }
 .ams-button:hover {
   background: var(--ams-accent-hover);
   border-color: var(--ams-accent-hover);
 }
+.ams-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
 .ams-button:disabled {
-  background: var(--ams-ink-soft);
-  border-color: var(--ams-ink-soft);
+  background: var(--ams-surface);
+  border-color: var(--ams-line-strong);
+  color: var(--ams-ink-soft);
   cursor: not-allowed;
 }
 
 .ams-button-secondary {
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: var(--ams-text-sm);
   font-weight: 700;
   background: #fff;
   color: var(--ams-accent);
   border: 1px solid var(--ams-accent);
-  border-radius: 2px;
+  border-radius: var(--ams-radius-sm);
   padding: 0.5rem 1.1rem;
   cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
+    box-shadow 160ms ease, transform 160ms ease;
 }
 .ams-button-secondary:hover {
   background: var(--ams-accent-soft);
+}
+.ams-button-secondary:active:not(:disabled) {
+  transform: translateY(1px);
 }
 .ams-button-secondary:disabled {
   color: var(--ams-ink-soft);
@@ -112,13 +241,17 @@ a:hover {
   cursor: not-allowed;
 }
 
+/* --ams-line-strong, not --ams-line: a form control's border is what tells you
+   where the field is, so WCAG 1.4.11 holds it to 3:1. Decorative hairlines
+   elsewhere (modal header rules, row separators) are exempt and stay on
+   --ams-line. */
 .ams-input,
 .ams-select {
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: var(--ams-text-sm);
   width: 100%;
   padding: 0.5rem 0.65rem;
-  border: 1px solid var(--ams-line);
+  border: 1px solid var(--ams-line-strong);
   border-radius: 2px;
   background: var(--ams-surface);
   color: var(--ams-ink);
@@ -126,7 +259,7 @@ a:hover {
 
 .ams-pill {
   display: inline-block;
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   letter-spacing: 0.03em;
   padding: 0.15rem 0.5rem;
@@ -159,19 +292,24 @@ a:hover {
   flex-wrap: wrap;
   margin-bottom: 0.75rem;
 }
+/* min() not a bare 200px: a flex item's min-width is a hard floor, so on a
+   narrow viewport the input refuses to shrink and pushes the whole toolbar past
+   the card edge — the row wraps but the item itself still overhangs, which is
+   how this produced a horizontally scrolling page at 400px. */
 .ams-board-search {
   flex: 1;
-  min-width: 200px;
+  min-width: min(200px, 100%);
 }
 .ams-board-counts {
   display: flex;
   gap: 0.4rem;
+  flex-wrap: wrap;
 }
 .ams-board-count {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: var(--ams-text-sm);
   font-weight: 600;
   color: var(--ams-ink-soft);
   padding: 0.3rem 0.65rem;
@@ -198,13 +336,32 @@ a:hover {
   border-radius: 999px;
   background: var(--ams-accent-soft);
   color: var(--ams-accent-ink);
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
+}
+/* Four equal lanes that wrap instead of crushing. Held as a grid rather than
+   four flex children so that below ~700px the lanes reflow to two and then one,
+   instead of each shrinking to ~20px and spilling ticket text past the card. */
+.ams-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--ams-space-3);
+}
+@media (max-width: 900px) {
+  .ams-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .ams-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .ams-board-column {
+  min-width: 0;
   background: var(--ams-surface);
   border: 1px solid var(--ams-line);
-  border-radius: 6px;
-  padding: 0.6rem;
+  border-radius: var(--ams-radius-md);
+  padding: var(--ams-space-2);
 }
 .ams-ticket-card {
   background: #fff;
@@ -273,7 +430,7 @@ a:hover {
   background: none;
   border: none;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: var(--ams-text-sm);
   font-weight: 700;
   text-align: left;
   cursor: pointer;
@@ -291,7 +448,7 @@ a:hover {
   border-radius: 50%;
   background: var(--ams-accent-soft);
   color: var(--ams-accent-ink);
-  font-size: 0.78rem;
+  font-size: var(--ams-text-xs);
   flex-shrink: 0;
 }
 .ams-stage-card-locked .ams-stage-index {
@@ -304,10 +461,28 @@ a:hover {
 .ams-stage-chevron {
   color: var(--ams-ink-soft);
 }
-.ams-stage-hint {
-  margin: 0 1rem 0.85rem;
-  font-size: 0.82rem;
+/* A locked stage is a deliberate state, so it gets a deliberate panel. A bare
+   sentence floating in an empty column reads as "this page failed to load"
+   rather than "you have not earned this step yet". */
+.ams-stage-locked {
+  max-width: 60ch;
+  padding: var(--ams-space-5);
+  background: var(--ams-surface);
+  border: 1px dashed var(--ams-line-strong);
+  border-radius: var(--ams-radius-md);
+}
+.ams-stage-locked-label {
+  margin: 0 0 var(--ams-space-2);
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--ams-ink-soft);
+}
+.ams-stage-hint {
+  margin: 0;
+  font-size: var(--ams-text-sm);
+  color: var(--ams-ink);
 }
 .ams-stage-body {
   padding: 0 1rem 1.1rem;
@@ -321,7 +496,7 @@ a:hover {
   background: var(--ams-accent-soft);
   color: var(--ams-accent-ink);
   font-weight: 700;
-  font-size: 0.68rem;
+  font-size: var(--ams-text-xs);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -363,24 +538,24 @@ a:hover {
   padding-bottom: 0.55rem;
 }
 .ams-doc-org {
-  font-size: 1.1rem;
+  font-size: var(--ams-text-lg);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 .ams-doc-kind {
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
 .ams-doc-meta {
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   margin: 0.7rem 0 1.2rem;
 }
 .ams-doc-label {
   margin-top: 1.6rem;
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   border-top: 1px solid var(--ams-line);
   padding-top: 0.5rem;
@@ -433,7 +608,7 @@ a:hover {
   flex-shrink: 0;
 }
 .ams-modal-breadcrumb {
-  font-size: 0.85rem;
+  font-size: var(--ams-text-sm);
   color: var(--ams-ink-soft);
   display: flex;
   align-items: center;
@@ -448,7 +623,7 @@ a:hover {
   border-radius: 999px;
   background: var(--ams-accent-soft);
   color: var(--ams-accent-ink);
-  font-size: 0.7rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -456,7 +631,7 @@ a:hover {
 .ams-modal-close {
   border: none;
   background: none;
-  font-size: 1.35rem;
+  font-size: var(--ams-text-xl);
   line-height: 1;
   cursor: pointer;
   color: var(--ams-ink-soft);
@@ -481,7 +656,7 @@ a:hover {
   padding: 1.25rem 1.25rem 2rem;
 }
 .ams-modal-main h2 {
-  font-size: 1.35rem;
+  font-size: var(--ams-text-xl);
   line-height: 1.3;
   margin-bottom: 1.1rem;
   /* Hold the title to a readable measure — CR summaries run long and a
@@ -492,7 +667,7 @@ a:hover {
   margin-top: 1.75rem;
 }
 .ams-modal-section-title {
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -534,20 +709,20 @@ a:hover {
   padding-top: 0;
 }
 .ams-modal-details dt {
-  font-size: 0.68rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 .ams-modal-details dd {
   margin: 0.25rem 0 0;
-  font-size: 0.88rem;
+  font-size: var(--ams-text-sm);
   font-weight: 600;
 }
 
 /* Parsed change-request body (see TicketModal's CrDescription). */
 .ams-cr-body {
-  font-size: 0.88rem;
+  font-size: var(--ams-text-sm);
 }
 .ams-cr-body-collapsed {
   max-height: 19rem;
@@ -568,18 +743,18 @@ a:hover {
   border-radius: 6px;
 }
 .ams-cr-meta-row dt {
-  font-size: 0.68rem;
+  font-size: var(--ams-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ams-ink-soft);
 }
 .ams-cr-meta-row dd {
   margin: 0.15rem 0 0;
-  font-size: 0.85rem;
+  font-size: var(--ams-text-sm);
   font-weight: 600;
 }
 .ams-cr-heading {
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -624,7 +799,7 @@ a:hover {
   border: none;
   background: none;
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   font-weight: 600;
   color: var(--ams-accent);
   cursor: pointer;
@@ -634,7 +809,7 @@ a:hover {
 }
 .ams-modal-link {
   color: var(--ams-info);
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   font-weight: 600;
   cursor: pointer;
   background: none;
@@ -654,7 +829,7 @@ a:hover {
 }
 .ams-modal-activity-tab {
   padding: 0.4rem 0.7rem;
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   font-weight: 600;
   color: var(--ams-ink-soft);
   border: none;
@@ -675,7 +850,7 @@ a:hover {
 }
 .ams-diff-file-header {
   font-family: ui-monospace, monospace;
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   padding: 0.45rem 0.7rem;
   background: var(--ams-surface);
@@ -685,7 +860,7 @@ a:hover {
 }
 .ams-diff-body {
   font-family: ui-monospace, monospace;
-  font-size: 0.78rem;
+  font-size: var(--ams-text-xs);
   line-height: 1.5;
   border: 1px solid var(--ams-line);
   border-top: none;
@@ -753,12 +928,12 @@ a:hover {
 .ams-topbar-brand-name {
   font-family: 'Asap', system-ui, sans-serif;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: var(--ams-text-base);
   color: var(--ams-ink);
 }
 .ams-topbar-brand-caption {
   color: var(--ams-ink-soft);
-  font-size: 0.78rem;
+  font-size: var(--ams-text-xs);
 }
 .ams-topbar-identity {
   display: flex;
@@ -771,11 +946,11 @@ a:hover {
 }
 .ams-topbar-identity-name {
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: var(--ams-text-sm);
 }
 .ams-topbar-identity-role {
   color: var(--ams-ink-soft);
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   text-transform: capitalize;
 }
 .ams-topbar-avatar {
@@ -785,7 +960,7 @@ a:hover {
   background: var(--ams-accent-soft);
   color: var(--ams-accent-ink);
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: var(--ams-text-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -798,11 +973,11 @@ a:hover {
   min-height: 0;
 }
 .ams-shell-sidebar {
-  width: 232px;
+  width: 264px;
   flex-shrink: 0;
   background: var(--ams-surface);
   border-right: 1px solid var(--ams-line);
-  padding: 1.25rem 1rem;
+  padding: var(--ams-space-5) var(--ams-space-4);
   align-self: flex-start;
   position: sticky;
   top: var(--ams-topbar-height);
@@ -816,21 +991,27 @@ a:hover {
 .ams-sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--ams-space-1);
 }
 .ams-sidebar-link {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.4rem 0.55rem;
-  border-radius: 6px;
+  gap: var(--ams-space-2);
+  padding: var(--ams-space-2) var(--ams-space-3);
+  border-radius: var(--ams-radius-md);
   color: var(--ams-ink);
-  font-size: 0.88rem;
+  font-size: var(--ams-text-sm);
   font-weight: 600;
   text-decoration: none;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
+    box-shadow 160ms ease;
 }
 .ams-sidebar-link:hover {
   background: #fff;
+}
+.ams-sidebar-link:active {
+  background: var(--ams-accent-soft);
 }
 .ams-sidebar-link-active {
   background: var(--ams-accent-soft);
@@ -845,33 +1026,17 @@ a:hover {
 .ams-sidebar-link-desc {
   display: block;
   color: var(--ams-ink-soft);
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   font-weight: 400;
-  margin-top: 0.1rem;
+  margin-top: var(--ams-space-1);
 }
 .ams-sidebar-divider {
   height: 1px;
   background: var(--ams-line);
-  margin: 0.75rem 0;
+  margin: var(--ams-space-3) 0;
 }
-
-/* Sub-navigation under a scenario's sidebar link — jumps to an in-page
-   section (anchor), same role-gated content the page itself already shows,
-   just a faster way in than scrolling. */
-.ams-sidebar-subnav {
-  display: flex;
-  flex-direction: column;
-  margin: 0.15rem 0 0.4rem 0.75rem;
-  border-left: 2px solid var(--ams-line);
-}
-.ams-sidebar-sublink {
-  padding: 0.3rem 0 0.3rem 0.6rem;
-  color: var(--ams-ink-soft);
-  font-size: 0.8rem;
-  text-decoration: none;
-}
-.ams-sidebar-sublink:hover {
-  color: var(--ams-accent-ink);
+#ams-sidebar-slot {
+  margin-top: var(--ams-space-4);
 }
 
 /* Pipeline stepper — ported from common/ui_pipeline.py's exact markup/CSS
@@ -911,7 +1076,7 @@ a:hover {
   background: white;
 }
 .ams-stepper-label {
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
   white-space: nowrap;
 }
 .ams-stepper-label-done {
@@ -934,6 +1099,225 @@ a:hover {
 }
 .ams-stepper-connector-done {
   background: var(--ams-accent);
+}
+
+.ams-s3-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--ams-space-6) var(--ams-space-5);
+}
+.ams-s3-summary {
+  color: var(--ams-ink-soft);
+  max-width: 70ch;
+  margin: 0 0 var(--ams-space-5);
+}
+.ams-s3-layout {
+  display: block;
+}
+.ams-s3-stage-panel {
+  min-width: 0;
+}
+/* Cap the measure on prose only. Cards, tables, diffs and runner output still
+   take the full column — they are scannable structures, not running text — but a
+   paragraph set to 1180px is roughly 190 characters a line, well past the point
+   where the eye loses its place returning to the left margin. */
+.ams-stage-view > p,
+.ams-stage-view > .ams-stage-live {
+  max-width: 72ch;
+}
+.ams-stage-view > h2 {
+  font-size: var(--ams-text-xl);
+  margin-bottom: var(--ams-space-2);
+}
+.ams-stage-view h2:focus {
+  outline: none;
+}
+.ams-stage-view h2:focus-visible {
+  outline: none;
+}
+.ams-stage-live {
+  min-height: 1.1rem;
+  margin: var(--ams-space-2) 0 var(--ams-space-4);
+  color: var(--ams-ink-soft);
+  font-size: var(--ams-text-sm);
+}
+.ams-stage-rail {
+  min-width: 0;
+}
+.ams-stage-rail-context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ams-space-1);
+  background: #fff;
+  border: 1px solid var(--ams-line);
+  border-radius: var(--ams-radius-md);
+  padding: var(--ams-space-3);
+  margin-bottom: var(--ams-space-3);
+  box-shadow: var(--ams-shadow-sm);
+}
+.ams-stage-rail-context span:last-child {
+  color: var(--ams-ink-soft);
+  font-size: var(--ams-text-xs);
+}
+/* One continuous list, not six cards. A bordered white card per stage gives six
+   competing containers in a 250px column — the eye has to parse the boxes before
+   it can read the sequence, which is the opposite of what a progress rail is for.
+   Hairline separators inside a single surface keep it reading as one list, and
+   leave the accent free to mean exactly one thing: you are here. */
+.ams-stepper-rail {
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--ams-line);
+  border-radius: var(--ams-radius-md);
+  box-shadow: var(--ams-shadow-sm);
+  overflow: hidden;
+}
+.ams-stepper-rail .ams-stepper-stage {
+  display: block;
+}
+.ams-stepper-rail .ams-stepper-stage + .ams-stepper-stage {
+  border-top: 1px solid var(--ams-line);
+}
+.ams-stage-rail-item {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  gap: var(--ams-space-3);
+  width: 100%;
+  min-width: 0;
+  /* Left pad accounts for the 3px "you are here" bar so titles stay on one
+     optical line whether or not a row is current. */
+  padding: var(--ams-space-3) var(--ams-space-3) var(--ams-space-3)
+    calc(var(--ams-space-3) + 3px);
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--ams-ink);
+  text-decoration: none;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.ams-stage-rail a.ams-stage-rail-item {
+  cursor: pointer;
+}
+.ams-stage-rail a.ams-stage-rail-item:hover {
+  background: var(--ams-surface);
+  border-left-color: var(--ams-line-strong);
+}
+.ams-stage-rail a.ams-stage-rail-item:active {
+  background: var(--ams-accent-soft);
+}
+.ams-stepper-stage-current .ams-stage-rail-item {
+  background: var(--ams-accent-soft);
+  border-left-color: var(--ams-accent);
+}
+.ams-stepper-stage-locked .ams-stage-rail-item {
+  background: transparent;
+  color: var(--ams-ink-soft);
+  cursor: not-allowed;
+}
+.ams-stepper-rail .ams-stepper-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  line-height: 1;
+}
+.ams-stepper-dot-locked {
+  border-color: var(--ams-line-strong);
+  background: var(--ams-surface);
+  color: var(--ams-ink-soft);
+}
+.ams-stepper-rail .ams-stepper-label {
+  white-space: normal;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ams-stepper-rail .ams-stepper-label strong,
+.ams-stage-rail-state,
+.ams-stage-rail-status,
+.ams-stage-rail-hint {
+  display: block;
+}
+.ams-stage-rail-state,
+.ams-stage-rail-status {
+  font-size: var(--ams-text-xs);
+  margin-top: var(--ams-space-1);
+}
+.ams-stage-rail-hint {
+  font-size: var(--ams-text-xs);
+  line-height: 1.25;
+  margin-top: var(--ams-space-1);
+  color: var(--ams-ink-soft);
+}
+.ams-stage-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ams-line);
+}
+.ams-stage-nav a {
+  text-decoration: none;
+}
+/* An unavailable step is styled neutral, not dimmed. Fading the primary button
+   to 55% leaves a still-red, still-button-shaped control that reads as "clickable
+   but faint" — people click it. Dropping the accent entirely says "not yet"
+   without ambiguity. (Disabled controls are exempt from WCAG 1.4.3, but the
+   faded accent also measured only 3.2:1, so there was nothing to preserve.)
+   The rail carries the reason it is locked. */
+.ams-stage-nav-disabled {
+  background: var(--ams-surface);
+  color: var(--ams-ink-soft);
+  border-color: var(--ams-line-strong);
+  cursor: not-allowed;
+}
+.ams-muted {
+  color: var(--ams-ink-soft);
+}
+
+@media (max-width: 900px) {
+  .ams-shell-body {
+    flex-direction: column;
+  }
+  .ams-shell-sidebar {
+    position: static;
+    width: 100%;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--ams-line);
+  }
+  .ams-topbar {
+    align-items: flex-start;
+    height: auto;
+    min-height: var(--ams-topbar-height);
+    gap: var(--ams-space-3);
+    padding: var(--ams-space-3) var(--ams-space-4);
+  }
+  .ams-topbar-brand,
+  .ams-topbar-identity {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .ams-s3-page {
+    padding: 1.25rem 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 
 /* Ticket audit timeline — ported from common/ui_timeline.py's exact
@@ -968,7 +1352,7 @@ a:hover {
 }
 .ams-timeline-ts {
   color: var(--ams-ink-soft);
-  font-size: 0.78rem;
+  font-size: var(--ams-text-xs);
 }
 .ams-timeline-action {
   color: var(--ams-ink);
@@ -976,12 +1360,12 @@ a:hover {
 }
 .ams-timeline-detail {
   color: var(--ams-ink-soft);
-  font-size: 0.88rem;
+  font-size: var(--ams-text-sm);
   margin-top: 0.14rem;
 }
 .ams-timeline-chip {
   border-radius: 4px;
-  font-size: 0.68rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   letter-spacing: 0.03em;
   padding: 0.1rem 0.38rem;
@@ -1015,10 +1399,10 @@ a:hover {
 }
 .ams-metric-label {
   color: var(--ams-ink-soft);
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
 }
 .ams-metric-value {
-  font-size: 1.7rem;
+  font-size: var(--ams-text-2xl);
   font-weight: 700;
   color: var(--ams-accent-ink);
   font-family: 'Asap', system-ui, sans-serif;
@@ -1034,7 +1418,7 @@ a:hover {
   margin-bottom: 0.5rem;
 }
 .ams-ac-chip {
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
@@ -1048,7 +1432,7 @@ a:hover {
   border-color: var(--ams-warning);
 }
 .ams-scenario-gap-note {
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-warning);
   margin: 0 0 0.6rem;
 }
@@ -1056,12 +1440,12 @@ a:hover {
 .ams-trace-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: var(--ams-text-sm);
 }
 .ams-scenario-table th,
 .ams-trace-table th {
   text-align: left;
-  font-size: 0.7rem;
+  font-size: var(--ams-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ams-ink-soft);
@@ -1079,11 +1463,11 @@ a:hover {
 }
 .ams-scenario-id {
   font-family: ui-monospace, monospace;
-  font-size: 0.78rem;
+  font-size: var(--ams-text-xs);
   white-space: nowrap;
 }
 .ams-kind {
-  font-size: 0.68rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1123,7 +1507,7 @@ a:hover {
   text-decoration: underline;
 }
 .ams-scenario-expected {
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   margin-top: 0.15rem;
 }
@@ -1133,10 +1517,10 @@ a:hover {
   background: var(--ams-surface);
   border: 1px solid var(--ams-line);
   border-radius: 4px;
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
 }
 .ams-scenario-detail dt {
-  font-size: 0.68rem;
+  font-size: var(--ams-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--ams-ink-soft);
@@ -1154,7 +1538,7 @@ a:hover {
 }
 .ams-scenario-acs {
   font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
+  font-size: var(--ams-text-xs);
   white-space: nowrap;
 }
 .ams-scenario-actions {
@@ -1176,7 +1560,7 @@ a:hover {
   align-items: start;
 }
 .ams-scenario-editor-row > label {
-  font-size: 0.7rem;
+  font-size: var(--ams-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--ams-ink-soft);
@@ -1186,7 +1570,7 @@ a:hover {
   width: 100%;
 }
 .ams-scenario-hint {
-  font-size: 0.75rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   margin-top: 0.2rem;
 }
@@ -1198,7 +1582,7 @@ a:hover {
 }
 .ams-ac-toggle {
   font-family: ui-monospace, monospace;
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   padding: 0.2rem 0.45rem;
   border-radius: 3px;
   border: 1px solid var(--ams-line);
@@ -1214,30 +1598,30 @@ a:hover {
 }
 .ams-trace-headline {
   margin: 0 0 0.6rem;
-  font-size: 0.88rem;
+  font-size: var(--ams-text-sm);
 }
 .ams-trace-ac {
   font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
 }
 .ams-trace-text {
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   max-width: 34rem;
 }
 .ams-trace-scenarios,
 .ams-trace-tests {
   font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
+  font-size: var(--ams-text-xs);
 }
 .ams-trace-source {
   font-family: 'Asap', system-ui, sans-serif;
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
 }
 .ams-trace-status {
-  font-size: 0.7rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1263,7 +1647,7 @@ a:hover {
   color: var(--ams-ink-soft);
 }
 .ams-trace-footnote {
-  font-size: 0.75rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   margin: 0.6rem 0 0;
   max-width: 60rem;
@@ -1276,7 +1660,7 @@ a:hover {
   margin: 1.2rem 0;
 }
 .ams-doc-figure-title {
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1291,7 +1675,7 @@ a:hover {
   height: auto;
 }
 .ams-doc-figcaption {
-  font-size: 0.75rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   margin-top: 0.4rem;
   max-width: 46rem;
@@ -1315,22 +1699,30 @@ a:hover {
   flex-wrap: wrap;
 }
 .ams-note-title {
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
 }
 .ams-note-audience {
-  font-size: 0.75rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The exec review's specific complaint: once the head row wrapped, Copy fell to
+   a second line and sat hard left under the title, which reads as a broken
+   layout rather than a wrapped one. margin-left:auto keeps it on the right edge
+   in both states. */
+.ams-note-copy {
+  margin-left: auto;
 }
 .ams-note-body {
   margin: 0.3rem 0 0;
-  font-size: 0.88rem;
+  font-size: var(--ams-text-sm);
   line-height: 1.5;
   max-width: 62ch;
 }
 .ams-plan-reason {
-  font-size: 0.85rem;
+  font-size: var(--ams-text-sm);
   margin: 0;
   padding: 0.5rem 0.7rem;
   background: var(--ams-accent-soft);
@@ -1340,14 +1732,14 @@ a:hover {
 .ams-plan-list {
   margin: 0.3rem 0 0;
   padding-left: 1.3rem;
-  font-size: 0.88rem;
+  font-size: var(--ams-text-sm);
 }
 .ams-plan-list li {
   margin-bottom: 0.55rem;
 }
 .ams-plan-kind {
   display: inline-block;
-  font-size: 0.62rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1376,7 +1768,7 @@ a:hover {
 }
 .ams-plan-detail {
   color: var(--ams-ink-soft);
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   margin-top: 0.1rem;
   max-width: 62ch;
 }
@@ -1384,7 +1776,7 @@ a:hover {
   display: inline-block;
   margin-top: 0.25rem;
   font-family: ui-monospace, monospace;
-  font-size: 0.76rem;
+  font-size: var(--ams-text-xs);
   background: var(--ams-surface);
   border: 1px solid var(--ams-line);
   border-radius: 3px;
@@ -1393,7 +1785,7 @@ a:hover {
 }
 .ams-plan-empty,
 .ams-plan-note {
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
 }
 .ams-plan-note {
@@ -1418,16 +1810,16 @@ a:hover {
 }
 .ams-scm-branch {
   font-family: ui-monospace, monospace;
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   overflow-wrap: anywhere;
 }
 .ams-scm-base {
-  font-size: 0.76rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   margin-left: 0.4rem;
 }
 .ams-scm-status {
-  font-size: 0.62rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1446,7 +1838,7 @@ a:hover {
   color: #8a1330;
 }
 .ams-scm-simulated {
-  font-size: 0.78rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-warning);
   background: #fbf4e4;
   border: 1px solid rgba(176, 136, 36, 0.35);
@@ -1477,17 +1869,17 @@ a:hover {
 }
 .ams-scm-step-label {
   display: block;
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
   font-weight: 700;
 }
 .ams-scm-step-hint {
   display: block;
-  font-size: 0.72rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
 }
 .ams-scm-evidence {
   margin-top: 0.8rem;
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
 }
 .ams-scm-evidence-row {
   display: flex;
@@ -1513,7 +1905,7 @@ a:hover {
 }
 .ams-scm-blockers {
   margin-top: 0.7rem;
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   border: 1px solid rgba(210, 13, 53, 0.35);
   border-radius: 4px;
   padding: 0.4rem 0.6rem;
@@ -1525,7 +1917,7 @@ a:hover {
 }
 .ams-scm-commit {
   margin-top: 0.7rem;
-  font-size: 0.83rem;
+  font-size: var(--ams-text-xs);
 }
 .ams-scm-commit code {
   font-family: ui-monospace, monospace;
@@ -1533,19 +1925,19 @@ a:hover {
 }
 .ams-scm-commit-meta {
   display: block;
-  font-size: 0.74rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
 }
 .ams-scm-pipeline,
 .ams-scm-detail,
 .ams-scm-abandoned {
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
   max-width: 68ch;
   margin: 0.6rem 0 0;
 }
 .ams-scm-error {
-  font-size: 0.82rem;
+  font-size: var(--ams-text-xs);
   color: var(--ams-error);
   margin: 0.6rem 0 0;
 }
@@ -1557,7 +1949,7 @@ a:hover {
 }
 .ams-scm-transcript {
   margin-top: 0.8rem;
-  font-size: 0.8rem;
+  font-size: var(--ams-text-xs);
 }
 .ams-scm-transcript summary {
   cursor: pointer;
@@ -1569,7 +1961,637 @@ a:hover {
   background: var(--ams-surface);
   border: 1px solid var(--ams-line);
   border-radius: 4px;
-  font-size: 0.76rem;
+  font-size: var(--ams-text-xs);
   overflow-x: auto;
   white-space: pre;
+}
+
+/* --- Artifact dialog + summaries (pages/s3/components.tsx) -------------------
+   The stages carry the flow; the artifacts they produce open in a dialog. The
+   panel deliberately reuses .ams-modal-backdrop and the ams-modal-in keyframe
+   from the ticket modal rather than defining a second scrim and a second
+   pop-in — two elevation treatments for the same idea is how a product starts
+   looking assembled rather than designed. Only the panel differs: this one is
+   a single scrolling column, not the ticket view's main + details grid. */
+.ams-sheet {
+  animation: ams-modal-in 0.16s ease-out;
+  background: #fff;
+  border-radius: var(--ams-radius-md);
+  width: 100%;
+  max-width: 720px;
+  max-height: calc(100vh - 6rem);
+  margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 36px rgba(15, 23, 31, 0.3);
+  overflow: hidden;
+}
+/* For bodies that are structures rather than prose — diffs, checklists, the
+   traceability matrix — where a 720px column would force horizontal scrolling. */
+.ams-sheet-lg {
+  max-width: 980px;
+}
+.ams-sheet:focus {
+  outline: none;
+}
+.ams-sheet:focus-visible {
+  outline: 2px solid var(--ams-accent);
+  outline-offset: -2px;
+}
+.ams-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ams-space-3);
+  padding: var(--ams-space-4) var(--ams-space-5);
+  border-bottom: 1px solid var(--ams-line);
+  flex-shrink: 0;
+}
+.ams-sheet-heading {
+  min-width: 0;
+}
+.ams-sheet-title {
+  font-size: var(--ams-text-lg);
+  line-height: 1.3;
+  margin: 0;
+  max-width: 40ch;
+}
+.ams-sheet-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  max-width: 60ch;
+}
+.ams-sheet-body {
+  padding: var(--ams-space-5);
+  overflow-y: auto;
+}
+/* Running text inside a dialog is held to a readable measure and never
+   stretched to the panel edge — the exec review called this out by name on the
+   release notes, where four short lines reflowed into a ragged full-bleed
+   block. Structures (tables, diffs, plans) opt out via their own widths. */
+.ams-sheet-body > p,
+.ams-sheet-prose {
+  max-width: 66ch;
+}
+/* The design doc opens in the wide panel so the change-map SVG is legible, but
+   its running text is still held to a measure — a 900px line of serif body copy
+   is exactly the "not looking nice" the exec review flagged. */
+.ams-sheet-body > .ams-doc,
+.ams-sheet-body > .ams-card:first-child {
+  margin-top: 0;
+}
+.ams-doc-body {
+  max-width: 70ch;
+}
+.ams-sheet-note {
+  margin: var(--ams-space-4) 0 0;
+  padding-top: var(--ams-space-3);
+  border-top: 1px solid var(--ams-line);
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  max-width: 66ch;
+}
+
+/* The compact stand-in an artifact leaves behind in the main flow. */
+.ams-artifact {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ams-space-4);
+  flex-wrap: wrap;
+  margin-top: var(--ams-space-3);
+  padding: var(--ams-space-4);
+}
+.ams-artifact-text {
+  min-width: 0;
+  flex: 1 1 22rem;
+}
+.ams-artifact-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+}
+.ams-artifact-title {
+  font-size: var(--ams-text-sm);
+}
+.ams-artifact-detail {
+  margin: 0.3rem 0 0;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  line-height: 1.5;
+  max-width: 68ch;
+}
+/* margin-left:auto rather than a flex-grow spacer: when the row wraps on a
+   narrow window the actions still sit at the right edge instead of snapping
+   back to the left under the title. */
+.ams-artifact-actions {
+  display: flex;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* Status at a glance: glyph + words, so the state survives greyscale, a
+   projector, and a colour-blind viewer. */
+.ams-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.ams-chip-icon {
+  font-weight: 700;
+}
+.ams-chip-pass {
+  background: #dbeee6;
+  color: #125c43;
+  border-color: rgba(18, 92, 67, 0.25);
+}
+.ams-chip-fail {
+  background: #f6dfe3;
+  color: #8a1330;
+  border-color: rgba(138, 19, 48, 0.25);
+}
+.ams-chip-warn {
+  background: #fbeed3;
+  color: var(--ams-warning);
+  border-color: rgba(125, 95, 19, 0.25);
+}
+.ams-chip-neutral {
+  background: var(--ams-surface);
+  color: var(--ams-ink-soft);
+  border-color: var(--ams-line-strong);
+}
+
+/* In-card explanatory copy on the stages. The .ams-stage-view > p measure cap
+   only reaches direct children, so paragraphs inside a card were the ones
+   running to 190 characters a line. */
+.ams-stage-note {
+  font-size: var(--ams-text-sm);
+  color: var(--ams-ink-soft);
+  margin: 0.4rem 0 0.6rem;
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+@media (max-width: 640px) {
+  .ams-sheet {
+    max-height: calc(100vh - 3rem);
+  }
+  .ams-artifact-actions {
+    margin-left: 0;
+  }
+}
+
+/* --- Admin: demo control (Admin.tsx and pages/admin/) -----------------------
+   Nothing here invents a second visual language: the sections are .ams-card,
+   status is the same .ams-chip glyph+word pair the stages use, commands reuse
+   .ams-plan-command, and the counts reuse the .ams-metric-* KPI strip. The new
+   pieces are the ones this page needs and no other page has — a genuinely
+   destructive button, a form field with a label/hint/error triple, and the
+   list-row shape the services and reset scopes share. */
+
+/* The house primary is already crimson, so a destructive control cannot be
+   distinguished by "red" alone. --ams-error is a distinctly hotter red than
+   --ams-accent, but the real separation is structural: this button only ever
+   appears inside a confirmation dialog, behind a typed scope name, on a card
+   with the danger rule down its left edge. White on #d20d35 measures 5.4:1. */
+.ams-button-danger {
+  font-family: inherit;
+  font-size: var(--ams-text-sm);
+  font-weight: 700;
+  color: #fff;
+  background: var(--ams-error);
+  border: 1px solid var(--ams-error);
+  border-radius: var(--ams-radius-sm);
+  padding: 0.5rem 1.1rem;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
+    box-shadow 160ms ease, transform 160ms ease;
+}
+.ams-button-danger:hover:not(:disabled) {
+  background: #a80a2a;
+  border-color: #a80a2a;
+}
+.ams-button-danger:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.ams-button-danger:disabled {
+  background: var(--ams-surface);
+  border-color: var(--ams-line-strong);
+  color: var(--ams-ink-soft);
+  cursor: not-allowed;
+}
+
+/* Row-level control size. Still 36px tall with the 0.4rem padding, so it clears
+   a comfortable pointer target while letting four of them share a row. */
+.ams-button-compact {
+  padding: 0.4rem 0.8rem;
+  font-size: var(--ams-text-xs);
+}
+
+.ams-textarea {
+  font-family: ui-monospace, monospace;
+  font-size: var(--ams-text-xs);
+  line-height: 1.5;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--ams-line-strong);
+  border-radius: 2px;
+  background: var(--ams-surface);
+  color: var(--ams-ink);
+  resize: vertical;
+}
+.ams-textarea:focus-visible {
+  outline: 3px solid var(--ams-accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px var(--ams-accent-soft);
+}
+
+/* Label above, hint below, error below that — never a placeholder standing in
+   for a label, since the placeholder disappears the moment there is a value to
+   check against it. */
+.ams-field {
+  margin-bottom: var(--ams-space-4);
+}
+.ams-field-label {
+  display: block;
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ams-ink-soft);
+  margin-bottom: 0.25rem;
+}
+.ams-field-hint {
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  margin: 0.25rem 0 0;
+  max-width: 62ch;
+}
+.ams-field-error {
+  font-size: var(--ams-text-xs);
+  font-weight: 600;
+  color: var(--ams-error);
+  margin: 0.25rem 0 0;
+  max-width: 62ch;
+}
+
+.ams-admin-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+.ams-admin-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--ams-space-4);
+  flex-wrap: wrap;
+  margin-top: var(--ams-space-3);
+}
+.ams-admin-title {
+  font-size: var(--ams-text-2xl);
+  margin-bottom: var(--ams-space-1);
+}
+/* Reserved height: the announcement appearing must not shove the whole page
+   down a line every time an action completes. */
+.ams-admin-live {
+  min-height: 1.4rem;
+  margin: var(--ams-space-3) 0 var(--ams-space-2);
+  font-size: var(--ams-text-sm);
+  font-weight: 600;
+  color: var(--ams-success);
+}
+
+.ams-admin-section {
+  margin-top: var(--ams-space-5);
+}
+.ams-admin-section-danger {
+  border-left: 3px solid var(--ams-error);
+}
+.ams-admin-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--ams-space-3);
+  flex-wrap: wrap;
+}
+.ams-admin-section-title {
+  font-size: var(--ams-text-lg);
+}
+.ams-admin-group-title {
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ams-ink-soft);
+  margin: var(--ams-space-4) 0 0;
+}
+
+.ams-admin-context {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+}
+.ams-admin-branch {
+  font-size: var(--ams-text-sm);
+  color: var(--ams-ink-soft);
+}
+.ams-admin-branch code {
+  color: var(--ams-ink);
+  overflow-wrap: anywhere;
+}
+/* The KPI strip at full 2xl reads as five headlines competing with the page
+   title; this is the same tile at a size that supports it instead. */
+.ams-admin-strip {
+  margin: var(--ams-space-4) 0 0;
+  gap: var(--ams-space-6);
+}
+.ams-admin-strip .ams-metric-value {
+  font-size: var(--ams-text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.ams-admin-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--ams-space-2);
+}
+.ams-admin-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ams-space-3) var(--ams-space-4);
+  flex-wrap: wrap;
+  padding: var(--ams-space-3) 0;
+}
+.ams-admin-row + .ams-admin-row {
+  border-top: 1px solid var(--ams-line);
+}
+.ams-admin-row-main {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+.ams-admin-row-title {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  font-weight: 700;
+}
+.ams-admin-row-detail {
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  margin: 0.2rem 0 0;
+  max-width: 62ch;
+}
+.ams-admin-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.ams-admin-actions-end {
+  justify-content: flex-end;
+  margin-top: var(--ams-space-3);
+}
+.ams-admin-count-badge,
+.ams-admin-count {
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Glyph + heading text carry the state; the fill only reinforces it. Same
+   contract as .ams-chip, so the page survives greyscale and a projector. */
+.ams-admin-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ams-space-2);
+  border: 1px solid;
+  border-radius: var(--ams-radius-sm);
+  padding: var(--ams-space-3);
+  margin: var(--ams-space-3) 0 0;
+  font-size: var(--ams-text-sm);
+}
+.ams-admin-banner-icon {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--ams-text-xs);
+  border: 1px solid currentColor;
+}
+.ams-admin-banner-title {
+  display: block;
+}
+.ams-admin-banner-body {
+  margin: 0.25rem 0 0;
+  max-width: 68ch;
+}
+.ams-admin-banner-list {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  max-width: 68ch;
+}
+.ams-admin-banner-info {
+  background: var(--ams-surface);
+  border-color: var(--ams-line-strong);
+  color: var(--ams-ink);
+}
+.ams-admin-banner-good {
+  background: #dbeee6;
+  border-color: rgba(18, 92, 67, 0.3);
+  color: #125c43;
+}
+.ams-admin-banner-warn {
+  background: #fbeed3;
+  border-color: rgba(125, 95, 19, 0.35);
+  color: var(--ams-warning);
+}
+.ams-admin-banner-danger {
+  background: #f6dfe3;
+  border-color: rgba(138, 19, 48, 0.3);
+  color: #8a1330;
+}
+
+.ams-admin-cmd {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--ams-space-2);
+}
+.ams-admin-cmd-status {
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+}
+
+/* A reset preview can name every file in a target, and a list long enough to
+   push the confirm control off screen is a list that stops being read. */
+.ams-admin-files {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0.45rem 0.6rem;
+  max-height: 11rem;
+  overflow: auto;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: var(--ams-radius-sm);
+  font-family: ui-monospace, monospace;
+  font-size: var(--ams-text-xs);
+}
+.ams-admin-files li {
+  padding: 0.1rem 0;
+  overflow-wrap: anywhere;
+}
+.ams-admin-files-danger {
+  border-color: rgba(138, 19, 48, 0.35);
+  background: #fdf3f5;
+}
+.ams-admin-pathgroup {
+  margin-top: var(--ams-space-3);
+}
+.ams-admin-pathgroup-label {
+  margin: 0;
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ams-ink-soft);
+}
+.ams-admin-pathgroup-empty {
+  margin: 0.2rem 0 0;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+}
+
+.ams-admin-confirm {
+  margin-top: var(--ams-space-4);
+  border-top: 1px solid var(--ams-line);
+  padding-top: var(--ams-space-4);
+}
+.ams-admin-confirm-word {
+  font-family: ui-monospace, monospace;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ams-ink);
+}
+.ams-admin-confirm-actions {
+  display: flex;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: var(--ams-space-4);
+}
+
+.ams-admin-tablewrap {
+  overflow-x: auto;
+  margin-top: var(--ams-space-3);
+}
+.ams-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ams-text-sm);
+}
+.ams-admin-table-caption {
+  caption-side: top;
+  text-align: left;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  padding-bottom: 0.3rem;
+}
+.ams-admin-table th {
+  text-align: left;
+  font-size: var(--ams-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ams-ink-soft);
+  border-bottom: 1px solid var(--ams-line);
+  padding: 0.3rem 0.5rem 0.3rem 0;
+}
+.ams-admin-table td {
+  border-bottom: 1px solid var(--ams-line);
+  padding: 0.35rem 0.5rem 0.35rem 0;
+  overflow-wrap: anywhere;
+}
+.ams-admin-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ams-admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0 var(--ams-space-5);
+}
+.ams-admin-preview {
+  margin-top: var(--ams-space-4);
+}
+.ams-admin-json {
+  margin: var(--ams-space-3) 0 0;
+  max-height: 20rem;
+  overflow: auto;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: var(--ams-radius-sm);
+  padding: var(--ams-space-3);
+  font-size: var(--ams-text-xs);
+}
+.ams-admin-details {
+  margin-top: var(--ams-space-3);
+  font-size: var(--ams-text-sm);
+}
+.ams-admin-details summary {
+  cursor: pointer;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+}
+.ams-admin-targets {
+  list-style: none;
+  margin: var(--ams-space-2) 0 0;
+  padding: 0;
+  font-size: var(--ams-text-sm);
+}
+.ams-admin-targets li {
+  padding: 0.25rem 0;
+  border-top: 1px solid var(--ams-line);
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+}
+.ams-admin-target-chips {
+  display: flex;
+  gap: var(--ams-space-1);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .ams-admin-page {
+    padding: 1.25rem 1rem 3rem;
+  }
+  /* Once a row has wrapped, a right-aligned action group reads as belonging to
+     whatever is below it — pin it back to the left under its own text. */
+  .ams-admin-row-actions {
+    margin-left: 0;
+  }
+  .ams-admin-strip {
+    gap: var(--ams-space-4);
+  }
 }

@@ -211,8 +211,8 @@ function CrossTeamImpactRow({
       }}
     >
       <span className="ams-pill ams-pill-preview">{impact.app_name}</span>
-      <p style={{ fontSize: '0.85rem', margin: '0.4rem 0' }}>{impact.reason}</p>
-      <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)' }}>
+      <p style={{ fontSize: 'var(--ams-text-sm)', margin: '0.4rem 0' }}>{impact.reason}</p>
+      <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)' }}>
         Suggested ticket: {impact.suggested_summary}
       </p>
       {!created && (
@@ -224,12 +224,12 @@ function CrossTeamImpactRow({
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="ams-pill ams-pill-general">{created.key} · Open</span>
           {created.assignee ? (
-            <span style={{ fontSize: '0.85rem', color: 'var(--ams-success)' }}>
+            <span style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-success)' }}>
               ✓ Assigned to {created.assignee}
             </span>
           ) : (
             <>
-              <span style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)' }}>
+              <span style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)' }}>
                 Visible to the manager as open — assign now or later:
               </span>
               <select
@@ -265,8 +265,8 @@ function RoutingPanel({ decision }: { decision: RouteDecision }) {
   if (!decision.routed || !decision.application) {
     return (
       <div className="ams-card" style={{ marginTop: '0.75rem' }}>
-        <div style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)' }}>Routing</div>
-        <div style={{ fontSize: '0.85rem', marginTop: '0.3rem' }}>
+        <div style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>Routing</div>
+        <div style={{ fontSize: 'var(--ams-text-sm)', marginTop: '0.3rem' }}>
           This ticket carried no Configuration Item, so there is nothing to route on
           deterministically — the AI repo match below decides instead, and asks you to
           confirm anything it isn't sure about.
@@ -280,38 +280,38 @@ function RoutingPanel({ decision }: { decision: RouteDecision }) {
     <div className="ams-card" style={{ marginTop: '0.75rem' }}>
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <span className="ams-pill ams-pill-general">{app.display_name}</span>
-        <span style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)' }}>
+        <span style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>
           Routed by {decision.method === 'ci' ? 'CI' : 'business service'} “
           {decision.matched_on}” — no AI involved
         </span>
       </div>
       <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>Component team</div>
+          <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Component team</div>
           <div style={{ fontWeight: 700 }}>{app.component_team}</div>
         </div>
         <div>
-          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>Jira project</div>
+          <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Jira project</div>
           <div style={{ fontWeight: 700 }}>{app.jira_project_key}</div>
         </div>
         <div>
-          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>Tech stack</div>
+          <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Tech stack</div>
           <div style={{ fontWeight: 700 }}>{app.tech_stack}</div>
         </div>
         {decision.suggested_assignee && (
           <div>
-            <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>On call</div>
+            <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>On call</div>
             <div style={{ fontWeight: 700 }}>{decision.suggested_assignee}</div>
           </div>
         )}
       </div>
       {decision.automation_available ? (
-        <p style={{ fontSize: '0.85rem', margin: '0.6rem 0 0', color: 'var(--ams-ink-soft)' }}>
+        <p style={{ fontSize: 'var(--ams-text-sm)', margin: '0.6rem 0 0', color: 'var(--ams-ink-soft)' }}>
           Repo <code>{app.repo_path}</code> — {decision.candidate_targets.length} change
           {decision.candidate_targets.length === 1 ? '' : 's'} available to run against it.
         </p>
       ) : (
-        <p style={{ fontSize: '0.85rem', margin: '0.6rem 0 0', color: 'var(--ams-ink-soft)' }}>
+        <p style={{ fontSize: 'var(--ams-text-sm)', margin: '0.6rem 0 0', color: 'var(--ams-ink-soft)' }}>
           Routed to the owning team. This console has no repo for {app.display_name}, so no
           code will be generated for it here.
         </p>
@@ -432,7 +432,7 @@ export default function TicketModal({
               {crText || issue.description ? (
                 <CrDescription text={crText || issue.description || ''} summary={issue.summary} />
               ) : (
-                <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)' }}>
+                <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)' }}>
                   No description on file for this ticket.
                 </p>
               )}
@@ -442,7 +442,7 @@ export default function TicketModal({
               <div className="ams-modal-section">
                 <div className="ams-modal-section-title">AI actions</div>
                 {!crLabel && (
-                  <p style={{ fontSize: '0.82rem', color: 'var(--ams-ink-soft)', marginBottom: '0.5rem' }}>
+                  <p style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)', marginBottom: '0.5rem' }}>
                     No CR linked to this ticket in this console — impact analysis below runs off
                     the ticket's own text instead.
                   </p>
@@ -452,7 +452,7 @@ export default function TicketModal({
                     <strong>AI needs one clarification before analyzing</strong>
                     {/* pre-wrap: an assumptions question (analyze.build_assumption_
                         question) is a numbered list, not one line. */}
-                    <p style={{ fontSize: '0.88rem', margin: '0.5rem 0', whiteSpace: 'pre-wrap' }}>
+                    <p style={{ fontSize: 'var(--ams-text-sm)', margin: '0.5rem 0', whiteSpace: 'pre-wrap' }}>
                       {clarificationQuestion}
                     </p>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -524,7 +524,7 @@ export default function TicketModal({
                 {analysisResult && (
                   <div className="ams-card" style={{ marginTop: '0.75rem' }}>
                     <strong>{analysisResult.label}</strong>
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: 'var(--ams-text-sm)', marginTop: '0.5rem' }}>
                       {analysisResult.impact_analysis}
                     </div>
                     {analysisResult.assumptions.length > 0 && (
@@ -541,11 +541,11 @@ export default function TicketModal({
                             spent — every assumption is asked about first (see
                             /s3/analyze). Say why it wasn't asked, so this doesn't
                             read as the AI choosing to assume. */}
-                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ams-accent-ink)' }}>
+                        <div style={{ fontSize: 'var(--ams-text-xs)', fontWeight: 700, color: 'var(--ams-accent-ink)' }}>
                           Still unresolved after the clarification limit — proceeding on these
                           assumptions
                         </div>
-                        <ul style={{ margin: '0.35rem 0 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                        <ul style={{ margin: '0.35rem 0 0', paddingLeft: '1.1rem', fontSize: 'var(--ams-text-sm)' }}>
                           {analysisResult.assumptions.map((assumption, index) => (
                             <li key={index}>{assumption}</li>
                           ))}
@@ -554,11 +554,11 @@ export default function TicketModal({
                     )}
                     <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
                       <div>
-                        <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>Effort</div>
+                        <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Effort</div>
                         <div style={{ fontWeight: 700 }}>{analysisResult.effort_estimate.hours_class}</div>
                       </div>
                       <div>
-                        <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>
+                        <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>
                           Priority-equivalent
                         </div>
                         <div style={{ fontWeight: 700 }}>
@@ -567,7 +567,7 @@ export default function TicketModal({
                       </div>
                       {analysisResult.target_repo && (
                         <div>
-                          <div style={{ color: 'var(--ams-ink-soft)', fontSize: '0.8rem' }}>
+                          <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>
                             Target repo
                           </div>
                           <div style={{ fontWeight: 700 }}>
@@ -590,7 +590,7 @@ export default function TicketModal({
                   <div className="ams-card" style={{ marginTop: '0.75rem' }}>
                     <strong>Other teams depended on</strong>
                     {crossTeamImpacts.length === 0 ? (
-                      <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)', marginTop: '0.4rem' }}>
+                      <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)', marginTop: '0.4rem' }}>
                         No other application teams look affected.
                       </p>
                     ) : (
@@ -632,10 +632,10 @@ export default function TicketModal({
                 ))}
               </div>
               {eventsLoading && (
-                <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)' }}>Loading…</p>
+                <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)' }}>Loading…</p>
               )}
               {!eventsLoading && visibleEvents.length === 0 && (
-                <p style={{ fontSize: '0.85rem', color: 'var(--ams-ink-soft)' }}>
+                <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)' }}>
                   No activity recorded yet — run an action above to see it show up here.
                 </p>
               )}
@@ -699,7 +699,7 @@ export default function TicketModal({
                       <>
                         Problem record
                         {issue.problem_id && (
-                          <div style={{ fontSize: '0.8rem', color: 'var(--ams-ink-soft)' }}>
+                          <div style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>
                             {issue.problem_id}
                           </div>
                         )}

@@ -36,10 +36,15 @@ _CSS = """
     --ams-line: rgba(54,53,48,0.16);
     --ams-surface: #F7F7F6;
     --ams-shadow: 0 2px 10px rgba(147,148,142,0.3);
-    --ams-success: #007F7F;
-    --ams-warning: #B08824;
+    /* Status colours are used as text, so they are held to WCAG AA 4.5:1
+       against the lightest-on-darkest pairing they actually occur in. The
+       previous #007F7F / #B08824 / #007CBF measured 4.27 / 2.90 / 4.00 on
+       --ams-bg and failed. Keep these in step with the React console's
+       theme.css, which was ported from this block. */
+    --ams-success: #00706F;
+    --ams-warning: #7D5F13;
     --ams-error: #D20D35;
-    --ams-info: #007CBF;
+    --ams-info: #00629A;
 }
 
 html, body, [class*="css"] {

@@ -28,7 +28,7 @@ export default function Home() {
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' }}>
       <span className="ams-eyebrow">MapleSure Insurance · AMS Console</span>
-      <h1 style={{ fontSize: '1.9rem', marginTop: '0.6rem' }}>AMS Service Console</h1>
+      <h1 style={{ fontSize: 'var(--ams-text-2xl)', marginTop: '0.6rem' }}>AMS Service Console</h1>
       <p style={{ color: 'var(--ams-ink-soft)', maxWidth: '60ch', marginTop: '0.4rem' }}>
         Agentic applications for running the MapleSure application portfolio. Pick a scenario
         to open it.
@@ -71,8 +71,8 @@ export default function Home() {
               </span>
               <StatusPill status={scenario.status} />
             </div>
-            <h3 style={{ fontSize: '1.05rem', marginBottom: '0.4rem' }}>{scenario.title}</h3>
-            <p style={{ color: 'var(--ams-ink-soft)', fontSize: '0.88rem', minHeight: '3.6em' }}>
+            <h3 style={{ fontSize: 'var(--ams-text-lg)', marginBottom: '0.4rem' }}>{scenario.title}</h3>
+            <p style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-sm)', minHeight: '3.6em' }}>
               {scenario.description}
             </p>
             <Link to={scenario.href} className="ams-button" style={{ display: 'inline-block' }}>

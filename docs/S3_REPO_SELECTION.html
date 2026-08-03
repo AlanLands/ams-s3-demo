@@ -118,7 +118,7 @@
   <p class="subtitle">Three selection layers, three different mechanisms — and an
     honest account of which ones are measured.</p>
   <p class="meta">MapleSure Insurance demo build · Verified against the codebase
-    on 27 July 2026 · Companion to <span class="mono">S3_RANKING_VS_DUO.pdf</span></p>
+    on 3 August 2026 · Companion to <span class="mono">S3_RANKING_VS_DUO.pdf</span></p>
 </div>
 
 <div class="callout">
@@ -171,6 +171,29 @@ they do not fail the same way.</p>
     a category error, and the right answer is to explain the confidence gate
     instead.</figcaption>
 </figure>
+
+<h3>For a repository the console already hosts, layer 1 usually never runs</h3>
+<p>The stack above is the <em>unknown-estate</em> path. A repository registered with
+this console — one sitting under <code>repos/</code> with a
+<code>.s3targets.json</code> manifest — is resolved deterministically instead, by
+<code>s3_enhancement/target_match.py</code>, in three tiers cheapest first:</p>
+<ol>
+  <li><strong>The CR identifier.</strong> Every CR opens <code>CR-YYYY-NNN:</code> and
+    every registered target names the CR file it was registered with, so this is an
+    exact structural match. It resolves all four of today's pinned CRs with no
+    model call.</li>
+  <li><strong>The <code>Application:</code> header</strong>, matched against the
+    ServiceNow application registry, then narrowed to that application's registered
+    targets. An application hosting more than one target (PolicyCore hosts two)
+    falls through rather than guessing.</li>
+  <li><strong>The LLM fallback</strong> — layer 1 above — only for a CR that matches
+    neither, behind the same confidence gate.</li>
+</ol>
+<p>This is why onboarding is "drop the repo in and add its CRs": a CR file placed
+under <code>crs/</code> opens a board ticket automatically, tier 1 resolves it to the
+target its manifest declared, and no ticket-key-to-repository table exists anywhere
+to be edited. The manifest contract and the full procedure are in
+<code>repos/README.md</code>.</p>
 </section>
 
 <section class="section">
@@ -293,9 +316,9 @@ an honest system ends up sounding overclaimed.</p>
       <td><strong>3 · File selection</strong><div class="tiny">embeddings + floors</div></td>
       <td><span class="chip chip-ok">Measured</span></td>
       <td>17 tests in <code>tests/test_s3_relevance.py</code>, plus a live check that
-        every legacy subsystem stays screened out across three tier-name variants.
-        Measured margins: nearest decoy subsystem 0.339 against a 0.45 floor; hardest
-        real file 0.458 against a 0.55 floor. Selection is deterministic run to run.</td>
+        every screened subsystem stays screened out across three tier-name variants.
+        Measured margins: nearest decoy subsystem 0.354 against a 0.45 floor; hardest
+        real file 0.459 against a 0.55 floor. Selection is deterministic run to run.</td>
     </tr>
     <tr>
       <td><strong>Generation</strong><div class="tiny">codegen + tests</div></td>
@@ -386,8 +409,9 @@ on the spot.</p>
 
 <p class="footnote">
 <strong>Method.</strong> Every claim here was read from the codebase on
-27 July 2026: <code>s3_enhancement/repo_match.py</code>,
-<code>api/routers/s3.py</code>'s <code>/gitlab/scope-auto</code>,
+3 August 2026: <code>s3_enhancement/repo_match.py</code>,
+<code>s3_enhancement/target_match.py</code>,
+<code>apps/console/api/routers/s3.py</code>'s <code>/gitlab/scope-auto</code>,
 <code>s3_enhancement/relevance.py</code>, <code>tests/test_s3_repo_match.py</code>,
 <code>tests/test_s3_relevance.py</code> and <code>tools/verify_s3_live.py</code>.
 Test counts and threshold margins were taken from live runs, not from code

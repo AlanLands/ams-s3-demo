@@ -1,5 +1,18 @@
 # Scenario → Capability Decomposition
 
+> **Historical.** This is the original six-scenario scope from the `sixFold`
+> tabletop demo, kept for background only — see `docs/history/README.md`. This
+> repository builds S3 (Enhancement Delivery) alone, its targets now live under
+> `repos/`, and the S3 vocabulary has since been reskinned for group retirement
+> (amendment, plan tier, contribution, plan sponsor). Nothing below has been
+> updated to match, deliberately: it is a record of what was decided then, not a
+> statement of what is true now.
+>
+> Three references to named individuals and one to a named organisation were
+> replaced with role descriptions on 2026-08-03 (CLAUDE.md hard rule #2 — no
+> real names in any document that can be shared). Nothing else in the historical
+> content was altered.
+
 Scope definition for the 90-minute demo: each scenario broken into discrete
 capabilities, the demo beat that proves it, its data source, and build effort.
 Effort: **S** ≤ ½ day · **M** ~1 day · **L** ~2 days (one person, AI-assisted build).
@@ -13,7 +26,7 @@ Priority key: **CORE** = must land for the demo · **PLUS** = show if time allow
 
 | # | Capability | Demo beat | Data | Effort | Priority |
 |---|-----------|-----------|------|--------|----------|
-| 1.0 | **Data-quality gate** (differentiator — beyond the ask; Vinay's prompt available) | Incoming incident scored: investigable or not → auto-drafted mail to requestor asking for specifics | incidents.csv | S | CORE |
+| 1.0 | **Data-quality gate** (differentiator — beyond the ask; an existing prompt from the team was available) | Incoming incident scored: investigable or not → auto-drafted mail to requestor asking for specifics | incidents.csv | S | CORE |
 | 1.1 | Two-level triage: **rule-based first** (editable per-app rules as text) **+ AI** category/priority | Rules fire visibly, then AI assigns priority with reasoning; client can edit rules live | incidents.csv | M | CORE |
 | 1.2 | Assignment-group routing | AI routes to correct group, citing the rule/precedent (today: manual L1 dispatch) | incidents.csv | S | CORE |
 | 1.3 | Similar-incident retrieval | "Seen 4 times before — here's what fixed it" with links | incidents.csv | M | CORE |
@@ -26,7 +39,7 @@ Priority key: **CORE** = must land for the demo · **PLUS** = show if time allow
 | # | Capability | Demo beat | Data | Effort | Priority |
 |---|-----------|-----------|------|--------|----------|
 | 2.1 | Recurring-cluster detection | 6-mo data in → "these 17 incidents are one problem" (seeded pattern found) | incidents.csv | M | CORE |
-| 2.2 | Problem-ticket initiation — **ServiceNow toggle** | Auto-drafted problem record; "REST API open → auto-created in ServiceNow, else guided manual" shown as a feature switch (Seetha checking API status) | derived | S | CORE |
+| 2.2 | Problem-ticket initiation — **ServiceNow toggle** | Auto-drafted problem record; "REST API open → auto-created in ServiceNow, else guided manual" shown as a feature switch (a team member was confirming API availability) | derived | S | CORE |
 | 2.3 | RCA narrative | AI RCA surfaces the pre-existing problem record + temporary workaround (seeded) | incidents.csv | M | CORE |
 | 2.4 | Permanent-fix recommendation | Ranked fix options with impact estimate. **Talk track up front: fix quality matures after ~6 months of system learning** — sets expectations before the client asks | derived | S | CORE |
 | 2.5 | Monthly proactive sweep | Ranked problem backlog across whole corpus | incidents.csv | M | PLUS |
@@ -36,7 +49,7 @@ Priority key: **CORE** = must land for the demo · **PLUS** = show if time allow
 | # | Capability | Demo beat | Data | Effort | Priority |
 |---|-----------|-----------|------|--------|----------|
 | 3.0 | MapleSure policy/claims app (prereq, shared with S4) | Working small UI: view policies, submit claim | synthetic | L | CORE |
-| 3.1 | AI-assisted requirement analysis | CR text ("add coverage-upgrade option") → impact analysis on the codebase | CR doc | S | CORE |
+| 3.1 | AI-assisted requirement analysis | CR text ("add tier-upgrade option") → impact analysis on the codebase | CR doc | S | CORE |
 | 3.2 | Code generation | AI writes the change; new button/flow appears that wasn't there before | mockapp repo | M | CORE |
 | 3.3 | Test generation + run | AI-written tests execute green live | mockapp repo | M | CORE |
 | 3.4 | Docs + release notes | Auto-updated docs and release note | mockapp repo | S | CORE |
@@ -77,7 +90,7 @@ Priority key: **CORE** = must land for the demo · **PLUS** = show if time allow
 | # | Item | Serves | Effort |
 |---|------|--------|--------|
 | X.1 | incidents.csv generator, ~50 ServiceNow-shape fields, seeded patterns (SEEDS.md) | S1, S2, S6 | M |
-| X.2 | KB / known-error articles pack (file-upload pattern, per CIBC command-center approach) | S1, S4 | S |
+| X.2 | KB / known-error articles pack (file-upload pattern, following a prior engagement's command-centre approach) | S1, S4 | S |
 | X.3 | LLM wrapper (Anthropic/OpenAI switchable, response caching) | all | S |
 | X.4 | Demo runner + reset scripts per scenario | all | S |
 

@@ -6,9 +6,9 @@
   "response": {
     "key": "AMS-838",
     "status": "Done",
-    "summary": "Handle mid-cycle premium adjustments for coverage tier upgrades.",
+    "summary": "Handle mid-cycle contribution adjustments for plan tier upgrades.",
     "issue_type": "Task",
     "assignee": "Ravi Kumar",
-    "description": "A tier upgrade changes the premium mid-cycle, requiring a new mid-cycle handling path for recalculating premiums."
+    "description": "A tier upgrade changes the contribution mid-cycle, requiring a new mid-cycle handling path for recalculating contributions."
   }
 }

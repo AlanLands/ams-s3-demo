@@ -172,7 +172,7 @@ Current codebase context:
 
 Write a short impact analysis (roughly 5-10 lines) covering:
 1. What files/functions need to change to implement this CR.
-2. What risk areas exist (e.g. schema/data migration, premium calculation
+2. What risk areas exist (e.g. schema/data migration, contribution calculation
    correctness, effect on existing flows).
 3. What should be tested before this ships.
 

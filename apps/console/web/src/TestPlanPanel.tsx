@@ -298,7 +298,7 @@ export default function ScenarioPlan({
           {approving ? 'Approving…' : approvedBy ? 'Re-approve plan' : 'Approve test plan'}
         </button>
         {approvedBy && (
-          <span style={{ fontSize: '0.85rem', color: 'var(--ams-success)' }}>
+          <span style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-success)' }}>
             ✓ Approved by {approvedBy}
           </span>
         )}

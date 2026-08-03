@@ -15,7 +15,7 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <button
-      className="ams-modal-link"
+      className="ams-modal-link ams-note-copy"
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text)

@@ -35,7 +35,7 @@ class Policy:
 
 
 def test_restores_docstring_the_model_dropped() -> None:
-    repaired = _restore_module_docstring("apps/policycore/core/models.py", STRIPPED_MODELS)
+    repaired = _restore_module_docstring("repos/policycore/core/models.py", STRIPPED_MODELS)
     assert repaired.startswith('"""Data models for the MapleSure group benefits mock app.')
     assert "Storage lives" in repaired
     # The model's actual change must survive the repair untouched.
@@ -45,23 +45,23 @@ def test_restores_docstring_the_model_dropped() -> None:
 
 def test_leaves_content_alone_when_docstring_already_present() -> None:
     content = '"""Kept."""\n\nfrom __future__ import annotations\n'
-    assert _restore_module_docstring("apps/policycore/core/models.py", content) == content
+    assert _restore_module_docstring("repos/policycore/core/models.py", content) == content
 
 
 def test_ignores_non_python_and_unknown_paths() -> None:
     java = "public class Claim {}\n"
     assert _restore_module_docstring("Claim.java", java) == java
     new_file = "x = 1\n"
-    assert _restore_module_docstring("apps/policycore/core/brand_new.py", new_file) == new_file
+    assert _restore_module_docstring("repos/policycore/core/brand_new.py", new_file) == new_file
 
 
 def test_invalid_python_passes_through_for_the_validator_to_reject() -> None:
     broken = "def oops(\n"
-    assert _restore_module_docstring("apps/policycore/core/models.py", broken) == broken
+    assert _restore_module_docstring("repos/policycore/core/models.py", broken) == broken
 
 
 def test_repaired_output_still_parses() -> None:
-    ast.parse(_restore_module_docstring("apps/policycore/core/models.py", STRIPPED_MODELS))
+    ast.parse(_restore_module_docstring("repos/policycore/core/models.py", STRIPPED_MODELS))
 
 
 # ---------------------------------------------------------------------------
@@ -70,32 +70,32 @@ def test_repaired_output_still_parses() -> None:
 # can't drift out from under the test the way the live repo files did.
 # ---------------------------------------------------------------------------
 
-ORIGINAL_ENDORSEMENTS = '''"""Endorsement-request business logic for the MapleSure mock app."""
+ORIGINAL_AMENDMENTS = '''"""Amendment-request business logic for the MapleSure mock app."""
 
 from __future__ import annotations
 
 
-def _next_endorsement_number(policy_number: str) -> str:
-    """Generate a new endorsement number, unique across all policies."""
+def _next_amendment_number(policy_number: str) -> str:
+    """Generate a new amendment number, unique across all policies."""
     return f"END-{policy_number}"
 
 
-def submit_endorsement(policy_number: str) -> str:
-    """Create and persist a new endorsement request, returning the record."""
-    return _next_endorsement_number(policy_number)
+def submit_amendment(policy_number: str) -> str:
+    """Create and persist a new amendment request, returning the record."""
+    return _next_amendment_number(policy_number)
 '''
 
-STRIPPED_ENDORSEMENTS = '''"""Endorsement-request business logic for the MapleSure mock app."""
+STRIPPED_AMENDMENTS = '''"""Amendment-request business logic for the MapleSure mock app."""
 
 from __future__ import annotations
 
 
-def _next_endorsement_number(policy_number: str) -> str:
+def _next_amendment_number(policy_number: str) -> str:
     return f"END-{policy_number}"
 
 
-def submit_endorsement(policy_number: str, priority: str = "Standard") -> str:
-    return _next_endorsement_number(policy_number)
+def submit_amendment(policy_number: str, priority: str = "Standard") -> str:
+    return _next_amendment_number(policy_number)
 '''
 
 
@@ -112,11 +112,11 @@ def _write_original(repo_root, rel_path: str, content: str) -> None:
 
 
 def test_restores_function_docstrings_the_model_dropped(repo_root) -> None:
-    _write_original(repo_root, "endorsements.py", ORIGINAL_ENDORSEMENTS)
-    repaired = _restore_body_docstrings("endorsements.py", STRIPPED_ENDORSEMENTS)
-    assert '"""Generate a new endorsement number, unique across all policies."""' in repaired
+    _write_original(repo_root, "amendments.py", ORIGINAL_AMENDMENTS)
+    repaired = _restore_body_docstrings("amendments.py", STRIPPED_AMENDMENTS)
+    assert '"""Generate a new amendment number, unique across all policies."""' in repaired
     assert (
-        '"""Create and persist a new endorsement request, returning the record."""'
+        '"""Create and persist a new amendment request, returning the record."""'
         in repaired
     )
     # The model's actual change (the new `priority` parameter) must survive.
@@ -125,22 +125,22 @@ def test_restores_function_docstrings_the_model_dropped(repo_root) -> None:
 
 
 def test_leaves_function_docstring_alone_when_already_present(repo_root) -> None:
-    _write_original(repo_root, "endorsements.py", ORIGINAL_ENDORSEMENTS)
-    assert _restore_body_docstrings("endorsements.py", ORIGINAL_ENDORSEMENTS) == (
-        ORIGINAL_ENDORSEMENTS
+    _write_original(repo_root, "amendments.py", ORIGINAL_AMENDMENTS)
+    assert _restore_body_docstrings("amendments.py", ORIGINAL_AMENDMENTS) == (
+        ORIGINAL_AMENDMENTS
     )
 
 
 def test_does_not_restore_a_renamed_function(repo_root) -> None:
-    _write_original(repo_root, "endorsements.py", ORIGINAL_ENDORSEMENTS)
-    renamed = STRIPPED_ENDORSEMENTS.replace(
-        "def submit_endorsement(", "def submit_endorsement_request("
+    _write_original(repo_root, "amendments.py", ORIGINAL_AMENDMENTS)
+    renamed = STRIPPED_AMENDMENTS.replace(
+        "def submit_amendment(", "def submit_amendment_request("
     )
-    repaired = _restore_body_docstrings("endorsements.py", renamed)
-    # No node named "submit_endorsement" exists in the model's output to
+    repaired = _restore_body_docstrings("amendments.py", renamed)
+    # No node named "submit_amendment" exists in the model's output to
     # attach the original docstring to — nothing to match, nothing invented.
-    assert "Create and persist a new endorsement" not in repaired
-    assert "def submit_endorsement_request(" in repaired
+    assert "Create and persist a new amendment" not in repaired
+    assert "def submit_amendment_request(" in repaired
 
 
 def test_body_docstrings_ignores_non_python_and_missing_original(repo_root) -> None:
@@ -150,16 +150,16 @@ def test_body_docstrings_ignores_non_python_and_missing_original(repo_root) -> N
 
 
 def test_body_docstrings_invalid_python_passes_through(repo_root) -> None:
-    _write_original(repo_root, "endorsements.py", ORIGINAL_ENDORSEMENTS)
+    _write_original(repo_root, "amendments.py", ORIGINAL_AMENDMENTS)
     broken = "def oops(\n"
-    assert _restore_body_docstrings("endorsements.py", broken) == broken
+    assert _restore_body_docstrings("amendments.py", broken) == broken
 
 
 # ---------------------------------------------------------------------------
 # _restore_dropped_comment_lines — the general, non-docstring case: a plain
 # `#` comment deleted from the middle of a function body, with no docstring
 # involved at all. Found against the real CR-2026-042 recording, in
-# apps/policycore/app.py's render(): a design-rationale comment between two
+# repos/policycore/app.py's render(): a design-rationale comment between two
 # statements vanished with nothing marking its former position.
 # ---------------------------------------------------------------------------
 
@@ -272,8 +272,8 @@ COLLAPSED_TWO_DEFS = (
 
 
 def test_restores_pep8_blank_line_spacing(repo_root) -> None:
-    _write_original(repo_root, "endorsements.py", ORIGINAL_TWO_DEFS)
-    repaired = _restore_top_level_blank_lines("endorsements.py", COLLAPSED_TWO_DEFS)
+    _write_original(repo_root, "amendments.py", ORIGINAL_TWO_DEFS)
+    repaired = _restore_top_level_blank_lines("amendments.py", COLLAPSED_TWO_DEFS)
     assert "\n\n\ndef b() -> None:" in repaired
     ast.parse(repaired)
 
@@ -288,24 +288,24 @@ def test_blank_lines_only_touches_the_run_above_the_matched_def(repo_root) -> No
         "def a() -> None:\n    pass", 'def a() -> None:\n    x = {i for i in range(3)}'
     )
     collapsed = COLLAPSED_TWO_DEFS.replace("def a() -> None:\n    pass", reformatted_body)
-    _write_original(repo_root, "endorsements.py", original)
-    repaired = _restore_top_level_blank_lines("endorsements.py", collapsed)
+    _write_original(repo_root, "amendments.py", original)
+    repaired = _restore_top_level_blank_lines("amendments.py", collapsed)
     assert "\n\n\ndef b() -> None:" in repaired
     # The model's own (unrelated) multi-line formatting choice survives untouched.
     assert "x = {\n        i for i in range(3)\n    }" in repaired
 
 
 def test_blank_lines_leaves_content_alone_when_spacing_already_matches(repo_root) -> None:
-    _write_original(repo_root, "endorsements.py", ORIGINAL_TWO_DEFS)
-    assert _restore_top_level_blank_lines("endorsements.py", ORIGINAL_TWO_DEFS) == (
+    _write_original(repo_root, "amendments.py", ORIGINAL_TWO_DEFS)
+    assert _restore_top_level_blank_lines("amendments.py", ORIGINAL_TWO_DEFS) == (
         ORIGINAL_TWO_DEFS
     )
 
 
 def test_blank_lines_does_not_restore_a_renamed_def(repo_root) -> None:
-    _write_original(repo_root, "endorsements.py", ORIGINAL_TWO_DEFS)
+    _write_original(repo_root, "amendments.py", ORIGINAL_TWO_DEFS)
     renamed = COLLAPSED_TWO_DEFS.replace("def b() -> None:", "def c() -> None:")
-    assert _restore_top_level_blank_lines("endorsements.py", renamed) == renamed
+    assert _restore_top_level_blank_lines("amendments.py", renamed) == renamed
 
 
 def test_blank_lines_ignores_non_python_and_missing_original(repo_root) -> None:
@@ -315,9 +315,9 @@ def test_blank_lines_ignores_non_python_and_missing_original(repo_root) -> None:
 
 
 def test_blank_lines_invalid_python_passes_through(repo_root) -> None:
-    _write_original(repo_root, "endorsements.py", ORIGINAL_TWO_DEFS)
+    _write_original(repo_root, "amendments.py", ORIGINAL_TWO_DEFS)
     broken = "def oops(\n"
-    assert _restore_top_level_blank_lines("endorsements.py", broken) == broken
+    assert _restore_top_level_blank_lines("amendments.py", broken) == broken
 
 
 # ---------------------------------------------------------------------------
@@ -326,43 +326,43 @@ def test_blank_lines_invalid_python_passes_through(repo_root) -> None:
 # docstrings, and blank-line spacing all lost in the same file).
 # ---------------------------------------------------------------------------
 
-ORIGINAL_FULL_FILE = '''"""Endorsement-request business logic for the MapleSure mock app."""
+ORIGINAL_FULL_FILE = '''"""Amendment-request business logic for the MapleSure mock app."""
 
 from __future__ import annotations
 
 
-def _next_endorsement_number(policy_number: str) -> str:
-    """Generate a new endorsement number, unique across all policies."""
+def _next_amendment_number(policy_number: str) -> str:
+    """Generate a new amendment number, unique across all policies."""
     return f"END-{policy_number}"
 
 
-def submit_endorsement(policy_number: str) -> str:
-    """Create and persist a new endorsement request, returning the record."""
-    return _next_endorsement_number(policy_number)
+def submit_amendment(policy_number: str) -> str:
+    """Create and persist a new amendment request, returning the record."""
+    return _next_amendment_number(policy_number)
 '''
 
 STRIPPED_FULL_FILE = (
     "from __future__ import annotations\n"
     "\n"
-    "def _next_endorsement_number(policy_number: str) -> str:\n"
+    "def _next_amendment_number(policy_number: str) -> str:\n"
     '    return f"END-{policy_number}"\n'
     "\n"
-    "def submit_endorsement(policy_number: str, priority: str = \"Standard\") -> str:\n"
-    "    return _next_endorsement_number(policy_number)\n"
+    "def submit_amendment(policy_number: str, priority: str = \"Standard\") -> str:\n"
+    "    return _next_amendment_number(policy_number)\n"
 )
 
 
 def test_repair_chain_restores_module_and_function_docstrings_and_spacing(repo_root) -> None:
-    _write_original(repo_root, "endorsements.py", ORIGINAL_FULL_FILE)
-    repaired = _repair_generated_content("endorsements.py", STRIPPED_FULL_FILE)
+    _write_original(repo_root, "amendments.py", ORIGINAL_FULL_FILE)
+    repaired = _repair_generated_content("amendments.py", STRIPPED_FULL_FILE)
     assert repaired.startswith(
-        '"""Endorsement-request business logic for the MapleSure mock app."""'
+        '"""Amendment-request business logic for the MapleSure mock app."""'
     )
-    assert '"""Generate a new endorsement number, unique across all policies."""' in repaired
+    assert '"""Generate a new amendment number, unique across all policies."""' in repaired
     assert (
-        '"""Create and persist a new endorsement request, returning the record."""'
+        '"""Create and persist a new amendment request, returning the record."""'
         in repaired
     )
-    assert "\n\n\ndef submit_endorsement" in repaired
+    assert "\n\n\ndef submit_amendment" in repaired
     assert 'priority: str = "Standard"' in repaired
     ast.parse(repaired)

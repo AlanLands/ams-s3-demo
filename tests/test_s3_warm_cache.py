@@ -28,7 +28,7 @@ def test_warm_covers_every_registered_target():
     warmable_ids = {t.target_id for t in targets.all_targets() if t.cr_template_path is not None}
     assert {
         targets.DEFAULT_TARGET_ID,
-        targets.ENDORSEMENT_TARGET_ID,
+        targets.AMENDMENT_TARGET_ID,
         targets.CLAIMSPORTAL_TARGET_ID,
     } <= warmable_ids
 

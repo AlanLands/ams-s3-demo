@@ -6,9 +6,9 @@
   "response": {
     "key": "AMS-619",
     "status": "To Do",
-    "summary": "Ensure claims are checked against the coverage tier at filing time in ClaimsPortal.",
+    "summary": "Ensure claims are checked against the plan tier at filing time in ClaimsPortal.",
     "issue_type": "Task",
     "assignee": "Priya Nair",
-    "description": "ClaimsPortal must ensure claims are evaluated against the coverage tier at the time of filing."
+    "description": "ClaimsPortal must ensure claims are evaluated against the plan tier at the time of filing."
   }
 }

@@ -18,7 +18,7 @@ Environment=PYTHONUNBUFFERED=1
 # read from the EnvironmentFile above: an unset variable would expand to
 # nothing and Streamlit would silently swallow the next flag as the path.
 # Bound to localhost; nginx fronts it.
-ExecStart=/opt/ams-s3-demo/.venv/bin/streamlit run apps/policycore/app.py \
+ExecStart=/opt/ams-s3-demo/.venv/bin/streamlit run repos/policycore/app.py \
     --server.port 8501 \
     --server.address 127.0.0.1 \
     --server.baseUrlPath sl_policycore \

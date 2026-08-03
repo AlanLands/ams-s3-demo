@@ -1,4 +1,4 @@
-"""Live S3 test generation for the coverage-upgrade change.
+"""Live S3 test generation for the plan-tier-upgrade change.
 
 The prompt/validation below is CR-2026-041-specific, same caveat as
 codegen.py — a second `Target` needs its own prompt/validator pair, not just a
@@ -25,8 +25,8 @@ from s3_enhancement.targets import Target
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_ROOT = REPO_ROOT / "s3_enhancement" / "out"
-CACHE_KEY = targets.MOCKAPP_COVERAGE_UPGRADE.stream_cache_key("testgen")
-ALLOWLIST: tuple[str, ...] = targets.MOCKAPP_COVERAGE_UPGRADE.testgen_allowlist
+CACHE_KEY = targets.MOCKAPP_TIER_UPGRADE.stream_cache_key("testgen")
+ALLOWLIST: tuple[str, ...] = targets.MOCKAPP_TIER_UPGRADE.testgen_allowlist
 SYSTEM_PROMPT = (
     "You are an AI pair programmer for a live AMS demo. Return structured JSON "
     "only. Do not include markdown fences, prose, or diffs."
@@ -111,10 +111,12 @@ def _generate_tests_once(
     used_replay: bool,
     scenarios: list[dict] | None = None,
 ) -> TestgenResult:
-    if target.cache_namespace == targets.MOCKAPP_ENDORSEMENT_FIELD_ADD.cache_namespace:
-        prompt = build_endorsement_prompt(cr_text, target=target)
+    if target.cache_namespace == targets.MOCKAPP_AMENDMENT_FIELD_ADD.cache_namespace:
+        prompt = build_amendment_prompt(cr_text, target=target)
     elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
         prompt = build_spring_prompt(cr_text, target=target)
+    elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
+        prompt = build_enroldirect_prompt(cr_text, target=target)
     else:
         prompt = build_prompt(tier_name, cr_text)
     prompt += _format_scenarios(scenarios)
@@ -172,14 +174,14 @@ def build_prompt(tier_name: str, cr_text: str) -> str:
 
     reference = """Tests should cover:
 - default tier is Standard after reseed
-- upgrade to Premium recalculates premium and persists
+- upgrade to Premium recalculates the contribution and persists
 - two-tier upgrade reaches the top tier and stays mathematically consistent
 - unknown tier using "NotATier", downgrade, same-tier, and unknown policy raise ValueError
-- COVERAGE_TIERS ordering is exactly ["Standard", "Premium", top tier]
+- PLAN_TIERS ordering is exactly ["Standard", "Premium", top tier]
 """
 
     context_files = []
-    for rel_path in ("apps/policycore/core/models.py", "apps/policycore/core/db.py", "apps/policycore/core/seed.py"):
+    for rel_path in ("repos/policycore/core/models.py", "repos/policycore/core/db.py", "repos/policycore/core/seed.py"):
         path = REPO_ROOT / rel_path
         content = path.read_text(encoding="utf-8") if path.exists() else ""
         context_files.append(f"--- {rel_path} ---\n{content}")
@@ -192,7 +194,7 @@ Audience-selected top tier name: {tier_name}
 Top tier literal to assert in the generated tests: {top_tier_literal}
 
 Current generated app files are already applied. Generate only this test file:
-tests/test_s3_coverage_upgrade.py
+tests/test_s3_tier_upgrade.py
 
 {reference}
 
@@ -201,19 +203,19 @@ do not write fallback/try-except import chains, and do not treat a Policy as a
 dict:
 {chr(10).join(context_files)}
 
-`apps.policycore.core.coverage` exposes `COVERAGE_TIERS: list[str]`,
+`repos.policycore.core.tiers` exposes `PLAN_TIERS: list[str]`,
 `TIER_MULTIPLIERS: dict[str, float]`, and
-`upgrade_coverage(policy_number: str, new_tier: str) -> Policy` (raises
+`upgrade_tier(policy_number: str, new_tier: str) -> Policy` (raises
 `ValueError` on unknown tier / downgrade / same-tier / unknown policy).
-The recalculated premium is rounded to 2 decimals — expected values must be
-computed as `round(premium / old_multiplier * new_multiplier, 2)`, never
+The recalculated contribution is rounded to 2 decimals — expected values must
+be computed as `round(contribution / old_multiplier * new_multiplier, 2)`, never
 compared against an unrounded float.
-`apps.policycore.core.db.get_policy(policy_number: str) -> Policy | None` and
+`repos.policycore.core.db.get_policy(policy_number: str) -> Policy | None` and
 `list_policies() -> list[Policy]` return `Policy` dataclass instances — access
-fields with plain attribute access (`policy.coverage_tier`, `policy.premium`,
+fields with plain attribute access (`policy.plan_tier`, `policy.contribution`,
 `policy.policy_number`), never dict-style `policy["..."]` or `.get(...)`.
-`apps.policycore.core.seed.reseed() -> None` reseeds known synthetic policies
-(e.g. "POL-10001") at coverage_tier="Standard" — call it directly by that name
+`repos.policycore.core.seed.reseed() -> None` reseeds known synthetic policies
+(e.g. "POL-10001") at plan_tier="Standard" — call it directly by that name
 in an autouse fixture, no aliasing needed. An unknown policy number for the
 "unknown policy" test should be an unmistakably invalid string like
 "POL-99999", not an integer.
@@ -221,36 +223,36 @@ in an autouse fixture, no aliasing needed. An unknown policy number for the
 Return structured JSON only with this exact shape:
 {{
   "files": [
-    {{"path": "tests/test_s3_coverage_upgrade.py", "content": "<complete replacement>"}}
+    {{"path": "tests/test_s3_tier_upgrade.py", "content": "<complete replacement>"}}
   ]
 }}
 
 Use pytest, reseed the mock app database before each test via an autouse
-fixture, and import directly from apps.policycore.core.coverage, apps.policycore.core.db, and
-apps.policycore.core.seed using the exact names given above. The test file should be
+fixture, and import directly from repos.policycore.core.tiers, repos.policycore.core.db, and
+repos.policycore.core.seed using the exact names given above. The test file should be
 deterministic and have no LLM calls or network access."""
 
 
-def build_endorsement_prompt(cr_text: str, *, target: Target) -> str:
+def build_amendment_prompt(cr_text: str, *, target: Target) -> str:
     """Prompt for CR-2026-042's generated test file — no audience-picked
-    placeholder, unlike the coverage-upgrade CR's {{TIER_NAME}}."""
+    placeholder, unlike the tier-upgrade CR's {{TIER_NAME}}."""
     test_path = target.testgen_allowlist[0]
 
     reference = """Tests should cover:
-- submitting an endorsement request with no priority argument defaults to "Standard"
-- submitting an endorsement request with priority="Urgent" persists "Urgent"
-- the persisted endorsement round-trips through list_endorsements() with the
+- submitting an amendment request with no priority argument defaults to "Standard"
+- submitting an amendment request with priority="Urgent" persists "Urgent"
+- the persisted amendment round-trips through list_amendments() with the
   chosen priority
-- existing fields (endorsement_type, requested_change, effective_date,
+- existing fields (amendment_type, requested_change, effective_date,
   contact_phone, contact_email) are unaffected by the new field
 """
 
     context_files = []
     for rel_path in (
-        "apps/policycore/core/models.py",
-        "apps/policycore/core/db.py",
-        "apps/policycore/core/endorsements.py",
-        "apps/policycore/core/seed.py",
+        "repos/policycore/core/models.py",
+        "repos/policycore/core/db.py",
+        "repos/policycore/core/amendments.py",
+        "repos/policycore/core/seed.py",
     ):
         path = REPO_ROOT / rel_path
         content = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -266,17 +268,17 @@ Current generated app files are already applied. Generate only this test file:
 
 Exact API to test — this is a fixed, known contract, do not guess field names,
 do not write fallback/try-except import chains, and do not treat an
-Endorsement as a dict:
+Amendment as a dict:
 {chr(10).join(context_files)}
 
-`apps.policycore.core.endorsements.submit_endorsement(policy_number: str,
-endorsement_type: str, requested_change: str, effective_date: str,
+`repos.policycore.core.amendments.submit_amendment(policy_number: str,
+amendment_type: str, requested_change: str, effective_date: str,
 contact_phone: str, contact_email: str, priority: str = "Standard") ->
-Endorsement` is the only function that creates an endorsement.
-`apps.policycore.core.db.list_endorsements(policy_number: str) -> list[Endorsement]`
-returns `Endorsement` dataclass instances — access fields with plain
-attribute access (`endorsement.priority`), never dict-style access.
-`apps.policycore.core.seed.reseed() -> None` reseeds known synthetic policies (e.g.
+Amendment` is the only function that creates an amendment.
+`repos.policycore.core.db.list_amendments(policy_number: str) -> list[Amendment]`
+returns `Amendment` dataclass instances — access fields with plain
+attribute access (`amendment.priority`), never dict-style access.
+`repos.policycore.core.seed.reseed() -> None` reseeds known synthetic policies (e.g.
 "POL-10001") — call it directly by that name in an autouse fixture, no
 aliasing needed.
 
@@ -288,8 +290,8 @@ Return structured JSON only with this exact shape:
 }}
 
 Use pytest, reseed the mock app database before each test via an autouse
-fixture, and import directly from apps.policycore.core.endorsements, apps.policycore.core.db,
-and apps.policycore.core.seed using the exact names given above. The test file should
+fixture, and import directly from repos.policycore.core.amendments, repos.policycore.core.db,
+and repos.policycore.core.seed using the exact names given above. The test file should
 be deterministic and have no LLM calls or network access."""
 
 
@@ -344,11 +346,112 @@ Return structured JSON only with this exact shape:
 }}
 
 Use plain pytest functions importing `decide`/`payable` directly from
-apps.claimsportal.claims_service.claim_rules. Plain unit tests of claim_rules
+repos.claimsportal.claims_service.claim_rules. Plain unit tests of claim_rules
 only: no FastAPI TestClient, no server startup, no mocking, no network. Use
 modern built-in generics for any type hint (never `typing.Optional` etc.) and
 keep every line at 100 characters or fewer. The test file must be
 deterministic."""
+
+
+def build_enroldirect_prompt(cr_text: str, *, target: Target) -> str:
+    """Prompt for CR-2026-045's generated pytest suite.
+
+    Plain unit tests of the gate, built from `Applicant`/`GroupContract`
+    literals rather than the seeded directory — no HTTP, no app startup, so it
+    stays fast and deterministic and does not double up on
+    `tests/test_regression_enroldirect.py`, which already covers the seeded
+    book through the API. This suite tests the change; that one tests what the
+    change must not break.
+    """
+    test_path = target.testgen_allowlist[0]
+
+    reference = """Tests should cover:
+- effective_category("PROSPECT") is the value of PROSPECT_POLICY, and
+  effective_category is the identity for "MEMBER" and "GUEST"
+- preference_for_category("PROSPECT") resolves through PROSPECT_POLICY. Write
+  it exactly as:
+      expected = MEMBER_ACCESS if PROSPECT_POLICY == TREAT_AS_MEMBER else GUEST_ACCESS
+      assert preference_for_category(PROSPECT) == expected
+  PROSPECT_POLICY is module-level configuration: READ it, never reassign it.
+  Do not use `global`, monkeypatch, setattr, or any fixture that changes it —
+  a test that mutates it is testing a setting the running app does not have
+- preference_for_category is unchanged for "MEMBER" and "GUEST", and still
+  returns None for an unrecognised category
+- a prospect on an ACTIVE contract enabling the resolved preference is granted,
+  and the decision's authorisingPreference is that preference
+- a prospect on an ACTIVE contract that enables only the OTHER preference is
+  denied, with requiredPreference set and authorisingPreference None
+- a prospect on a LAPSED contract is denied at the contract gate even when the
+  contract enables both preferences — gate order, and it must not depend on
+  the policy
+- prospectPolicyApplied is PROSPECT_POLICY on a prospect's decision and None on
+  a member's and a guest's
+"""
+
+    context_files = []
+    context_paths = [
+        rel_path
+        for rel_path in target.codegen_allowlist
+        if rel_path.endswith(("applicants.py", "eligibility.py"))
+    ]
+    for rel_path in context_paths:
+        path = REPO_ROOT / rel_path
+        content = path.read_text(encoding="utf-8") if path.exists() else ""
+        context_files.append(f"--- {rel_path} ---\n{content}")
+
+    return f"""Change request:
+{cr_text}
+
+Current generated app files are already applied. Generate only this test file:
+{test_path}
+
+{reference}
+
+Exact API to test — this is a fixed, known contract, do not guess names and
+do not add fallback logic:
+{chr(10).join(context_files)}
+
+Return structured JSON only with this exact shape:
+{{
+  "files": [
+    {{"path": "{test_path}", "content": "<complete replacement>"}}
+  ]
+}}
+
+Use plain pytest functions. Start the file with exactly these four imports,
+and add nothing else — every name the tests below need is in them:
+
+from repos.enroldirect.applicants import (
+    GUEST, MEMBER, PROSPECT, PROSPECT_POLICY, TREAT_AS_GUEST, TREAT_AS_MEMBER, Applicant
+)
+from repos.enroldirect.directory import GroupContract
+from repos.enroldirect.eligibility import (
+    ACTIVE, check_eligibility, effective_category, preference_for_category
+)
+from repos.enroldirect.preferences import GUEST_ACCESS, MEMBER_ACCESS
+
+Construct real `Applicant` and `GroupContract` instances inline in each test.
+Do NOT define a mock or stub contract class, and do NOT use
+`directory.CONTRACTS` or `directory.APPLICANTS` — the class is the contract,
+the seeded book is not, so a change to the seed cannot break this suite.
+`GroupContract(contractNumber=..., sponsorName=..., status=...,
+enabledPreferences=(...))` takes a TUPLE of preferences. `Applicant` is
+positional: (applicantId, fullName, contractNumber, category, hasActiveBenefit),
+and its `__post_init__` rejects a MEMBER with no active benefit and a PROSPECT
+holding one — construct prospects with hasActiveBenefit=False and members with
+True. An applicant's contractNumber must match the contract's or the gate
+raises.
+Assert against the imported constants (MEMBER_ACCESS, GUEST_ACCESS, ACTIVE),
+never against a string literal of the constant's own name.
+No FastAPI TestClient, no server startup, no mocking, no network. Use modern
+built-in generics for any type hint (never `typing.Optional` etc.) and keep
+every line at 100 characters or fewer. The test file must be deterministic.
+
+Write every import as valid Python. A multi-name import that needs wrapping
+must use parentheses — `from m import (A, B, C)` across lines, never
+`from m import A, B,` with a trailing comma and no parentheses, which is a
+SyntaxError. Prefer one unwrapped import per module where the names fit on a
+single line under 100 characters."""
 
 
 def _parse_files_response(response: str) -> dict[str, str]:

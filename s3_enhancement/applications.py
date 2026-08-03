@@ -24,7 +24,7 @@ Two things this deliberately encodes:
   questions is the point; conflating them is how automation gets pointed at
   the wrong repo.
 
-- **A CI identifies an application, not a change.** `apps/policycore/` hosts two
+- **A CI identifies an application, not a change.** `repos/policycore/` hosts two
   registered targets (CR-2026-041 and CR-2026-042); both belong to the one
   `POLICY_CORE` application. So routing narrows a ticket to an application and
   its candidate targets, and the CR text picks which change within it — a CI
@@ -131,7 +131,7 @@ POLICY_CORE = Application(
     jira_project_key="AMS",
     component_team="App Support — PolicyCore",
     tech_stack="Python / FastAPI + SQLite",
-    repo_path="apps/policycore",
+    repo_path="repos/policycore",
 )
 register_application(POLICY_CORE)
 
@@ -148,7 +148,7 @@ CLAIMS_PORTAL = Application(
     jira_project_key="AMS",
     component_team="App Support — ClaimsPortal",
     tech_stack="Python / FastAPI",
-    repo_path="apps/claimsportal",
+    repo_path="repos/claimsportal",
 )
 register_application(CLAIMS_PORTAL)
 
@@ -176,6 +176,37 @@ DOCUMENT_HUB = Application(
     tech_stack="React / Node",
 )
 register_application(DOCUMENT_HUB)
+
+# EnrolDirect carried no `repo_path` until CR-2026-045 was written and
+# `targets.ENROLDIRECT_PROSPECT_ACCESS` registered against it. That gap was
+# deliberate while it lasted: `automation_available` answers "can we act on
+# this ticket", not "is the source on disk", so declaring a repo with no target
+# behind it would have offered a code-generation beat that failed the moment a
+# presenter clicked it. Both halves now exist, which is what makes this row
+# automatable — `RouteDecision.automation_available` still checks for both, so
+# removing either one puts it back to routing-only rather than to a broken beat.
+#
+# Owned by the PolicyCore support team rather than a team of its own: it is the
+# enrolment channel of the policy administration estate, and inventing an
+# assignment group nobody is on would break `register_application`'s own rule.
+ENROL_DIRECT_ID = "enroldirect"
+
+ENROL_DIRECT = Application(
+    app_id=ENROL_DIRECT_ID,
+    display_name="EnrolDirect",
+    business_service="Online Enrolment",
+    ci_names=(
+        "EnrolDirect",
+        "Enrol Direct",
+        "EnrolDirect API",
+        "MapleSure Online Enrolment",
+    ),
+    jira_project_key="AMS",
+    component_team="App Support — PolicyCore",
+    tech_stack="Python / FastAPI",
+    repo_path="repos/enroldirect",
+)
+register_application(ENROL_DIRECT)
 
 
 def all_applications() -> tuple[Application, ...]:

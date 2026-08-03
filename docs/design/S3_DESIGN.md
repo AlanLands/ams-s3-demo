@@ -1,6 +1,6 @@
 # S3 (Enhancement Delivery) — Technical Design
 
-**Status:** current as of 2026-07-27 · **Scope:** the whole standalone S3 build in this repo
+**Status:** current as of 2026-08-03 · **Scope:** the whole standalone S3 build in this repo
 **Audience:** engineers extending this codebase, and presenters who need to explain what
 the machine is actually doing on stage.
 
@@ -20,17 +20,37 @@ ticket → clarify → impact analysis + effort → propose code → review diff
        → design doc → hand off to QA → generate tests → run → mutation check → release notes
 ```
 
-The demo insurer is fictional (**MapleSure Insurance**). Three registered CRs exercise the
-same pipeline against two different applications in two different languages:
+The demo insurer is fictional (**MapleSure Insurance**) and the domain is group retirement
+and group benefits — a *plan sponsor* holds a *group contract*, *plan members* enrol under
+it, a change to an in-force contract is an *amendment*, and what the sponsor pays is a
+*contribution*. Four registered CRs exercise the same pipeline against three different
+applications:
 
-| Ticket | CR | Target app | Language | What the CR does |
-|---|---|---|---|---|
-| AMS-101 | CR-2026-041 | `apps/policycore/` (MapleSure portal) | Python | Add a coverage-tier upgrade capability (audience picks the tier name live) |
-| AMS-102 | CR-2026-042 | `apps/policycore/` | Python | Add a `priority` field to the endorsement form |
-| AMS-103 | CR-2026-043 | `apps/claimsportal/` (ClaimsPortal) | Python / FastAPI | Add deductible handling to claims decisioning |
+| Ticket | CR | Target app | What the CR does |
+|---|---|---|---|
+| AMS-101 | CR-2026-041 | `repos/policycore/` (MapleSure plan-administration portal) | Add a plan-tier upgrade capability (audience picks the top tier's name live) |
+| AMS-102 | CR-2026-042 | `repos/policycore/` | Add a `priority` field to the amendment request form |
+| AMS-103 | CR-2026-043 | `repos/claimsportal/` (ClaimsPortal, two FastAPI services) | Add deductible handling to claims decisioning |
+| AMS-1045 | CR-2026-045 | `repos/enroldirect/` (EnrolDirect) | Settle which access preference a prospect member resolves to at the enrolment gate |
+
+All four are Python today; nothing in the pipeline assumes that (see §7.2 and §8).
 
 The point of AMS-103 is architectural, not narrative: it proves the pipeline is not welded
-to one repo, one language, or one test runner.
+to one repo or one test runner. AMS-1045 makes a second architectural point — its baseline
+is a **removal**, not a missing feature. The checked-in state is the moment after the impact
+analysis and before the gate acts on it, and `impact.py` is handed to the model as context
+while being explicitly off its edit list, so "read the analysis, don't rewrite it" is
+enforced rather than requested.
+
+AMS-1045's key is derived, not seeded: any `crs/CR-*.md` file becomes a board ticket
+automatically (§3.1).
+
+### Two folders, and why the split is load-bearing
+
+`repos/` holds the repositories S3 **changes**; `apps/` holds the console and launch
+scripts that **do the changing**. A directory dropped into `repos/` with a
+`.s3targets.json` manifest registers itself as a target at import, with no code edit —
+the contract is documented once, in [`../../repos/README.md`](../../repos/README.md).
 
 ### Design goals, in priority order
 
@@ -57,6 +77,7 @@ graph TB
     API["FastAPI<br/>api/main.py"]
     AUTH["api/auth.py + api/session.py<br/>cookie session, in-memory"]
     R["api/routers/s3.py<br/>~25 endpoints, no business logic"]
+    ADM["api/routers/admin.py<br/>manager-only, require_manager"]
   end
 
   subgraph "s3_enhancement/ — the pipeline"
@@ -66,7 +87,10 @@ graph TB
     TG[testgen.py]
     TR[testrun.py<br/>run · mutation]
     DG[docgen.py<br/>design doc · release notes]
-    TGT[targets.py<br/>target registry]
+    TGT["targets.py<br/>target registry"]
+    DISC["discovery.py<br/>.s3targets.json auto-registration"]
+    CRI["cr_intake.py<br/>crs/*.md → board ticket"]
+    AO["admin_ops.py<br/>resets · port probes · onboarding"]
     HAR[harness.py<br/>optional live agent-CLI beat]
   end
 
@@ -79,20 +103,24 @@ graph TB
     TEL[telemetry.py]
   end
 
-  subgraph Targets
-    MA["apps/policycore/<br/>Streamlit portal + SQLite"]
-    SP["apps/claimsportal/<br/>2 Python/FastAPI services"]
+  subgraph "repos/ — what S3 changes"
+    MA["repos/policycore/<br/>Streamlit portal + SQLite"]
+    SP["repos/claimsportal/<br/>2 Python/FastAPI services"]
+    ED["repos/enroldirect/<br/>Python/FastAPI"]
   end
 
   UI -->|"/api/*, httponly cookie"| API --> AUTH --> R
+  API --> ADM --> AO
   R --> AN & CG & TG & TR & DG
+  R --> CRI
   AN & CG & TG --> REL --> VS
   AN & CG & TG & DG --> LLM
   REL --> GL
   R --> JR & TE
   LLM --> TEL
-  CG -->|"apply (only writer)"| MA & SP
-  TR -->|pytest / mvn| MA & SP
+  CG -->|"apply (only writer)"| MA & SP & ED
+  TR -->|pytest| MA & SP & ED
+  DISC -.->|"manifests"| TGT
   TGT -.->|config| REL & CG & TG & TR
 ```
 
@@ -136,9 +164,43 @@ target.stream_cache_key("codegen")    # → "s3_codegen"                        
 
 **What a `Target` does *not* generalize:** the codegen/testgen *prompts* and *structural
 validators* are per-CR business logic (exact API names, exact error wording, backward-compat
-rules). Onboarding a real fourth target means writing its prompt/validator pair, not just a
-registry entry. `codegen._propose_change_once` dispatches on `cache_namespace` to pick one
-of three prompt builders today.
+rules). `codegen._propose_change_once` dispatches on `cache_namespace` to pick one of four
+prompt builders today, and there are four hand-written file-set validators to match.
+
+### 3.1 Registration without a code edit
+
+Two things a real onboarding needs, and neither should require editing this repo:
+
+**`discovery.py` — the repo.** A directory under `repos/` carrying a `.s3targets.json`
+manifest is turned into `Target`s and registered at import. The manifest is required rather
+than inferred because `codegen_allowlist` (the blast radius), `core_files`,
+`regression_paths` (the suite the pipeline is forbidden to write to) and `mutations` (which
+quote generated code verbatim) are all *decisions*, not facts recoverable from source —
+guessing any of them either widens the blast radius silently or makes the "the AI never
+touched the independent check" claim untrue. A manifest that exists but cannot be parsed
+**raises at import**; it is not skipped, because a repo shipping a manifest is asking to be
+registered and a silent skip presents as "S3 didn't pick up my repo" with nothing to look
+at. The full contract is in [`../../repos/README.md`](../../repos/README.md), documented
+there once so it cannot drift between two copies.
+
+A discovered target gets relevance scoping, CR→target routing, propose/apply/revert, the
+regression beat and the mutation beat. It does *not* get a committed replay recording —
+there is nothing to record against until its CR has run once, so its first codegen run is a
+live call that records itself — and it does not get a bespoke structural validator; it falls
+through to the generic `_validate_file_set`. Both are honest defaults. The four built-in
+targets stay declared by hand in `targets.py` precisely because they own those bespoke
+validators, and built-ins win on an id clash while two discovered repos colliding still
+raises.
+
+**`cr_intake.py` — the ticket.** A `.md` file dropped into the top-level `crs/` becomes a
+board row with nobody seeding a Jira ticket for it. The key is a pure function of the CR
+identifier (`CR-2026-045` → `AMS-1045`), because there is nowhere to persist a counter that
+would survive `demo/reset_s3.sh`, and a key that changed between two board loads would
+strand every event already recorded against the old one. Derived keys start at AMS-1000: the
+seeded demo tickets (AMS-098, AMS-101..104) and `jira_client._synthetic_issue`'s replay keys
+both live in AMS-100..999, so the band is provably collision-free and still readable from the
+back of the room. The ticket lands **unassigned**, which routes it to a manager. Nothing in
+the module calls an LLM, touches Jira, or writes anything — the router owns those decisions.
 
 ### File paths are a scoring input — never move a target
 
@@ -150,11 +212,19 @@ committed codegen recordings — the beat then dies with
 `LLMError: codegen returned unexpected file set`, in replay mode, offline, with no live
 fallback. **Moving a target is a path-rewrite across code and recordings, not a rename.**
 
-Done once, for the `apps/` restructure on 2026-07-28. The recordings carry target paths
-twice — as the returned file keys, and inside the generated code's own `import`
-statements — so both had to be rewritten together. Both targets were then re-verified
-generate → apply → revert. A live re-record was not required, which is a weaker
+Done twice. First for the `apps/` restructure on 2026-07-28; then on 2026-08-03, moving all
+three target repos out of `apps/` into the new `repos/` drop folder — 128 files rewritten
+across code, docs and recordings together. The recordings carry target paths twice, as the
+returned file keys and inside the generated code's own `import` statements, so both have to
+be rewritten in the same pass. Both times every target was re-verified generate → apply →
+revert afterwards, and **both times a live re-record was not required** — a weaker
 constraint than this section previously assumed.
+
+Two traps in the second move passed a `grep` and broke at run time: paths built as split
+literals (`REPO_ROOT / "apps" / "policycore"`) are invisible to an `apps/policycore`
+search, and files with unusual extensions (`.env.example`, `deploy/aws/*.service`) fall out
+of an extension allowlist. Both bit on the first pass. Verify with an end-to-end run, not
+with grep.
 
 ---
 
@@ -163,9 +233,12 @@ constraint than this section previously assumed.
 This is the heart of the technical story: *how does the AI decide which part of a large
 codebase a change request touches, without reading all of it?*
 
-`apps/policycore/` contains **56 discoverable source files** — 6 real Python files and 50 Java
-"decoy" files spread across 6 fictional legacy subsystems, each with its own `DESIGN.md`.
-The funnel's job is to get from 56 to 4 without ever opening the 50.
+`repos/policycore/` contains **58 discoverable source files** — 8 real Python files and 50
+Java "decoy" files spread across 6 fictional legacy subsystems, each with its own
+`DESIGN.md`. A seventh subsystem doc, `enrolment/DESIGN.md`, is *not* a decoy: it covers
+real Python the portal uses, and it is there so the screen has to make a genuine judgement
+rather than only sorting Java from Python. The funnel's job is to get from 58 to 4 without
+ever opening the 50.
 
 ```mermaid
 flowchart TD
@@ -207,8 +280,8 @@ for whichever backend actually served the request.
 
 | Stage | Constant | Embedding floor | TF-IDF floor | Measured decoy ceiling |
 |---|---|---|---|---|
-| Subsystem screen | `_SUBSYSTEM_*_MIN_SCORE_DEFAULT` | **0.45** | 0.05 | 0.336 (settlement, the closest decoy) vs ≤0.012 TF-IDF |
-| File ranking | `_FILE_*_MIN_SCORE_DEFAULT` | **0.55** | 0.15 | 0.4501 (`apps/policycore/core/claims.py` — domain-adjacent, not the subject) |
+| Subsystem screen | `_SUBSYSTEM_*_MIN_SCORE_DEFAULT` | **0.45** | 0.05 | 0.354 (settlement, the closest decoy) vs ≤0.012 TF-IDF |
+| File ranking | `_FILE_*_MIN_SCORE_DEFAULT` | **0.55** | 0.15 | 0.459 (`repos/policycore/core/claims.py` — domain-adjacent, not the subject) |
 
 Both floors sit **above** the empirically measured decoy ceiling with margin, but are a
 genuinely low bar otherwise: a subsystem or file that shares real terms with the CR clears
@@ -219,28 +292,31 @@ threshold only after re-running those.
 
 ### 4.2 Worked example — CR-2026-041, live numbers
 
+Measured 2026-08-03 against the checked-in baseline:
+
 ```
-candidate_pool_size ....... 56   (python 6, java 50)
+candidate_pool_size ....... 58   (python 8, java 50)
 
 Stage 1 — subsystem scores (embedding cosine, floor 0.45):
-  settlement    0.3295   ✗ screened out
-  underwriting  0.2927   ✗
-  audit         0.2903   ✗
-  risk          0.2751   ✗
-  billing       0.1986   ✗
-  reporting     0.1023   ✗
-  → in_scope = ()  · screened_out = all 6  · 50 Java files never opened
+  settlement    0.3539   ✗ screened out
+  enrolment     0.2203   ✗   (real Python, not a decoy — screened on merit)
+  risk          0.2071   ✗
+  billing       0.2022   ✗
+  underwriting  0.1945   ✗
+  audit         0.1486   ✗
+  reporting     0.1219   ✗
+  → in_scope = ()  · screened_out = all 7  · 50 Java files never opened
 
 Stage 2 — file scores over what survived (floor 0.55):
-  apps/policycore/core/claims.py        0.4448   ✗ below floor (domain-adjacent, not the subject)
-  apps/policycore/core/endorsements.py  0.3796   ✗
+  repos/policycore/core/claims.py        0.4590   ✗ below floor (domain-adjacent, not the subject)
+  repos/policycore/core/amendments.py    0.4413   ✗
   → extra_files = ()
 
 selected = the 4 core files:
-  apps/policycore/core/models.py · apps/policycore/core/db.py · apps/policycore/core/coverage.py · apps/policycore/app.py
+  repos/policycore/core/models.py · repos/policycore/core/db.py · repos/policycore/core/tiers.py · repos/policycore/app.py
 ```
 
-Note `apps/policycore/core/coverage.py` **does not exist yet** — the CR creates it. It's still a
+Note `repos/policycore/core/tiers.py` **does not exist yet** — the CR creates it. It's still a
 core file, passed to the prompt with empty content, and still required back in the response.
 
 ### 4.3 Screening is scoped to the target's own root
@@ -248,20 +324,20 @@ core file, passed to the prompt with empty content, and still required back in t
 `discover_subsystem_design_docs(root)` globs `root`, and every caller with a
 `Target` in hand passes `design_doc_root=target.root` through
 `select_relevant_files`. Only the target-less callers (tests, `tools/`, the legacy
-Streamlit console — all inherently mockapp-scoped) fall back to `apps/policycore/`.
+Streamlit console — all inherently mockapp-scoped) fall back to `repos/policycore/`.
 
 This matters because a root with no design docs must yield `{}`, which
-`screen_subsystems` turns into an empty screen that excludes nothing. The ClaimsPortal
-ClaimsPortal target has no `DESIGN.md` anywhere, so its screen is correctly empty
-and the UI says "no subsystem doc matched closely enough — this change used the
-CR's fixed core file list directly".
+`screen_subsystems` turns into an empty screen that excludes nothing. Neither the
+ClaimsPortal nor the EnrolDirect target has a `DESIGN.md` anywhere, so their screens are
+correctly empty and the UI says "no subsystem doc matched closely enough — this change used
+the CR's fixed core file list directly".
 
-*Fixed 2026-07-27.* Screening previously globbed `apps/policycore/` unconditionally, so
+*Fixed 2026-07-27.* Screening previously globbed `repos/policycore/` unconditionally, so
 the ClaimsPortal target was scored against mockapp's decoy subsystems and the panel
-reported `apps/policycore/systems/legacy_platform/settlement` (0.49) as the part of
+reported `repos/policycore/systems/legacy_platform/settlement` (0.49) as the part of
 the repo the change was matched to — for a change that never touched mockapp.
-Selection itself was unaffected (a `apps/policycore/systems/…/` prefix never matches a
-`apps/claimsportal/…` path), but the reported answer was wrong on stage.
+Selection itself was unaffected (a `repos/policycore/systems/…/` prefix never matches a
+`repos/claimsportal/…` path), but the reported answer was wrong on stage.
 `test_non_mockapp_target_is_never_screened_against_mockapp_subsystems` locks it in.
 
 ### 4.4 Two escape hatches that override scoring
@@ -269,8 +345,12 @@ Selection itself was unaffected (a `apps/policycore/systems/…/` prefix never m
 - **`core_files`** — always included as prompt context regardless of score, and always
   required back in the model's response (`verify_core_recall`, enforced in
   `codegen._validate_file_set`). This is the safety net that keeps the demo from flaking on
-  the files the CR is actually about.
-- **`never_extra`** — structurally off-limits regardless of score. `apps/policycore/core/seed.py`
+  the files the CR is actually about. EnrolDirect is the one target where the two lists
+  come apart: `impact.py` is a core file *and* absent from the `codegen_allowlist`, because
+  the model must read the analysis and must not edit it. Hence
+  `_validate_enroldirect_file_set`, which requires recall over the editable core files only
+  and fails loudly if a read-only file comes back modified.
+- **`never_extra`** — structurally off-limits regardless of score. `repos/policycore/core/seed.py`
   scores *highest* of any candidate (it's the file most densely full of `Policy` field
   names) but constructs `Policy(...)` with 6 fixed positional args, so it must never be
   editable. It still counts toward `candidate_pool_size` for an honest "size of this app"
@@ -307,8 +387,9 @@ The naive prompt is the scoped prompt with every file substituted for the select
 it differs from what was actually billed by exactly the unselected files' contents —
 everything else (system prompt, CR text, task instructions) is identical and must not be
 dropped from one side. *(The earlier implementation summed all file bodies alone, comparing
-a full prompt against bare source; on the ClaimsPortal target, where scoping selects 8 of 8 files,
-it reported the naive baseline as cheaper than what was actually spent.)*
+a full prompt against bare source; on the ClaimsPortal target, where scoping selects every
+file in the candidate pool, it reported the naive baseline as cheaper than what was actually
+spent.)*
 
 `estimate_tokens()` is a ~4-chars/token heuristic, **not** a real tokenizer — used only for
 the illustrative comparison. A billed number always comes from the provider's own reported
@@ -325,18 +406,18 @@ impact-analysis modal, cross-team impact), rather than drifting per page.
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Files in this app          Files used for this change               │
-│  56                         4                                        │
+│  58                         4                                        │
 │                                                                      │
 │  Which part of the repo the AI matched this change to                │
 │  ┌ no subsystem doc matched closely enough — this change used the    │
 │  │ CR's fixed core file list directly, not a subsystem guess.        │
 │                                                                      │
-│  ▸ 6 other subsystems screened out as not relevant (not part of      │
+│  ▸ 7 other subsystems screened out as not relevant (not part of      │
 │    this change)                                                      │
 │      ┌───────────────┐                                               │
-│      │ ~settlement~  │ ███░░░░░░░░░░░░░  0.33   ← struck through,    │
-│      │ ~underwriting~│ ██░░░░░░░░░░░░░░  0.29     60% opacity        │
-│      │ ~audit~       │ ██░░░░░░░░░░░░░░  0.29                        │
+│      │ ~settlement~  │ ████░░░░░░░░░░░░  0.35   ← struck through,    │
+│      │ ~enrolment~   │ ██░░░░░░░░░░░░░░  0.22     60% opacity        │
+│      │ ~risk~        │ ██░░░░░░░░░░░░░░  0.21                        │
 │      └───────────────┘                                               │
 │  ▸ Selected source files                                             │
 └──────────────────────────────────────────────────────────────────────┘
@@ -346,7 +427,7 @@ Design decisions baked into that rendering:
 
 - Each subsystem gets a **proportional bar** (`width = clamp(score, 0, 1) × 100%`, capped at
   160px) plus the raw score to 2dp. Scores are *shown*, not hidden behind a verdict — a
-  reviewer can see 0.33 was a near-miss and 0.10 was nowhere close.
+  reviewer can see 0.35 was a near-miss and 0.12 was nowhere close.
 - **Screened-out entries are collapsed by default**, struck through and dimmed, and labelled
   "not part of this change". Otherwise "why is a Java subsystem in my Python-only change?"
   is the first question a reviewer asks. In-scope rows use the accent colour; screened-out
@@ -363,8 +444,8 @@ Design decisions baked into that rendering:
 | otherwise | "Scoped context used ~N input tokens; a whole-app-context approach would have used ~M tokens — **3.4×** more." |
 
 The `<1.05` branch exists because the old code floored the multiplier at 1× and rendered the
-ClaimsPortal target's 8-of-8 selection as "1× fewer", which is dressing up a no-op. Multipliers
-below 10× show one decimal — "3×" quietly rounds a third of the saving away.
+ClaimsPortal target's whole-pool selection as "1× fewer", which is dressing up a no-op.
+Multipliers below 10× show one decimal — "3×" quietly rounds a third of the saving away.
 
 ---
 
@@ -537,7 +618,7 @@ sequenceDiagram
   D->>API: POST /s3/generate
   API->>CG: propose_change(tier, cr_text, target)
   CG->>CG: relevance funnel → selection
-  CG->>CG: build prompt (per-target: coverage | endorsement | spring)
+  CG->>CG: build prompt (per-target: tiers | amendment | claimsportal | enroldirect)
   CG->>CG: stream_complete(cache_key=target.stream_cache_key("codegen"))
   CG->>CG: parse JSON → validate file set → validate content
   CG->>CG: _drop_unchanged_files → _stage_files → _write_diff
@@ -553,7 +634,7 @@ sequenceDiagram
 
   D->>API: POST /s3/apply {proposal_id, file_path?}
   API->>FS: copy staged → repo (the ONLY writer)
-  API->>FS: post_apply_command subprocess (e.g. python -m apps.policycore.core.seed)
+  API->>FS: post_apply_command subprocess (e.g. python -m repos.policycore.core.seed)
   API-->>D: applied_files + post_apply {ok, steps[]}
 ```
 
@@ -575,19 +656,21 @@ every core file back), but review shouldn't show noise.
 |---|---|---|
 | Shape | all | valid JSON, `files` list, string `path`/`content` |
 | File set | all | core recall (`verify_core_recall`) + nothing outside `selection.selected` |
-| Python content | `.py` (all three targets) | `ast.parse`, no legacy `typing.List/Dict/Optional` (ruff UP006/UP035) |
+| Python content | `.py` (all four targets) | `ast.parse`, no legacy `typing.List/Dict/Optional` (ruff UP006/UP035) |
 | Safety | all | denylist (`real client`, `end client`, `.env`, `api_key`, `secret`) + secret-shaped regex (`sk-…`, `AKIA…`, PEM headers) |
-| CR-2026-041 | `coverage.py`, `models.py` | required public symbols `COVERAGE_TIERS`/`TIER_MULTIPLIERS`/`upgrade_coverage`; `Policy(...)` still constructible with 6 positional args |
-| CR-2026-042 | `models.py` | `Endorsement.priority` is the **last** field and **has a default** |
+| CR-2026-041 | `tiers.py`, `models.py` | required public symbols `PLAN_TIERS`/`TIER_MULTIPLIERS`/`upgrade_tier`; `Policy(...)` still constructible with 6 positional args |
+| CR-2026-042 | `models.py` | `Amendment.priority` is the **last** field and **has a default** |
 | CR-2026-043 | `claim_rules.py` etc. | `decide`/`payable` function defs exist (via `ast.walk`), required contract tokens; `policy.py`/`policy_client.py` carry `deductible` |
+| CR-2026-045 | `applicants.py`, `eligibility.py` etc. | core recall over the **editable** core files only, and a loud failure if the read-only `impact.py` comes back modified |
 
 The backward-compat check actually `exec`s the generated `models.py` and constructs a
 `Policy` with the exact 6 positional args `seed.py` uses — because `seed.py` is off the
-allowlist and would crash the app on startup otherwise. All three targets are pure Python
-since ClaimsPortal is Python, so `_validate_content` is a
-single `ast.parse` path with no per-language fork (the Java-specific `_validate_java_content`
-brace/package-declaration gate this table used to describe was deleted along with the
-non-Python target).
+allowlist and would crash the app on startup otherwise. All four targets are pure Python, so
+`_validate_content` is a single `ast.parse` path with no per-language fork (the Java-specific
+`_validate_java_content` brace/package-declaration gate this table used to describe was
+deleted along with the non-Python target). Nothing in the design assumes that stays true —
+adding a language means a `Target.language` branch here and a runner that emits JUnit XML,
+not a rewrite.
 
 ### 7.3 Two behaviours worth calling out
 
@@ -623,7 +706,7 @@ own.
    immediately — a test file is not a change to the product.
 2. **`POST /s3/tests/run`** — runs the target's own runner and parses **JUnit XML** into
    per-case results, so the console renders a checklist instead of a raw runner dump:
-   - The default (all three registered targets): `pytest <path> -v --junitxml=<tmp>
+   - The default (all four registered targets): `pytest <path> -v --junitxml=<tmp>
      -o junit_family=xunit2`
    - A target can instead declare an external `test_command`/`test_cwd` (an escape hatch for
      a non-Python target, unused today — ClaimsPortal's Maven/JUnit invocation used this path
@@ -644,7 +727,8 @@ own.
 
 All routes are under `/api` — deliberately, so a client route like `/s3` never collides with
 the backend router of the same name. Every route depends on `require_identity`, which 401s
-before any handler body runs.
+before any handler body runs; the admin routes and ticket assignment depend on
+`require_manager` on top of it.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -657,8 +741,11 @@ before any handler body runs.
 | POST | `/s3/generate` · `/s3/revise` · `/s3/add-file` · `/s3/apply` | the propose → review → apply loop |
 | POST | `/s3/design-doc` · `/s3/release-notes` | narrative artifacts |
 | POST | `/s3/tests/generate` · `/s3/tests/run` · `/s3/tests/mutation` · `/s3/tests` (legacy) | the test beats |
-| GET | `/s3/jira/board` · `/s3/jira/dependencies` · `/s3/ticket-events` | board, cross-team dependencies, activity feed |
-| POST | `/s3/jira/cross-team-ticket` · `/problem-record-ticket` · `/assign-ticket` · `/ticket-status` | the only Jira writes, all human-confirmed |
+| GET | `/s3/jira/board` · `/s3/jira/dependencies` · `/s3/ticket-events` | board (including rows derived from `crs/*.md`), cross-team dependencies, activity feed |
+| POST | `/s3/jira/cross-team-ticket` · `/problem-record-ticket` · `/ticket-status` | the only Jira writes, all human-confirmed |
+| POST | `/s3/jira/assign-ticket` | **manager only** — assign, reassign, or unassign |
+| GET | `/admin/status` · `/admin/reset/{scope}/preview` · `/admin/logs` | **manager only** — service probes, what a reset would do, log tails |
+| POST | `/admin/reset` · `/admin/services/{id}/{action}` · `/admin/repos/onboard` · DELETE `/admin/logs` | **manager only** — the admin panel's writes |
 | GET | `/s3/gitlab/projects` · POST `/s3/gitlab/projects/{id}/scope` · `/s3/gitlab/scope-auto` | read-only real-repo scoping beat |
 | POST | `/s3/chat/quick-impact` | free-text "how much would this cost" chat |
 | GET | `/s3/harness/latest` · `/s3/screenshots/{stage}` | optional agent-harness and before/after PNG beats |
@@ -671,13 +758,63 @@ tier name → **422**, missing precondition (no generated test file, no matching
 The router is deliberately **thin**: no business logic, every function it calls is the same
 one the original Streamlit view called.
 
+### 9.1 Assignment is a manager's decision, enforced server-side
+
+Assignment used to be set-once, and the "once" was a **UI-only** gate:
+`POST /s3/jira/assign-ticket` had no role check at all, so anything that could reach the
+endpoint could assign any ticket to anyone. It is now `require_manager`, and a manager can
+reassign or unassign as well as assign. Tickets derived from `crs/*.md` land unassigned
+precisely so this path is the one that routes them.
+
+Same rule as the release record's approvals and the commit gate: a claim about *who* is
+responsible is read and written server-side, never asserted by a client.
+
+### 9.2 The admin panel — what it refuses to do
+
+`/api/admin/*` over `s3_enhancement/admin_ops.py`. Four jobs the presenter would otherwise
+open a terminal for: reset demo state, clear logs, see and control the target apps, onboard
+a repo. Three rules shape the module, and the limits they produce are part of the design:
+
+- **A reset must never silently discard work.** Over a terminal `git checkout HEAD -- …` is
+  a considered act; over HTTP it is a button. Every source-restoring scope is previewed
+  against `git status` first and **refused with a 409 while the paths it would overwrite are
+  dirty**. Delete-only scopes touch nothing but generated state and stay allowed. There is
+  no "reset everything" scope — seven explicit ones (`policycore`, `claimsportal`,
+  `enroldirect`, `tickets`, `logs`, `proposals`, `caches`), and you name one.
+  `.cache/vectordb` is deliberately in none of them: rebuilding the embedding index can mean
+  live embedding calls, the opposite of what a mid-demo reset should risk.
+- **Never build a shell command by string interpolation.** Reset scripts run as
+  `[bash, <absolute path>]` with a fixed argument list and no shell; delete-only scopes are
+  reimplemented in Python and never shell out at all.
+- **Report what is true, not what was attempted.** `up` is a plain TCP connect to
+  `localhost:<port>` — no `ps`, no `lsof`, no `/proc` — so it survives the locked-down host
+  design goal 4 requires. After a start or stop the port is re-probed and the *probe*
+  decides `ok`, not the `Popen`/`kill` return. Where process control genuinely isn't
+  available, the answer is `ok: false` plus the exact command an operator should run. Same
+  posture `scm.py` takes with `simulated`.
+
+Two consequences worth stating out loud: **there is no service id for the console** — naming
+it is a 400, not an attempt, because it cannot restart the process serving the request — and
+**a written manifest needs a console restart** before the target registers, since discovery
+runs at import.
+
+The panel is also where an unrestorable reset surfaces before it runs. `demo/reset_s3.sh` and
+`reset_s3_endorsement.sh` restore with `git checkout HEAD -- repos/…`, which can only restore
+paths HEAD already has — so moving a target breaks them until the move is committed, and the
+checkout fails with "pathspec did not match". `head_missing_paths()` detects that with
+`git cat-file -e HEAD:<path>` and reports a named `reset_blocked_reason` instead of letting a
+raw git error out of a button; committing the move is the fix. The check is not tied to any
+one move — it is the standing guard for the next one. ClaimsPortal and EnrolDirect restore by
+copying their `.baseline/` snapshots and never depend on HEAD.
+
 ---
 
 ## 10. Frontend
 
-React 19 + Vite + TypeScript. Three pages (Login, Home, S3) plus shared components. The S3
-console is a **collapsible pipeline of stage cards**, minimized by default, with a stage that
-isn't unlocked yet unopenable:
+React 19 + Vite + TypeScript. Four pages — Login, Home, S3, and `/admin` — plus shared
+components. The S3 console is **one route per pipeline stage** (`/s3/board`, `/target`,
+`/generate`, `/design-doc`, `/tests`, `/release`) behind a persistent left-hand stage rail,
+with a stage that isn't unlocked yet unopenable:
 
 | Stage | Unlock condition |
 |---|---|
@@ -701,6 +838,25 @@ in separately, marks their ticket Done.
 `GET /s3/reset-marker` closes the loop with `demo/reset_s3.sh`: the marker changes only on
 reset, and the SPA drops its cached per-ticket state rather than showing results for a
 ticket the server no longer has any record of.
+
+`/admin` renders as four cards (`pages/Admin.tsx` + `pages/admin/`) mirroring §9.2: reset by
+scope, logs, services, onboard. It shows what a reset would restore and delete, and why it
+is blocked, *before* offering the button. Route-level protection is a convenience only —
+the API is the gate.
+
+### 10.1 Artifacts open in a modal
+
+Client feedback on the earlier build was that there was too much on screen at once: *"there
+is a lot of data on the screen… open it in a pop-up."* So the long AI-produced artifacts —
+release notes, deployment plan, design doc, scenario table, generated and executed test
+checklists, mutation diff, traceability matrix — render inside `Modal`
+(`pages/s3/components.tsx`) rather than expanding down the page. What stays in the main flow
+is what a presenter narrates: the action buttons, the verdict line, the token-cost line. The
+stage rail is unchanged.
+
+`Modal` is mount-to-open — the caller renders `{open && <Modal …/>}` — so focus handling and
+the escape key live in one place rather than in each stage. Adding a new artifact means
+adding a modal, not another expanding panel.
 
 ---
 
@@ -726,9 +882,13 @@ ticket the server no longer has any record of.
 
 ## 12. Verification
 
-- **`pytest tests/`** — 237 tests, ruff clean. Covers relevance scoring and threshold
+- **`pytest tests/`** — 679 tests, ruff clean. Covers relevance scoring and threshold
   behaviour, codegen validators and docstring preservation, clarity/gap/impact gates, test
-  parsing, target registry, API routes, and an explicit `test_autofix_no_git_writes.py`.
+  parsing, target registry, manifest discovery, CR intake, admin operations, API routes, and
+  the explicit `test_autofix_no_git_writes.py` / `test_s3_scm.py` guarantees. `tests/` also
+  holds the three targets' human-authored regression suites, which the pipeline is forbidden
+  to write to — `tests/test_s3_testrun.py` asserts they never appear in any allowlist, and
+  that assertion is the whole value of the regression beat.
 - **`tools/verify_s3_live.py`** — the live-demo rehearsal gate, in two layers:
   - *Architecture checks* (run offline with `--skip-live`): replay works with networking
     stubbed out entirely; a mid-stream provider failure falls back to replay invisibly; one
@@ -749,11 +909,18 @@ ticket the server no longer has any record of.
 
 ## 13. Extending it
 
-**Adding a new CR against an existing target root:** register a `Target` with a unique
-`cache_namespace`, add the CR template, write its prompt builder and structural validator
-pair, add a `Mutation`, warm the caches (`demo/warm_s3_cache.sh`), and add a
-`TICKET_TARGETS` entry in `S3.tsx`. Post-apply migrations are inherited from siblings on the
-same root automatically.
+**Onboarding a new repository — the no-code path.** Drop the source in as `repos/<name>/`,
+put its CRs in the top-level `crs/`, add `repos/<name>/.s3targets.json`, and keep its
+human-authored regression suite in the top-level `tests/` (anything ending `.py` under a
+repo root joins the codegen candidate pool, which would let the pipeline write to the one
+independent check that a CR broke nothing). That is the whole procedure; the manifest
+contract is in [`../../repos/README.md`](../../repos/README.md). Restart the console so
+discovery re-runs. The board picks the CRs up on its own.
+
+**Adding a new CR against an existing built-in target root:** register a `Target` with a
+unique `cache_namespace`, add the CR file, write its prompt builder and structural validator
+pair, add a `Mutation`, and warm the caches (`demo/warm_s3_cache.sh`). Post-apply migrations
+are inherited from siblings on the same root automatically.
 
 **Adding a new language:** set `Target.language`, `test_command`, and `test_cwd`; add a
 content validator branch in `codegen._validate_content`; confirm the runner emits JUnit XML
@@ -761,11 +928,20 @@ content validator branch in `codegen._validate_content`; confirm the runner emit
 
 **Known limitations / open items:**
 
-- Codegen prompts and validators are per-CR business logic — three targets means three
-  prompt builders and three validators. This is the main thing that would need real work to
-  scale to a 30-repo estate.
+- Codegen prompts and structural validators are per-CR business logic — four built-in
+  targets means four prompt builders and four validators. A discovered target falls through
+  to the generic validator, which is honest but weaker. This is the main thing that would
+  need real work to scale to a 30-repo estate.
+- A discovered target has no committed replay recording until its CR has been run once, so
+  its first codegen run is a live call. Warm it before presenting.
 - Sessions are single-process and in-memory; a multi-worker deployment needs a shared store.
 - `MODEL_PRICING_USD_PER_1M` is empty by design; cost totals read as unset until real rates
   are supplied.
 - Live codegen against a GitLab-hosted target is deliberately not supported — that path is
   read-only discovery/relevance preview, and nothing is ever written back to GitLab.
+- `demo/reset_s3.sh` and `demo/reset_s3_endorsement.sh` restore from `HEAD`, so they can only
+  restore paths HEAD already has: **a target move breaks them until it is committed** (§9.2).
+  The admin panel names the reason rather than failing halfway; the two `.baseline/`-based
+  resets never depend on HEAD.
+- `deploy/aws/` deploys the console and PolicyCore only — there are no systemd units for
+  ClaimsPortal's two services or EnrolDirect.

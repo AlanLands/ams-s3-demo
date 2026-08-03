@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
-# CR-2026-043 (ClaimsPortal target) between-rehearsals reset.
-# Mirrors demo/reset_s3.sh's job for the mockapp target: the pre-CR baseline
+# CR-2026-043 ("Benefit Claim Deductible Handling") between-rehearsals reset.
+# Mirrors demo/reset_s3.sh's job for the PolicyCore target: the pre-CR baseline
 # is restored from the committed-in-place snapshot at
-# apps/claimsportal/.baseline/ rather than `git checkout HEAD --`, since the
+# repos/claimsportal/.baseline/ rather than `git checkout HEAD --`, since the
 # generated claim_rules.py has no pre-CR counterpart to check out.
+#
+# Restoring by cp is also why this script still works while demo/reset_s3.sh
+# and demo/reset_s3_endorsement.sh are broken (they check out from HEAD, which
+# does not yet carry repos/ — see the note at the top of demo/reset_s3.sh).
+#
+# ClaimsPortal deliberately keeps its P&C-shaped vocabulary — claim,
+# deductible, annual maximum, policyNumber, holderName — through the
+# 2026-08-03 GRS reskin. It is correct group-benefits English, and the API
+# contract is frozen because the committed replay recording quotes it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -21,7 +30,7 @@ if [[ "$_current_branch" == feature/AMS-* ]] && ! git checkout main 2>/dev/null;
   echo "note: staying on '$_current_branch' — switching to main would conflict with local changes"
 fi
 
-CLAIMSPORTAL=apps/claimsportal
+CLAIMSPORTAL=repos/claimsportal
 BASELINE_FILES=(
   policy_service/policy.py
   policy_service/main.py
@@ -37,5 +46,5 @@ rm -f "$CLAIMSPORTAL/claims_service/claim_rules.py"
 rm -f tests/test_s3_claims_deductible.py
 
 echo "ClaimsPortal source baseline restored; generated files removed."
-echo "Note: staged proposals under s3_enhancement/out/ are shared with the mockapp target —"
+echo "Note: staged proposals under s3_enhancement/out/ are shared with the other targets —"
 echo "run demo/reset_s3.sh too for a full between-rehearsals reset."

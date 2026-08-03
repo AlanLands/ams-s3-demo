@@ -8,7 +8,7 @@
       "key": "AMS-101",
       "id": "10101",
       "self": null,
-      "summary": "CR-2026-041: Coverage-Upgrade Option",
+      "summary": "CR-2026-041: Plan Tier Upgrade Option",
       "status": "QA",
       "issue_type": "Task",
       "assignee": "Priya Nair"
@@ -17,7 +17,7 @@
       "key": "AMS-102",
       "id": "10102",
       "self": null,
-      "summary": "CR-2026-042: Endorsement Priority Field",
+      "summary": "CR-2026-042: Amendment Priority Field",
       "status": "In Progress",
       "issue_type": "Task",
       "assignee": "Ravi Kumar"
@@ -42,7 +42,7 @@
     },
     {
       "key": "AMS-104",
-      "summary": "Flag urgent endorsement requests (from Support Ops)",
+      "summary": "Flag urgent amendment requests (from Support Ops)",
       "status": "To Do",
       "assignee": "Ravi Kumar",
       "issue_type": "Task",

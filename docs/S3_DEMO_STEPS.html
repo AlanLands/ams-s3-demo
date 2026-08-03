@@ -116,7 +116,8 @@
   <p class="meta">
     Generated from <span class="mono">demo/DEMO_STEPS.md</span> ·
     repo <span class="mono">ams-s3-demo</span><br>
-    Companion docs: <span class="mono">apps/README.md</span> (what each application is) ·
+    Companion docs: <span class="mono">apps/README.md</span> (the console and the launch scripts) ·
+    <span class="mono">repos/README.md</span> (the target repositories, and onboarding one) ·
     <span class="mono">demo/DEMO_TEST_GUIDE.md</span> (per-scenario rehearsal script)
   </p>
 </header>
@@ -126,13 +127,25 @@ someone who has never run it before — if you already know the repo, you want
 <code>demo/DEMO_TEST_GUIDE.md</code> instead, which is the per-scenario rehearsal script.</p>
 <hr />
 <h2>1. What you are standing up</h2>
-<p>Four applications, each started by its own script under <code>apps/</code>, plus the S3
-tooling that drives them. You do <strong>not</strong> need all four for every beat.</p>
+<p>Five processes, each started by its own script under <code>apps/</code>, plus the S3
+tooling that drives them. You do <strong>not</strong> need all five for every beat.</p>
+<div class="callout"><span class="label">Two folders, and the split is the point</span>
+<p><code>repos/</code> holds the three <strong>target repositories</strong> — PolicyCore,
+ClaimsPortal, EnrolDirect. Those are what S3 <em>changes</em>. <code>apps/</code> holds
+the <strong>console and the launch scripts</strong>. Those are what does the changing.
+Scripts 2–5 below live in <code>apps/</code> but start code out of <code>repos/</code>,
+because starting the demo is a tooling job.</p>
+<p>Adding a fourth target is a drop-in: put the source in as
+<code>repos/&lt;name&gt;/</code>, add its CRs to the top-level <code>crs/</code>, add a
+<code>repos/&lt;name&gt;/.s3targets.json</code> manifest, and keep its regression suite in
+the top-level <code>tests/</code>. No edit to any registry file. The manifest contract and
+the reasoning are in <code>repos/README.md</code> — read that rather than this page for
+onboarding.</p></div>
 <table>
 <thead>
 <tr>
 <th>#</th>
-<th>Application</th>
+<th>Process</th>
 <th>Start</th>
 <th>Port</th>
 <th>Needed for</th>
@@ -141,38 +154,45 @@ tooling that drives them. You do <strong>not</strong> need all four for every be
 <tbody>
 <tr>
 <td>1</td>
-<td><strong>Console</strong> — FastAPI + React. The screen you present from.</td>
+<td><strong>Console</strong> — FastAPI + React. The screen you present from. Source in <code>apps/console/</code>.</td>
 <td><code>apps/run-console.sh</code></td>
 <td>8000 + 5173</td>
 <td>Every beat</td>
 </tr>
 <tr>
 <td>2</td>
-<td><strong>PolicyCore</strong> — the client's policy portal (Streamlit). The window the audience watches change.</td>
+<td><strong>PolicyCore</strong> — the client's plan-administration portal (Streamlit), from <code>repos/policycore/</code>. The window the audience watches change.</td>
 <td><code>apps/run-policycore.sh</code></td>
 <td>8501 (open <code>/sl_policycore</code>)</td>
 <td>CR-2026-041, CR-2026-042</td>
 </tr>
 <tr>
 <td>3</td>
-<td><strong>Policy-Service</strong> — ClaimsPortal policy side (Python/FastAPI).</td>
+<td><strong>Policy-Service</strong> — ClaimsPortal contracts side (Python/FastAPI), from <code>repos/claimsportal/policy_service/</code>.</td>
 <td><code>apps/run-policy-service.sh</code></td>
 <td>8081</td>
 <td>CR-2026-043</td>
 </tr>
 <tr>
 <td>4</td>
-<td><strong>Claims-Service</strong> — ClaimsPortal claims side (Python/FastAPI). Start after #3.</td>
+<td><strong>Claims-Service</strong> — ClaimsPortal claims side (Python/FastAPI), from <code>repos/claimsportal/claims_service/</code>. Start after #3.</td>
 <td><code>apps/run-claims-service.sh</code></td>
 <td>8082</td>
 <td>CR-2026-043</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>EnrolDirect</strong> — the online enrolment channel (Python/FastAPI), from <code>repos/enroldirect/</code>. Standalone; needs nothing but the venv.</td>
+<td><code>apps/run-enroldirect.sh</code></td>
+<td>8083</td>
+<td>CR-2026-045</td>
 </tr>
 </tbody>
 </table>
 <div class="callout"><span class="label">Open this one</span><p>The console UI is <code>http://localhost:5173</code>, not <code>:8000</code>.
 Port 8000 is the API the UI talks to.</p></div>
-<p>See <code>apps/README.md</code> for what each folder is and how it maps to a ServiceNow
-application.</p>
+<p>See <code>apps/README.md</code> for the launch scripts and how each repo maps to a
+ServiceNow application, and <code>repos/README.md</code> for the repositories themselves.</p>
 <hr />
 <h2>2. Prerequisites</h2>
 <table>
@@ -215,14 +235,14 @@ cp .env.example .env
 #    then edit .env — see section 4
 
 # 4. Seed the PolicyCore database
-python -m apps.policycore.core.seed
+python -m repos.policycore.core.seed
 
 # 5. Confirm the install
-python -m pytest -q          # expect: 529 passed
+python -m pytest -q          # expect: 679 collected, all passing
 </code></pre>
 <div class="callout"><span class="label">Sanity check</span><p>If <code>pytest</code> passes, the wiring is correct. It exercises
-the routing registry, the code-review flow and both replay targets without
-needing an LLM or any of the four applications running.</p></div>
+the routing registry, the repo-discovery contract, the code-review flow and all four
+replay targets without needing an LLM or any of the five processes running.</p></div>
 <hr />
 <h2>4. Pointing it at your LLM</h2>
 <p>Edit <code>.env</code>. Pick <em>one</em> provider block.</p>
@@ -289,22 +309,39 @@ presenting — otherwise a slow or unreachable model stalls a beat mid-demo.</p>
 <hr />
 <h2>5. Reset before every rehearsal or demo</h2>
 <p>The demo mutates real source files and the SQLite database. Reset returns
-everything to the pre-CR baseline. Run all three <strong>in this order</strong> — the
-endorsement reset must come after <code>reset_s3.sh</code>, because that script reseeds
-the database the endorsement baseline then builds on.</p>
-<pre><code class="language-bash">demo/reset_s3.sh              # CR-2026-041 (PolicyCore coverage tier) + shared state
-demo/reset_s3_endorsement.sh  # CR-2026-042 (PolicyCore endorsement priority)
-demo/reset_s3_claimsportal.sh   # CR-2026-043 (ClaimsPortal deductible)
+everything to the pre-CR baseline. Run these <strong>in this order</strong> — the
+CR-042 reset must come after <code>reset_s3.sh</code>, because that script reseeds
+the database the CR-042 baseline then builds on.</p>
+<pre><code class="language-bash">demo/reset_s3.sh              # CR-2026-041 (PolicyCore plan tier) + shared state
+demo/reset_s3_endorsement.sh  # CR-2026-042 (PolicyCore amendment priority)
+demo/reset_s3_claimsportal.sh # CR-2026-043 (ClaimsPortal deductible)
+demo/reset_s3_enroldirect.sh  # CR-2026-045 (EnrolDirect prospect access)
 demo/warm_s3_cache.sh         # ALWAYS last — reset_s3.sh wipes .cache/llm
 </code></pre>
+<p><code>reset_s3_endorsement.sh</code> keeps its pre-reskin filename on purpose:
+teammates invoke it by name, so only its contents changed with the vocabulary.</p>
 <p>Expected final lines:</p>
-<pre><code class="language-text">S3 source baseline restored, mockapp reseeded, LLM cache cleared, and ticket timeline cleared.
-CR-2026-042 source baseline restored, mockapp reseeded, and LLM cache cleared.
+<pre><code class="language-text">S3 source baseline restored, PolicyCore reseeded, LLM cache cleared, and ticket timeline cleared.
+CR-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared.
 ClaimsPortal source baseline restored; generated files removed.
+EnrolDirect source baseline restored; generated files removed.
 </code></pre>
+<div class="callout"><span class="label">The two PolicyCore resets restore from HEAD</span>
+<p>They restore source with <code>git checkout HEAD -- repos/…</code>, so <strong>HEAD must
+already carry the paths they name</strong>. Move a target directory and both stop at the
+checkout with <em>"pathspec did not match"</em> until the move is committed — committing it
+is the whole fix, nothing in the scripts needs changing. The ClaimsPortal and EnrolDirect
+resets copy from their committed <code>.baseline/</code> snapshots, so they never depend on
+HEAD.</p></div>
+<h3>Or reset from the console</h3>
+<p>Log in as <strong>Manager</strong> and open <code>/admin</code>. Same scopes, no
+terminal, plus a preview of exactly what each one restores and deletes. It refuses
+(409) rather than overwriting a dirty tree, there is deliberately no "reset
+everything" scope, and it reports a path missing from HEAD up front as a named
+<code>reset_blocked_reason</code> instead of surfacing a raw git error out of a button.</p>
 <hr />
 <h2>6. Start the applications</h2>
-<p>One terminal per application. For the PolicyCore CRs you need only the first
+<p>One terminal per process. For the PolicyCore CRs you need only the first
 two.</p>
 <pre><code class="language-bash">apps/run-console.sh           # terminal 1 — API :8000 + UI :5173
 apps/run-policycore.sh        # terminal 2 — portal :8501/sl_policycore
@@ -312,7 +349,13 @@ apps/run-policycore.sh        # terminal 2 — portal :8501/sl_policycore
 # only for the ClaimsPortal CR (CR-2026-043):
 apps/run-policy-service.sh    # terminal 3 — :8081  (start before claims)
 apps/run-claims-service.sh    # terminal 4 — :8082
+
+# only for the EnrolDirect CR (CR-2026-045):
+apps/run-enroldirect.sh       # terminal 5 — :8083
 </code></pre>
+<p>A manager can also see and control processes 2–5 from <code>/admin</code> without a
+terminal. Not the console itself — it cannot restart the process serving the request,
+and naming it is a 400 rather than an attempt.</p>
 <p>Then open <code>http://localhost:5173</code> and log in. Any roster name works; passcodes
 are in <code>common/roster.py</code>.</p>
 <table>
@@ -367,6 +410,11 @@ need to reset between the two.</p>
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>0</td>
+<td><strong>The board already has a ticket for a CR nobody seeded</strong> — AMS-1045, unassigned</td>
+<td>A <code>.md</code> file dropped into <code>crs/</code> opens a ticket by itself, keyed off the CR id, and lands unassigned so it routes to the manager. That is the onboarding story being literally true rather than described</td>
+</tr>
 <tr>
 <td>1</td>
 <td>Open the ticket; routing panel appears above the analysis</td>
@@ -442,8 +490,20 @@ need to reset between the two.</p>
 <td><strong>Download the release record, attach it to the ticket</strong></td>
 <td>Everything the run proved, in one PDF — including what it could <em>not</em> prove</td>
 </tr>
+<tr>
+<td>14</td>
+<td><strong>Optional close, as Manager:</strong> <code>/admin</code> — service state, reset scopes, onboard a repo</td>
+<td>Everything that used to need a terminal mid-demo, behind a server-side manager check. Good place to answer "what would it take to point this at our repo?" with a screen instead of a paragraph</td>
+</tr>
 </tbody>
 </table>
+<div class="callout"><span class="label">One UI change to expect if you rehearsed on an older build</span>
+<p>Artifacts now open in a <strong>modal</strong> rather than rendering inline — release
+notes, deployment plan, design doc, scenario table, test checklists, mutation diff,
+traceability matrix. Action buttons, verdict lines and token-cost lines stay in the
+main flow, and the left-hand stage rail is unchanged. This came straight from the
+client's "there is a lot of data on the screen… open it in a pop-up" feedback, so it
+is worth naming as <em>their</em> change when it comes up.</p></div>
 <p>On beats 12-13: the deployment order is <strong>derived</strong>, not drafted — on
 CR-2026-043 the plan puts policy_service before claims_service because
 claims_service calls it, and says why. The release record is assembled from
@@ -480,10 +540,16 @@ the browser's own print-to-PDF, so the button always does something.</p>
 <p>Beats 7, 9 and 10 are the QA-facing half of the tests stage. Two things worth
 saying out loud when showing them:</p>
 <ul>
-<li>The regression suite (<code>tests/test_regression_policycore.py</code>,
-<code>tests/test_regression_claimsportal.py</code>) appears in <strong>no</strong> target's
-<code>testgen_allowlist</code>. The pipeline physically cannot write to it, which is
-what makes &quot;the pre-existing tests still pass&quot; a result rather than a claim.</li>
+<li>The regression suites — <code>tests/test_regression_policycore.py</code> (20 tests),
+<code>tests/test_regression_policycore_enrolment.py</code> (19),
+<code>tests/test_regression_claimsportal.py</code> (5) and
+<code>tests/test_regression_enroldirect.py</code> (24) — appear in <strong>no</strong> target's
+<code>testgen_allowlist</code> or <code>codegen_allowlist</code>, and
+<code>tests/test_s3_testrun.py</code> asserts it. The pipeline physically cannot write to
+them, which is what makes &quot;the pre-existing tests still pass&quot; a result rather than a
+claim. They also live in the top-level <code>tests/</code> rather than under a repo root,
+because anything ending <code>.py</code> under <code>repos/&lt;name&gt;/</code> joins the
+codegen candidate pool.</li>
 <li>In the matrix, only the scenario→test column is inferred, and it is
 deliberately conservative: an ambiguous pairing renders as &quot;no automated
 test&quot; rather than guessing. On CR-2026-043 two criteria legitimately land
@@ -504,11 +570,19 @@ the tool reports gaps instead of hiding them.</li>
 <tbody>
 <tr>
 <td><code>FOREIGN KEY constraint failed</code> during a reset or seed</td>
-<td>An old baseline whose <code>wipe_db()</code> predates the endorsements table. Fixed in the current scripts. If you hit it on an older checkout: <code>rm -f data/mockapp.db</code>, then re-run the reset.</td>
+<td>An old baseline whose <code>wipe_db()</code> predates the amendments table. Fixed in the current scripts. If you hit it on an older checkout: <code>rm -f data/mockapp.db</code>, then re-run the reset.</td>
+</tr>
+<tr>
+<td><code>pathspec 'repos/policycore/app.py' did not match</code> from a reset</td>
+<td>A target directory was moved and the move is not committed, so HEAD does not have those paths for the script to restore from. Commit the move. Nothing else fixes it; see section 5.</td>
 </tr>
 <tr>
 <td><code>codegen returned unexpected file set</code></td>
-<td>A target directory under <code>apps/</code> was renamed or moved. The replay recordings contain the exact paths. Restore the directory name — see the warning in <code>apps/README.md</code>.</td>
+<td>A repository under <code>repos/</code> was renamed or moved. The replay recordings contain the exact paths, both as file keys and inside the generated code's own <code>import</code> statements. Restore the directory name — see the warning in <code>repos/README.md</code>.</td>
+</tr>
+<tr>
+<td>A repo you dropped into <code>repos/</code> never shows up</td>
+<td>Either it has no <code>.s3targets.json</code>, or the console has not restarted since one was written. A manifest that exists but cannot be parsed <em>raises at import</em> rather than being skipped — so silence means "no manifest", not "bad manifest".</td>
 </tr>
 <tr>
 <td>A beat hangs, or fails mentioning your LLM URL</td>
@@ -537,16 +611,22 @@ the tool reports gaps instead of hiding them.</li>
 <ul class="check">
 <li><code>python -m pytest -q</code> passes</li>
 <li><code>.env</code> has your provider block filled in, and the section-4 one-liner returned a reply</li>
-<li>All three reset scripts ran clean, in order</li>
+<li>All four reset scripts ran clean, in order — or you know which of them is currently blocked and why</li>
 <li><code>demo/warm_s3_cache.sh</code> ran <em>after</em> the resets</li>
 <li>Console reachable at <code>:5173</code>; you are logged in</li>
 <li>PolicyCore reachable at <code>:8501/sl_policycore</code> in a second window</li>
 <li>For the ClaimsPortal CR: <code>:8081</code> and <code>:8082</code> both responding</li>
-<li>You have walked beats 1–13 once, end to end, on this machine</li>
+<li>For the EnrolDirect CR: <code>:8083</code> responding, and a prospect still refused at
+<code>POST /api/eligibility/check</code> — that refusal <em>is</em> the baseline</li>
+<li>You have walked beats 0–14 once, end to end, on this machine</li>
 </ul>
-<p class="footer-note">The four applications live under <code>apps/</code>; the AI pipeline that drives them is
-in <code>s3_enhancement/</code>, shared clients in <code>common/</code>, and presenter scripts in
-<code>demo/</code>. Do not rename directories under <code>apps/</code> — see <code>apps/README.md</code>.</p>
+<p class="footer-note">The three target repositories live under <code>repos/</code> — what S3
+changes; the console and the launch scripts live under <code>apps/</code> — what does the
+changing. The AI pipeline is in <code>s3_enhancement/</code>, shared clients in
+<code>common/</code>, change requests in <code>crs/</code>, and presenter scripts in
+<code>demo/</code>. Do not rename a directory under <code>repos/</code>: a repo's path is a
+scoring input and it is baked into the committed recordings, so moving one is a
+two-part rewrite, not a <code>mv</code>. See <code>repos/README.md</code>.</p>
 
 </body>
 </html>

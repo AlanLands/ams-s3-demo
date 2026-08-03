@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MapleSure — Group Contracts</title>
+<style>
+  :root {
+    --accent: #0e7490;
+    --accent-soft: #ecfeff;
+    --ink: #1e293b;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --bg: #f8fafc;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #164e63, #0e7490);
+    color: #fff; padding: 1.1rem 2rem;
+    display: flex; align-items: baseline; gap: .75rem;
+  }
+  header h1 { font-size: 1.25rem; font-weight: 700; }
+  header .team {
+    font-size: .8rem; background: rgba(255,255,255,.18);
+    padding: .2rem .6rem; border-radius: 999px; letter-spacing: .03em;
+  }
+  main { max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; }
+  .toolbar { display: flex; gap: .75rem; margin-bottom: 1.25rem; }
+  .toolbar input {
+    flex: 1; padding: .6rem .9rem; border: 1px solid var(--line);
+    border-radius: 8px; font-size: .95rem; background: #fff;
+  }
+  .toolbar input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .toolbar button {
+    padding: .6rem 1.1rem; border: none; border-radius: 8px;
+    background: var(--accent); color: #fff; font-size: .95rem; cursor: pointer;
+  }
+  .toolbar button:hover { filter: brightness(1.1); }
+  .card {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; box-shadow: 0 1px 3px rgba(15,23,42,.06);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: .8rem 1.1rem; }
+  th {
+    background: var(--accent-soft); color: var(--accent);
+    font-size: .75rem; text-transform: uppercase; letter-spacing: .06em;
+  }
+  tr + tr td { border-top: 1px solid var(--line); }
+  td.num { font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block; padding: .15rem .6rem; border-radius: 999px;
+    font-size: .75rem; font-weight: 600;
+  }
+  .badge.active { background: #dcfce7; color: #15803d; }
+  .badge.lapsed { background: #fee2e2; color: #b91c1c; }
+  .empty { padding: 2rem; text-align: center; color: var(--muted); }
+  footer { text-align: center; color: var(--muted); font-size: .8rem; margin: 1.5rem 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MapleSure Insurance</h1>
+  <span class="team">CONTRACTS TEAM</span>
+</header>
+<main>
+  <div class="toolbar">
+    <input id="search" type="text" placeholder="Filter by contract number, plan sponsor, or benefit…">
+    <button id="refresh">Refresh</button>
+  </div>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Contract #</th><th>Plan sponsor</th><th>Benefit</th><th>Status</th><th>Annual maximum</th></tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+<footer>policy-service (group contract lookup) · port 8081 · synthetic demo data</footer>
+<script>
+  const fmt = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
+  let policies = [];
+
+  function render() {
+    const q = document.getElementById("search").value.trim().toLowerCase();
+    const rows = document.getElementById("rows");
+    const shown = policies.filter(p =>
+      !q || [p.policyNumber, p.holderName, p.product].some(v => v.toLowerCase().includes(q)));
+    if (!shown.length) {
+      rows.innerHTML = '<tr><td colspan="5" class="empty">No matching contracts</td></tr>';
+      return;
+    }
+    rows.innerHTML = shown.map(p => `
+      <tr>
+        <td><strong>${p.policyNumber}</strong></td>
+        <td>${p.holderName}</td>
+        <td>${p.product}</td>
+        <td><span class="badge ${p.status === "ACTIVE" ? "active" : "lapsed"}">${p.status}</span></td>
+        <td class="num">${fmt.format(p.annualMaximum)}</td>
+      </tr>`).join("");
+  }
+
+  async function load() {
+    try {
+      policies = await (await fetch("api/policies")).json();
+    } catch {
+      document.getElementById("rows").innerHTML =
+        '<tr><td colspan="5" class="empty">Could not reach policy-service API</td></tr>';
+      return;
+    }
+    render();
+  }
+
+  document.getElementById("search").addEventListener("input", render);
+  document.getElementById("refresh").addEventListener("click", load);
+  load();
+</script>
+</body>
+</html>

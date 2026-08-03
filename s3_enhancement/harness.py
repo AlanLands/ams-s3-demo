@@ -4,7 +4,7 @@ Where codegen.py/testgen.py concatenate whole mockapp files into one prompt
 and ask for complete-file JSON replacements in a single call, this module
 shells out to a real headless coding-agent CLI (Claude Code `claude -p` or
 Codex CLI `codex exec`) against the actual repo: the harness reads only what
-it needs, edits apps/policycore/tests itself, and runs pytest itself, while a
+it needs, edits repos/policycore/tests itself, and runs pytest itself, while a
 presenter watches it happen live in a terminal.
 
 This is additive only — codegen.py, testgen.py, analyze.py, docgen.py, and
@@ -14,7 +14,7 @@ common/llm.py are not touched by this module and remain the deep fallback
 The harness's own exit code is never trusted as a success signal by itself —
 only three independent, objective post-run checks decide success:
 1. the working tree's touched-file set is a subset of EXPECTED_FILES,
-2. a fresh `pytest tests/test_s3_coverage_upgrade.py` run (not whatever the
+2. a fresh `pytest tests/test_s3_tier_upgrade.py` run (not whatever the
    harness itself claims it ran) exits 0,
 3. a content validator (denylist/secret scan, required public symbols, the
    exact ValueError wordings S4's talk-to-code demo depends on, and the
@@ -56,7 +56,7 @@ OUT_ROOT = REPO_ROOT / "s3_enhancement" / "out"
 _CACHE_ROOT = REPO_ROOT / "s3_enhancement" / "cache"
 REPLAY_PATH = _CACHE_ROOT / "harness_replay.json"
 
-EXPECTED_FILES: tuple[str, ...] = targets.MOCKAPP_COVERAGE_UPGRADE.harness_expected_files
+EXPECTED_FILES: tuple[str, ...] = targets.MOCKAPP_TIER_UPGRADE.harness_expected_files
 
 
 def _replay_path(target: Target) -> Path:
@@ -74,8 +74,8 @@ _SECRET_RE = re.compile(
     r"(sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)"
 )
 _DENYLIST = ("real client", "end client", ".env", "api_key", "api key", "secret")
-_REQUIRED_COVERAGE_SYMBOLS = ("COVERAGE_TIERS", "TIER_MULTIPLIERS", "upgrade_coverage")
-_REQUIRED_ERROR_SUBSTRINGS = ("Unknown coverage tier", "not found", "is already at")
+_REQUIRED_TIER_SYMBOLS = ("PLAN_TIERS", "TIER_MULTIPLIERS", "upgrade_tier")
+_REQUIRED_ERROR_SUBSTRINGS = ("Unknown plan tier", "not found", "is already at")
 
 
 class HarnessError(Exception):
@@ -103,9 +103,9 @@ def build_prompt(tier_name: str, cr_text: str) -> str:
 
 Audience-selected top tier name: {tier_name}
 
-Follow apps/policycore/CLAUDE.md (or apps/policycore/AGENTS.md — they are content-identical)
+Follow repos/policycore/CLAUDE.md (or repos/policycore/AGENTS.md — they are content-identical)
 in this repo exactly. It is the fixed contract for this change: the file
-scope, the exact COVERAGE_TIERS/TIER_MULTIPLIERS/upgrade_coverage API, the
+scope, the exact PLAN_TIERS/TIER_MULTIPLIERS/upgrade_tier API, the
 exact ValueError wordings, and the instruction to run pytest before
 finishing. Do not re-explore the rest of the repository beyond what that file
 points you to — the current file contents are already sufficient context."""
@@ -262,7 +262,7 @@ def _build_diff(
 
 def _run_pytest() -> subprocess.CompletedProcess:
     return subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/test_s3_coverage_upgrade.py", "-v"],
+        [sys.executable, "-m", "pytest", "tests/test_s3_tier_upgrade.py", "-v"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -270,22 +270,22 @@ def _run_pytest() -> subprocess.CompletedProcess:
 
 
 def _validate_content(tier_name: str) -> None:
-    coverage_path = REPO_ROOT / "apps/policycore/core/coverage.py"
-    if not coverage_path.exists():
-        raise HarnessError("harness run did not produce apps/policycore/core/coverage.py")
-    content = coverage_path.read_text(encoding="utf-8")
+    tiers_path = REPO_ROOT / "repos/policycore/core/tiers.py"
+    if not tiers_path.exists():
+        raise HarnessError("harness run did not produce repos/policycore/core/tiers.py")
+    content = tiers_path.read_text(encoding="utf-8")
 
     try:
-        tree = ast.parse(content, filename=str(coverage_path))
+        tree = ast.parse(content, filename=str(tiers_path))
     except SyntaxError as exc:
-        raise HarnessError(f"harness generated invalid Python for coverage.py: {exc}") from exc
+        raise HarnessError(f"harness generated invalid Python for tiers.py: {exc}") from exc
 
     lowered = content.lower()
     for forbidden in _DENYLIST:
         if forbidden in lowered:
-            raise HarnessError(f"harness generated forbidden string {forbidden!r} in coverage.py")
+            raise HarnessError(f"harness generated forbidden string {forbidden!r} in tiers.py")
     if _SECRET_RE.search(content):
-        raise HarnessError("harness generated secret-shaped content in coverage.py")
+        raise HarnessError("harness generated secret-shaped content in tiers.py")
 
     top_level_names = {
         node.id
@@ -296,38 +296,38 @@ def _validate_content(tier_name: str) -> None:
         for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
     }
-    missing = [name for name in _REQUIRED_COVERAGE_SYMBOLS if name not in top_level_names]
+    missing = [name for name in _REQUIRED_TIER_SYMBOLS if name not in top_level_names]
     if missing:
         raise HarnessError(
-            f"harness coverage.py missing required public symbol(s) {missing} "
+            f"harness tiers.py missing required public symbol(s) {missing} "
             f"— got {sorted(top_level_names)}"
         )
 
     for substring in _REQUIRED_ERROR_SUBSTRINGS:
         if substring not in content:
-            raise HarnessError(f"harness coverage.py missing required error wording {substring!r}")
+            raise HarnessError(f"harness tiers.py missing required error wording {substring!r}")
 
     if tier_name not in content:
-        raise HarnessError(f"harness coverage.py does not mention tier name {tier_name!r}")
+        raise HarnessError(f"harness tiers.py does not mention tier name {tier_name!r}")
 
     _validate_models_backward_compatible()
 
 
 def _validate_models_backward_compatible() -> None:
-    """apps/policycore/core/seed.py is off the harness's file scope and constructs
-    Policy(...) with 6 positional args (no coverage_tier) — this must still
-    work after the harness's models.py adds coverage_tier, or the app crashes
+    """repos/policycore/core/seed.py is off the harness's file scope and constructs
+    Policy(...) with 6 positional args (no plan_tier) — this must still
+    work after the harness's models.py adds plan_tier, or the app crashes
     on startup. Mirrors codegen.py's _validate_policy_backward_compatible."""
-    models_path = REPO_ROOT / "apps/policycore/core/models.py"
+    models_path = REPO_ROOT / "repos/policycore/core/models.py"
     models_content = models_path.read_text(encoding="utf-8")
     namespace: dict = {}
     try:
-        exec(compile(models_content, "apps/policycore/core/models.py", "exec"), namespace)  # noqa: S102
+        exec(compile(models_content, "repos/policycore/core/models.py", "exec"), namespace)  # noqa: S102
         policy_cls = namespace["Policy"]
         policy_cls("POL-TEST", "Test Sponsor Ltd.", "Health", 100.0, "2024-01-01", "Active")
     except Exception as exc:
         raise HarnessError(
-            "harness generated apps/policycore/core/models.py breaks apps/policycore/core/seed.py's "
+            "harness generated repos/policycore/core/models.py breaks repos/policycore/core/seed.py's "
             f"existing 6-positional-arg Policy(...) construction: {exc}"
         ) from exc
 

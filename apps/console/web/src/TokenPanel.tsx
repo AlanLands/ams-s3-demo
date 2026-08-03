@@ -12,7 +12,7 @@ export default function TokenPanel({
   }
 }) {
   if (panel.scoped_input_tokens == null) {
-    return <p style={{ color: 'var(--ams-ink-soft)', fontSize: '0.85rem' }}>Token count unavailable for this run.</p>
+    return <p style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-sm)' }}>Token count unavailable for this run.</p>
   }
   // "~" + suffix when the numbers are reconstructed from a replay recording
   // (chars/4 heuristic) rather than provider-reported usage.
@@ -21,7 +21,7 @@ export default function TokenPanel({
   const naive = panel.naive_input_tokens_estimate
   if (!naive) {
     return (
-      <p style={{ color: 'var(--ams-ink-soft)', fontSize: '0.85rem' }}>
+      <p style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-sm)' }}>
         Scoped context used {approx}{panel.scoped_input_tokens.toLocaleString()} input tokens
         {estimatedNote}.
       </p>
@@ -34,7 +34,7 @@ export default function TokenPanel({
   // multiplier at 1x, which rendered exactly that case as "1x fewer".
   if (ratio < 1.05) {
     return (
-      <p style={{ color: 'var(--ams-ink-soft)', fontSize: '0.85rem' }}>
+      <p style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-sm)' }}>
         Scoped context used {approx}{panel.scoped_input_tokens.toLocaleString()} input tokens
         {estimatedNote} — no saving over whole-app context here, since this change needed
         essentially every file in the app.
@@ -45,7 +45,7 @@ export default function TokenPanel({
   // estimate, "3x" quietly rounds a third of the saving away.
   const multiplier = ratio < 10 ? ratio.toFixed(1) : Math.round(ratio).toString()
   return (
-    <p style={{ color: 'var(--ams-ink-soft)', fontSize: '0.85rem' }}>
+    <p style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-sm)' }}>
       Scoped context used {approx}{panel.scoped_input_tokens.toLocaleString()} input tokens
       {estimatedNote}; a whole-app-context approach would have used ~{naive.toLocaleString()}
       {' '}tokens — {multiplier}x more.

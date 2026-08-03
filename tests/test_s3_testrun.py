@@ -170,8 +170,8 @@ def test_demo_targets_all_declare_a_mutation():
     from s3_enhancement import targets
 
     for target in (
-        targets.MOCKAPP_COVERAGE_UPGRADE,
-        targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
+        targets.MOCKAPP_TIER_UPGRADE,
+        targets.MOCKAPP_AMENDMENT_FIELD_ADD,
         targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
     ):
         assert target.mutations, f"{target.target_id} has no seeded mutation"
@@ -183,8 +183,8 @@ def test_demo_targets_all_declare_a_regression_suite():
     from s3_enhancement import targets
 
     for target in (
-        targets.MOCKAPP_COVERAGE_UPGRADE,
-        targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
+        targets.MOCKAPP_TIER_UPGRADE,
+        targets.MOCKAPP_AMENDMENT_FIELD_ADD,
         targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
     ):
         assert target.has_regression_suite, f"{target.target_id} has no regression suite"
@@ -249,3 +249,74 @@ def test_run_regression_prefers_a_declared_command(tmp_path):
 
     assert captured["command"] == ["mvn", "-q", "test"]
     assert captured["cwd"] == tmp_path
+
+
+# --- "the change was never applied" hint ------------------------------------
+
+
+def _case(name: str, status: str, message: str = ""):
+    from s3_enhancement import testrun as _tr
+
+    return _tr.TestCase(
+        name=name, classname="t", description=name, status=status, time_s=0.01, message=message
+    )
+
+
+def _run(cases, passed: bool):
+    """`SuiteRun.passed` is derived from the return code, not a field."""
+    from s3_enhancement import testrun as _tr
+
+    return _tr.SuiteRun(
+        output="", returncode=0 if passed else 1, cases=cases, duration_s=0.3
+    )
+
+
+def test_hint_fires_when_every_failure_is_a_missing_attribute():
+    """The exact shape of running the generated suite against the baseline:
+    the CR's new field simply is not there yet."""
+    from apps.console.api.routers.s3 import _unapplied_change_hint
+
+    run = _run(
+        [
+            _case("test_default_priority_standard", "failed",
+                  "AttributeError: 'Amendment' object has no attribute 'priority'"),
+            _case("test_persist_priority_urgent", "failed",
+                  "TypeError: submit_amendment() got an unexpected keyword argument 'priority'"),
+        ],
+        passed=False,
+    )
+    hint = _unapplied_change_hint(run)
+    assert hint is not None
+    assert "apply" in hint.lower()
+
+
+def test_hint_stays_silent_on_a_real_assertion_failure():
+    """A genuine regression must not be explained away as an unapplied change —
+    that would send a presenter down the wrong path live."""
+    from apps.console.api.routers.s3 import _unapplied_change_hint
+
+    run = _run(
+        [_case("test_totals", "failed", "AssertionError: assert 3 == 4")],
+        passed=False,
+    )
+    assert _unapplied_change_hint(run) is None
+
+
+def test_hint_stays_silent_on_a_mixed_run():
+    """One missing attribute among real assertion failures is not the pattern."""
+    from apps.console.api.routers.s3 import _unapplied_change_hint
+
+    run = _run(
+        [
+            _case("test_a", "failed", "AttributeError: no attribute 'priority'"),
+            _case("test_b", "failed", "AssertionError: assert 1 == 2"),
+        ],
+        passed=False,
+    )
+    assert _unapplied_change_hint(run) is None
+
+
+def test_hint_stays_silent_on_a_passing_run():
+    from apps.console.api.routers.s3 import _unapplied_change_hint
+
+    assert _unapplied_change_hint(_run([_case("test_a", "passed")], passed=True)) is None
