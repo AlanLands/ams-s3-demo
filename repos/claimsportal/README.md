@@ -93,3 +93,149 @@ Health checks: `http://localhost:8081/health`, `http://localhost:8082/health`.
 
 The policy_service URL used by claims_service can be overridden with the
 `POLICY_SERVICE_URL` environment variable (defaults to `http://localhost:8081`).
+
+---
+
+# Application knowledge
+
+> Sections marked **Illustrative** are representative of a group-benefits
+> estate of this shape, not measurements. These services have no measured
+> RPO/RTO, no financial impact study and no on-call rota behind them. Replace
+> them with SME input before treating them as authoritative. All names and
+> contacts are fictional.
+
+## 1. What it does
+
+Two cooperating services that take a benefit claim from submission to an
+accept/reject decision. They are separate processes with separate team
+consoles, and the split is the point: claim intake and contract data are owned
+by different teams.
+
+The flow: the Claims Team console fetches its contract dropdown live from
+Policy-Service, so an adjudicator can only file against a contract that exists.
+On submission, Claims-Service calls Policy-Service for the contract, applies
+the benefit rules — annual maximum and contract status among them — and
+returns **ACCEPTED** or **REJECTED** with the reason.
+
+Claims-Service reaches Policy-Service through `POLICY_SERVICE_URL`, never a
+hard-coded address, so the pair deploys to any host or port pairing.
+
+**The dependency direction is operationally load-bearing.** Claims-Service has
+a hard runtime dependency on Policy-Service; the reverse is not true. If
+Policy-Service is down, claim validation stops while contract lookup keeps
+working. Start Policy-Service first — starting Claims-Service alone yields a
+service that answers but fails every validation, which presents as a data fault
+rather than an ordering one.
+
+The client also distinguishes **"this contract does not exist"** (a routine
+rejection) from **"the contract service is unavailable"** (an incident).
+Collapsing the two would let an outage present as a batch of rejected claims.
+
+## 2. Intended users
+
+| User type | Relationship |
+|---|---|
+| Claims adjudicator | **Primary.** Files and reviews claims via the Claims Team console |
+| Contracts / policy administration team | **Primary.** Maintains contract records via the Contracts Team console |
+| Plan member (employee) | Subject of a claim; not a direct user |
+| Application support / maintenance | Runtime behaviour, and inter-service faults specifically |
+| Operations | Run procedures, service start ordering, restarts |
+| Business analyst / product | Adjudication rules and their outcomes |
+| Audit & compliance | Accept/reject decisions and the reasons recorded with them |
+
+**Internal-facing.** Both consoles are used by MapleSure staff. Assume
+authenticated internal network access; both carry claim and contract data.
+
+## 3. Disaster recovery — *Illustrative*
+
+| Service | Tier | RTO | RPO | Rationale |
+|---|---|---|---|---|
+| Policy-Service | Tier 2 — Business Critical | 4 hours | 15 min | Claims-Service depends on it; its outage is functionally a ClaimsPortal outage |
+| Claims-Service | Tier 3 — Business Operational | 8 hours | 1 hour | Claim intake can be queued or handled manually for a working day |
+
+| Item | Method | Frequency |
+|---|---|---|
+| Contract data | Rehydrated from the source of record on restore — no independent backup | On deploy |
+| Application configuration | Version-controlled with the deployment | Every change |
+| Source and release artefacts | Version control + artefact repository | Every commit / build |
+
+Recovery outline:
+
+1. Assess scope.
+2. Provision host; restore runtime from the pinned dependency manifest.
+3. Apply environment configuration — in particular `POLICY_SERVICE_URL`, which
+   is what lets the pair be repointed without a rebuild.
+4. **Start Policy-Service before Claims-Service** (see above).
+5. Verify: run `tests/test_regression_claimsportal.py`; confirm the contract
+   dropdown populates and one claim adjudicates end to end.
+6. Notify the business owner.
+
+**Known gaps.** Contract data has no independent backup — recovery depends on
+the upstream source of record being available. Start ordering is a documented
+manual step rather than an enforced dependency. The procedure is not rehearsed,
+so the RTO figures are estimates.
+
+## 4. Business impact — *Illustrative*
+
+**Process supported:** benefit claim intake and adjudication against contract
+terms. **Business owner:** Claims Operations.
+
+| Outage duration | Impact |
+|---|---|
+| 0–4 hours | Adjudication pauses; claims queue |
+| 4–24 hours | Claim settlement SLA at risk; manual adjudication begins |
+| > 24 hours | Backlog exceeds manual capacity; provider payment delays; complaint volume rises |
+
+**Financial.** Delayed settlement carries interest exposure and
+provider-relationship cost.
+
+**Regulatory and contractual.** Group contracts carry service standards agreed
+with sponsors. The accept/reject decision and its recorded reason are the
+evidence trail if a rejection is disputed.
+
+**Operational.** Policy-Service's availability effectively sets ClaimsPortal's.
+Capacity planning must treat the pair as one unit, not two services.
+
+**Peak periods.** Plan year start, and any period following a benefit change
+that drives claim volume.
+
+## 5. Organisation and escalation — *Illustrative sample*
+
+| Level | Role | Responsibility | Response target | Contact |
+|---|---|---|---|---|
+| L1 | Service Desk | Triage, known-error lookup, restart per runbook | 15 min | servicedesk@maplesure.example · x4100 |
+| L2 | Application Support — Group Benefits | Diagnosis, configuration fixes, coordinate restore | 30 min (Sev 1) | ams-groupbenefits@maplesure.example · x4210 |
+| L3 | Engineering — Benefits Platform | Code defects, DR execution | 1 hour (Sev 1) | benefits-platform@maplesure.example · x4315 |
+| L4 | Service Owner | Business decisions, external communication, invoke DR | 2 hours | s.maiti@maplesure.example |
+
+| Severity | Definition | Example |
+|---|---|---|
+| Sev 1 | Either service unavailable | Policy-Service down — all validation fails |
+| Sev 2 | Major function degraded, workaround exists | Claim validation intermittent; dropdown not populating |
+| Sev 3 | Minor function impaired | Console display defect; filter wrong |
+| Sev 4 | Cosmetic or informational | Label wording |
+
+| Role | Name | Contact |
+|---|---|---|
+| Service Owner — Group Benefits | Sudipta Maiti | s.maiti@maplesure.example |
+| Business Owner — Claims Operations | Priya Raghunathan | p.raghunathan@maplesure.example |
+| Application Support Lead | AMS — Group Benefits | ams-groupbenefits@maplesure.example |
+| Engineering Lead | Benefits Platform Engineering | benefits-platform@maplesure.example |
+| Infrastructure / Hosting | Platform Operations | platform-ops@maplesure.example |
+
+**Vendors.** No third party holds an operational dependency. The runtime is
+open-source and pinned — no managed service, licence key or vendor support
+contract in the request path. *(Confirm with Procurement before publishing.)*
+
+**Support model.** L1 24×7; L2 business hours plus on-call; L3 on-call. Weekly
+rotation. Freeze during plan year start. Quarterly service review.
+
+## 6. Testing
+
+| Level | Where | Covers |
+|---|---|---|
+| Unit | `tests/test_unit_claimsportal.py` | Service URL from configuration; missing contract vs. service outage |
+| Regression | `tests/test_regression_claimsportal.py` | Claim adjudication against contract data, across both services |
+
+Both live outside this directory deliberately: no automated process may write
+to them, which is what makes them an independent check.

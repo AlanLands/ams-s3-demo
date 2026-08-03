@@ -231,3 +231,171 @@ print CSS rendered with headless Chrome, per the house pipeline; re-render with:
 
 All synthetic. Plan sponsors are fictional employers, every applicant name is
 invented, and nothing here derives from a real roster.
+
+---
+
+# Application knowledge
+
+> Sections marked **Illustrative** are representative of a group-benefits
+> estate of this shape, not measurements. This application has no measured
+> RPO/RTO, no financial impact study and no on-call rota behind it. Replace
+> them with SME input before treating them as authoritative. All names and
+> contacts are fictional.
+
+## 1. What it does
+
+The self-serve channel a plan member uses to join or change benefits without
+going through a call centre, plus the analysis surface that answers *who is
+allowed to use it*.
+
+Access is governed by two **access preferences** the plan sponsor agrees at
+contract inception: one written for people already holding an active benefit,
+one for people with no active benefit who still have reason to enrol — retiree
+continuations, spousal transfers, sponsor-agreed exceptions.
+
+**The ownership split is load-bearing.** PolicyCore *owns* those preferences;
+they live on the contract record. EnrolDirect *enforces* them. A change to what
+a preference means is therefore a change to a contract between two systems, not
+a local edit — which is why the population question this app exists to answer
+needed an impact analysis before anyone wrote code.
+
+The eligibility check runs three gates in a fixed order:
+
+1. **Is the contract active?** A lapsed contract retains whatever preferences it
+   was configured with, so this runs first — otherwise stale configuration could
+   grant access, and no category-level test would notice.
+2. **Does the applicant's category resolve to a preference?**
+3. **Did the sponsor enable that preference?**
+
+Every decision carries its reasons, not just a boolean. A denial that cannot say
+which gate closed becomes a support ticket — and those reasons are
+customer-visible copy, not internal diagnostics.
+
+Enrolment reuses that same gate rather than reimplementing it, then confirms the
+plan is on the applicant's contract and open to their category. The outcome is
+recorded either way, so refusals are auditable.
+
+Self-contained: it holds its own applicant and contract data and calls no other
+service at runtime.
+
+## 2. Intended users
+
+| User type | Relationship |
+|---|---|
+| Plan member (employee) | **Primary — the self-serve end user.** The only one of the three applications whose primary user is outside the organisation |
+| Prospect / non-active applicant | Retiree continuations, spousal transfers, sponsor-agreed exceptions |
+| Plan sponsor (employer HR) | Sets the access preferences that gate the channel — via PolicyCore, not here |
+| Contracts / policy administration team | Owns the preference configuration this app enforces |
+| Application support / maintenance | Runtime behaviour; explaining why a specific applicant was refused |
+| Operations | Run procedures, routine checks, restarts |
+| Business analyst / product | Access policy and its population impact |
+| Audit & compliance | Access decisions and the reasons recorded with them |
+
+**Member-facing.** This raises its availability profile above the other two
+applications and makes its refusal messages customer-visible copy.
+
+## 3. Disaster recovery — *Illustrative*
+
+**Tier 2 — Business Critical. RTO 4 hours, RPO 1 hour.** Member-facing: an
+outage is externally visible, and it is time-boxed by the enrolment period —
+an outage during an open-enrolment window is materially worse than the same
+outage outside one.
+
+| Item | Method | Frequency |
+|---|---|---|
+| Applicant and contract data | Seeded in-process — no persistent store to back up | On start |
+| Enrolment log | In-process and non-persistent by design (see below) | — |
+| Application configuration | Version-controlled with the deployment | Every change |
+| Source and release artefacts | Version control + artefact repository | Every commit / build |
+
+**Nothing here survives a restart, and nothing is supposed to.** The application
+must run in a locked-down sandbox, so a datastore is a dependency it cannot
+take. That makes recovery unusually simple — provision, deploy, start — and it
+makes the enrolment log unsuitable as the audit record of last resort. If
+enrolment outcomes must survive an incident, they need to be shipped somewhere
+durable; that is a gap, not a design feature.
+
+Recovery outline:
+
+1. Assess scope.
+2. Provision host; restore runtime from the pinned dependency manifest.
+3. Apply environment configuration (`ENROLDIRECT_PORT`).
+4. Start; verify with `tests/test_regression_enroldirect.py` and one
+   eligibility check plus one enrolment end to end.
+5. Confirm member-facing messaging with the business owner.
+
+**Known gaps.** No durable record of enrolment outcomes (above). The procedure
+is not rehearsed, so the RTO is an estimate.
+
+## 4. Business impact — *Illustrative*
+
+**Process supported:** member self-service enrolment and benefit changes.
+**Business owner:** Member Experience.
+
+| Outage duration | Impact |
+|---|---|
+| 0–4 hours | Members redirected to the call centre |
+| 4–24 hours | Call centre volume spike; enrolment abandonment |
+| > 24 hours | Enrolment window may be missed entirely — coverage gaps with contractual consequences |
+
+**Financial.** Displacing members to the call centre substitutes a low-cost
+channel with a high-cost one. A missed enrolment window can mean a coverage gap
+the sponsor's contract does not permit.
+
+**Customer and reputational.** The only member-facing system of the three.
+Outages are externally visible and concentrated in enrolment periods, when
+attention is highest. A refusal a member cannot get an explanation for converts
+directly into a complaint — which is why the decision carries its reasons.
+
+**Regulatory and contractual.** Enrolment windows are contractual. Access
+decisions and their recorded reasons are the evidence trail if a refusal is
+disputed.
+
+**Peak periods.** Annual open enrolment, defined per sponsor — severe. Change
+freezes should cover every active enrolment window.
+
+## 5. Organisation and escalation — *Illustrative sample*
+
+| Level | Role | Responsibility | Response target | Contact |
+|---|---|---|---|---|
+| L1 | Service Desk | Triage, known-error lookup, restart per runbook | 15 min | servicedesk@maplesure.example · x4100 |
+| L2 | Application Support — Group Benefits | Diagnosis, explain a specific refusal, coordinate restore | 30 min (Sev 1) | ams-groupbenefits@maplesure.example · x4210 |
+| L3 | Engineering — Benefits Platform | Code defects, DR execution, gate changes | 1 hour (Sev 1) | benefits-platform@maplesure.example · x4315 |
+| L4 | Service Owner | Business decisions, member communication, invoke DR | 2 hours | s.maiti@maplesure.example |
+
+| Severity | Definition | Example |
+|---|---|---|
+| Sev 1 | Channel unavailable, **or any outage during an open-enrolment window** | Application down; gate refusing every applicant |
+| Sev 2 | Major function degraded, workaround exists | Enrolment failing for one category; reasons not rendering |
+| Sev 3 | Minor function impaired | Display defect; wording issue in a non-refusal screen |
+| Sev 4 | Cosmetic or informational | Label wording |
+
+Note the Sev 1 definition is deliberately wider here than for the other two
+applications: timing, not just scope, determines severity.
+
+| Role | Name | Contact |
+|---|---|---|
+| Service Owner — Group Benefits | Sudipta Maiti | s.maiti@maplesure.example |
+| Business Owner — Member Experience | Daniel Okonkwo | d.okonkwo@maplesure.example |
+| Application Support Lead | AMS — Group Benefits | ams-groupbenefits@maplesure.example |
+| Engineering Lead | Benefits Platform Engineering | benefits-platform@maplesure.example |
+| Infrastructure / Hosting | Platform Operations | platform-ops@maplesure.example |
+
+**Vendors.** No third party holds an operational dependency. The runtime is
+open-source and pinned — this application runs on nothing but the virtual
+environment, which is what lets a locked-down sandbox host it. *(Confirm with
+Procurement before publishing.)*
+
+**Support model.** L1 24×7; L2 business hours plus on-call, extended to cover
+open-enrolment windows; L3 on-call. Weekly rotation. Hard freeze during every
+active enrolment window. Quarterly service review.
+
+## 6. Testing
+
+| Level | Where | Covers |
+|---|---|---|
+| Unit | `tests/test_unit_enroldirect.py` | Gate ordering, preference vocabulary, applicant data-integrity rules, every decision carries a reason |
+| Regression | `tests/test_regression_enroldirect.py` | Access-gate outcomes and enrolment refusals, asserted over HTTP |
+
+Both live outside this directory deliberately: no automated process may write
+to them, which is what makes them an independent check.

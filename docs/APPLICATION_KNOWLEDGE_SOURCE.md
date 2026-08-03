@@ -4,6 +4,15 @@ Source material for the Application Knowledge Document. Covers the three
 MapleSure Insurance applications in this estate: **PolicyCore**,
 **ClaimsPortal** and **EnrolDirect**.
 
+> **Each application also carries this content in its own repository**, under
+> an "Application knowledge" heading — see `repos/policycore/README.md`,
+> `repos/claimsportal/README.md` and `repos/enroldirect/README.md`. Those are
+> the canonical per-application source, and they are what a tool reading the
+> repositories will find. This file is the consolidated view: the three
+> applications side by side, plus the two cross-cutting sections that belong to
+> no single repository — the supporting-documentation correction (§6) and the
+> estate-wide testing picture (§7). If they disagree, the repository wins.
+
 > **Editor's note — delete this block before publishing.**
 >
 > Sections 1, 2 and the data models are **factual**: they were written from the
