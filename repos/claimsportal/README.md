@@ -1,4 +1,4 @@
-# MapleSure ClaimsPortal demo (two services)
+# MapleSure ClaimsPortal (two services)
 
 > **S3 target**: this repo doubles as the S3 pipeline's second enhancement
 > target — "ClaimsPortal", CR-2026-043 (`crs/CR-2026-043.md`), registered as
@@ -13,17 +13,17 @@
 > the two PolicyCore resets. A manager can run the same thing from the
 > console's `/admin` panel.
 
-It lives under `repos/` because that is where every repository S3 *changes*
+It lives under `repos/` because that is where every repository S3 _changes_
 lives; `apps/` holds the console and the launch scripts. See
 [`../README.md`](../README.md) for the drop-folder contract.
 
-Two small FastAPI applications that demo service-to-service communication
+Two small FastAPI applications that exercise service-to-service communication
 over REST. All data is synthetic — no real client data.
 
-| Service | Port | Role | Team UI |
-|---|---|---|---|
-| `policy_service` | 8081 | Serves MapleSure group contracts from an in-memory list | Contracts Team console — http://localhost:8081/ |
-| `claims_service` | 8082 | Accepts benefit claims and validates them by calling policy_service | Claims Team console — http://localhost:8082/ |
+| Service          | Port | Role                                                                | Team UI                                         |
+| ---------------- | ---- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `policy_service` | 8081 | Serves MapleSure group contracts from an in-memory list             | Contracts Team console — http://localhost:8081/ |
+| `claims_service` | 8082 | Accepts benefit claims and validates them by calling policy_service | Claims Team console — http://localhost:8082/    |
 
 Each service serves its team's web console from its own `static/` directory
 (plain HTML/JS, no build step). The Contracts Team console lists and filters
@@ -46,15 +46,16 @@ renaming the API contract on top of that would desync the committed recording.
 
 ## Run
 
-In two terminals (or use `./run-demo.sh` to start both). The launch scripts
-live with the rest of the tooling, under `apps/`:
+In two terminals — Policy-Service first, since Claims-Service validates
+against it. The launch scripts live with the rest of the tooling, under
+`apps/`, and read their ports from `.env`:
 
 ```bash
 apps/run-policy-service.sh    # from the repo root
 apps/run-claims-service.sh
 ```
 
-## Demo script
+## Worked example
 
 ```bash
 # 1. List group contracts (policy_service)

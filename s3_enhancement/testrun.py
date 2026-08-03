@@ -247,7 +247,7 @@ def _select_mutation(target: Target) -> tuple[Mutation, Path, str]:
     raise MutationError(
         "No seeded mutation matches the current generated code — the generated "
         "content has drifted from the recorded run. Re-run the generate/apply "
-        "steps, or re-record the demo caches."
+        "steps, or re-record the replay caches."
     )
 
 

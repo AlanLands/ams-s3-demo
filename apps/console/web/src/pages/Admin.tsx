@@ -138,10 +138,10 @@ export default function Admin() {
       <span className="ams-eyebrow">MapleSure Insurance · AMS Console · Admin</span>
       <div className="ams-admin-head">
         <div>
-          <h1 className="ams-admin-title">Demo control</h1>
+          <h1 className="ams-admin-title">Environment control</h1>
           <p className="ams-s3-summary">
-            Reset demo state, clear logs, run the target applications, and register a new
-            repo — without leaving the console for a terminal.
+            Reset environment state, clear logs, run the target applications, and register a
+            new repo — without leaving the console for a terminal.
           </p>
         </div>
         <div className="ams-admin-row-actions">

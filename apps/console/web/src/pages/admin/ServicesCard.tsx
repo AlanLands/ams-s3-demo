@@ -55,7 +55,7 @@ export default function ServicesCard({
       title="Target applications"
       description={
         <>
-          The demo apps S3 runs its change requests against. State is a live port
+          The applications S3 runs its change requests against. State is a live port
           check on this host, re-taken after every action — not a memory of what
           was last started.
         </>

@@ -136,7 +136,7 @@ export default function ResetCard({
 
   return (
     <AdminSection
-      title="Reset demo state"
+      title="Reset environment state"
       tone="danger"
       description={
         <>

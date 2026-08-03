@@ -501,8 +501,8 @@ export default function GenerateStage() {
                         </button>
                       )}
                       <span style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>
-                        Sends the crash back to the model for a revised proposal — or run
-                        demo/reset_s3.sh to roll back.
+                        Sends the crash back to the model for a revised proposal — or use
+                        Admin → Reset to roll back.
                       </span>
                     </div>
                     {fixCrashError && (
@@ -608,8 +608,8 @@ export default function GenerateStage() {
             ) : (
               <div className="ams-card" style={{ marginTop: '0.75rem' }}>
                 <p style={{ fontSize: 'var(--ams-text-sm)' }}>
-                  No changes to propose — the app already has this feature from an earlier run. Run
-                  demo/reset_s3.sh to regenerate from a clean baseline.
+                  No changes to propose — the app already has this feature from an earlier run.
+                  Use Admin → Reset to regenerate from a clean baseline.
                 </p>
               </div>
             )}

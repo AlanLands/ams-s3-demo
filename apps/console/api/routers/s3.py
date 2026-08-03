@@ -2597,7 +2597,7 @@ def harness_latest(identity: Identity = Depends(require_identity)) -> dict:
     if run_dir is None or not (run_dir / "status.json").exists():
         raise HTTPException(
             status_code=404,
-            detail="No harness run found yet — run demo/run_s3_harness.sh first.",
+            detail="No harness run found yet — run the harness script first.",
         )
 
     status_dict = json.loads((run_dir / "status.json").read_text(encoding="utf-8"))
