@@ -5,7 +5,7 @@ import pytest
 
 from common.llm import LLMError
 from s3_enhancement.analyze import draft_adhoc_impact_analysis, draft_impact_analysis
-from s3_enhancement.cr import render_cr
+from s3_enhancement.story import render_story
 
 
 def test_draft_impact_analysis_surfaces_assumptions_separately_from_the_text():
@@ -17,7 +17,7 @@ def test_draft_impact_analysis_surfaces_assumptions_separately_from_the_text():
     )
 
     with patch("s3_enhancement.analyze.complete", return_value=canned) as mock_complete:
-        impact = draft_impact_analysis(render_cr("Elite"))
+        impact = draft_impact_analysis(render_story("Elite"))
 
     assert mock_complete.call_args.kwargs["json_mode"] is True
     assert impact.text == "Update coverage.py and app.py to add the new tier."
@@ -27,12 +27,12 @@ def test_draft_impact_analysis_surfaces_assumptions_separately_from_the_text():
 
 
 def test_draft_impact_analysis_defaults_to_no_assumptions():
-    """A fully-specified CR is expected to come back with an empty
+    """A fully-specified user story is expected to come back with an empty
     assumptions list, not an omitted/null field."""
     canned = json.dumps({"impact_analysis": "Straightforward field addition.", "assumptions": []})
 
     with patch("s3_enhancement.analyze.complete", return_value=canned):
-        impact = draft_impact_analysis(render_cr("Elite"))
+        impact = draft_impact_analysis(render_story("Elite"))
 
     assert impact.assumptions == []
 
@@ -42,7 +42,7 @@ def test_draft_impact_analysis_raises_llm_error_on_non_list_assumptions():
 
     with patch("s3_enhancement.analyze.complete", return_value=malformed):
         with pytest.raises(LLMError):
-            draft_impact_analysis(render_cr("Elite"))
+            draft_impact_analysis(render_story("Elite"))
 
 
 def test_draft_adhoc_impact_analysis_surfaces_assumptions():

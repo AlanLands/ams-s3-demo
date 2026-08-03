@@ -1,21 +1,21 @@
 """Pre-existing regression suite for the ClaimsPortal contract lookup API.
 
 Checked in, human-authored, and named by no target's testgen allowlist — S3
-can neither write nor overwrite it. CR-2026-043 edits policy_service (it adds
+can neither write nor overwrite it. US-2026-043 edits policy_service (it adds
 a deductible to the group contract record), so "the existing contract lookup
 is unaffected" is a claim that needs a test rather than a promise.
 
-Two constraints keep this passing on both sides of the CR:
+Two constraints keep this passing on both sides of the user story:
 
 1. Assertions go through HTTP and read fields off JSON, not by constructing
-   `Policy(...)` directly — the model gains a field in the CR, and a test
+   `Policy(...)` directly — the model gains a field in the user story, and a test
    that constructed one positionally would break the moment the change
    applied, which would look like a regression and be nothing of the sort.
 2. Nothing here asserts the *absence* of fields. A new `deductible` key in
-   the response is the CR doing its job; only a missing or altered
+   the response is the user story doing its job; only a missing or altered
    pre-existing key is a regression.
 
-Must pass before and after CR-2026-043, and must not live under
+Must pass before and after US-2026-043, and must not live under
 `repos/claimsportal/` — see the same two rules in
 `tests/test_regression_policycore.py`.
 """
@@ -69,7 +69,7 @@ def test_unknown_contract_still_returns_not_found():
 
 
 def test_lapsed_contract_status_survives_the_round_trip():
-    # claims_service rejects on this exact string; if the CR normalised or
+    # claims_service rejects on this exact string; if the user story normalised or
     # re-cased status values, every lapsed-contract rejection would silently
     # turn into an acceptance.
     policy = client.get("/api/policies/MS-1003").json()

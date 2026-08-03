@@ -16,17 +16,17 @@ const SOURCE_SCOPES: ScopeCopy[] = [
   {
     scope: 'policycore',
     title: 'PolicyCore source',
-    detail: 'Puts the MapleSure portal target app back to the baseline the CR starts from.',
+    detail: 'Puts the MapleSure portal target app back to the baseline the story starts from.',
   },
   {
     scope: 'claimsportal',
     title: 'ClaimsPortal source',
-    detail: 'Puts both ClaimsPortal services back to the baseline the CR starts from.',
+    detail: 'Puts both ClaimsPortal services back to the baseline the story starts from.',
   },
   {
     scope: 'enroldirect',
     title: 'EnrolDirect source',
-    detail: 'Puts the enrolment channel back to the baseline the CR starts from.',
+    detail: 'Puts the enrolment channel back to the baseline the story starts from.',
   },
 ]
 

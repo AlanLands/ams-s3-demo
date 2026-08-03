@@ -40,7 +40,7 @@ export default function TargetStage() {
         )}
         {activeTicketKey && !analysisDoneForActive && (
           <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0' }}>
-            Run the impact analysis on the ticket above first — for a CR that names
+            Run the impact analysis on the ticket above first — for a user story that names
             no target system, that analysis is what there is to go on.
           </p>
         )}
@@ -51,7 +51,7 @@ export default function TargetStage() {
         )}
         {activeTicketKey && analysisDoneForActive && !matchPending && !activeMatch?.resolved && (
           <p style={{ fontSize: 'var(--ams-text-sm)', margin: '0.3rem 0 0' }}>
-            Couldn't identify a repo for this ticket from its CR — a human needs to
+            Couldn't identify a repo for this ticket from its user story — a human needs to
             route it.
           </p>
         )}
@@ -65,7 +65,7 @@ export default function TargetStage() {
                   inferred:
                 </>
               ) : (
-                <>Resolved from the CR itself — no model call needed.</>
+                <>Resolved from the user story itself — no model call needed.</>
               )}
             </p>
             <div
@@ -79,8 +79,8 @@ export default function TargetStage() {
             >
               <code>{activeMatch.display_name}</code>
               <span className="ams-pill ams-pill-general">
-                {activeMatch.method === 'cr_id'
-                  ? 'matched on CR identifier'
+                {activeMatch.method === 'story_id'
+                  ? 'matched on story identifier'
                   : activeMatch.method === 'application_header'
                     ? 'matched on application header'
                     : 'AI match'}
@@ -243,7 +243,7 @@ export default function TargetStage() {
         </strong>
         {!checkOutResult && !checkOutError && (
           <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
-            {checkOutLockedReason ?? "Cuts this CR's feature branch."}
+            {checkOutLockedReason ?? "Cuts this story's feature branch."}
           </p>
         )}
         <button

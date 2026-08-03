@@ -2,8 +2,8 @@
 
 Stage-1 relevance screening (`relevance.py::screen_subsystems`) scores each
 subsystem's `DESIGN.md` "## Scope keywords" section to decide which subsystems
-are even *opened* for a CR. Those docs are a retrieval control surface — but
-until this module, nothing ever wrote one back. Code changed every CR; the docs
+are even *opened* for a user story. Those docs are a retrieval control surface — but
+until this module, nothing ever wrote one back. Code changed every user story; the docs
 that gate retrieval never did, so the declared scope drifted from reality and
 the screening gate quietly decayed.
 
@@ -19,7 +19,7 @@ of a judgment call:
 1. **Impact detection** (`find_affected_subsystems`) — pure path arithmetic, no
    LLM, always safe to run. An applied file counts as touching a subsystem when
    it lives under a directory that ships a `DESIGN.md`. When nothing matches
-   (the common case, including all three of today's demo CRs) the whole feature
+   (the common case, including all three of today's demo user stories) the whole feature
    is a no-op and no provider call is ever made.
 2. **Doc review** (`review_design_doc`) — only for subsystems stage 1 flagged.
    Asks whether the doc's declared scope still describes the subsystem after
@@ -123,7 +123,7 @@ def find_affected_subsystems(
     containing it, so a nested subsystem wins over its parent rather than both
     matching. Files outside every documented directory are attributed to
     nothing, which is why this returns empty for all three of today's demo
-    CRs — `repos/policycore/core/` and `repos/claimsportal/` carry no `DESIGN.md`.
+    user stories — `repos/policycore/core/` and `repos/claimsportal/` carry no `DESIGN.md`.
     """
     docs = relevance.discover_subsystem_design_docs(
         relevance.MOCKAPP_ROOT if design_doc_root is None else design_doc_root
@@ -170,7 +170,7 @@ That subsystem's current design document (`{impact.design_doc}`):
 Does this design document still accurately describe the subsystem after the
 change above? Consider especially whether the "## Scope keywords" section still
 reflects what the subsystem does — those keywords are used to decide whether
-this subsystem is even considered relevant to future change requests, so
+this subsystem is even considered relevant to future user stories, so
 keywords that have gone stale cause real retrieval mistakes later.
 
 Be conservative: a change that only alters implementation detail without

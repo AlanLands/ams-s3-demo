@@ -1,5 +1,5 @@
 """Narrow Jira Cloud REST v3 client for the S3 "connect your real Jira"
-demo beat (CR-2026-042's board/ticket integration).
+demo beat (US-2026-042's board/ticket integration).
 
 Supports exactly the calls this demo needs: create an issue, look one up,
 search via JQL (drives the engineer board view), and attach a file (the
@@ -138,7 +138,7 @@ class JiraClient:
                 return response
             # No pre-recorded response for this exact summary/description —
             # unlike codegen/testgen, a cross-team ticket's content is
-            # AI-suggested per CR, so pre-seeding every possible combination
+            # AI-suggested per user story, so pre-seeding every possible combination
             # isn't realistic. Synthesize a plausible ticket instead of
             # hard-failing: nothing about "what key did Jira assign" needs to
             # be faithfully replayed for this demo to make its point.

@@ -1,7 +1,7 @@
 """The change-map diagram for the QA design document.
 
 A picture of what this change touches: which service, which architectural
-layer, which files, and — where the CR crosses a service boundary — the call
+layer, which files, and — where the user story crosses a service boundary — the call
 that crosses it. Handed to QA alongside the design doc so "affected areas" is
 something you can look at rather than a paragraph you have to hold in your
 head.
@@ -164,7 +164,7 @@ def build_change_map(
     """Assemble the diagram's facts for `target`.
 
     `changed_files` defaults to the target's codegen allowlist — the files the
-    CR is contracted to touch — so the map is available before, during and
+    user story is contracted to touch — so the map is available before, during and
     after apply, and does not depend on a proposal still being in memory.
     """
     # `is None`, not falsiness: an explicitly empty list means "this change

@@ -98,7 +98,7 @@ export default function DesignDocStage() {
         )}
         {designDocError && <p style={{ color: 'var(--ams-error)' }}>{designDocError}</p>}
         {designDoc && activeTicketKey && (() => {
-          const crLabel = activeLinked?.crLabel ?? activeTicketKey
+          const storyLabel = activeLinked?.storyLabel ?? activeTicketKey
           const docDate = new Date().toLocaleDateString('en-CA', {
             year: 'numeric',
             month: 'long',
@@ -122,7 +122,7 @@ export default function DesignDocStage() {
                     {designDiagram && <Chip>Change map</Chip>}
                   </>
                 }
-                detail={`${crLabel} · Ticket ${activeTicketKey} · Engineering → QA hand-off`}
+                detail={`${storyLabel} · Ticket ${activeTicketKey} · Engineering → QA hand-off`}
                 actions={
                   <>
                     <button className="ams-button-secondary" onClick={() => setDocOpen(true)}>
@@ -141,7 +141,7 @@ export default function DesignDocStage() {
               {docOpen && (
                 <Modal
                   title="Design document"
-                  subtitle={`${crLabel} · Ticket ${activeTicketKey} · ${docDate} · Engineering → QA hand-off`}
+                  subtitle={`${storyLabel} · Ticket ${activeTicketKey} · ${docDate} · Engineering → QA hand-off`}
                   size="lg"
                   onClose={() => setDocOpen(false)}
                 >
@@ -151,7 +151,7 @@ export default function DesignDocStage() {
                       <span className="ams-doc-kind">Internal Design Document</span>
                     </div>
                     <div className="ams-doc-meta">
-                      {crLabel} · Ticket {activeTicketKey} · {docDate} · Engineering → QA hand-off
+                      {storyLabel} · Ticket {activeTicketKey} · {docDate} · Engineering → QA hand-off
                     </div>
                     {designDiagram && (
                       <figure className="ams-doc-figure">
@@ -187,7 +187,7 @@ export default function DesignDocStage() {
                     <button
                       className="ams-button-secondary"
                       onClick={() =>
-                        downloadFile(`${crLabel}-design-doc.md`, 'text/markdown', designDoc)
+                        downloadFile(`${storyLabel}-design-doc.md`, 'text/markdown', designDoc)
                       }
                     >
                       ⬇ Download markdown (.md)

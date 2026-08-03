@@ -1,10 +1,10 @@
-# policycore — agent-harness instructions for the S3 tier-upgrade CR
+# policycore — agent-harness instructions for the S3 tier-upgrade user story
 
 Kept in sync with `repos/policycore/CLAUDE.md` — update both together. This file exists
 only for the S3 live agent-harness demo beat (`s3_enhancement/harness.py`); it
 does not apply to any other work in this repository.
 
-You are implementing change request `crs/CR-2026-041.md` (a new top
+You are implementing user story `stories/US-2026-041.md` (a new top
 plan tier) against this small Python group benefits mock app for
 MapleSure Insurance, a fictional demo insurer. Follow this contract exactly —
 it is pinned for a live, timed demo and another generated file
@@ -36,7 +36,7 @@ do not make it a required (no-default) field.
 these exact names:
 
 - `PLAN_TIERS: list[str]` — ordered lowest to highest, exactly
-  `["Standard", "Premium", "<the new top tier name from the CR>"]`.
+  `["Standard", "Premium", "<the new top tier name from the user story>"]`.
 - `TIER_MULTIPLIERS: dict[str, float]` — contribution multiplier per tier name
   in `PLAN_TIERS`.
 - `upgrade_tier(policy_number: str, new_tier: str) -> Policy` — the only
@@ -79,7 +79,7 @@ Do not run `git add`, `git commit`, or `git push`. Leave your changes as
 uncommitted working-tree edits — a human reviews the diff before it's treated
 as shipped.
 
-## Hard rules for this repo (apply everywhere, not just this CR)
+## Hard rules for this repo (apply everywhere, not just this user story)
 
 - No real client data or names, ever. This is a synthetic demo for a
   fictional insurer, "MapleSure Insurance." Never write "the client," a real

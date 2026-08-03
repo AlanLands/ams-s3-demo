@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from s3_enhancement import cr, relevance, targets
+from s3_enhancement import story, relevance, targets
 
 
 def test_discover_mockapp_files_returns_the_full_candidate_pool() -> None:
@@ -19,10 +19,10 @@ def test_discover_mockapp_files_returns_the_full_candidate_pool() -> None:
     assert any(path.endswith(".py") for path in files)
 
 
-def test_canonical_cr_selects_only_core_files() -> None:
-    cr_text = cr.render_cr("Elite")
+def test_canonical_story_selects_only_core_files() -> None:
+    story_text = story.render_story("Elite")
     all_files = relevance.discover_mockapp_files()
-    selection = relevance.select_relevant_files(cr_text, all_files)
+    selection = relevance.select_relevant_files(story_text, all_files)
 
     assert set(selection.selected) == set(relevance.CORE_FILES)
     assert selection.extra_files == ()
@@ -30,12 +30,12 @@ def test_canonical_cr_selects_only_core_files() -> None:
         assert "repos/policycore/systems/" not in decoy_path
 
 
-def test_canonical_cr_selection_is_deterministic_across_runs() -> None:
-    cr_text = cr.render_cr("Elite")
+def test_canonical_story_selection_is_deterministic_across_runs() -> None:
+    story_text = story.render_story("Elite")
     all_files = relevance.discover_mockapp_files()
-    first = relevance.select_relevant_files(cr_text, all_files)
-    second = relevance.select_relevant_files(cr_text, all_files)
-    third = relevance.select_relevant_files(cr_text, all_files)
+    first = relevance.select_relevant_files(story_text, all_files)
+    second = relevance.select_relevant_files(story_text, all_files)
+    third = relevance.select_relevant_files(story_text, all_files)
 
     assert set(first.selected) == set(second.selected) == set(third.selected)
     assert first.extra_files == second.extra_files == third.extra_files
@@ -43,16 +43,16 @@ def test_canonical_cr_selection_is_deterministic_across_runs() -> None:
 
 def test_core_files_included_even_when_missing_on_disk() -> None:
     all_files = {"repos/policycore/core/models.py": "class Policy: ...", "repos/policycore/systems/x.py": "x = 1"}
-    selection = relevance.select_relevant_files("some CR text", all_files)
+    selection = relevance.select_relevant_files("some user story text", all_files)
 
     assert selection.selected["repos/policycore/core/tiers.py"] == ""
     assert selection.selected["repos/policycore/core/models.py"] == "class Policy: ..."
 
 
 def test_verify_core_recall_passes_on_a_full_selection() -> None:
-    cr_text = cr.render_cr("Elite")
+    story_text = story.render_story("Elite")
     all_files = relevance.discover_mockapp_files()
-    selection = relevance.select_relevant_files(cr_text, all_files)
+    selection = relevance.select_relevant_files(story_text, all_files)
     relevance.verify_core_recall(selection.selected)
 
 
@@ -64,7 +64,7 @@ def test_verify_core_recall_raises_on_incomplete_file_set() -> None:
 
 def test_candidate_pool_by_language_counts_both_languages() -> None:
     all_files = relevance.discover_mockapp_files()
-    selection = relevance.select_relevant_files(cr.render_cr("Elite"), all_files)
+    selection = relevance.select_relevant_files(story.render_story("Elite"), all_files)
     by_language = selection.candidate_pool_by_language
     assert by_language["python"] > 0
     assert by_language["java"] > 0
@@ -79,7 +79,7 @@ def test_estimate_tokens_is_a_rough_positive_heuristic() -> None:
 def test_naive_prompt_tokens_adds_the_unselected_files_to_what_was_spent() -> None:
     """The naive prompt is the scoped prompt with every file pasted in, so it
     differs by exactly the unselected files — the shared scaffold (system
-    prompt, CR text, instructions) counts on both sides."""
+    prompt, user story text, instructions) counts on both sides."""
     all_files = {"a.py": "x" * 400, "b.py": "y" * 800}
     naive = relevance.naive_prompt_tokens(1000, all_files, {"a.py": all_files["a.py"]})
     assert naive == 1000 + 200
@@ -113,10 +113,10 @@ def test_discover_subsystem_design_docs_finds_all_legacy_subsystems() -> None:
     assert docs.keys() - legacy == {"repos/policycore/enrolment"}
 
 
-def test_canonical_cr_screens_out_every_legacy_subsystem() -> None:
-    cr_text = cr.render_cr("Elite")
+def test_canonical_story_screens_out_every_legacy_subsystem() -> None:
+    story_text = story.render_story("Elite")
     docs = relevance.discover_subsystem_design_docs()
-    screen = relevance.screen_subsystems(cr_text, docs)
+    screen = relevance.screen_subsystems(story_text, docs)
 
     assert screen.in_scope == ()
     assert len(screen.screened_out) == len(docs)
@@ -140,10 +140,10 @@ def test_non_mockapp_target_is_never_screened_against_mockapp_subsystems() -> No
     in-scope for the ClaimsPortal target is a wrong answer on stage, not cosmetic.
     """
     target = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
-    cr_text = cr.render_cr("Elite", target=target)
-    all_files = relevance.discover_files_for_target(target, cr_text)
+    story_text = story.render_story("Elite", target=target)
+    all_files = relevance.discover_files_for_target(target, story_text)
     selection = relevance.select_relevant_files(
-        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+        story_text, all_files, core_files=target.core_files, design_doc_root=target.root
     )
 
     screen = selection.subsystem_screen
@@ -154,9 +154,9 @@ def test_non_mockapp_target_is_never_screened_against_mockapp_subsystems() -> No
 
 
 def test_select_relevant_files_never_opens_a_screened_out_subsystems_files() -> None:
-    cr_text = cr.render_cr("Elite")
+    story_text = story.render_story("Elite")
     all_files = relevance.discover_mockapp_files()
-    selection = relevance.select_relevant_files(cr_text, all_files)
+    selection = relevance.select_relevant_files(story_text, all_files)
 
     assert selection.subsystem_screen.in_scope == ()
     assert set(selection.subsystem_screen.screened_out) == set(
@@ -167,7 +167,7 @@ def test_select_relevant_files_never_opens_a_screened_out_subsystems_files() -> 
 
 
 def test_screen_subsystems_with_no_design_docs_screens_nothing() -> None:
-    screen = relevance.screen_subsystems("some CR text", {})
+    screen = relevance.screen_subsystems("some user story text", {})
     assert screen.in_scope == ()
     assert screen.screened_out == ()
     assert screen.scores == {}

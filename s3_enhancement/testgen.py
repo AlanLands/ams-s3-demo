@@ -1,6 +1,6 @@
 """Live S3 test generation for the plan-tier-upgrade change.
 
-The prompt/validation below is CR-2026-041-specific, same caveat as
+The prompt/validation below is US-2026-041-specific, same caveat as
 codegen.py — a second `Target` needs its own prompt/validator pair, not just a
 registry entry. See s3_enhancement/targets.py.
 """
@@ -50,7 +50,7 @@ class TestgenResult:
 
 def generate_tests(
     tier_name: str,
-    cr_text: str,
+    story_text: str,
     *,
     target: Target | None = None,
     scenarios: list[dict] | None = None,
@@ -59,7 +59,7 @@ def generate_tests(
 
     `scenarios` is the tester-approved plan (see s3_enhancement/scenarios.py).
     When supplied it is appended to the prompt, so a live or recording run
-    writes the suite against the reviewed list rather than against the CR
+    writes the suite against the reviewed list rather than against the user story
     alone. It intentionally does not enter the cache key: the demo's streamed
     caches are keyed by literal (see targets.Target.stream_cache_key), so in
     replay mode the recorded suite is served whatever the plan says — the
@@ -68,16 +68,16 @@ def generate_tests(
     target = target or targets.get_target(None)
     if os.environ.get("LLM_MODE", "replay").lower() == "replay":
         return _generate_tests_once(
-            tier_name, cr_text, target=target, used_replay=True, scenarios=scenarios
+            tier_name, story_text, target=target, used_replay=True, scenarios=scenarios
         )
     try:
         return _generate_tests_once(
-            tier_name, cr_text, target=target, used_replay=False, scenarios=scenarios
+            tier_name, story_text, target=target, used_replay=False, scenarios=scenarios
         )
     except LLMError:
         with _temporary_env("LLM_MODE", "replay"):
             return _generate_tests_once(
-                tier_name, cr_text, target=target, used_replay=True, scenarios=scenarios
+                tier_name, story_text, target=target, used_replay=True, scenarios=scenarios
             )
 
 
@@ -105,20 +105,20 @@ def _format_scenarios(scenarios: list[dict] | None) -> str:
 
 def _generate_tests_once(
     tier_name: str,
-    cr_text: str,
+    story_text: str,
     *,
     target: Target,
     used_replay: bool,
     scenarios: list[dict] | None = None,
 ) -> TestgenResult:
     if target.cache_namespace == targets.MOCKAPP_AMENDMENT_FIELD_ADD.cache_namespace:
-        prompt = build_amendment_prompt(cr_text, target=target)
+        prompt = build_amendment_prompt(story_text, target=target)
     elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
-        prompt = build_spring_prompt(cr_text, target=target)
+        prompt = build_spring_prompt(story_text, target=target)
     elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
-        prompt = build_enroldirect_prompt(cr_text, target=target)
+        prompt = build_enroldirect_prompt(story_text, target=target)
     else:
-        prompt = build_prompt(tier_name, cr_text)
+        prompt = build_prompt(tier_name, story_text)
     prompt += _format_scenarios(scenarios)
     usage: dict = {}
     substitutions = {"{{TIER_NAME}}": tier_name} if used_replay else None
@@ -161,14 +161,14 @@ def _generate_tests_once(
     )
 
 
-def build_prompt(tier_name: str, cr_text: str) -> str:
+def build_prompt(tier_name: str, story_text: str) -> str:
     mode = os.environ.get("LLM_MODE", "replay").lower()
     record_note = ""
     top_tier_literal = tier_name
     if mode == "record":
         top_tier_literal = "{{TIER_NAME}}"
         record_note = (
-            "\nThe CR contains a placeholder token {{TIER_NAME}}. Reproduce it "
+            "\nThe user story contains a placeholder token {{TIER_NAME}}. Reproduce it "
             "verbatim in generated test assertions; do not invent a concrete tier name."
         )
 
@@ -186,8 +186,8 @@ def build_prompt(tier_name: str, cr_text: str) -> str:
         content = path.read_text(encoding="utf-8") if path.exists() else ""
         context_files.append(f"--- {rel_path} ---\n{content}")
 
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 {record_note}
 
 Audience-selected top tier name: {tier_name}
@@ -233,9 +233,9 @@ repos.policycore.core.seed using the exact names given above. The test file shou
 deterministic and have no LLM calls or network access."""
 
 
-def build_amendment_prompt(cr_text: str, *, target: Target) -> str:
-    """Prompt for CR-2026-042's generated test file — no audience-picked
-    placeholder, unlike the tier-upgrade CR's {{TIER_NAME}}."""
+def build_amendment_prompt(story_text: str, *, target: Target) -> str:
+    """Prompt for US-2026-042's generated test file — no audience-picked
+    placeholder, unlike the tier-upgrade user story's {{TIER_NAME}}."""
     test_path = target.testgen_allowlist[0]
 
     reference = """Tests should cover:
@@ -258,8 +258,8 @@ def build_amendment_prompt(cr_text: str, *, target: Target) -> str:
         content = path.read_text(encoding="utf-8") if path.exists() else ""
         context_files.append(f"--- {rel_path} ---\n{content}")
 
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
 Current generated app files are already applied. Generate only this test file:
 {test_path}
@@ -295,8 +295,8 @@ and repos.policycore.core.seed using the exact names given above. The test file 
 be deterministic and have no LLM calls or network access."""
 
 
-def build_spring_prompt(cr_text: str, *, target: Target) -> str:
-    """Prompt for CR-2026-043's generated pytest suite — a plain unit test of
+def build_spring_prompt(story_text: str, *, target: Target) -> str:
+    """Prompt for US-2026-043's generated pytest suite — a plain unit test of
     the claim_rules contract, no HTTP/app startup, so it stays fast and
     deterministic. Name kept from this target's Java-era history (see
     CLAUDE.md); the source is Python since the 2026-07-30 rewrite."""
@@ -326,8 +326,8 @@ def build_spring_prompt(cr_text: str, *, target: Target) -> str:
         content = path.read_text(encoding="utf-8") if path.exists() else ""
         context_files.append(f"--- {rel_path} ---\n{content}")
 
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
 Current generated app files are already applied. Generate only this test file:
 {test_path}
@@ -353,8 +353,8 @@ keep every line at 100 characters or fewer. The test file must be
 deterministic."""
 
 
-def build_enroldirect_prompt(cr_text: str, *, target: Target) -> str:
-    """Prompt for CR-2026-045's generated pytest suite.
+def build_enroldirect_prompt(story_text: str, *, target: Target) -> str:
+    """Prompt for US-2026-045's generated pytest suite.
 
     Plain unit tests of the gate, built from `Applicant`/`GroupContract`
     literals rather than the seeded directory — no HTTP, no app startup, so it
@@ -399,8 +399,8 @@ def build_enroldirect_prompt(cr_text: str, *, target: Target) -> str:
         content = path.read_text(encoding="utf-8") if path.exists() else ""
         context_files.append(f"--- {rel_path} ---\n{content}")
 
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
 Current generated app files are already applied. Generate only this test file:
 {test_path}

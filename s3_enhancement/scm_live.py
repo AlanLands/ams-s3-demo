@@ -26,7 +26,7 @@ up (a push touches a real remote) that doesn't belong in the same change as
 "create a local branch". `commit` gets exactly one narrow exception: turning
 a plain folder of files into a git repo needs one commit before `main`
 exists as something to branch from at all — that is infrastructure setup,
-not the CR workflow's own commit step, and it stays that way structurally:
+not the user story workflow's own commit step, and it stays that way structurally:
 `tests/test_s3_scm_live.py` AST-walks every git argv literal in this module
 and fails if `commit` appears anywhere outside `_ensure_baseline_commit`, or
 if any of the other forbidden words appear anywhere at all.
@@ -177,7 +177,7 @@ def _ensure_baseline_commit(root: Path) -> None:
 
 
 def checkout_branch(ticket: str, target_id: str) -> LiveCheckoutResult:
-    """Create (or switch to) the CR's feature branch in the standalone app
+    """Create (or switch to) the user story's feature branch in the standalone app
     folder named by `SCM_LIVE_TARGET_ROOT`.
 
     Idempotent: calling this again for the same ticket/target when already

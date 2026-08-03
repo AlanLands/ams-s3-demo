@@ -4,7 +4,7 @@ Two things live here, both assembled from facts rather than drafted:
 
 `build_deployment_plan()` answers "how does this get shipped, and how do we
 put it back". Deploy order comes out of the change map's service graph: if
-claims-service calls policy-service and the CR adds a field to the policy
+claims-service calls policy-service and the user story adds a field to the policy
 API, deploying claims first gives you a window where it reads a field that
 does not exist yet. That ordering is derivable, so it is derived — a model
 asked the same question would usually be right, which is worse than always
@@ -298,7 +298,7 @@ class SuiteEvidence:
 
 @dataclass
 class ReleaseRecord:
-    cr_label: str
+    story_label: str
     ticket_key: str
     released_by: str
     generated_at: datetime
@@ -319,7 +319,7 @@ class ReleaseRecord:
 
     def to_dict(self) -> dict:
         return {
-            "cr_label": self.cr_label,
+            "story_label": self.story_label,
             "ticket_key": self.ticket_key,
             "released_by": self.released_by,
             "generated_at": self.generated_at.isoformat(timespec="seconds"),

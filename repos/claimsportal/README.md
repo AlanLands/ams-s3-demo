@@ -8,10 +8,10 @@
 > recovery, business impact, escalation).
 
 > **S3 target**: this repo doubles as the S3 pipeline's second enhancement
-> target — "ClaimsPortal", CR-2026-043 (`crs/CR-2026-043.md`), registered as
+> target — "ClaimsPortal", US-2026-043 (`stories/US-2026-043.md`), registered as
 > `claimsportal-claims-deductible` in `s3_enhancement/targets.py` and linked to
 > Jira ticket AMS-103 in the AMS console. The checked-in source is the
-> **pre-CR baseline** (mirrored in `.baseline/`); the AI pipeline adds the
+> **pre-user story baseline** (mirrored in `.baseline/`); the AI pipeline adds the
 > deductible feature live (or from the committed replay cache), generates
 > `tests/test_s3_claims_deductible.py`, and proves it with `pytest`. Reset
 > between rehearsals with `demo/reset_s3_claimsportal.sh`, which copies
@@ -41,7 +41,7 @@ outcome.
 
 Naming note: the module, endpoint, and field names below (`policy_service`,
 `/api/policies`, `policyNumber`, …) are a published API contract that
-CR-2026-043 and the committed codegen recording depend on by exact name, so
+US-2026-043 and the committed codegen recording depend on by exact name, so
 they keep their original spelling. In prose the thing they carry is a **group
 contract**.
 

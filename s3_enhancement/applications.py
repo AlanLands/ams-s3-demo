@@ -2,7 +2,7 @@
 Jira project, repo, and component team that own it.
 
 S3's existing routing (`repo_match.py`) asks an LLM to guess the target repo
-from CR free-text against the caller's GitLab project list. That is the right
+from user story free-text against the caller's GitLab project list. That is the right
 answer when nothing better exists, but it is a guess, and it runs on every
 ticket — including the ones where the client's CMDB already states the answer.
 
@@ -25,10 +25,10 @@ Two things this deliberately encodes:
   the wrong repo.
 
 - **A CI identifies an application, not a change.** `repos/policycore/` hosts two
-  registered targets (CR-2026-041 and CR-2026-042); both belong to the one
+  registered targets (US-2026-041 and US-2026-042); both belong to the one
   `POLICY_CORE` application. So routing narrows a ticket to an application and
-  its candidate targets, and the CR text picks which change within it — a CI
-  can never select a CR, because ServiceNow does not know CRs exist.
+  its candidate targets, and the user story text picks which change within it — a CI
+  can never select a user story, because ServiceNow does not know user stories exist.
 """
 
 from __future__ import annotations
@@ -177,7 +177,7 @@ DOCUMENT_HUB = Application(
 )
 register_application(DOCUMENT_HUB)
 
-# EnrolDirect carried no `repo_path` until CR-2026-045 was written and
+# EnrolDirect carried no `repo_path` until US-2026-045 was written and
 # `targets.ENROLDIRECT_PROSPECT_ACCESS` registered against it. That gap was
 # deliberate while it lasted: `automation_available` answers "can we act on
 # this ticket", not "is the source on disk", so declaring a repo with no target

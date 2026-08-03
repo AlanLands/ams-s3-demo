@@ -10,11 +10,11 @@ function stageState(stage: S3Stage, pathname: string) {
 
 export default function StageRail({
   activeTicketKey,
-  crLabel,
+  storyLabel,
   stages,
 }: {
   activeTicketKey: string | null
-  crLabel: string | null
+  storyLabel: string | null
   stages: S3Stage[]
 }) {
   const { pathname } = useLocation()
@@ -24,7 +24,7 @@ export default function StageRail({
       <div className="ams-stage-rail-context">
         <span className="ams-eyebrow">Active work</span>
         <strong>{activeTicketKey ?? 'No ticket selected'}</strong>
-        <span>{crLabel ?? 'Pick a ticket to resolve the CR context.'}</span>
+        <span>{storyLabel ?? 'Pick a ticket to resolve the user story context.'}</span>
       </div>
       <ol className="ams-stepper ams-stepper-rail">
         {stages.map((stage, index) => {

@@ -49,11 +49,11 @@ Priority key: **CORE** = must land for the demo · **PLUS** = show if time allow
 | # | Capability | Demo beat | Data | Effort | Priority |
 |---|-----------|-----------|------|--------|----------|
 | 3.0 | MapleSure policy/claims app (prereq, shared with S4) | Working small UI: view policies, submit claim | synthetic | L | CORE |
-| 3.1 | AI-assisted requirement analysis | CR text ("add tier-upgrade option") → impact analysis on the codebase | CR doc | S | CORE |
+| 3.1 | AI-assisted requirement analysis | user story text ("add tier-upgrade option") → impact analysis on the codebase | user story doc | S | CORE |
 | 3.2 | Code generation | AI writes the change; new button/flow appears that wasn't there before | mockapp repo | M | CORE |
 | 3.3 | Test generation + run | AI-written tests execute green live | mockapp repo | M | CORE |
 | 3.4 | Docs + release notes | Auto-updated docs and release note | mockapp repo | S | CORE |
-| 3.5 | Effort estimate on intake | AI sizes the CR (~40h-class, P4-equivalent) before work starts | CR doc | S | PLUS |
+| 3.5 | Effort estimate on intake | AI sizes the user story (~40h-class, P4-equivalent) before work starts | user story doc | S | PLUS |
 
 ## S4 — Knowledge & Onboarding (MapleSure with docs stripped)
 

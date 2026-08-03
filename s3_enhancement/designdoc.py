@@ -120,7 +120,7 @@ _STYLE = """
 def render_document_html(
     design_doc: str,
     *,
-    cr_label: str,
+    story_label: str,
     ticket_key: str,
     diagram_svg: str | None = None,
     diagram_caption: str = "",
@@ -160,11 +160,11 @@ def render_document_html(
     stamp = (today or date.today()).strftime("%d %B %Y")
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<title>{escape(cr_label)} — Design Document</title>
+<title>{escape(story_label)} — Design Document</title>
 <style>{_STYLE}</style></head><body>
 <div class="letterhead"><span class="org">MapleSure Insurance</span>\
 <span class="kind">Internal Design Document</span></div>
-<div class="meta">{escape(cr_label)} · Ticket {escape(ticket_key)} · {stamp} · \
+<div class="meta">{escape(story_label)} · Ticket {escape(ticket_key)} · {stamp} · \
 Engineering → QA hand-off</div>
 {figure}
 {chr(10).join(body)}
@@ -386,11 +386,11 @@ def render_release_record_html(record, *, today: date | None = None) -> str:
     stamp = (today or record.generated_at.date()).strftime("%d %B %Y")
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<title>{escape(record.cr_label)} — Release Record</title>
+<title>{escape(record.story_label)} — Release Record</title>
 <style>{_STYLE}</style></head><body>
 <div class="letterhead"><span class="org">MapleSure Insurance</span>\
 <span class="kind">Release Record</span></div>
-<div class="meta">{escape(record.cr_label)} · Ticket {escape(record.ticket_key)} · {stamp} · \
+<div class="meta">{escape(record.story_label)} · Ticket {escape(record.ticket_key)} · {stamp} · \
 Released by {escape(record.released_by)}</div>
 {chr(10).join(sections)}
 <div class="label">{escape(AI_SUGGESTION_LABEL)}</div>

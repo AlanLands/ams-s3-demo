@@ -12,7 +12,7 @@ LLM features must follow), [`../../CLAUDE.md`](../../CLAUDE.md) (project hard ru
 
 ## 1. What S3 is
 
-One change request travels end-to-end through an AI-assisted application-maintenance
+One user story travels end-to-end through an AI-assisted application-maintenance
 pipeline, with a human gate at every step:
 
 ```
@@ -23,15 +23,15 @@ ticket → clarify → impact analysis + effort → propose code → review diff
 The demo insurer is fictional (**MapleSure Insurance**) and the domain is group retirement
 and group benefits — a *plan sponsor* holds a *group contract*, *plan members* enrol under
 it, a change to an in-force contract is an *amendment*, and what the sponsor pays is a
-*contribution*. Four registered CRs exercise the same pipeline against three different
+*contribution*. Four registered user stories exercise the same pipeline against three different
 applications:
 
-| Ticket | CR | Target app | What the CR does |
+| Ticket | user story | Target app | What the user story does |
 |---|---|---|---|
-| AMS-101 | CR-2026-041 | `repos/policycore/` (MapleSure plan-administration portal) | Add a plan-tier upgrade capability (audience picks the top tier's name live) |
-| AMS-102 | CR-2026-042 | `repos/policycore/` | Add a `priority` field to the amendment request form |
-| AMS-103 | CR-2026-043 | `repos/claimsportal/` (ClaimsPortal, two FastAPI services) | Add deductible handling to claims decisioning |
-| AMS-1045 | CR-2026-045 | `repos/enroldirect/` (EnrolDirect) | Settle which access preference a prospect member resolves to at the enrolment gate |
+| AMS-101 | US-2026-041 | `repos/policycore/` (MapleSure plan-administration portal) | Add a plan-tier upgrade capability (audience picks the top tier's name live) |
+| AMS-102 | US-2026-042 | `repos/policycore/` | Add a `priority` field to the amendment request form |
+| AMS-103 | US-2026-043 | `repos/claimsportal/` (ClaimsPortal, two FastAPI services) | Add deductible handling to claims decisioning |
+| AMS-1045 | US-2026-045 | `repos/enroldirect/` (EnrolDirect) | Settle which access preference a prospect member resolves to at the enrolment gate |
 
 All four are Python today; nothing in the pipeline assumes that (see §7.2 and §8).
 
@@ -42,7 +42,7 @@ analysis and before the gate acts on it, and `impact.py` is handed to the model 
 while being explicitly off its edit list, so "read the analysis, don't rewrite it" is
 enforced rather than requested.
 
-AMS-1045's key is derived, not seeded: any `crs/CR-*.md` file becomes a board ticket
+AMS-1045's key is derived, not seeded: any `stories/US-*.md` file becomes a board ticket
 automatically (§3.1).
 
 ### Two folders, and why the split is load-bearing
@@ -89,7 +89,7 @@ graph TB
     DG[docgen.py<br/>design doc · release notes]
     TGT["targets.py<br/>target registry"]
     DISC["discovery.py<br/>.s3targets.json auto-registration"]
-    CRI["cr_intake.py<br/>crs/*.md → board ticket"]
+    CRI["story_intake.py<br/>stories/*.md → board ticket"]
     AO["admin_ops.py<br/>resets · port probes · onboarding"]
     HAR[harness.py<br/>optional live agent-CLI beat]
   end
@@ -139,12 +139,12 @@ while the UI still looks logged in.
 ## 3. Core abstraction: the `Target` registry
 
 `s3_enhancement/targets.py` is the seam that lets one pipeline serve many repos. A frozen
-`Target` dataclass carries everything the pipeline needs to know about a repo/CR pairing:
+`Target` dataclass carries everything the pipeline needs to know about a repo/user story pairing:
 
 | Field group | Fields | Used by |
 |---|---|---|
 | Identity | `target_id`, `display_name`, `source_kind` (`local`\|`gitlab`), `cache_namespace` | registry, cache keys |
-| Source | `root`, `cr_template_path`, `cr_placeholder`, or `project_id`/`ref` | `relevance`, `cr` |
+| Source | `root`, `story_template_path`, `story_placeholder`, or `project_id`/`ref` | `relevance`, `story` |
 | Scoping | `core_files`, `never_extra` | `relevance` |
 | Contracts | `codegen_allowlist`, `testgen_allowlist`, `harness_expected_files` | `codegen`, `testgen`, `harness` |
 | Execution | `language`, `test_command`, `test_cwd`, `post_apply_command` | `testrun`, apply endpoint |
@@ -163,7 +163,7 @@ target.stream_cache_key("codegen")    # → "s3_codegen"                        
 ```
 
 **What a `Target` does *not* generalize:** the codegen/testgen *prompts* and *structural
-validators* are per-CR business logic (exact API names, exact error wording, backward-compat
+validators* are per-user story business logic (exact API names, exact error wording, backward-compat
 rules). `codegen._propose_change_once` dispatches on `cache_namespace` to pick one of four
 prompt builders today, and there are four hand-written file-set validators to match.
 
@@ -183,18 +183,18 @@ registered and a silent skip presents as "S3 didn't pick up my repo" with nothin
 at. The full contract is in [`../../repos/README.md`](../../repos/README.md), documented
 there once so it cannot drift between two copies.
 
-A discovered target gets relevance scoping, CR→target routing, propose/apply/revert, the
+A discovered target gets relevance scoping, user story→target routing, propose/apply/revert, the
 regression beat and the mutation beat. It does *not* get a committed replay recording —
-there is nothing to record against until its CR has run once, so its first codegen run is a
+there is nothing to record against until its user story has run once, so its first codegen run is a
 live call that records itself — and it does not get a bespoke structural validator; it falls
 through to the generic `_validate_file_set`. Both are honest defaults. The four built-in
 targets stay declared by hand in `targets.py` precisely because they own those bespoke
 validators, and built-ins win on an id clash while two discovered repos colliding still
 raises.
 
-**`cr_intake.py` — the ticket.** A `.md` file dropped into the top-level `crs/` becomes a
-board row with nobody seeding a Jira ticket for it. The key is a pure function of the CR
-identifier (`CR-2026-045` → `AMS-1045`), because there is nowhere to persist a counter that
+**`story_intake.py` — the ticket.** A `.md` file dropped into the top-level `stories/` becomes a
+board row with nobody seeding a Jira ticket for it. The key is a pure function of the user story
+identifier (`US-2026-045` → `AMS-1045`), because there is nowhere to persist a counter that
 would survive `demo/reset_s3.sh`, and a key that changed between two board loads would
 strand every event already recorded against the old one. Derived keys start at AMS-1000: the
 seeded demo tickets (AMS-098, AMS-101..104) and `jira_client._synthetic_issue`'s replay keys
@@ -231,7 +231,7 @@ with grep.
 ## 4. The relevance funnel — how scoring actually works
 
 This is the heart of the technical story: *how does the AI decide which part of a large
-codebase a change request touches, without reading all of it?*
+codebase a user story touches, without reading all of it?*
 
 `repos/policycore/` contains **58 discoverable source files** — 8 real Python files and 50
 Java "decoy" files spread across 6 fictional legacy subsystems, each with its own
@@ -242,11 +242,11 @@ ever opening the 50.
 
 ```mermaid
 flowchart TD
-  CR["CR text"] --> S1
+  user story["user story text"] --> S1
 
   subgraph "Stage 1 — subsystem screening (prose vs prose)"
     S1["Read every DESIGN.md under the TARGET's root<br/>extract its '## Scope keywords' section"]
-    S1 --> SC1["Embed + cosine-score each doc against the CR"]
+    S1 --> SC1["Embed + cosine-score each doc against the user story"]
     SC1 --> TH1{"score ≥ threshold?"}
     TH1 -->|no| OUT["screened_out —<br/>its source files are never opened"]
     TH1 -->|yes| IN[in_scope]
@@ -257,7 +257,7 @@ flowchart TD
 
   subgraph "Stage 2 — file ranking"
     POOL["candidate pool =<br/>all files − core_files − never_extra − screened-out subsystems"]
-    POOL --> SC2["Embed + cosine-score '{path} {content}' vs '{CR-id} {cr_text}'"]
+    POOL --> SC2["Embed + cosine-score '{path} {content}' vs '{story-id} {story_text}'"]
     SC2 --> TH2{"score ≥ threshold?"}
     TH2 -->|yes| TOP["top max_extra (default 4) by score"]
     TH2 -->|no| DROP[dropped]
@@ -284,13 +284,13 @@ for whichever backend actually served the request.
 | File ranking | `_FILE_*_MIN_SCORE_DEFAULT` | **0.55** | 0.15 | 0.459 (`repos/policycore/core/claims.py` — domain-adjacent, not the subject) |
 
 Both floors sit **above** the empirically measured decoy ceiling with margin, but are a
-genuinely low bar otherwise: a subsystem or file that shares real terms with the CR clears
+genuinely low bar otherwise: a subsystem or file that shares real terms with the user story clears
 them easily, so real signal is never mistaken for noise. `tools/verify_s3_live.py` has two
 checks (`check_decoys_never_selected`, `check_design_doc_gate_screens_all_legacy_subsystems`)
 that fail the rehearsal gate if a calibration drift breaks either assertion — lower a
 threshold only after re-running those.
 
-### 4.2 Worked example — CR-2026-041, live numbers
+### 4.2 Worked example — US-2026-041, live numbers
 
 Measured 2026-08-03 against the checked-in baseline:
 
@@ -316,7 +316,7 @@ selected = the 4 core files:
   repos/policycore/core/models.py · repos/policycore/core/db.py · repos/policycore/core/tiers.py · repos/policycore/app.py
 ```
 
-Note `repos/policycore/core/tiers.py` **does not exist yet** — the CR creates it. It's still a
+Note `repos/policycore/core/tiers.py` **does not exist yet** — the user story creates it. It's still a
 core file, passed to the prompt with empty content, and still required back in the response.
 
 ### 4.3 Screening is scoped to the target's own root
@@ -330,7 +330,7 @@ This matters because a root with no design docs must yield `{}`, which
 `screen_subsystems` turns into an empty screen that excludes nothing. Neither the
 ClaimsPortal nor the EnrolDirect target has a `DESIGN.md` anywhere, so their screens are
 correctly empty and the UI says "no subsystem doc matched closely enough — this change used
-the CR's fixed core file list directly".
+the user story's fixed core file list directly".
 
 *Fixed 2026-07-27.* Screening previously globbed `repos/policycore/` unconditionally, so
 the ClaimsPortal target was scored against mockapp's decoy subsystems and the panel
@@ -345,7 +345,7 @@ Selection itself was unaffected (a `repos/policycore/systems/…/` prefix never 
 - **`core_files`** — always included as prompt context regardless of score, and always
   required back in the model's response (`verify_core_recall`, enforced in
   `codegen._validate_file_set`). This is the safety net that keeps the demo from flaking on
-  the files the CR is actually about. EnrolDirect is the one target where the two lists
+  the files the user story is actually about. EnrolDirect is the one target where the two lists
   come apart: `impact.py` is a core file *and* absent from the `codegen_allowlist`, because
   the model must read the analysis and must not edit it. Hence
   `_validate_enroldirect_file_set`, which requires recall over the editable core files only
@@ -364,7 +364,7 @@ For a real connected repo there are no design docs and no core-file contract, so
 1. `list_repo_paths()` — cheap, no content. Filter to source extensions, drop
    `node_modules/`, `vendor/`, `dist/`, `build/`, `.min.js`.
 2. **TF-IDF over path segments only.** Each path is tokenized by splitting on `/`, `_`, `.`
-   (`src/billing/export.py` → `"src billing export py"`), scored against the CR, and only
+   (`src/billing/export.py` → `"src billing export py"`), scored against the user story, and only
    the top `max_candidates` (default 20) have their content fetched at all.
 3. Those 20 go through the normal `select_relevant_files()` with `core_files=()` and
    `design_docs={}`.
@@ -385,7 +385,7 @@ naive = scoped_input_tokens + Σ estimate_tokens(content) for every *unselected*
 
 The naive prompt is the scoped prompt with every file substituted for the selected ones, so
 it differs from what was actually billed by exactly the unselected files' contents —
-everything else (system prompt, CR text, task instructions) is identical and must not be
+everything else (system prompt, user story text, task instructions) is identical and must not be
 dropped from one side. *(The earlier implementation summed all file bodies alone, comparing
 a full prompt against bare source; on the ClaimsPortal target, where scoping selects every
 file in the candidate pool, it reported the naive baseline as cheaper than what was actually
@@ -410,7 +410,7 @@ impact-analysis modal, cross-team impact), rather than drifting per page.
 │                                                                      │
 │  Which part of the repo the AI matched this change to                │
 │  ┌ no subsystem doc matched closely enough — this change used the    │
-│  │ CR's fixed core file list directly, not a subsystem guess.        │
+│  │ user story's fixed core file list directly, not a subsystem guess.        │
 │                                                                      │
 │  ▸ 7 other subsystems screened out as not relevant (not part of      │
 │    this change)                                                      │
@@ -432,7 +432,7 @@ Design decisions baked into that rendering:
   "not part of this change". Otherwise "why is a Java subsystem in my Python-only change?"
   is the first question a reviewer asks. In-scope rows use the accent colour; screened-out
   rows use the muted ink colour.
-- When `in_scope` is empty (the normal case for CR-2026-041, whose real files aren't behind
+- When `in_scope` is empty (the normal case for US-2026-041, whose real files aren't behind
   their own design doc) the panel says so explicitly rather than rendering an empty list.
 
 **`TokenPanel.tsx`** — three distinct renderings, chosen honestly:
@@ -515,7 +515,7 @@ a `try/except LLMError` that retries under a temporarily forced `LLM_MODE=replay
 2. **Replay** the committed recording (invisible to the audience; `used_replay` flag only).
 3. **Harness replay** (`harness.py`, rung 2 of its own ladder) for the optional agent-CLI beat.
 
-Recordings store the CR's `{{TIER_NAME}}` placeholder verbatim, so **one recording replays
+Recordings store the user story's `{{TIER_NAME}}` placeholder verbatim, so **one recording replays
 for any audience-picked tier name** via plain string substitution — and the substitution
 runs in *every* mode, so a record run never stages placeholder-bearing files.
 
@@ -541,14 +541,14 @@ There are **four** question sources, and they share **one budget of `MAX_CLARIFI
 
 | Gate | Module | Runs on | Catches |
 |---|---|---|---|
-| 1. Clarity | `check_cr_clarity` | ticket text alone | Ticket so vague that analysis would be misdirected entirely |
-| 2. Gap | `check_cr_gaps` | CR text alone | One *specific* missing detail: unstated threshold/percentage, eligibility criterion, field name/default, target system |
-| 3. Repo identity | `repo_match.needs_confirmation` | CR + GitLab project list | Match below `high` confidence — scoping the wrong repo |
+| 1. Clarity | `check_story_clarity` | ticket text alone | Ticket so vague that analysis would be misdirected entirely |
+| 2. Gap | `check_story_gaps` | user story text alone | One *specific* missing detail: unstated threshold/percentage, eligibility criterion, field name/default, target system |
+| 3. Repo identity | `repo_match.needs_confirmation` | user story + GitLab project list | Match below `high` confidence — scoping the wrong repo |
 | 4. **Assumption** | `build_assumption_question` | the draft's *own declared assumptions* | Anything the model actually had to guess |
 
 Gate 4 is the one that closes the loop. Gates 1–3 run *before* the analysis and can only
 *predict* what the model might guess at; in practice they're wrong in both directions
-(passing a CR the analysis then guesses about, or asking about a detail the CR already
+(passing a user story the analysis then guesses about, or asking about a detail the user story already
 states). Gate 4 reads what the model actually declared it assumed, so what gets asked is
 exactly what would otherwise have been silently guessed — and the draft is **withheld** until
 it's answered.
@@ -563,16 +563,16 @@ sequenceDiagram
   participant S as login session (server-side history)
   participant L as LLM
 
-  E->>API: tier_name / cr_text (+ clarification_answer)
+  E->>API: tier_name / story_text (+ clarification_answer)
   API->>S: load history for this ticket
-  API->>L: check_cr_gaps(cr_text, history)
+  API->>L: check_story_gaps(story_text, history)
   alt gap found and budget remains
     L-->>API: {needs_clarification: true, question}
     API->>S: append user turn + assistant question
     API-->>E: {needs_clarification: true, question}
     Note over E,API: same single answer box — not a separate button
   else
-    API->>L: draft_impact_analysis(cr + folded-in answers, pin_cache = no answers)
+    API->>L: draft_impact_analysis(story + folded-in answers, pin_cache = no answers)
     L-->>API: {impact_analysis, assumptions[]}
     alt assumptions non-empty and budget remains
       API-->>E: one combined "I'd otherwise assume…" question
@@ -593,8 +593,8 @@ Design constraints worth preserving:
 - **History lives server-side** in the caller's own login session (`api/session.py`), keyed
   per ticket for `/analyze` and globally for `/analyze-adhoc` and quick-chat. The client only
   ever sends the latest message.
-- **`_full_cr_text()`** reconstructs the whole ticket from the transcript: after any
-  clarification round, the incoming `cr_text` is only the newest fragment (the engineer's
+- **`_full_story_text()`** reconstructs the whole ticket from the transcript: after any
+  clarification round, the incoming `story_text` is only the newest fragment (the engineer's
   answer), not the original ticket.
 - **The "assumptions the AI made" box can only ever appear once the budget is spent** —
   never as the first thing the engineer sees. If it appears, it means the AI asked twice and
@@ -616,7 +616,7 @@ sequenceDiagram
   participant FS as working tree
 
   D->>API: POST /s3/generate
-  API->>CG: propose_change(tier, cr_text, target)
+  API->>CG: propose_change(tier, story_text, target)
   CG->>CG: relevance funnel → selection
   CG->>CG: build prompt (per-target: tiers | amendment | claimsportal | enroldirect)
   CG->>CG: stream_complete(cache_key=target.stream_cache_key("codegen"))
@@ -658,10 +658,10 @@ every core file back), but review shouldn't show noise.
 | File set | all | core recall (`verify_core_recall`) + nothing outside `selection.selected` |
 | Python content | `.py` (all four targets) | `ast.parse`, no legacy `typing.List/Dict/Optional` (ruff UP006/UP035) |
 | Safety | all | denylist (`real client`, `end client`, `.env`, `api_key`, `secret`) + secret-shaped regex (`sk-…`, `AKIA…`, PEM headers) |
-| CR-2026-041 | `tiers.py`, `models.py` | required public symbols `PLAN_TIERS`/`TIER_MULTIPLIERS`/`upgrade_tier`; `Policy(...)` still constructible with 6 positional args |
-| CR-2026-042 | `models.py` | `Amendment.priority` is the **last** field and **has a default** |
-| CR-2026-043 | `claim_rules.py` etc. | `decide`/`payable` function defs exist (via `ast.walk`), required contract tokens; `policy.py`/`policy_client.py` carry `deductible` |
-| CR-2026-045 | `applicants.py`, `eligibility.py` etc. | core recall over the **editable** core files only, and a loud failure if the read-only `impact.py` comes back modified |
+| US-2026-041 | `tiers.py`, `models.py` | required public symbols `PLAN_TIERS`/`TIER_MULTIPLIERS`/`upgrade_tier`; `Policy(...)` still constructible with 6 positional args |
+| US-2026-042 | `models.py` | `Amendment.priority` is the **last** field and **has a default** |
+| US-2026-043 | `claim_rules.py` etc. | `decide`/`payable` function defs exist (via `ast.walk`), required contract tokens; `policy.py`/`policy_client.py` carry `deductible` |
+| US-2026-045 | `applicants.py`, `eligibility.py` etc. | core recall over the **editable** core files only, and a loud failure if the read-only `impact.py` comes back modified |
 
 The backward-compat check actually `exec`s the generated `models.py` and constructs a
 `Policy` with the exact 6 positional args `seed.py` uses — because `seed.py` is off the
@@ -677,7 +677,7 @@ not a rewrite.
 **Docstring restoration (`_restore_module_docstring`).** Whole-file replacement makes models
 silently shed the leading module docstring, and no prompt rule reliably stops it — asked
 about the deletion they deny it; told to fix it they echo the same content back while
-reporting success. Since no CR ever asks to delete a docstring, its disappearance is treated
+reporting success. Since no user story ever asks to delete a docstring, its disappearance is treated
 as an artefact of the format and repaired deterministically in code.
 
 **Showing the model its own diff.** The revise prompt includes the pending unified diff,
@@ -690,7 +690,7 @@ there when the diff shows it removed.
 **Post-apply migrations** are registry-driven, matched by target *root* rather than target
 id: a proposal's file paths identify which local app they belong to, and every registered
 target rooted there contributes its `post_apply_command`. Sibling targets inherit each
-other's migration step, so a new mockapp CR is covered for schema drift before its author
+other's migration step, so a new mockapp user story is covered for schema drift before its author
 thinks about it. Failures surface to the caller with their output tail (`post_apply.ok`),
 rather than dying silently in a discarded subprocess.
 
@@ -734,14 +734,14 @@ before any handler body runs; the admin routes and ticket assignment depend on
 |---|---|---|
 | GET | `/auth/roster` · POST `/auth/login` · `/auth/logout` · GET `/auth/me` | fictional roster login, httponly cookie |
 | GET | `/s3/reset-marker` | changes only on `demo/reset_s3.sh`; lets the SPA drop stale localStorage |
-| GET | `/s3/cr` | render a CR template with the audience-picked tier name |
+| GET | `/s3/story` | render a user story template with the audience-picked tier name |
 | POST | `/s3/analyze` | gap gate → impact + assumptions + effort + file selection + token panel |
 | POST | `/s3/analyze-adhoc` | clarity → gap → repo-identity gates, then analysis with no codebase context |
 | POST | `/s3/impact/cross-team` | AI-suggested other affected teams (human confirms before any ticket) |
 | POST | `/s3/generate` · `/s3/revise` · `/s3/add-file` · `/s3/apply` | the propose → review → apply loop |
 | POST | `/s3/design-doc` · `/s3/release-notes` | narrative artifacts |
 | POST | `/s3/tests/generate` · `/s3/tests/run` · `/s3/tests/mutation` · `/s3/tests` (legacy) | the test beats |
-| GET | `/s3/jira/board` · `/s3/jira/dependencies` · `/s3/ticket-events` | board (including rows derived from `crs/*.md`), cross-team dependencies, activity feed |
+| GET | `/s3/jira/board` · `/s3/jira/dependencies` · `/s3/ticket-events` | board (including rows derived from `stories/*.md`), cross-team dependencies, activity feed |
 | POST | `/s3/jira/cross-team-ticket` · `/problem-record-ticket` · `/ticket-status` | the only Jira writes, all human-confirmed |
 | POST | `/s3/jira/assign-ticket` | **manager only** — assign, reassign, or unassign |
 | GET | `/admin/status` · `/admin/reset/{scope}/preview` · `/admin/logs` | **manager only** — service probes, what a reset would do, log tails |
@@ -763,7 +763,7 @@ one the original Streamlit view called.
 Assignment used to be set-once, and the "once" was a **UI-only** gate:
 `POST /s3/jira/assign-ticket` had no role check at all, so anything that could reach the
 endpoint could assign any ticket to anyone. It is now `require_manager`, and a manager can
-reassign or unassign as well as assign. Tickets derived from `crs/*.md` land unassigned
+reassign or unassign as well as assign. Tickets derived from `stories/*.md` land unassigned
 precisely so this path is the one that routes them.
 
 Same rule as the release record's approvals and the commit gate: a claim about *who* is
@@ -884,7 +884,7 @@ adding a modal, not another expanding panel.
 
 - **`pytest tests/`** — 679 tests, ruff clean. Covers relevance scoring and threshold
   behaviour, codegen validators and docstring preservation, clarity/gap/impact gates, test
-  parsing, target registry, manifest discovery, CR intake, admin operations, API routes, and
+  parsing, target registry, manifest discovery, user story intake, admin operations, API routes, and
   the explicit `test_autofix_no_git_writes.py` / `test_s3_scm.py` guarantees. `tests/` also
   holds the three targets' human-authored regression suites, which the pipeline is forbidden
   to write to — `tests/test_s3_testrun.py` asserts they never appear in any allowlist, and
@@ -910,15 +910,15 @@ adding a modal, not another expanding panel.
 ## 13. Extending it
 
 **Onboarding a new repository — the no-code path.** Drop the source in as `repos/<name>/`,
-put its CRs in the top-level `crs/`, add `repos/<name>/.s3targets.json`, and keep its
+put its user stories in the top-level `stories/`, add `repos/<name>/.s3targets.json`, and keep its
 human-authored regression suite in the top-level `tests/` (anything ending `.py` under a
 repo root joins the codegen candidate pool, which would let the pipeline write to the one
-independent check that a CR broke nothing). That is the whole procedure; the manifest
+independent check that a user story broke nothing). That is the whole procedure; the manifest
 contract is in [`../../repos/README.md`](../../repos/README.md). Restart the console so
-discovery re-runs. The board picks the CRs up on its own.
+discovery re-runs. The board picks the user stories up on its own.
 
-**Adding a new CR against an existing built-in target root:** register a `Target` with a
-unique `cache_namespace`, add the CR file, write its prompt builder and structural validator
+**Adding a new user story against an existing built-in target root:** register a `Target` with a
+unique `cache_namespace`, add the user story file, write its prompt builder and structural validator
 pair, add a `Mutation`, and warm the caches (`demo/warm_s3_cache.sh`). Post-apply migrations
 are inherited from siblings on the same root automatically.
 
@@ -928,11 +928,11 @@ content validator branch in `codegen._validate_content`; confirm the runner emit
 
 **Known limitations / open items:**
 
-- Codegen prompts and structural validators are per-CR business logic — four built-in
+- Codegen prompts and structural validators are per-user story business logic — four built-in
   targets means four prompt builders and four validators. A discovered target falls through
   to the generic validator, which is honest but weaker. This is the main thing that would
   need real work to scale to a 30-repo estate.
-- A discovered target has no committed replay recording until its CR has been run once, so
+- A discovered target has no committed replay recording until its user story has been run once, so
   its first codegen run is a live call. Warm it before presenting.
 - Sessions are single-process and in-memory; a multi-worker deployment needs a shared store.
 - `MODEL_PRICING_USD_PER_1M` is empty by design; cost totals read as unset until real rates

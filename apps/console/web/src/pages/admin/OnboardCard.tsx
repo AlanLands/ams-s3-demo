@@ -9,7 +9,7 @@ interface FormState {
   display_name: string
   target_id: string
   cache_namespace: string
-  cr: string
+  story: string
   core_files: string
   codegen_allowlist: string
   testgen_allowlist: string
@@ -22,7 +22,7 @@ const EMPTY_FORM: FormState = {
   display_name: '',
   target_id: '',
   cache_namespace: '',
-  cr: '',
+  story: '',
   core_files: '',
   codegen_allowlist: '',
   testgen_allowlist: '',
@@ -41,7 +41,7 @@ function buildPayload(form: FormState, dryRun: boolean): OnboardRequest {
     display_name: form.display_name.trim(),
     target_id: form.target_id.trim(),
     cache_namespace: form.cache_namespace.trim(),
-    cr: form.cr.trim(),
+    story: form.story.trim(),
     core_files: linesToList(form.core_files),
     codegen_allowlist: linesToList(form.codegen_allowlist),
     testgen_allowlist: linesToList(form.testgen_allowlist),
@@ -127,7 +127,7 @@ export default function OnboardCard({
     ? 'Already registered. Target ids and cache namespaces must be unique, or a run replays the wrong recording.'
     : null
 
-  const required = [form.name, form.display_name, form.target_id, form.cache_namespace, form.cr]
+  const required = [form.name, form.display_name, form.target_id, form.cache_namespace, form.story]
   const complete = required.every((value) => value.trim().length > 0)
   const canPreview = complete && !nameError && !targetIdClash && busy === null
   const canWrite =
@@ -301,15 +301,15 @@ export default function OnboardCard({
           </Field>
         </div>
 
-        <Field label="Change request path" hint="Repo-relative path to the CR this target runs.">
+        <Field label="User story path" hint="Repo-relative path to the user story this target runs.">
           {({ inputId, describedBy }) => (
             <input
               id={inputId}
               aria-describedby={describedBy}
               className="ams-input"
-              value={form.cr}
-              onChange={(event) => update({ cr: event.target.value })}
-              placeholder="crs/CR-2026-050.md"
+              value={form.story}
+              onChange={(event) => update({ story: event.target.value })}
+              placeholder="stories/US-2026-050.md"
               autoComplete="off"
               spellCheck={false}
             />
@@ -431,7 +431,7 @@ export default function OnboardCard({
         </div>
         {!complete && (
           <p className="ams-field-hint">
-            Name, display name, target id, cache namespace and CR path are all required
+            Name, display name, target id, cache namespace and user story path are all required
             before a dry run.
           </p>
         )}

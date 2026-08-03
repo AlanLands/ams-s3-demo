@@ -16,22 +16,22 @@ from s3_enhancement.targets import Target
 
 SYSTEM_PROMPT = (
     "You are an AI engineering assistant supporting an application-maintenance "
-    "team for MapleSure Insurance. Given a change request that has just been "
+    "team for MapleSure Insurance. Given a user story that has just been "
     "implemented and tested, write a short, customer-friendly release note plus "
     "a one-line doc blurb describing the new capability."
 )
 
 DESIGN_DOC_SYSTEM_PROMPT = (
     "You are an AI engineering assistant supporting an application-maintenance "
-    "team for MapleSure Insurance. Given a change request whose code has just "
+    "team for MapleSure Insurance. Given a user story whose code has just "
     "been generated and applied (but not yet tested), write a short internal "
     "design document that hands the change off to QA."
 )
 
 
-def build_prompt(cr_text: str) -> str:
-    return f"""Change request (now implemented and tested):
-{cr_text}
+def build_prompt(story_text: str) -> str:
+    return f"""User story (now implemented and tested):
+{story_text}
 
 Write:
 1. A short release note (2-4 sentences) suitable for a client-facing change
@@ -42,9 +42,9 @@ Keep the tone plain and factual - no marketing language, this is an internal
 AMS delivery note, not an ad."""
 
 
-def build_design_doc_prompt(cr_text: str) -> str:
-    return f"""Change request (code generated and applied, not yet tested):
-{cr_text}
+def build_design_doc_prompt(story_text: str) -> str:
+    return f"""User story (code generated and applied, not yet tested):
+{story_text}
 
 Write a short internal design document, for handoff to QA, with these sections:
 1. Summary - one or two sentences on what is changing and why.
@@ -58,12 +58,12 @@ handoff document, not marketing copy."""
 
 
 def draft_release_notes(
-    cr_text: str, *, target: Target | None = None, usage_out: dict | None = None
+    story_text: str, *, target: Target | None = None, usage_out: dict | None = None
 ) -> str:
-    """Draft a short release note + doc blurb for the given CR text."""
+    """Draft a short release note + doc blurb for the given user story text."""
     target = target or targets.get_target(None)
     return complete(
-        build_prompt(cr_text),
+        build_prompt(story_text),
         system=SYSTEM_PROMPT,
         cache_key=target.cache_key("release_notes"),
         usage_out=usage_out,
@@ -71,15 +71,15 @@ def draft_release_notes(
 
 
 def draft_design_doc(
-    cr_text: str, *, target: Target | None = None, usage_out: dict | None = None
+    story_text: str, *, target: Target | None = None, usage_out: dict | None = None
 ) -> str:
     """Draft a short internal design doc handing the applied change off to QA
     — sits between "apply" and "generate tests" in the pipeline, so the test
     suite is generated against a reviewed handoff artifact rather than only
-    the raw CR text."""
+    the raw user story text."""
     target = target or targets.get_target(None)
     return complete(
-        build_design_doc_prompt(cr_text),
+        build_design_doc_prompt(story_text),
         system=DESIGN_DOC_SYSTEM_PROMPT,
         cache_key=target.cache_key("design_doc"),
         usage_out=usage_out,
@@ -90,7 +90,7 @@ def draft_design_doc(
 
 RELEASE_NOTE_SET_SYSTEM_PROMPT = (
     "You are an AI engineering assistant supporting an application-maintenance "
-    "team for MapleSure Insurance. Given a change request that has just been "
+    "team for MapleSure Insurance. Given a user story that has just been "
     "implemented and tested, write release notes for three different audiences. "
     "Return structured JSON only. No markdown fences, no prose outside the JSON."
 )
@@ -123,9 +123,9 @@ class ReleaseNoteSet:
         }
 
 
-def build_release_note_set_prompt(cr_text: str, *, target: Target) -> str:
-    return f"""Change request (implemented, tested and being released):
-{cr_text}
+def build_release_note_set_prompt(story_text: str, *, target: Target) -> str:
+    return f"""User story (implemented, tested and being released):
+{story_text}
 
 Application: {target.display_name}
 
@@ -144,7 +144,7 @@ Write three separate release notes for three audiences.
 
 Plain and factual throughout — this is an internal AMS delivery record, not
 an advertisement. Never invent a date, a version number or a ticket
-reference that is not in the change request above.
+reference that is not in the user story above.
 
 Return structured JSON only, with this exact shape:
 {{"changelog": "...", "ops_note": "...", "whats_new": "..."}}"""
@@ -181,9 +181,9 @@ def _parse_note_set(response: str) -> ReleaseNoteSet:
 
 
 def draft_release_note_set(
-    cr_text: str, *, target: Target | None = None, usage_out: dict | None = None
+    story_text: str, *, target: Target | None = None, usage_out: dict | None = None
 ) -> ReleaseNoteSet:
-    """Draft the three audience-specific release notes for `cr_text`.
+    """Draft the three audience-specific release notes for `story_text`.
 
     A separate cache beat from `draft_release_notes`, not a replacement of it:
     the older call returns a plain string and is still reachable from the
@@ -193,7 +193,7 @@ def draft_release_note_set(
     """
     target = target or targets.get_target(None)
     response = complete(
-        build_release_note_set_prompt(cr_text, target=target),
+        build_release_note_set_prompt(story_text, target=target),
         system=RELEASE_NOTE_SET_SYSTEM_PROMPT,
         json_mode=True,
         cache_key=target.cache_key("release_note_set"),

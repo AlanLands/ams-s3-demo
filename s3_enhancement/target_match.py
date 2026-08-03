@@ -1,26 +1,26 @@
-"""Resolve which registered `Target` a CR belongs to, from the CR text alone.
+"""Resolve which registered `Target` a user story belongs to, from the user story text alone.
 
-Every CR under `crs/*.md` now lives in one place, outside every target's own
+Every user story under `stories/*.md` now lives in one place, outside every target's own
 directory (see CLAUDE.md's "File paths are load-bearing" section — moving a
-*target's source* is a two-part rewrite; moving the CR text itself carries no
+*target's source* is a two-part rewrite; moving the user story text itself carries no
 such cost, since `relevance.py`'s discovery globs only `*.py`/`*.java` and
-never scores the CR text). That move only pays off if picking the right
+never scores the user story text). That move only pays off if picking the right
 target no longer depends on where the file sits, or on a human writing down
 a ticket-key -> target_id mapping by hand — otherwise the coupling just moved
 from the filesystem into a hardcoded table somewhere else. This module is
-that missing piece: given a CR's text, find its target the same way
+that missing piece: given a user story's text, find its target the same way
 `applications.py` finds an application from a CI — deterministically first,
 an LLM only when the deterministic tiers have no answer.
 
 Three tiers, cheapest first:
 
-1. **CR identifier.** Every CR opens with a `CR-YYYY-NNN:` title line, and
-   every registered target's `cr_template_path.stem` is exactly that
-   identifier (`CR-2026-041`, etc.) — a target IS the file it was registered
+1. **user story identifier.** Every user story opens with a `US-YYYY-NNN:` title line, and
+   every registered target's `story_template_path.stem` is exactly that
+   identifier (`US-2026-041`, etc.) — a target IS the file it was registered
    with, so this is an exact structural match, not a guess. This is also the
-   only tier that already works for today's three pinned CRs with zero
+   only tier that already works for today's three pinned user stories with zero
    registry lookups.
-2. **`Application:` header.** Every CR also states which application it's
+2. **`Application:` header.** Every user story also states which application it's
    for (`Application: ClaimsPortal (...)`). Matched against
    `applications.py`'s registered `display_name`s, then narrowed to that
    application's registered targets via `targets.targets_for_application()`.
@@ -28,17 +28,17 @@ Three tiers, cheapest first:
    application — `applications.py`'s own docstring already notes an
    application can host more than one target (PolicyCore hosts two), so an
    ambiguous header falls through rather than guessing.
-3. **AI fallback**, for a CR whose title isn't yet any registered target's
-   `cr_template_path.stem` and whose `Application:` header is missing,
-   misspelled, or ambiguous between targets — e.g. a genuinely new CR being
+3. **AI fallback**, for a user story whose title isn't yet any registered target's
+   `story_template_path.stem` and whose `Application:` header is missing,
+   misspelled, or ambiguous between targets — e.g. a genuinely new user story being
    drafted before its target is registered. Mirrors `repo_match.py`'s
    shape (`RepoMatch`-style result, the same confidence gate) but the
    candidate pool is this console's own registered targets, not a caller's
    GitLab projects.
 
 Onboarding a new repo is then: register its `Target` (own `root`,
-`cr_template_path`, `application_id`) in `targets.py`, drop its CR under
-`crs/`. Tier 1 picks it up immediately — no ticket-key table to edit anywhere
+`story_template_path`, `application_id`) in `targets.py`, drop its user story under
+`stories/`. Tier 1 picks it up immediately — no ticket-key table to edit anywhere
 else in this codebase.
 """
 
@@ -52,14 +52,14 @@ from common.llm import LLMError, complete, parse_json_response
 from s3_enhancement import applications, targets
 from s3_enhancement.targets import Target
 
-_TITLE_RE = re.compile(r"^(CR-\d{4}-\d+):", re.MULTILINE)
+_TITLE_RE = re.compile(r"^(US-\d{4}-\d+):", re.MULTILINE)
 _APPLICATION_RE = re.compile(r"^Application:\s*(.+)$", re.MULTILINE)
 
-MatchMethod = Literal["cr_id", "application_header", "ai", "unresolved"]
+MatchMethod = Literal["story_id", "application_header", "ai", "unresolved"]
 
 SYSTEM_PROMPT = (
     "You are an AI engineering assistant helping an application-maintenance team "
-    "figure out which of their internally registered code targets a change request "
+    "figure out which of their internally registered code targets a user story "
     "belongs to, given only each target's name and the change it already implements "
     "— you have not read any source code."
 )
@@ -115,13 +115,13 @@ class TargetMatch:
         return self.method == "ai" and self.confidence != "high"
 
 
-def _cr_id_from_text(cr_text: str) -> str | None:
-    match = _TITLE_RE.search(cr_text)
+def _story_id_from_text(story_text: str) -> str | None:
+    match = _TITLE_RE.search(story_text)
     return match.group(1) if match else None
 
 
-def _application_name_from_text(cr_text: str) -> str | None:
-    match = _APPLICATION_RE.search(cr_text)
+def _application_name_from_text(story_text: str) -> str | None:
+    match = _APPLICATION_RE.search(story_text)
     if not match:
         return None
     # Header reads e.g. "PolicyCore (policy/claims portal)" — the parenthetical
@@ -129,18 +129,18 @@ def _application_name_from_text(cr_text: str) -> str | None:
     return match.group(1).split("(")[0].strip()
 
 
-def _match_by_cr_id(cr_text: str) -> Target | None:
-    cr_id = _cr_id_from_text(cr_text)
-    if not cr_id:
+def _match_by_story_id(story_text: str) -> Target | None:
+    story_id = _story_id_from_text(story_text)
+    if not story_id:
         return None
     for target in targets.all_targets():
-        if target.cr_template_path is not None and target.cr_template_path.stem == cr_id:
+        if target.story_template_path is not None and target.story_template_path.stem == story_id:
             return target
     return None
 
 
-def _match_by_application_header(cr_text: str) -> Target | None:
-    name = _application_name_from_text(cr_text)
+def _match_by_application_header(story_text: str) -> Target | None:
+    name = _application_name_from_text(story_text)
     if not name:
         return None
     matches = [
@@ -155,21 +155,21 @@ def _match_by_application_header(cr_text: str) -> Target | None:
 
 def _describe_target(target: Target) -> str:
     title = target.display_name
-    if target.cr_template_path is not None and target.cr_template_path.exists():
-        cr_id = target.cr_template_path.stem
-        title = f"{target.display_name} ({cr_id})"
+    if target.story_template_path is not None and target.story_template_path.exists():
+        story_id = target.story_template_path.stem
+        title = f"{target.display_name} ({story_id})"
     return f"target_id={target.target_id}: {title}"
 
 
-def build_ai_prompt(cr_text: str, candidates: tuple[Target, ...]) -> str:
+def build_ai_prompt(story_text: str, candidates: tuple[Target, ...]) -> str:
     listing = "\n".join(_describe_target(target) for target in candidates)
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
 Candidate internal targets:
 {listing}
 
-Which target_id is this change request most likely for? Base this only on the
+Which target_id is this user story most likely for? Base this only on the
 target descriptions above.
 
 Rank every candidate listed, including the ones you reject — a reviewer needs
@@ -191,14 +191,14 @@ Return JSON exactly matching:
 }}"""
 
 
-def _match_by_ai(cr_text: str) -> TargetMatch:
+def _match_by_ai(story_text: str) -> TargetMatch:
     candidates = targets.all_targets()
     if not candidates:
         return TargetMatch(target=None, method="unresolved")
 
     try:
         response = complete(
-            build_ai_prompt(cr_text, candidates),
+            build_ai_prompt(story_text, candidates),
             system=SYSTEM_PROMPT,
             json_mode=True,
         )
@@ -258,14 +258,14 @@ def _parse_ranking(raw: object, by_id: dict[str, Target]) -> tuple[RankedCandida
     return tuple(ranked)
 
 
-def resolve_target_for_cr(cr_text: str) -> TargetMatch:
-    """Resolve `cr_text` to a registered `Target`, cheapest tier first."""
-    by_id = _match_by_cr_id(cr_text)
+def resolve_target_for_story(story_text: str) -> TargetMatch:
+    """Resolve `story_text` to a registered `Target`, cheapest tier first."""
+    by_id = _match_by_story_id(story_text)
     if by_id is not None:
-        return TargetMatch(target=by_id, method="cr_id")
+        return TargetMatch(target=by_id, method="story_id")
 
-    by_header = _match_by_application_header(cr_text)
+    by_header = _match_by_application_header(story_text)
     if by_header is not None:
         return TargetMatch(target=by_header, method="application_header")
 
-    return _match_by_ai(cr_text)
+    return _match_by_ai(story_text)

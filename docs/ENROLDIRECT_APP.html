@@ -122,7 +122,7 @@
   <p class="subtitle">The online enrolment channel, the access question nobody had
     counted, and an analysis surface that refuses to overstate its own evidence.</p>
   <p class="meta">Third repository in <span class="mono">repos/</span> · Python / FastAPI ·
-    S3 target for CR-2026-045 · Verified against a live run on 3 August 2026 ·
+    S3 target for US-2026-045 · Verified against a live run on 3 August 2026 ·
     24 regression tests passing</p>
 </div>
 
@@ -147,9 +147,9 @@
   code, the data, or this brief. The interesting move is that the analysis is not a
   document here: it is three endpoints that recompute themselves from whatever the
   configuration currently says.</p>
-  <p>CR-2026-045 was rewritten on 3 August 2026 to follow that same source material —
+  <p>US-2026-045 was rewritten on 3 August 2026 to follow that same source material —
   business objective, target member type, and acceptance criteria in
-  given-when-then — so the change request reads as the client's own story rather than
+  given-when-then — so the user story reads as the client's own story rather than
   ours. Its technical acceptance criteria were not touched, which is why the committed
   recording still replays against it.</p>
 </div>
@@ -211,7 +211,7 @@
   preference and is refused at the second gate. The analysis surface evaluates both
   options as parameters of its own computation, without the runtime gate resolving
   anyone through either of them.</p>
-  <p>CR-2026-045 settles it, and settles it as a <strong>single module-level value</strong>
+  <p>US-2026-045 settles it, and settles it as a <strong>single module-level value</strong>
   in <span class="mono">applicants.py</span> rather than a per-call parameter. That is
   deliberate: the gate enforces one policy for the whole book, and a caller that could
   pass its own would be choosing its own access rules.</p>
@@ -410,7 +410,7 @@
   a suite the pipeline can rewrite is not an independent check of anything.
   <span class="mono">tests/test_s3_testrun.py</span> asserts that separation rather than
   trusting it. Every one of these must pass <strong>before and after</strong>
-  CR-2026-045 — they are invariants, not assertions about the change.</p>
+  US-2026-045 — they are invariants, not assertions about the change.</p>
 
   <table>
     <thead><tr><th style="width:44%">What is asserted</th><th>Why it needs a test</th></tr></thead>
@@ -433,12 +433,12 @@
   was on disk, no target was registered, and the console correctly reported
   <span class="mono">automation_available=False</span>. <strong>That is no longer true.</strong>
   It is registered as <span class="mono">enroldirect-prospect-access</span>, running
-  CR-2026-045, with its own committed replay recording. Routing and automation are both
+  US-2026-045, with its own committed replay recording. Routing and automation are both
   live for it.</p>
 
   <div class="callout">
     <div class="lead">Its baseline is a removal, and that is the whole point</div>
-    <p class="say">"The other change requests add something — a field, a tier, a
+    <p class="say">"The other user stories add something — a field, a tier, a
     deductible. This one settles a question. What is checked in is the state <em>after</em>
     the impact analysis and <em>before</em> anyone acted on it: a prospect resolves to no
     preference and is turned away. The 'before' is not a missing feature, it is a refusal
@@ -449,7 +449,7 @@
   <p><span class="mono">impact.py</span> is in the target's <strong>core files</strong> —
   relevance always recalls it into the prompt — and deliberately <strong>not</strong> in its
   codegen allowlist. Both halves are needed. The model has to read the analysis to
-  understand what the CR means; it must not edit it, because the analysis has to keep
+  understand what the user story means; it must not edit it, because the analysis has to keep
   sizing <em>both</em> options after one is adopted. A comparison reporting only the option
   in force cannot answer "what is this costing us", which is the question that reopens
   the decision. Core recall gets it in; the allowlist keeps it out of the diff, and this
@@ -461,7 +461,7 @@
     <tbody>
       <tr><td>Target id</td><td class="mono">enroldirect-prospect-access</td></tr>
       <tr><td>Cache namespace</td><td class="mono">enroldirect_prospect_access</td></tr>
-      <tr><td>Change request</td><td class="mono">crs/CR-2026-045.md</td></tr>
+      <tr><td>User story</td><td class="mono">stories/US-2026-045.md</td></tr>
       <tr><td>Board ticket</td><td class="mono">AMS-1045</td></tr>
       <tr><td>Editable core files</td><td class="mono">applicants.py · eligibility.py · enrolments.py · main.py</td></tr>
       <tr><td>Read-only core file</td><td class="mono">impact.py</td></tr>
@@ -471,8 +471,8 @@
     </tbody>
   </table>
 
-  <p>AMS-1045 was never hand-seeded. <span class="mono">crs/CR-2026-045.md</span> exists,
-  so the board opens a ticket for it automatically, keyed off the CR identifier and landing
+  <p>AMS-1045 was never hand-seeded. <span class="mono">stories/US-2026-045.md</span> exists,
+  so the board opens a ticket for it automatically, keyed off the user story identifier and landing
   unassigned — which is what puts it in front of the manager. The rest of the onboarding
   contract, including the <span class="mono">.s3targets.json</span> manifest a
   dropped-in repository ships, is in <span class="mono">repos/README.md</span>.</p>

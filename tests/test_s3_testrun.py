@@ -273,7 +273,7 @@ def _run(cases, passed: bool):
 
 def test_hint_fires_when_every_failure_is_a_missing_attribute():
     """The exact shape of running the generated suite against the baseline:
-    the CR's new field simply is not there yet."""
+    the user story's new field simply is not there yet."""
     from apps.console.api.routers.s3 import _unapplied_change_hint
 
     run = _run(

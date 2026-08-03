@@ -18,9 +18,9 @@ def _fake_target() -> SimpleNamespace:
 
 def test_run_live_writes_failed_status_on_harness_error(tmp_path, monkeypatch):
     monkeypatch.setattr(harness, "OUT_ROOT", tmp_path)
-    monkeypatch.setattr(harness, "render_cr", lambda tier_name, target=None: "CR text")
+    monkeypatch.setattr(harness, "render_story", lambda tier_name, target=None: "user story text")
     monkeypatch.setattr(
-        harness, "build_command", lambda tier_name, cr_text: ("fake-cli", ["fake-cli"])
+        harness, "build_command", lambda tier_name, story_text: ("fake-cli", ["fake-cli"])
     )
     monkeypatch.setattr(harness, "_untracked_paths", lambda: set())
     monkeypatch.setattr(harness, "_tracked_content_hashes", lambda: {})
@@ -44,9 +44,9 @@ def test_run_live_writes_failed_status_on_harness_error(tmp_path, monkeypatch):
 
 def test_run_live_success_status_is_marked_ok(tmp_path, monkeypatch):
     monkeypatch.setattr(harness, "OUT_ROOT", tmp_path)
-    monkeypatch.setattr(harness, "render_cr", lambda tier_name, target=None: "CR text")
+    monkeypatch.setattr(harness, "render_story", lambda tier_name, target=None: "user story text")
     monkeypatch.setattr(
-        harness, "build_command", lambda tier_name, cr_text: ("fake-cli", ["fake-cli"])
+        harness, "build_command", lambda tier_name, story_text: ("fake-cli", ["fake-cli"])
     )
     # One expected file "changes" during the run so the touched-files check passes.
     tracked = iter([{"repos/policycore/core/models.py": "before"}, {"repos/policycore/core/models.py": "after"}])

@@ -5,7 +5,7 @@ module validates the JSON and Python syntax, stages the files, writes an
 informational diff, then applies the replacements to the working tree.
 
 The prompt text and validators below (`_validate_file_set`, `_validate_content`,
-`_validate_policy_backward_compatible`) are CR-2026-041's specific contract
+`_validate_policy_backward_compatible`) are US-2026-041's specific contract
 (exact API names, exact error wording, seed.py backward-compat) — they are not
 generic. A second `Target` (see s3_enhancement/targets.py) needs its own
 prompt/validator pair to get live codegen; registering a target alone does not
@@ -53,7 +53,7 @@ _PRESERVATION_RULES = """\
 - Treat the given file as an edit target, not a blank page: reproduce every
   line you are not intentionally changing byte-for-byte, including
   blank-line spacing, existing comments, and docstrings. Do not "clean up,"
-  reflow, or drop anything the change request did not ask you to touch.
+  reflow, or drop anything the user story did not ask you to touch.
 - Every comment and docstring present in the input must still be present in
   your output, unless the exact line(s) it documents no longer exist after
   your change. If a comment or docstring becomes inaccurate because of your
@@ -99,7 +99,7 @@ class CodegenResult:
 
 
 def propose_change(
-    tier_name: str, cr_text: str, *, target: Target | None = None
+    tier_name: str, story_text: str, *, target: Target | None = None
 ) -> CodegenResult:
     """Generate, validate, stage, and diff the target's file replacements.
 
@@ -110,16 +110,16 @@ def propose_change(
     """
     target = target or targets.get_target(None)
     if os.environ.get("LLM_MODE", "replay").lower() == "replay":
-        return _propose_change_once(tier_name, cr_text, target=target, used_replay=True)
+        return _propose_change_once(tier_name, story_text, target=target, used_replay=True)
     try:
-        return _propose_change_once(tier_name, cr_text, target=target, used_replay=False)
+        return _propose_change_once(tier_name, story_text, target=target, used_replay=False)
     except LLMError:
         with _temporary_env("LLM_MODE", "replay"):
-            return _propose_change_once(tier_name, cr_text, target=target, used_replay=True)
+            return _propose_change_once(tier_name, story_text, target=target, used_replay=True)
 
 
 def generate_change(
-    tier_name: str, cr_text: str, *, target: Target | None = None
+    tier_name: str, story_text: str, *, target: Target | None = None
 ) -> CodegenResult:
     """Legacy propose-and-immediately-apply convenience wrapper.
 
@@ -128,26 +128,26 @@ def generate_change(
     (`api/routers/s3.py`) uses `propose_change()` + `apply_change()`
     separately instead — see their docstrings.
     """
-    result = propose_change(tier_name, cr_text, target=target)
+    result = propose_change(tier_name, story_text, target=target)
     apply_change(result.proposal_id)
     return result
 
 
 def _propose_change_once(
-    tier_name: str, cr_text: str, *, target: Target, used_replay: bool
+    tier_name: str, story_text: str, *, target: Target, used_replay: bool
 ) -> CodegenResult:
-    all_files = relevance.discover_files_for_target(target, cr_text)
+    all_files = relevance.discover_files_for_target(target, story_text)
     selection = relevance.select_relevant_files(
-        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+        story_text, all_files, core_files=target.core_files, design_doc_root=target.root
     )
     if target.cache_namespace == targets.MOCKAPP_AMENDMENT_FIELD_ADD.cache_namespace:
-        prompt = build_amendment_prompt(cr_text, selection=selection)
+        prompt = build_amendment_prompt(story_text, selection=selection)
     elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
-        prompt = build_spring_prompt(cr_text, selection=selection)
+        prompt = build_spring_prompt(story_text, selection=selection)
     elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
-        prompt = build_enroldirect_prompt(cr_text, selection=selection, target=target)
+        prompt = build_enroldirect_prompt(story_text, selection=selection, target=target)
     else:
-        prompt = build_prompt(tier_name, cr_text, selection=selection)
+        prompt = build_prompt(tier_name, story_text, selection=selection)
     usage: dict = {}
     substitutions = {"{{TIER_NAME}}": tier_name} if used_replay else None
     chunks: list[str] = []
@@ -595,7 +595,7 @@ Rules:
   the "-" lines: if it really is gone, say so plainly and explain why, and
   do NOT claim it was kept. Never tell the reviewer something is still
   there when the diff shows it removed.
-- If the diff removes a docstring, comment, or blank line the change request
+- If the diff removes a docstring, comment, or blank line the user story
   never asked you to touch, that is an unintended regression: say so, and
   return the corrected file in "files" restoring it verbatim.
 - Only return files from the list above — never introduce a new file path.
@@ -608,23 +608,23 @@ Rules:
 
 def build_prompt(
     tier_name: str,
-    cr_text: str,
+    story_text: str,
     *,
     selection: relevance.SelectionResult | None = None,
     target: Target | None = None,
 ) -> str:
     if selection is None:
         target = target or targets.get_target(None)
-        all_files = relevance.discover_files_for_target(target, cr_text)
+        all_files = relevance.discover_files_for_target(target, story_text)
         selection = relevance.select_relevant_files(
-            cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+            story_text, all_files, core_files=target.core_files, design_doc_root=target.root
         )
 
     mode = os.environ.get("LLM_MODE", "replay").lower()
     record_note = ""
     if mode == "record":
         record_note = (
-            "\nThe CR contains a placeholder token {{TIER_NAME}}. Reproduce it "
+            "\nThe user story contains a placeholder token {{TIER_NAME}}. Reproduce it "
             "verbatim in generated string literals and UI labels; do not invent "
             "a concrete tier name."
         )
@@ -646,8 +646,8 @@ def build_prompt(
         indent=2,
     )
 
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 {record_note}
 
 Audience-selected top tier name: {tier_name}
@@ -667,7 +667,7 @@ Rules:
   them:
   - `PLAN_TIERS: list[str]` — ordered lowest to highest, exactly
     `["Standard", "Premium", "{tier_name}"]` (or, only when recording with the
-    placeholder CR, `["Standard", "Premium", "{{{{TIER_NAME}}}}"]`).
+    placeholder user story, `["Standard", "Premium", "{{{{TIER_NAME}}}}"]`).
   - `TIER_MULTIPLIERS: dict[str, float]` — contribution multiplier per tier name
     in `PLAN_TIERS`.
   - `upgrade_tier(policy_number: str, new_tier: str) -> Policy` — the only
@@ -710,10 +710,10 @@ Rules:
 
 
 def build_amendment_prompt(
-    cr_text: str, *, selection: relevance.SelectionResult
+    story_text: str, *, selection: relevance.SelectionResult
 ) -> str:
-    """Prompt for CR-2026-042 (amendment priority field) — no audience-picked
-    placeholder, unlike the tier-upgrade CR's {{TIER_NAME}}."""
+    """Prompt for US-2026-042 (amendment priority field) — no audience-picked
+    placeholder, unlike the tier-upgrade user story's {{TIER_NAME}}."""
     current_files = []
     for rel_path, content in selection.selected.items():
         current_files.append(f"--- {rel_path} ---\n{content}")
@@ -731,8 +731,8 @@ def build_amendment_prompt(
         indent=2,
     )
 
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
 Current contents of the only files you may replace:
 {chr(10).join(current_files)}
@@ -760,7 +760,7 @@ Rules:
   "Standard" is the default selection), and passes the selected value to
   `submit_amendment(...)`.
 - Submitting the form without touching the new Priority control must behave
-  exactly as before this CR (defaults to "Standard").
+  exactly as before this user story (defaults to "Standard").
 {_PRESERVATION_RULES}
 - Every file below uses 4-space indentation throughout — match it exactly on
   every line you output, including lines that already existed. Return a
@@ -777,9 +777,9 @@ Rules:
   chosen must still succeed."""
 
 
-def build_spring_prompt(cr_text: str, *, selection: relevance.SelectionResult) -> str:
-    """Prompt for CR-2026-043 (claims deductible) against the ClaimsPortal
-    target — no audience-picked placeholder, like the amendment CR. Name
+def build_spring_prompt(story_text: str, *, selection: relevance.SelectionResult) -> str:
+    """Prompt for US-2026-043 (claims deductible) against the ClaimsPortal
+    target — no audience-picked placeholder, like the amendment user story. Name
     kept from this target's Java-era history (see CLAUDE.md); the source is
     Python since the 2026-07-30 rewrite."""
     current_files = []
@@ -799,11 +799,11 @@ def build_spring_prompt(cr_text: str, *, selection: relevance.SelectionResult) -
         indent=2,
     )
 
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
 Current contents of the only files you may replace (an empty file is one the
-CR creates from scratch):
+user story creates from scratch):
 {chr(10).join(current_files)}
 
 Return structured JSON only with this exact shape:
@@ -826,7 +826,7 @@ Rules:
 - "at or below the deductible" means `amount <= deductible` is rejected;
   strictly above the deductible (and within the limit) is accepted.
 - policy.py's `Policy` model gains a `deductible: float` field as the LAST
-  field, after annualMaximum. main.py's seeded contracts use the CR's
+  field, after annualMaximum. main.py's seeded contracts use the user story's
   deductible values. policy_client.py's `PolicyView` model gains the
   matching last field.
 - claim.py's `Claim` model gains a `payableAmount: float` field as the LAST
@@ -848,7 +848,7 @@ Rules:
 
 _ENROLDIRECT_READ_ONLY_REASONS = {
     "repos/enroldirect/impact.py": (
-        "the impact analysis this CR acts on — it must keep sizing BOTH "
+        "the impact analysis this user story acts on — it must keep sizing BOTH "
         "options after one is adopted, and its JSON field names are consumed "
         "by the console"
     ),
@@ -865,16 +865,16 @@ _ENROLDIRECT_READ_ONLY_REASONS = {
 
 
 def build_enroldirect_prompt(
-    cr_text: str, *, selection: relevance.SelectionResult, target: Target
+    story_text: str, *, selection: relevance.SelectionResult, target: Target
 ) -> str:
-    """Prompt for CR-2026-045 (prospect access) against the EnrolDirect target.
+    """Prompt for US-2026-045 (prospect access) against the EnrolDirect target.
 
-    No audience-picked placeholder, like the amendment and ClaimsPortal CRs.
+    No audience-picked placeholder, like the amendment and ClaimsPortal user stories.
 
     The instruction with no counterpart in the other builders is the read-only
     set. Three of this target's selected files are context the model needs and
     must not return — `impact.py` above all, since the analysis surface is the
-    obvious thing to "finish" and editing it would rewrite the evidence the CR
+    obvious thing to "finish" and editing it would rewrite the evidence the user story
     is acting on. Editability is read off `target.codegen_allowlist` rather
     than listed here, so the prompt and the validator cannot disagree.
     """
@@ -903,8 +903,8 @@ def build_enroldirect_prompt(
         indent=2,
     )
 
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
 Current contents of the files in scope. Only the ones NOT marked
 [CONTEXT ONLY] may be returned:
@@ -1083,15 +1083,15 @@ def _validate_enroldirect_file_set(
     """File-set check for a target whose prompt shows a file it may not change.
 
     `impact.py` is one of this target's `core_files` — the model has to read
-    the analysis to understand what the CR is acting on — but it is not in the
+    the analysis to understand what the user story is acting on — but it is not in the
     `codegen_allowlist`, so demanding it back the way `verify_core_recall`
     does for every other target would fail every well-behaved response. Core
     recall therefore runs over the editable core files only.
 
     The read-only files are still checked, in the direction that matters: the
     model may echo one back unchanged (harmless, and `_drop_unchanged_files`
-    removes it), but a *modified* one is the CR's "not to be changed by this
-    CR" clause being broken, and that fails loudly rather than being silently
+    removes it), but a *modified* one is the user story's "not to be changed by this
+    user story" clause being broken, and that fails loudly rather than being silently
     discarded.
     """
     editable_core = tuple(p for p in selection.core_files if p in target.codegen_allowlist)
@@ -1112,7 +1112,7 @@ def _validate_enroldirect_file_set(
     )
     if modified_read_only:
         raise LLMError(
-            "S3 codegen modified files this CR forbids changing: "
+            "S3 codegen modified files this user story forbids changing: "
             f"{modified_read_only}; allowlist {sorted(target.codegen_allowlist)}"
         )
 
@@ -1151,7 +1151,7 @@ def _validate_spring_file_set(
 
 
 def _validate_claim_rules_contract(files: dict[str, str]) -> None:
-    """CR-2026-043's fixed contract — the generated pytest suite calls
+    """US-2026-043's fixed contract — the generated pytest suite calls
     claim_rules.decide/payable by these exact names, and both Policy-side
     models must actually carry the new deductible for the cross-service
     JSON mapping to line up."""
@@ -1184,7 +1184,7 @@ def _validate_claim_rules_contract(files: dict[str, str]) -> None:
 def _validate_amendment_priority_field(models_content: str) -> None:
     """`priority` must be the Amendment dataclass's last field, with a
     default — otherwise existing amendment submissions with no priority
-    chosen would break (CR-2026-042's explicit acceptance criterion)."""
+    chosen would break (US-2026-042's explicit acceptance criterion)."""
     try:
         tree = ast.parse(models_content, filename="repos/policycore/core/models.py")
     except SyntaxError as exc:
@@ -1288,7 +1288,7 @@ def _validate_content(rel_path: str, content: str) -> None:
 
 def _drop_unchanged_files(files: dict[str, str]) -> dict[str, str]:
     """Return only the files whose proposed content actually differs from
-    what's on disk right now. A missing repo file (one the CR creates) always
+    what's on disk right now. A missing repo file (one the user story creates) always
     counts as changed."""
     changed: dict[str, str] = {}
     for rel_path, content in files.items():
@@ -1306,7 +1306,7 @@ def _restore_module_docstring(rel_path: str, content: str) -> str:
     Returning each file as a complete replacement makes models silently shed
     the leading docstring, and no prompt rule reliably stops it: asked about
     the deletion they deny it, and told to fix it they echo the same content
-    back while reporting success. The CR never asks to delete a docstring, so
+    back while reporting success. The user story never asks to delete a docstring, so
     treat its disappearance as an artefact of the format and repair it here
     instead of trusting the model to.
     """
@@ -1357,7 +1357,7 @@ def _restore_body_docstrings(rel_path: str, content: str) -> str:
     """Put back function/class docstrings the model dropped, the same way
     `_restore_module_docstring` does for the module docstring — whole-file
     replacement sheds these just as readily, and it is the exact regression
-    reported against CR-2026-042's replay: docstrings gone from every touched
+    reported against US-2026-042's replay: docstrings gone from every touched
     function, not only the module's.
 
     Matches functions/classes by qualified name only. A function the model
@@ -1414,7 +1414,7 @@ def _restore_body_docstrings(rel_path: str, content: str) -> str:
 def _restore_dropped_comment_lines(rel_path: str, content: str) -> str:
     """Restore whole-line comments a whole-file replacement silently dropped
     anywhere in the file — not just docstrings. Found against a real
-    recording (CR-2026-042): a design-rationale comment in the middle of a
+    recording (US-2026-042): a design-rationale comment in the middle of a
     function body vanished with no docstring involved, so the AST-based
     docstring repairs above never see it.
 
@@ -1503,7 +1503,7 @@ def _restore_top_level_blank_lines(rel_path: str, content: str) -> str:
     renamed or newly-added def has no original position to restore, so its
     spacing is left exactly as the model wrote it. Deliberately narrower than
     running a general formatter (`ruff format`) over the whole file — that
-    also collapses unrelated multi-line expressions the CR never touched
+    also collapses unrelated multi-line expressions the user story never touched
     (comprehensions, ternaries, wrapped calls) into a diff the reviewer has
     to puzzle over. This only ever rewrites the blank-line run immediately
     above a matched def/class; nothing else in the file is touched.

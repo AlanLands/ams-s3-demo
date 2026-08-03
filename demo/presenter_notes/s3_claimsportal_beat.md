@@ -2,7 +2,7 @@
 
 **Point being made**: S3 is a pipeline, not a party trick tuned to one app.
 Same console, same beats, a second independently-registered repo/target,
-second CR. (There is now a third — EnrolDirect, CR-2026-045 — if anyone asks
+second user story. (There is now a third — EnrolDirect, US-2026-045 — if anyone asks
 whether two is a coincidence.) (Until 2026-07-30 this beat also carried a second-language story —
 ClaimsPortal is Python/FastAPI, verified via pytest. It was
 rebuilt in Python/FastAPI so the demo runs without a JVM/Maven; the pipeline
@@ -14,7 +14,7 @@ tech stack.)
 "MapleSure — Group Contracts", the Contracts Team console) serves policies;
 claims_service (:8082, "MapleSure — Benefit Claims", the Claims Team console)
 validates each submitted claim by calling policy_service over REST.
-**CR-2026-043 — Benefit Claim Deductible Handling** (`crs/CR-2026-043.md`,
+**US-2026-043 — Benefit Claim Deductible Handling** (`stories/US-2026-043.md`,
 Jira AMS-103, assignee Ravi Kumar)
 adds a per-policy deductible: below-deductible claims are rejected, accepted
 claims record a payable amount. Fixed contract: `claim_rules.decide`/`payable`
@@ -37,7 +37,7 @@ module-level functions.
 ## Pre-flight (before the audience is in the room)
 
 ```bash
-./demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-CR baseline
+./demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-user story baseline
 ./demo/reset_s3.sh                # shared state: out/, ticket events, .cache/llm
 uvicorn apps.console.api.main:app --port 8000  # terminal 1 — API :8000 (never --reload:
                                   # Generate/Apply write .py files, the watcher

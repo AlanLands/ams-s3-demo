@@ -9,10 +9,10 @@ property for the regression suites and is the reason it holds.
 
 The two rules that govern the regression suites govern this file too:
 
-1. **Every assertion holds before and after CR-2026-045.** The CR settles how
+1. **Every assertion holds before and after US-2026-045.** The user story settles how
    a prospect is classified at the gate, so nothing here asserts a prospect's
    gate outcome or what `preference_for_category` returns for `PROSPECT`.
-   What it asserts is the ground the CR must not move: the two classified
+   What it asserts is the ground the user story must not move: the two classified
    categories, the gate ordering, the data-integrity rules on the applicant
    record, and the preference-vocabulary contract with PolicyCore.
 2. **It lives in `tests/`, not under `repos/enroldirect/`.** Anything ending
@@ -140,7 +140,7 @@ def test_unknown_category_is_rejected():
 
 
 def test_classified_categories_resolve_to_their_own_preference():
-    # Asserted as absolute values, not as a comparison. CR-2026-045 changes
+    # Asserted as absolute values, not as a comparison. US-2026-045 changes
     # what PROSPECT resolves to; if it moved either of these, the change would
     # not be contained to the population it was scoped to.
     assert preference_for_category(MEMBER) == MEMBER_ACCESS

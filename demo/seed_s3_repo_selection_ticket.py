@@ -1,13 +1,13 @@
 """Demo seed: put AMS-104 on the board — the ticket that makes S3 *choose*
 a repo instead of being told which one.
 
-The three standing tickets each carry a CR whose title line is exactly some
-registered target's `cr_template_path.stem`, so `target_match` resolves them
+The three standing tickets each carry a user story whose title line is exactly some
+registered target's `story_template_path.stem`, so `target_match` resolves them
 at tier 1 on an exact structural match and never consults a model. That is
 the right default, but it means the repo-selection beat never runs: nothing
 on the board is ambiguous.
 
-CR-2026-044 is. Its title is no registered target's stem, and its
+US-2026-044 is. Its title is no registered target's stem, and its
 `Application: PolicyCore` header narrows to *two* targets rather than one
 (`targets_for_application` returns both the plan-tier and amendment
 targets), so tier 2 declines to guess and falls through to the AI tier. That
@@ -17,7 +17,7 @@ gates checkout/generate on a human accepting whatever the model picked.
 Writes the Jira replay caches directly rather than POSTing to the API, so it
 needs no running server — and unlike `seed_problem_record_ticket.py` this
 ticket must NOT be tagged `origin=problem_record`; it is an ordinary
-business CR that simply arrived without naming its target system.
+business user story that simply arrived without naming its target system.
 
 Run after `demo/reset_s3.sh`, which restores `s3_enhancement/cache/jira_*.json`
 from HEAD and would otherwise drop this ticket from the board. Idempotent —
@@ -46,7 +46,7 @@ ISSUE = {
     "description": (
         "Raised on the support floor, not through the change-request desk. "
         "Names the application (PolicyCore) but no target system, so the repo "
-        "has to be identified before any work starts. See CR-2026-044."
+        "has to be identified before any work starts. See US-2026-044."
     ),
 }
 

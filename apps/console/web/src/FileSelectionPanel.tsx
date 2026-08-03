@@ -7,7 +7,7 @@ import type { FileSelection } from './api_s3'
 // places instead of only ever showing up in one of them.
 //
 // repos/policycore/systems/*/DESIGN.md is a bank of decoy subsystems (several of them
-// Java) this demo's screening step is meant to rule out — for CRs whose real
+// Java) this demo's screening step is meant to rule out — for user stories whose real
 // core files aren't behind their own design doc, in_scope ends up empty and
 // screened_out is the whole decoy bank. Screened-out entries must never look
 // like part of the change (hence collapsed, unlabeled-as-used, by default) —
@@ -49,7 +49,7 @@ export default function FileSelectionPanel({ selection }: { selection: FileSelec
           </div>
         ) : (
           <p style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)', margin: 0 }}>
-            No subsystem doc matched closely enough — this change used the CR's fixed core file
+            No subsystem doc matched closely enough — this change used the story's fixed core file
             list directly (see "Selected source files" below), not a subsystem guess.
           </p>
         )}

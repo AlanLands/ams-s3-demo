@@ -75,7 +75,7 @@ start policy-service python -m uvicorn repos.claimsportal.policy_service.main:ap
 start claims-service python -m uvicorn repos.claimsportal.claims_service.main:app \
     --host "$BIND_HOST" --port "$CLAIMS_SERVICE_PORT"
 
-# EnrolDirect (CR-2026-045's target) calls no other service and seeds itself
+# EnrolDirect (US-2026-045's target) calls no other service and seeds itself
 # in-process, so it has no ordering constraint against the four above. No
 # --reload here, unlike apps/run-enroldirect.sh's TARGET_RELOAD switch: a
 # detached process restarting mid-Apply has no terminal to say so on.

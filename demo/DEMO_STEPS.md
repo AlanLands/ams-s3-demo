@@ -18,10 +18,10 @@ tooling that drives them. You do **not** need all five for every beat.
 | # | Process | Start | Port | Needed for |
 |---|-------------|-------|------|------------|
 | 1 | **Console** — FastAPI + React. The screen you present from. | `apps/run-console.sh` | 8000 + 5173 | Every beat |
-| 2 | **PolicyCore** — the client's plan-administration portal (Streamlit). The window the audience watches change. | `apps/run-policycore.sh` | 8501 (open `/sl_policycore`) | CR-2026-041, CR-2026-042 |
-| 3 | **Policy-Service** — ClaimsPortal contracts side (Python/FastAPI). | `apps/run-policy-service.sh` | 8081 | CR-2026-043 |
-| 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI). Start after #3. | `apps/run-claims-service.sh` | 8082 | CR-2026-043 |
-| 5 | **EnrolDirect** — the online enrolment channel (Python/FastAPI). | `apps/run-enroldirect.sh` | 8083 | CR-2026-045 |
+| 2 | **PolicyCore** — the client's plan-administration portal (Streamlit). The window the audience watches change. | `apps/run-policycore.sh` | 8501 (open `/sl_policycore`) | US-2026-041, US-2026-042 |
+| 3 | **Policy-Service** — ClaimsPortal contracts side (Python/FastAPI). | `apps/run-policy-service.sh` | 8081 | US-2026-043 |
+| 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI). Start after #3. | `apps/run-claims-service.sh` | 8082 | US-2026-043 |
+| 5 | **EnrolDirect** — the online enrolment channel (Python/FastAPI). | `apps/run-enroldirect.sh` | 8083 | US-2026-045 |
 
 > **Open this one** — the console UI is `http://localhost:5173`, not `:8000`.
 > Port 8000 is the API the UI talks to.
@@ -141,15 +141,15 @@ the run deterministic.
 ## 5. Reset before every rehearsal or session
 
 The pipeline mutates real source files and the SQLite database. Reset returns
-everything to the pre-CR baseline. Run them **in this order** — the amendment
+everything to the pre-user story baseline. Run them **in this order** — the amendment
 reset must come after `reset_s3.sh`, because that script reseeds the database
 the amendment baseline then builds on.
 
 ```bash
-demo/reset_s3.sh                # CR-2026-041 (PolicyCore plan tier) + shared state
-demo/reset_s3_endorsement.sh    # CR-2026-042 (PolicyCore amendment priority)
-demo/reset_s3_claimsportal.sh   # CR-2026-043 (ClaimsPortal deductible)
-demo/reset_s3_enroldirect.sh    # CR-2026-045 (EnrolDirect prospect access)
+demo/reset_s3.sh                # US-2026-041 (PolicyCore plan tier) + shared state
+demo/reset_s3_endorsement.sh    # US-2026-042 (PolicyCore amendment priority)
+demo/reset_s3_claimsportal.sh   # US-2026-043 (ClaimsPortal deductible)
+demo/reset_s3_enroldirect.sh    # US-2026-045 (EnrolDirect prospect access)
 demo/warm_s3_cache.sh           # ALWAYS last — reset_s3.sh wipes .cache/llm
 ```
 
@@ -157,7 +157,7 @@ Expected final lines:
 
 ```text
 S3 source baseline restored, PolicyCore reseeded, LLM cache cleared, and ticket timeline cleared.
-CR-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared.
+US-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared.
 ClaimsPortal source baseline restored; generated files removed.
 EnrolDirect source baseline restored; generated files removed.
 ```
@@ -198,17 +198,17 @@ four scripts print their success line.
 
 ## 6. Start the applications
 
-One terminal per process. For the PolicyCore CRs you need only the first two.
+One terminal per process. For the PolicyCore user stories you need only the first two.
 
 ```bash
 apps/run-console.sh           # terminal 1 — API :8000 + UI :5173
 apps/run-policycore.sh        # terminal 2 — portal :8501/sl_policycore
 
-# only for the ClaimsPortal CR (CR-2026-043):
+# only for the ClaimsPortal user story (US-2026-043):
 apps/run-policy-service.sh    # terminal 3 — :8081  (start before claims)
 apps/run-claims-service.sh    # terminal 4 — :8082
 
-# only for the EnrolDirect CR (CR-2026-045):
+# only for the EnrolDirect user story (US-2026-045):
 apps/run-enroldirect.sh       # terminal 5 — :8083
 ```
 
@@ -252,12 +252,21 @@ Six tickets. Five are seeded; the sixth opens by itself.
 
 | Key | Summary | Status | Assignee | Where it comes from |
 |---|---|---|---|---|
-| AMS-101 | CR-2026-041: Plan Tier Upgrade Option | QA | Priya Nair | Seeded Jira replay cache |
-| AMS-102 | CR-2026-042: Amendment Priority Field | In Progress | Ravi Kumar | Seeded Jira replay cache |
-| AMS-103 | CR-2026-043: Claims Deductible Handling (ClaimsPortal) | To Do | Ravi Kumar | Seeded Jira replay cache |
+| AMS-101 | US-2026-041: Plan Tier Upgrade Option | QA | Priya Nair | Seeded Jira replay cache |
+| AMS-102 | US-2026-042: Amendment Priority Field | In Progress | Ravi Kumar | Seeded Jira replay cache |
+| AMS-103 | US-2026-043: Claims Deductible Handling (ClaimsPortal) | To Do | Ravi Kumar | Seeded Jira replay cache |
 | AMS-098 | Quarterly policy data cleanup | Done | Elena Cruz | Seeded Jira replay cache (background noise) |
-| AMS-104 | Flag urgent amendment requests (from Support Ops) | To Do | Ravi Kumar | `demo/seed_s3_repo_selection_ticket.sh` (CR-2026-044) |
-| **AMS-1045** | **CR-2026-045: Prospect Member Eligibility Check For Online Enrolment** | **To Do** | **— unassigned —** | **Opened automatically from `crs/CR-2026-045.md`** |
+| AMS-104 | Flag urgent amendment requests (from Support Ops) | To Do | Ravi Kumar | `demo/seed_s3_repo_selection_ticket.sh` (US-2026-044) |
+| **AMS-1045** | **Prospect Member Eligibility Check For Online Enrolment** | **To Do** | **— unassigned —** | **Opened automatically from `stories/US-2026-045.md`** |
+
+**AMS-101..103 keep their `US-2026-0NN:` summary prefix on purpose.** They come
+from the seeded Jira replay cache, and the board search fetches only
+`summary, status, issuetype, assignee` (`common/jira_client.py`) — no
+description. So that prefix is the *only* thing `story_intake.story_ids_on_issue` can
+read to know those three user stories already have tickets. Strip it and auto-intake
+stops recognising them, opening duplicate AMS-1041/1042/1043 rows on the board.
+AMS-1045 is safe to show without a prefix because it is built by `story_intake`,
+which repeats the identifier in the ticket description.
 
 Statuses are the *seeded* ones; the board overlays whatever a run has since
 moved them to, and `reset_s3.sh` restores the seeded set — except that it
@@ -266,12 +275,12 @@ left them until the `repos/` move is committed. `git checkout --
 's3_enhancement/cache/jira_*.json'` plus `rm -f data/ticket_events.jsonl` is
 the manual equivalent.
 
-**AMS-1045 is the beat worth showing.** Nobody seeded it. Dropping a CR file
-into the top-level `crs/` opens a ticket for it, keyed deterministically off
-the CR id (`CR-2026-045` → `AMS-1045`, in the AMS-1000+ band so it can never
+**AMS-1045 is the beat worth showing.** Nobody seeded it. Dropping a user story file
+into the top-level `stories/` opens a ticket for it, keyed deterministically off
+the user story id (`US-2026-045` → `AMS-1045`, in the AMS-1000+ band so it can never
 collide with the hand-seeded AMS-100..999 tickets), and it lands **unassigned**
 — which is exactly what puts it in front of the manager on the dashboard, with
-an Assign control next to it. See `s3_enhancement/cr_intake.py`.
+an Assign control next to it. See `s3_enhancement/story_intake.py`.
 
 Pair it with the reassignment beat: log in as **Manager / 9000**, assign
 AMS-1045 to an engineer, then press **Reassign** on the row and change your
@@ -294,7 +303,7 @@ before any AI step runs.
 # NO repo here. Routing succeeds; automation correctly stays off.
 demo/seed_problem_record_ticket.sh
 
-# The other half: routes to a team AND offers the CR to run against it.
+# The other half: routes to a team AND offers the user story to run against it.
 SEED_CI=ClaimsPortal SEED_BUSINESS_SERVICE="Claims Management" \
   demo/seed_problem_record_ticket.sh
 ```
@@ -326,19 +335,19 @@ changed is what sits *inside* a stage.
 
 | # | Beat | What to say it proves |
 |---|------|------------------------|
-| 0 | The board itself — AMS-1045 sitting there unassigned | Onboarding a change is dropping its CR file in. The ticket opened itself, and landed unassigned so a manager routes it |
+| 0 | The board itself — AMS-1045 sitting there unassigned | Onboarding a change is dropping its user story file in. The ticket opened itself, and landed unassigned so a manager routes it |
 | 0b | As **Manager / 9000**: assign AMS-1045, then **Reassign** it | Assignment is a manager decision, reversible, and enforced server-side — an engineer's session cannot call the endpoint at all |
 | 1 | Open the ticket; routing panel appears above the analysis | The CI resolved to an application, owning team and repo by table lookup — no model call, nothing to confirm |
 | 2 | Impact analysis + effort estimate | Vague tickets get a clarifying question first, rather than a confident guess |
 | 3 | Generate code | Only the files the relevance funnel selected are sent — the token panel shows scoped vs naive cost |
 | 4 | **Review file by file**: Ask, Apply this file, Reject | Developers accept or reject one file at a time; a rejection records a reason to the ticket's audit trail and is excluded from Apply |
-| 5 | Apply, then look at PolicyCore on :8501/sl_policycore | The client's running application changed — on CR-2026-041 the new plan tier is selectable and the monthly contribution recalculates |
+| 5 | Apply, then look at PolicyCore on :8501/sl_policycore | The client's running application changed — on US-2026-041 the new plan tier is selectable and the monthly contribution recalculates |
 | 5b | **Source control panel**: branch → commit → push | The change lands on a feature branch cut off `main` before anything is written, the commit is gated on the tests passing, and the push hands off to the pipeline — the flow, not a direct edit to main |
 | 6 | **Revert** (per file or all) | Anything applied can be undone without a full reset |
 | 6b | **Design doc: change map + Download PDF** | The hand-off document carries a diagram of what the change touches, and leaves as a real PDF you can attach to the ticket |
-| 7 | **Draft test scenarios**, edit one, approve the plan | QA reviews *what will be checked*, in prose traced to the CR's acceptance criteria, before any test code exists — and can change it |
+| 7 | **Draft test scenarios**, edit one, approve the plan | QA reviews *what will be checked*, in prose traced to the user story's acceptance criteria, before any test code exists — and can change it |
 | 8 | Generate tests, run them, then the seeded-bug check | The generated tests actually catch a deliberately introduced bug |
-| 9 | **Run the regression suite** | A human-authored suite the AI cannot write to still passes — the CR cost nothing that already worked |
+| 9 | **Run the regression suite** | A human-authored suite the AI cannot write to still passes — the story cost nothing that already worked |
 | 10 | **Build the traceability matrix** | Every acceptance criterion, the scenarios planned for it, the tests that ran, and the result — the artifact an auditor asks for |
 | 11 | Design-doc drift check | Documentation drift is detected automatically after Apply, not by remembering to press a button |
 | 12 | **Release notes — three audiences** + the derived **deployment & rollback plan** | One note per reader (client / ops / user guide), and a deploy order computed from the change's own service graph |
@@ -370,7 +379,7 @@ script that would fail halfway. That is the gate working, and it is a fine
 thing to say out loud.
 
 On beats 12-13: the deployment order is **derived**, not drafted — on
-CR-2026-043 the plan puts policy_service before claims_service because
+US-2026-043 the plan puts policy_service before claims_service because
 claims_service calls it, and says why. The release record is assembled from
 what the run actually produced; its "Not evidenced by this release" block is
 the part worth pausing on, because a release document that only lists
@@ -384,7 +393,7 @@ panel says so on screen and the release record repeats it under "Not evidenced
 by this release". Nothing runs git and no remote is contacted. That is
 deliberate: the target apps live inside this repo and the reset scripts restore
 the baseline from `HEAD`, so a real commit would make them start restoring the
-CR instead. The point of the beat is the *shape* of the flow — branch before
+user story instead. The point of the beat is the *shape* of the flow — branch before
 edit, commit gated on green tests, pipeline on push — which is what a reviewer
 asks about when they see an AI editing code.
 
@@ -401,7 +410,7 @@ On beat 6b: the change map is **derived, not drawn by the model** — services,
 layers and the cross-service arrow are read from the changed-file set, so it
 costs no LLM call and needs no cache warming. The `NEW` badge comes from git
 (the file is absent from `HEAD`), which is why `claim_rules.py` carries one on
-CR-2026-043 and nothing does on CR-2026-042. The PDF is rendered server-side by
+US-2026-043 and nothing does on US-2026-042. The PDF is rendered server-side by
 headless Chromium; if `playwright install chromium` has not been run on the
 presenter machine the endpoint answers 503 and the console silently falls back to
 the browser's own print-to-PDF, so the button always does something.
@@ -416,7 +425,7 @@ saying out loud when showing them:
   what makes "the pre-existing tests still pass" a result rather than a claim.
 - In the matrix, only the scenario→test column is inferred, and it is
   deliberately conservative: an ambiguous pairing renders as "no automated
-  test" rather than guessing. On CR-2026-043 two criteria legitimately land
+  test" rather than guessing. On US-2026-043 two criteria legitimately land
   there — that is the honest answer, and a good moment to make the point that
   the tool reports gaps instead of hiding them.
 
@@ -452,8 +461,8 @@ For the full per-scenario talk track and the fallback ladder, see
 - [ ] `demo/warm_s3_cache.sh` ran *after* the resets
 - [ ] Console reachable at `:5173`; you are logged in
 - [ ] PolicyCore reachable at `:8501/sl_policycore` in a second window
-- [ ] For the ClaimsPortal CR: `:8081` and `:8082` both responding
-- [ ] For the EnrolDirect CR: `:8083` responding
+- [ ] For the ClaimsPortal user story: `:8081` and `:8082` both responding
+- [ ] For the EnrolDirect user story: `:8083` responding
 - [ ] AMS-1045 is on the board and unassigned
 - [ ] You have opened and closed at least one artifact modal, so the click-path is muscle memory
 - [ ] You have walked beats 0–13 once, end to end, on this machine

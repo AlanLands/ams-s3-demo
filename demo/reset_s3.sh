@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
 # Step 0 (SCM_MODE=live) can leave the repo on a branch this demo cut for a
-# previous rehearsal's CR (`feature/AMS-nnn-<target>`, see
+# previous rehearsal's user story (`feature/AMS-nnn-<target>`, see
 # scm.branch_name_for). Those never diverge from main — this pass never
 # commits, see s3_enhancement/scm_live.py — so returning to main is safe.
 #

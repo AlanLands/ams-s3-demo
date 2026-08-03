@@ -274,7 +274,7 @@ def test_rollback_reverts_rather_than_rewriting_history():
 
 def _record(**overrides) -> ReleaseRecord:
     base = dict(
-        cr_label="CR-2026-042",
+        story_label="US-2026-042",
         ticket_key="AMS-102",
         released_by="Priya Nair",
         generated_at=datetime(2026, 7, 29, 20, 30),
@@ -346,7 +346,7 @@ def test_note_set_rejects_a_response_missing_an_audience():
     payload = json.dumps({"changelog": "x", "whats_new": "y"})
     with patch.object(docgen, "complete", return_value=payload):
         with pytest.raises(LLMError, match="missing 'ops_note'"):
-            draft_release_note_set("cr")
+            draft_release_note_set("story")
 
 
 def test_note_set_rejects_secret_shaped_content():
@@ -359,14 +359,14 @@ def test_note_set_rejects_secret_shaped_content():
     )
     with patch.object(docgen, "complete", return_value=payload):
         with pytest.raises(LLMError, match="secret-shaped"):
-            draft_release_note_set("cr")
+            draft_release_note_set("story")
 
 
 def test_note_set_strips_markdown_fences():
     body = json.dumps({"changelog": "c", "ops_note": "o", "whats_new": "w"})
     payload = "```json\n" + body + "\n```"
     with patch.object(docgen, "complete", return_value=payload):
-        notes = draft_release_note_set("cr")
+        notes = draft_release_note_set("story")
     assert notes.changelog == "c"
 
 

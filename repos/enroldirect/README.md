@@ -110,7 +110,7 @@ inaccurate. Neither preference was written for them.
 Nothing decides which preference they are checked against, so
 `eligibility.preference_for_category` returns `None` for them and the gate
 refuses them at step 2. That refusal is the current behaviour, not a decision
-— **CR-2026-045** (`crs/CR-2026-045.md`), "Prospect Member Eligibility Check
+— **US-2026-045** (`stories/US-2026-045.md`), "Prospect Member Eligibility Check
 For Online Enrolment", is the change that settles it. It is written the way
 the business asked the question: a business objective, the target member type,
 and given-when-then acceptance criteria for an eligible and an ineligible
@@ -194,13 +194,13 @@ reassigned by rank within one chart — and every bar carries its value directly
 so identity never depends on colour alone. The pair is validated against the
 light surface (CVD ΔE 24.7, normal-vision ΔE 33.6, both ≥ 3:1 contrast).
 
-## S3 target — CR-2026-045
+## S3 target — US-2026-045
 
 EnrolDirect is registered in `s3_enhancement/applications.py` (so a ticket
 naming it routes to the right team deterministically) **and** as an S3 target,
-`enroldirect-prospect-access`, against `crs/CR-2026-045.md`.
+`enroldirect-prospect-access`, against `stories/US-2026-045.md`.
 
-Checked-in source is the **pre-CR baseline**: the analysis is done, the gate is
+Checked-in source is the **pre-user story baseline**: the analysis is done, the gate is
 not changed, and a prospect is refused because no preference resolves for them.
 A pristine copy lives in `.baseline/` and `demo/reset_s3_enroldirect.sh`
 restores it by copying that snapshot back — not with `git checkout`, so it is
@@ -217,7 +217,7 @@ change and must not edit it. That is why this target carries its own
 only, plus a loud failure if a read-only file comes back modified.
 
 `tests/test_regression_enroldirect.py` is named by no allowlist and must pass
-**before and after** the CR. Every assertion in it is an invariant: it asserts
+**before and after** the user story. Every assertion in it is an invariant: it asserts
 no prospect's gate outcome except on a lapsed contract, because that is the
 one prospect denial the classification cannot reach.
 

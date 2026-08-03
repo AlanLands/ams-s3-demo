@@ -4,7 +4,7 @@ Every rehearsal starts from a known-good state, and every beat can be re-run in
 isolation. All scripts `cd` to the repo root themselves and activate `.venv`
 before running anything.
 
-For the full end-to-end walkthrough of the four CR scenarios, see
+For the full end-to-end walkthrough of the four user story scenarios, see
 **`DEMO_TEST_GUIDE.md`**; for standing the whole thing up from a clean
 checkout, `DEMO_STEPS.md`. This file covers the scripts and the tooling around
 them.
@@ -63,25 +63,25 @@ rather than assuming it worked.
 | `run_mockapp.sh` | Serves `repos/policycore/app.py` on :8501/sl_policycore — the "client's app" window for the before/after proof. Same job as `apps/run-policycore.sh`. |
 | `run_s3_claimsportal.sh` | Runs the two Python/FastAPI ClaimsPortal services (:8081 contracts, :8082 claims) |
 | `run_s3_harness.sh` | The live agent-harness variant of the codegen beat — see below |
-| `reset_s3.sh` | CR-2026-041 (PolicyCore plan tier) back to pre-CR baseline; also clears shared state. Restores from `HEAD` — see above. |
-| `reset_s3_endorsement.sh` | CR-2026-042 (PolicyCore amendment Priority field) back to baseline, restored from `HEAD` (**not** from the `s3-endorsement-baseline` tag — see the comment in the script). |
-| `reset_s3_claimsportal.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `repos/claimsportal/.baseline/` |
-| `reset_s3_enroldirect.sh` | CR-2026-045 (EnrolDirect) back to baseline, from `repos/enroldirect/.baseline/` |
+| `reset_s3.sh` | US-2026-041 (PolicyCore plan tier) back to pre-user story baseline; also clears shared state. Restores from `HEAD` — see above. |
+| `reset_s3_endorsement.sh` | US-2026-042 (PolicyCore amendment Priority field) back to baseline, restored from `HEAD` (**not** from the `s3-endorsement-baseline` tag — see the comment in the script). |
+| `reset_s3_claimsportal.sh` | US-2026-043 (ClaimsPortal) back to baseline, from `repos/claimsportal/.baseline/` |
+| `reset_s3_enroldirect.sh` | US-2026-045 (EnrolDirect) back to baseline, from `repos/enroldirect/.baseline/` |
 | `warm_s3_cache.sh` | Pre-warms `.cache/llm` for the narrative drafts before presenting |
 | `seed_problem_record_ticket.sh` | Seeds the problem-record intake ticket (needs the API on :8000 already running) |
-| `seed_s3_repo_selection_ticket.sh` | Puts AMS-104 (CR-2026-044, the ticket that names no target system) back on the board. Needs no server; run it *after* `reset_s3.sh`, which restores the committed Jira caches and would otherwise drop it. |
+| `seed_s3_repo_selection_ticket.sh` | Puts AMS-104 (US-2026-044, the ticket that names no target system) back on the board. Needs no server; run it *after* `reset_s3.sh`, which restores the committed Jira caches and would otherwise drop it. |
 
 > `run_mockapp.sh` and `reset_s3_endorsement.sh` were previously named
 > `run_s4_endorsement.sh` / `reset_s4_endorsement.sh`. The "s4" was a leftover
 > from the six-scenario repo — both are S3 beats. Renamed 2026-07-26.
 > `reset_s3_endorsement.sh` kept its filename through the 2026-08-03 GRS
-> reskin — teammates invoke it by name — even though the CR it resets is now
-> "CR-2026-042: Amendment Priority Field". Only its contents changed.
+> reskin — teammates invoke it by name — even though the user story it resets is now
+> "US-2026-042: Amendment Priority Field". Only its contents changed.
 
-### No script for CR-2026-045's ticket
+### No script for US-2026-045's ticket
 
-There is deliberately none. A `.md` dropped into the top-level `crs/` opens a
-board ticket by itself — the key is derived from the CR id (`CR-2026-045` →
+There is deliberately none. A `.md` dropped into the top-level `stories/` opens a
+board ticket by itself — the key is derived from the user story id (`US-2026-045` →
 **AMS-1045**), and the ticket lands **unassigned** so the manager routes it.
 `seed_s3_repo_selection_ticket.sh` is the older hand-seeding path and stays
 only because AMS-104 needs a specific pre-set assignee to make its beat work.

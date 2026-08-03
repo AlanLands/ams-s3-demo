@@ -8,10 +8,10 @@ is a `None`, not an exception.
 `test_regression_claimsportal.py` covers the adjudication flow end to end.
 This file covers the seams underneath it, so a failure names the seam.
 
-Every assertion holds before and after CR-2026-043. The CR adds deductible
+Every assertion holds before and after US-2026-043. The user story adds deductible
 handling to claim validation; nothing here asserts validation rules or the
 absence of any field. The pydantic models are asserted through construction
-and field access, so a CR that *adds* a field does not fail these tests.
+and field access, so a user story that *adds* a field does not fail these tests.
 
 Lives in `tests/`, not under `repos/claimsportal/` — same reason as the other
 suites: a `.py` under a target root joins the codegen candidate pool.
@@ -29,18 +29,18 @@ from repos.claimsportal.claims_service import policy_client
 from repos.claimsportal.claims_service.claim import Claim
 from repos.claimsportal.policy_service.policy import Policy
 
-# --- building payloads that survive a CR adding a required field -------------
+# --- building payloads that survive a user story adding a required field -------------
 
 
 def _payload_for(model: type[BaseModel], **overrides: object) -> dict:
     """A valid payload for `model`, whatever fields it currently declares.
 
     Hard-coding the baseline field set is what a construction-based test gets
-    wrong: CR-2026-043 adds `deductible` to the contract and `payableAmount` to
+    wrong: US-2026-043 adds `deductible` to the contract and `payableAmount` to
     the claim as *required* fields, and a test that constructs from the
-    pre-CR set then fails on exactly the change it was supposed to be
+    pre-user story set then fails on exactly the change it was supposed to be
     indifferent to. These suites are invariants — they must hold before and
-    after every CR — so the payload is derived from the model rather than
+    after every user story — so the payload is derived from the model rather than
     frozen, and the test asserts only the fields it actually cares about.
     """
     filler: dict[str, object] = {}
@@ -162,7 +162,7 @@ def test_find_policy_propagates_a_server_error(monkeypatch):
 
 
 def test_policy_carries_the_published_contract_fields():
-    # These names are a published API contract that CR-2026-043 and the
+    # These names are a published API contract that US-2026-043 and the
     # committed recording depend on by exact spelling.
     for name in ("policyNumber", "holderName", "product", "status", "annualMaximum"):
         assert name in Policy.model_fields, f"published field {name} disappeared"

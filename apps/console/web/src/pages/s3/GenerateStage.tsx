@@ -132,11 +132,11 @@ export default function GenerateStage() {
       <p style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)', marginTop: '1.5rem' }}>
         {activeTicketKey ? (
           <>
-            Generating for <strong>{activeLinked?.crLabel}</strong> ({activeTicketKey}) — click a
+            Generating for <strong>{activeLinked?.storyLabel}</strong> ({activeTicketKey}) — click a
             ticket on the board above to switch.
           </>
         ) : (
-          'No ticket assigned to you with a linked CR yet — once one is, pick it up here.'
+          'No ticket assigned to you with a linked user story yet — once one is, pick it up here.'
         )}
       </p>
 
@@ -553,7 +553,7 @@ export default function GenerateStage() {
                           This change touched <code>{finding.subsystem}</code>, and its design
                           document no longer describes it accurately: {finding.reason} That
                           document&rsquo;s scope keywords decide whether this subsystem is
-                          considered relevant to future change requests, so leaving it stale
+                          considered relevant to future user stories, so leaving it stale
                           causes retrieval mistakes later.
                         </p>
                         {finding.proposal_id ? (

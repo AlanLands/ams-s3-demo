@@ -92,7 +92,7 @@ export default function TestsStage() {
         <div className="ams-card">
           <strong style={{ fontSize: 'var(--ams-text-sm)' }}>Test plan — scenarios first</strong>
           <p className="ams-stage-note">
-            What will be checked, traced to the CR's acceptance criteria, before a line of test
+            What will be checked, traced to the user story's acceptance criteria, before a line of test
             code is written. Edit, delete or add scenarios — the approved list is what the
             generated suite is written against.
           </p>
@@ -212,7 +212,7 @@ export default function TestsStage() {
 
             {/* Beat 4 — the other half of "did it work": the app's own
                 checked-in suite, which the AI never wrote and cannot edit.
-                New tests passing says the CR did what it claimed; these
+                New tests passing says the user story did what it claimed; these
                 passing says it cost nothing that already worked.
 
                 Deliberately not gated on the generated run: this suite
@@ -221,8 +221,8 @@ export default function TestsStage() {
             <div className="ams-card" style={{ marginTop: '0.75rem' }}>
               <strong style={{ fontSize: 'var(--ams-text-sm)' }}>Regression — the pre-existing suite</strong>
               <p className="ams-stage-note">
-                Checked into the repo before this change request, authored by a human, and named
-                by no allowlist the pipeline can write to. Every CR here ends with “existing
+                Checked into the repo before this change, authored by a human, and named
+                by no allowlist the pipeline can write to. Every user story here ends with “existing
                 flows are unaffected” — this is the part that checks it.
               </p>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -328,7 +328,7 @@ export default function TestsStage() {
           <div className="ams-card" style={{ marginTop: '0.75rem' }}>
             <strong style={{ fontSize: 'var(--ams-text-sm)' }}>Traceability — criteria to evidence</strong>
             <p className="ams-stage-note">
-              One row per acceptance criterion in the CR, joined to the approved scenarios and to
+              One row per acceptance criterion in the user story, joined to the approved scenarios and to
               the tests that actually ran. This is the artifact an auditor asks for.
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>

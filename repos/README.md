@@ -11,20 +11,20 @@ scripts — the tooling. A repo in here is something S3 changes; an app in
 ## Onboarding a new repository
 
 1. Drop the source in as `repos/<name>/`.
-2. Add its change requests to the top-level `crs/` folder. A CR file placed
+2. Add its user stories to the top-level `stories/` folder. A story file placed
    there is picked up on the board automatically and lands unassigned, which
    routes it to the manager to assign.
 3. Add `repos/<name>/.s3targets.json` declaring what that repo contributes.
 4. Put the repo's human-authored regression suite in the top-level `tests/`,
    **not** under `repos/<name>/`. Anything ending `.py` under a repo root
    joins the codegen candidate pool, which would let the pipeline write to the
-   one independent check that a CR broke nothing.
+   one independent check that a story broke nothing.
 
 That is the whole procedure.
 
 ## Manifest
 
-One repo may declare several targets — PolicyCore has two, one per CR.
+One repo may declare several targets — PolicyCore has two, one per user story.
 
 ```json
 {
@@ -33,7 +33,7 @@ One repo may declare several targets — PolicyCore has two, one per CR.
       "target_id": "samplebenefits-annual-limit",
       "display_name": "SampleBenefits — annual limit lookup",
       "cache_namespace": "samplebenefits_annual_limit",
-      "cr": "crs/CR-2026-050.md",
+      "story": "stories/US-2026-050.md",
       "core_files": ["repos/samplebenefits/service.py"],
       "codegen_allowlist": ["repos/samplebenefits/service.py"],
       "testgen_allowlist": ["tests/test_s3_samplebenefits.py"],
@@ -57,9 +57,9 @@ One repo may declare several targets — PolicyCore has two, one per CR.
 | `target_id` | yes | Registry-unique. Folded into the branch name at Step 0, so it is on screen. |
 | `cache_namespace` | yes | Registry-unique, non-empty. Becomes the replay recording's filename — rename it and the recording is a miss. |
 | `display_name` | no | Shown in the console's target picker. Defaults to `target_id`. |
-| `cr` | no | Repo-relative path to the CR this target implements. |
+| `story` | no | Repo-relative path to the user story this target implements. |
 | `core_files` | no | Files relevance must always recall into the prompt. |
-| `codegen_allowlist` | no | The blast radius. A path listed here is created if it does not exist yet — that is how a CR adds a new module. |
+| `codegen_allowlist` | no | The blast radius. A path listed here is created if it does not exist yet — that is how a story adds a new module. |
 | `testgen_allowlist` | no | Where the generated suite is written. Must never name a regression suite. |
 | `regression_paths` | no | The human-authored suite. The pipeline is forbidden to write here. |
 | `post_apply_command` | no | Migration/refresh step after apply. `{python}` is replaced with the running interpreter. |
@@ -89,21 +89,21 @@ One rule if you add them to a new target: a `DESIGN.md` at the **repo root** is
 documentation of the application, and `relevance.py` deliberately skips it when
 collecting subsystem design docs — a repo is not a subsystem of itself.
 `DESIGN.md` in a *subdirectory* is a different thing entirely: it declares a
-subsystem, its "## Scope keywords" section is scored against the CR, and it
+subsystem, its "## Scope keywords" section is scored against the story, and it
 therefore moves the relevance funnel. Do not put subsystem-shaped scope
 keywords in a root-level design doc expecting them to be inert; they are inert
 because of the path, not the content.
 
 ## What a dropped-in repo gets, and what it doesn't
 
-It gets relevance scoping, CR→target routing, the propose/apply/revert cycle,
+It gets relevance scoping, user story→target routing, the propose/apply/revert cycle,
 the regression beat and the mutation beat.
 
 It does **not** get a committed replay recording — there is nothing to record
-against until its CR has been run once, so its first codegen run is a live
+against until its user story has been run once, so its first codegen run is a live
 call that records itself for every run after. And it does not get a bespoke
 structural validator: the three built-in targets carry hand-written file-set
-validators in `codegen.py` tuned to their own CR's shape, while a discovered
+validators in `codegen.py` tuned to their own user story's shape, while a discovered
 target uses the generic one. Both are honest defaults.
 
 ## One thing that is not a `mv`

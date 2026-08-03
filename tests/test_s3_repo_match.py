@@ -18,7 +18,7 @@ def test_suggest_target_repo_parses_best_match_and_alternates():
         {
             "best_match_id": "1",
             "confidence": "high",
-            "reasoning": "The CR is about plan tiers, which lives in policy-service.",
+            "reasoning": "The user story is about plan tiers, which lives in policy-service.",
             "alternates": [{"id": "2", "reasoning": "Claims portal also shows coverage info."}],
         }
     )

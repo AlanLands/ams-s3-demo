@@ -222,8 +222,8 @@ class Scope:
 
 
 # The PolicyCore scope runs both of that target's reset scripts. PolicyCore
-# hosts two CRs (CR-2026-041 plan tier, CR-2026-042 amendment field) and each
-# has its own script; restoring only one leaves the other CR's edits — most
+# hosts two user stories (US-2026-041 plan tier, US-2026-042 amendment field) and each
+# has its own script; restoring only one leaves the other user story's edits — most
 # visibly core/amendments.py — in the tree, which is precisely the
 # half-restored state that surfaces mid-rehearsal rather than at the button.
 SCOPES: dict[str, Scope] = {
@@ -251,7 +251,7 @@ SCOPES: dict[str, Scope] = {
         delete_tree_contents=("s3_enhancement/out",),
         delete_trees=(".cache/llm",),
         detail=(
-            "PolicyCore source restored from HEAD (both CRs), database reseeded, "
+            "PolicyCore source restored from HEAD (both user stories), database reseeded, "
             "generated files removed, LLM cache / staged proposals / ticket timeline cleared."
         ),
     ),
@@ -887,7 +887,7 @@ def target_summaries(targets: Sequence[Any], discovered_ids: Iterable[str]) -> l
     rows: list[dict[str, Any]] = []
     for target in targets:
         root_path = getattr(target, "root", None)
-        cr_path = getattr(target, "cr_template_path", None)
+        story_path = getattr(target, "story_template_path", None)
         # A recording exists once the codegen beat has been replayed/recorded
         # for this namespace — the difference between a deterministic beat and
         # a live call on stage.
@@ -901,7 +901,7 @@ def target_summaries(targets: Sequence[Any], discovered_ids: Iterable[str]) -> l
                 "target_id": target.target_id,
                 "display_name": target.display_name,
                 "repo": _rel(root_path) if root_path else "",
-                "cr": _rel(cr_path) if cr_path else None,
+                "story": _rel(story_path) if story_path else None,
                 "discovered": target.target_id in discovered,
                 "has_recording": has_recording,
             }
@@ -952,7 +952,7 @@ def build_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "target_id": payload.get("target_id"),
         "display_name": payload.get("display_name") or payload.get("target_id"),
         "cache_namespace": payload.get("cache_namespace"),
-        "cr": payload.get("cr"),
+        "story": payload.get("story"),
         "core_files": list(payload.get("core_files") or []),
         "codegen_allowlist": list(payload.get("codegen_allowlist") or []),
         "testgen_allowlist": list(payload.get("testgen_allowlist") or []),
@@ -976,12 +976,12 @@ def onboarding_warnings(
     warnings: list[str] = []
     if not repo_dir.is_dir():
         warnings.append(
-            f"repos/{name} does not exist yet — drop the source in before running a CR"
+            f"repos/{name} does not exist yet — drop the source in before running a user story"
         )
     if not entry.get("regression_paths"):
         warnings.append(
             "No regression_paths declared — this target has no independent check that a "
-            "CR broke nothing. Add a human-authored suite under tests/ (never inside the "
+            "user story broke nothing. Add a human-authored suite under tests/ (never inside the "
             "repo root, and never in a codegen or testgen allowlist)."
         )
     warnings.append(

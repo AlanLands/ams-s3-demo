@@ -7,10 +7,10 @@
     "key": "AMS-103",
     "id": "10103",
     "self": null,
-    "summary": "CR-2026-043: Claims Deductible Handling (ClaimsPortal)",
+    "summary": "US-2026-043: Claims Deductible Handling (ClaimsPortal)",
     "status": "To Do",
     "issue_type": "Task",
     "assignee": "Ravi Kumar",
-    "description": "Add a per-policy deductible to the ClaimsPortal FastAPI services and apply it during claim intake: policies gain a deductible amount, claims at or below it are rejected as below-deductible, and accepted claims record a payable amount (claim amount minus deductible). See crs/CR-2026-043.md for the full contract."
+    "description": "Add a per-policy deductible to the ClaimsPortal FastAPI services and apply it during claim intake: policies gain a deductible amount, claims at or below it are rejected as below-deductible, and accepted claims record a payable amount (claim amount minus deductible). See stories/US-2026-043.md for the full contract."
   }
 }

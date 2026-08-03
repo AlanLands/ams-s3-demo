@@ -1,18 +1,18 @@
-"""Acceptance criteria, read out of a CR rather than inferred from it.
+"""Acceptance criteria, read out of a user story rather than inferred from it.
 
 Deliberately not an LLM call. The criteria are already written down in the
-change request; asking a model to restate them would add a paraphrase step
+user story; asking a model to restate them would add a paraphrase step
 that can drift, and would make the traceability matrix's left-hand column an
 AI artifact rather than the customer's own words. Same principle as the
 routing panel's CI lookup: when the answer is in a table, read the table.
 
-Every CR under `crs/*.md` shares one shape — a run of `Key: Value` headers,
+Every user story under `stories/*.md` shares one shape — a run of `Key: Value` headers,
 prose sections, then an `Acceptance criteria:` heading over a flat list of
-`- ` bullets, some with hard-wrapped continuation lines and (CR-2026-043)
+`- ` bullets, some with hard-wrapped continuation lines and (US-2026-043)
 nested sub-bullets that belong to the criterion above them. The list ends at
 the first blank line; anything after that is a different section, which
-matters because CR-2026-041 follows its criteria with a "Known downstream
-considerations" list that is explicitly *not* in scope for that CR.
+matters because US-2026-041 follows its criteria with a "Known downstream
+considerations" list that is explicitly *not* in scope for that user story.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ _INDENTED_RE = re.compile(r"^\s+\S")
 
 # A criterion of the form "existing X keeps working / is unaffected" is a
 # regression statement: it is satisfied by the app's pre-existing suite, not
-# by anything the CR adds. Detected by wording rather than position because
-# CRs put it last by convention, not by rule.
+# by anything the user story adds. Detected by wording rather than position because
+# user stories put it last by convention, not by rule.
 _REGRESSION_HINTS = (
     "unaffected",
     "keep working",
@@ -41,7 +41,7 @@ _REGRESSION_HINTS = (
 
 @dataclass(frozen=True)
 class Criterion:
-    """One acceptance criterion, numbered in the order the CR states it."""
+    """One acceptance criterion, numbered in the order the user story states it."""
 
     id: str
     text: str
@@ -56,7 +56,7 @@ def _flatten(lines: list[str]) -> str:
     """Join a criterion's wrapped lines back into one sentence.
 
     Nested sub-bullets keep their leading marker so a criterion that carries a
-    structured contract (CR-2026-043's ClaimRules API) still reads as a list
+    structured contract (US-2026-043's ClaimRules API) still reads as a list
     when rendered, rather than collapsing into an unpunctuated run-on.
     """
     parts: list[str] = []
@@ -70,11 +70,11 @@ def _flatten(lines: list[str]) -> str:
     return re.sub(r"\s+", " ", " ".join(parts)).strip()
 
 
-def parse_acceptance_criteria(cr_text: str) -> list[Criterion]:
-    """Every acceptance criterion in `cr_text`, in CR order. Empty if the CR
+def parse_acceptance_criteria(story_text: str) -> list[Criterion]:
+    """Every acceptance criterion in `story_text`, in user story order. Empty if the user story
     has no acceptance-criteria section — callers must handle that rather than
-    assume, since an ad-hoc ticket has no CR at all."""
-    lines = cr_text.replace("\r\n", "\n").split("\n")
+    assume, since an ad-hoc ticket has no user story at all."""
+    lines = story_text.replace("\r\n", "\n").split("\n")
     start: int | None = None
     for index, line in enumerate(lines):
         if _HEADING_RE.match(line):

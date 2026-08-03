@@ -190,7 +190,7 @@ def test_status_shape_and_reset_safe_on_a_clean_tree(clean_repo):
             "target_id",
             "display_name",
             "repo",
-            "cr",
+            "story",
             "discovered",
             "has_recording",
         }
@@ -585,7 +585,7 @@ _ONBOARD = {
     "display_name": "SampleBenefits — annual limit",
     "target_id": "samplebenefits-annual-limit",
     "cache_namespace": "samplebenefits_annual_limit",
-    "cr": None,
+    "story": None,
     "core_files": ["repos/samplebenefits/service.py"],
     "codegen_allowlist": ["repos/samplebenefits/service.py"],
     "testgen_allowlist": ["tests/test_s3_samplebenefits.py"],
@@ -681,7 +681,7 @@ def test_onboard_surfaces_discovery_manifest_errors(clean_repo):
     assert any("cache_namespace" in e for e in body["errors"])
 
     body = _client().post(
-        "/api/admin/repos/onboard", json={**_ONBOARD, "cr": "crs/CR-DOES-NOT-EXIST.md"}
+        "/api/admin/repos/onboard", json={**_ONBOARD, "story": "stories/US-DOES-NOT-EXIST.md"}
     ).json()
     assert body["ok"] is False
     assert any("does not exist" in e for e in body["errors"])

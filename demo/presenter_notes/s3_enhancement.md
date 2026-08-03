@@ -17,9 +17,9 @@
 > Vocabulary: this is Group Retirement Services, not P&C. PolicyCore speaks
 > **amendment** (not endorsement), **plan tier** (not coverage tier),
 > **contribution** (not premium), **plan sponsor** (not policyholder).
-> CR-2026-041 is **"Plan Tier Upgrade Option"**.
+> US-2026-041 is **"Plan Tier Upgrade Option"**.
 
-**Pain**: even small change requests carry disproportionate overhead — impact
+**Pain**: even small user stories carry disproportionate overhead — impact
 analysis, the actual change, tests, and documentation are all manual, slow steps
 that compound across a large application portfolio.
 
@@ -45,14 +45,14 @@ client's app"; a second terminal pane runs `run_s3_harness.sh` for beat 4 if
 using the harness path):
 0. *(optional, 30 seconds, lands well)* Show the board itself. **AMS-1045 is
    sitting there unassigned and nobody seeded it** — dropping
-   `crs/CR-2026-045.md` into the repo opened its own ticket, keyed off the CR
+   `stories/US-2026-045.md` into the repo opened its own ticket, keyed off the user story
    id, deliberately unassigned so it routes to a manager. Assign it as
    **Manager / 9000**, then press **Reassign** and change your mind:
    assignment is a manager decision, reversible, and enforced server-side —
    an engineer's session cannot call the endpoint at all.
 1. Show the MapleSure PolicyCore portal: contracts, claims, plan sponsor,
    monthly contribution. **No tier-upgrade feature exists.** (live, zero risk)
-2. Open CR-2026-041 and ask the audience to **pick the new top tier's name** — the
+2. Open US-2026-041 and ask the audience to **pick the new top tier's name** — the
    controlled free variable. It only ever lands in string labels, it cannot break
    the run, and it proves nothing is canned.
 3. AI impact analysis + effort estimate (~40h-class / P4-equivalent) over the real
@@ -62,22 +62,22 @@ using the harness path):
    front of a 50-file legacy Java estate
    (`repos/policycore/systems/legacy_platform/`), mirroring the kind of heterogeneous
    stack the client runs in AMS — a real system underneath, not a slide. The
-   candidate pool for this CR is **58 files**; the funnel picks four.
+   candidate pool for this user story is **58 files**; the funnel picks four.
    Selection runs in two stages, live: first the AI reads each
    subsystem's `DESIGN.md` (billing, underwriting, risk, settlement, audit,
    reporting, plus PolicyCore's own `enrolment` — open one on screen) and
-   screens out any subsystem whose declared scope doesn't match the CR, before
+   screens out any subsystem whose declared scope doesn't match the user story, before
    a single one of that subsystem's Java files is even opened. Point at the
-   subsystem screen in the panel — for this CR **all seven subsystems screen
+   subsystem screen in the panel — for this user story **all seven subsystems screen
    out** at that stage. Only what survives goes on to file-level scoring
-   against the CR text, which is what actually picks the handful of Python
+   against the user story text, which is what actually picks the handful of Python
    files that affect the tier-upgrade path. The token-count panel then
    shows the real scoped prompt size versus a naive whole-app-context
    baseline live, so the scaling story is measured rather than asserted.
 4. **Money shot.** Either: (a) the console pipeline generates the change and it
    streams on screen, then the validated files apply to the repo; or (b) switch to
    the second terminal pane and press Enter on `run_s3_harness.sh` — the agent
-   harness reads the CR and `repos/policycore/CLAUDE.md`'s contract, edits the files itself,
+   harness reads the user story and `repos/policycore/CLAUDE.md`'s contract, edits the files itself,
    and narrates what it's doing live. Either way, back in the console, click "Load
    latest harness run" (harness path only) and check "I've reviewed this AI-generated
    change" before beat 7 unlocks.
@@ -170,19 +170,19 @@ There is no S4 hand-off to prepare.)*
 **Metric/value**: collapses a change-request cycle that normally spans analysis,
 dev, test-writing, and doc updates into one continuous, reviewable flow.
 
-**Roadmap**: the demo CR itself is intentionally small/contained, but the scoped
+**Roadmap**: the demo user story itself is intentionally small/contained, but the scoped
 file-selection and token-count panels are the real answer to "how does this scale" —
 point at the 58-file candidate pool (11 real Python app files + the 50-file
 legacy Java platform and its design docs), and the scoped-vs-naive numbers, if
 asked. What's still roadmap, not built: the design-doc gate + TF-IDF selection
-is tuned for this one CR/app, not yet tuned across a large multi-CR backlog or
+is tuned for this one user story/app, not yet tuned across a large multi-user story backlog or
 a much bigger real codebase.
 
 **If asked "how do you add another application to this?"** — this is now a
-real answer, not a roadmap one. Drop the repo into `repos/`, put its CRs in
-the top-level `crs/`, and add a `repos/<name>/.s3targets.json` manifest
+real answer, not a roadmap one. Drop the repo into `repos/`, put its user stories in
+the top-level `stories/`, and add a `repos/<name>/.s3targets.json` manifest
 declaring what the pipeline may read and write. The target registers itself at
-next start; the CR opens its own ticket, unassigned, for a manager to route.
+next start; the user story opens its own ticket, unassigned, for a manager to route.
 The manifest is required because `codegen_allowlist`, `core_files` and the
 seeded-bug mutations are *decisions*, not things inferable from source — and a
 broken manifest raises at import rather than being silently skipped. There is

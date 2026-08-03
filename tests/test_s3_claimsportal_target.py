@@ -1,4 +1,4 @@
-"""Tests for the ClaimsPortal target (CR-2026-043) — registration/cache
+"""Tests for the ClaimsPortal target (US-2026-043) — registration/cache
 identity, and the claim_rules.py contract validators codegen/testgen apply
 pre-apply. Filename kept from this target's Java-era history (see
 CLAUDE.md); the source has been Python since the 2026-07-30 rewrite."""
@@ -52,7 +52,7 @@ def test_spring_target_uses_the_generic_pytest_path():
 
 def test_spring_discovery_excludes_baseline_and_pycache_dirs():
     target = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
-    files = relevance.discover_files_for_target(target, cr_text="deductible")
+    files = relevance.discover_files_for_target(target, story_text="deductible")
     assert files, "expected python sources under repos/claimsportal"
     for path in files:
         assert "/.baseline/" not in path, path

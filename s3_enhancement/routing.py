@@ -74,7 +74,7 @@ class RouteDecision:
         Both conditions must hold: the application declares a repo, *and* at
         least one target is registered against it. An application with a repo
         but no target is routable and not yet automatable — that gap is real
-        (a repo nobody has recorded a CR for) and must not read as automatable.
+        (a repo nobody has recorded a user story for) and must not read as automatable.
         """
         return (
             self.application is not None

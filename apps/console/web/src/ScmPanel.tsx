@@ -11,7 +11,7 @@ import type { ScmResponse, ScmState } from './api_s3'
  * contacts nothing, and every state carries `simulated: true`. That is a
  * deliberate constraint, not an unfinished feature: the target apps live inside
  * this repo and the demo reset scripts restore their baseline from HEAD, so a
- * real commit would make the resets start restoring the CR instead. The banner
+ * real commit would make the resets start restoring the user story instead. The banner
  * below says so on screen, and the release record repeats it under "Not
  * evidenced by this release". See s3_enhancement/scm.py.
  */

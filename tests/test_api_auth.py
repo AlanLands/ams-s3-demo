@@ -58,7 +58,7 @@ def test_me_after_login_returns_identity_then_logout_clears_it():
     assert client.get("/api/auth/me").status_code == 401
 
 
-def test_s3_cr_401s_without_login():
+def test_s3_story_401s_without_login():
     client = _client()
-    response = client.get("/api/s3/cr")
+    response = client.get("/api/s3/story")
     assert response.status_code == 401

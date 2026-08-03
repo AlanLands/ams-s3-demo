@@ -1,6 +1,6 @@
 """Target auto-discovery from the `repos/` drop folder.
 
-The onboarding claim S3 makes on stage is "drop the repo in and add its CRs".
+The onboarding claim S3 makes on stage is "drop the repo in and add its user stories".
 These tests are what stop that from quietly becoming false: they exercise the
 manifest contract end to end against a real directory, not a mocked one.
 """
@@ -53,7 +53,7 @@ def test_a_manifest_registers_its_target(repos_dir):
 
 
 def test_one_repo_may_declare_several_targets(repos_dir):
-    """PolicyCore has two, one per CR — the shape must generalise."""
+    """PolicyCore has two, one per user story — the shape must generalise."""
     second = {**MINIMAL, "target_id": "acme-gadget", "cache_namespace": "acme_gadget"}
     _write_manifest(repos_dir, "acme", {"targets": [MINIMAL, second]})
     assert len(discovery.discover_manifest_targets()) == 2
@@ -103,9 +103,9 @@ def test_missing_targets_list_raises(repos_dir):
         discovery.discover_manifest_targets()
 
 
-def test_a_cr_path_that_does_not_exist_raises(repos_dir):
+def test_a_story_path_that_does_not_exist_raises(repos_dir):
     """Catches the typo at import rather than at Step 0 in front of an audience."""
-    _write_manifest(repos_dir, "acme", {"targets": [{**MINIMAL, "cr": "crs/nope.md"}]})
+    _write_manifest(repos_dir, "acme", {"targets": [{**MINIMAL, "story": "stories/nope.md"}]})
     with pytest.raises(discovery.ManifestError, match="does not exist"):
         discovery.discover_manifest_targets()
 

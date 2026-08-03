@@ -16,7 +16,7 @@ if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
 echo "  EnrolDirect -> http://localhost:${ENROLDIRECT_PORT:-8083}/"
 
-# Applying a CR rewrites this target's .py files on disk, but a plain uvicorn
+# Applying a user story rewrites this target's .py files on disk, but a plain uvicorn
 # serves the code it imported at startup — so the console shows the change
 # applied while :8083 still answers with the baseline, which reads as "the
 # change did nothing". Restarting between Apply and Revert is the default cure.

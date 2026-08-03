@@ -10,7 +10,7 @@ export default function S3() {
   const controller = useS3Controller()
   const {
     activeTicketKey,
-    crLabel,
+    storyLabel,
     stages,
     expandedTicket,
     boardIssues,
@@ -43,13 +43,13 @@ export default function S3() {
 
   return (
     <div className="ams-s3-page">
-      {slot && createPortal(<StageRail activeTicketKey={activeTicketKey} crLabel={crLabel} stages={stages} />, slot)}
+      {slot && createPortal(<StageRail activeTicketKey={activeTicketKey} storyLabel={storyLabel} stages={stages} />, slot)}
       <span className="ams-eyebrow">
         MapleSure Insurance · AMS Console · S3
       </span>
       <h1 style={{ fontSize: 'var(--ams-text-2xl)', margin: 'var(--ams-space-3) 0 var(--ams-space-1)' }}>Enhancement Delivery</h1>
       <p className="ams-s3-summary">
-        Live CR intake, AI-assisted code generation, generated tests, and release notes.
+        Live user story intake, AI-assisted code generation, generated tests, and release notes.
       </p>
       <div className="ams-s3-layout">
         <div className="ams-s3-stage-panel">
@@ -65,8 +65,8 @@ export default function S3() {
         return (
           <TicketModal
             issue={issue}
-            crText={ticketCrText[expandedTicket] || ''}
-            crLabel={linked?.crLabel ?? null}
+            storyText={ticketCrText[expandedTicket] || ''}
+            storyLabel={linked?.storyLabel ?? null}
             onClose={() => setExpandedTicket(null)}
             analysisResult={ticketAnalysis[expandedTicket]}
             analysisLoading={!!ticketAnalysisLoading[expandedTicket]}

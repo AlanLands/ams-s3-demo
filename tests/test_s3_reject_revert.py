@@ -41,7 +41,7 @@ def staged_proposal(tmp_path, monkeypatch):
 
 def test_rejected_file_is_excluded_from_apply_all(staged_proposal):
     repo_root, _ = staged_proposal
-    codegen.reject_file("prop-1", "created.py", "Out of scope for this CR")
+    codegen.reject_file("prop-1", "created.py", "Out of scope for this user story")
 
     applied = codegen.apply_change("prop-1")
 
@@ -59,8 +59,8 @@ def test_applying_a_rejected_file_by_name_is_refused(staged_proposal):
 
 
 def test_rejection_reason_is_kept(staged_proposal):
-    codegen.reject_file("prop-1", "created.py", "  Out of scope for this CR  ")
-    assert codegen.rejected_files("prop-1") == {"created.py": "Out of scope for this CR"}
+    codegen.reject_file("prop-1", "created.py", "  Out of scope for this user story  ")
+    assert codegen.rejected_files("prop-1") == {"created.py": "Out of scope for this user story"}
 
 
 def test_rejection_can_be_cleared(staged_proposal):
@@ -205,19 +205,19 @@ def test_reject_endpoint_records_the_decision_and_reason(staged_proposal, tmp_pa
         json={
             "proposal_id": "prop-1",
             "file_path": "created.py",
-            "reason": "Out of scope for this CR",
+            "reason": "Out of scope for this user story",
             "ticket_number": "AMS-101",
         },
     )
 
     assert response.status_code == 200
-    assert response.json()["rejected_files"] == {"created.py": "Out of scope for this CR"}
+    assert response.json()["rejected_files"] == {"created.py": "Out of scope for this user story"}
 
     events = client.get("/api/s3/ticket-events?ticket_number=AMS-101").json()["events"]
     rejected = [e for e in events if e["action"] == "code_change_rejected"]
     assert len(rejected) == 1
     assert rejected[0]["actor"] == "human"
-    assert "created.py — Out of scope for this CR" == rejected[0]["detail"]
+    assert "created.py — Out of scope for this user story" == rejected[0]["detail"]
 
 
 def test_reject_unknown_file_returns_502(staged_proposal):

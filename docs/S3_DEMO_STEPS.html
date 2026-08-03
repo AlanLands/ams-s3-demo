@@ -58,7 +58,7 @@
   /* Match the body line-height so a mono cell's first line sits on the same
      baseline as the prose cell beside it, rather than riding high. */
   td.mono, th.mono { font-family: var(--mono); font-size: 9pt; line-height: 1.5; }
-  /* Ticket and CR keys are identifiers — breaking "AMS-1045" across two lines
+  /* Ticket and user story keys are identifiers — breaking "AMS-1045" across two lines
      makes them unreadable at a glance. Opt-in, not a blanket rule on .mono:
      the file-path cells elsewhere must stay wrappable. */
   .nowrap { white-space: nowrap; }
@@ -162,28 +162,28 @@ tooling that drives them. You do <strong>not</strong> need all five for every be
 <td><strong>PolicyCore</strong> — the client's plan-administration portal (Streamlit). The window the audience watches change.</td>
 <td><code>apps/run-policycore.sh</code></td>
 <td>8501 (open <code>/sl_policycore</code>)</td>
-<td>CR-2026-041, CR-2026-042</td>
+<td>US-2026-041, US-2026-042</td>
 </tr>
 <tr>
 <td>3</td>
 <td><strong>Policy-Service</strong> — ClaimsPortal contracts side (Python/FastAPI).</td>
 <td><code>apps/run-policy-service.sh</code></td>
 <td>8081</td>
-<td>CR-2026-043</td>
+<td>US-2026-043</td>
 </tr>
 <tr>
 <td>4</td>
 <td><strong>Claims-Service</strong> — ClaimsPortal claims side (Python/FastAPI). Start after #3.</td>
 <td><code>apps/run-claims-service.sh</code></td>
 <td>8082</td>
-<td>CR-2026-043</td>
+<td>US-2026-043</td>
 </tr>
 <tr>
 <td>5</td>
 <td><strong>EnrolDirect</strong> — the online enrolment channel (Python/FastAPI).</td>
 <td><code>apps/run-enroldirect.sh</code></td>
 <td>8083</td>
-<td>CR-2026-045</td>
+<td>US-2026-045</td>
 </tr>
 </tbody>
 </table>
@@ -335,18 +335,18 @@ presenting — otherwise a slow or unreachable model stalls a beat mid-run.</p><
 <hr />
 <h2>5. Reset before every rehearsal or session</h2>
 <p>The pipeline mutates real source files and the SQLite database. Reset returns
-everything to the pre-CR baseline. Run them <strong>in this order</strong> — the amendment
+everything to the pre-user story baseline. Run them <strong>in this order</strong> — the amendment
 reset must come after <code>reset_s3.sh</code>, because that script reseeds the database
 the amendment baseline then builds on.</p>
-<pre><code class="language-bash">demo/reset_s3.sh                # CR-2026-041 (PolicyCore plan tier) + shared state
-demo/reset_s3_endorsement.sh    # CR-2026-042 (PolicyCore amendment priority)
-demo/reset_s3_claimsportal.sh   # CR-2026-043 (ClaimsPortal deductible)
-demo/reset_s3_enroldirect.sh    # CR-2026-045 (EnrolDirect prospect access)
+<pre><code class="language-bash">demo/reset_s3.sh                # US-2026-041 (PolicyCore plan tier) + shared state
+demo/reset_s3_endorsement.sh    # US-2026-042 (PolicyCore amendment priority)
+demo/reset_s3_claimsportal.sh   # US-2026-043 (ClaimsPortal deductible)
+demo/reset_s3_enroldirect.sh    # US-2026-045 (EnrolDirect prospect access)
 demo/warm_s3_cache.sh           # ALWAYS last — reset_s3.sh wipes .cache/llm
 </code></pre>
 <p>Expected final lines:</p>
 <pre><code class="language-text">S3 source baseline restored, PolicyCore reseeded, LLM cache cleared, and ticket timeline cleared.
-CR-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared.
+US-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared.
 ClaimsPortal source baseline restored; generated files removed.
 EnrolDirect source baseline restored; generated files removed.
 </code></pre>
@@ -377,15 +377,15 @@ script that would fail halfway.</li>
 four scripts print their success line.</p>
 <hr />
 <h2>6. Start the applications</h2>
-<p>One terminal per process. For the PolicyCore CRs you need only the first two.</p>
+<p>One terminal per process. For the PolicyCore user stories you need only the first two.</p>
 <pre><code class="language-bash">apps/run-console.sh           # terminal 1 — API :8000 + UI :5173
 apps/run-policycore.sh        # terminal 2 — portal :8501/sl_policycore
 
-# only for the ClaimsPortal CR (CR-2026-043):
+# only for the ClaimsPortal user story (US-2026-043):
 apps/run-policy-service.sh    # terminal 3 — :8081  (start before claims)
 apps/run-claims-service.sh    # terminal 4 — :8082
 
-# only for the EnrolDirect CR (CR-2026-045):
+# only for the EnrolDirect user story (US-2026-045):
 apps/run-enroldirect.sh       # terminal 5 — :8083
 </code></pre>
 <p>Then open <code>http://localhost:5173</code> and log in. Any roster name works; passcodes
@@ -485,21 +485,21 @@ work never returns to the manager.</p>
 <tbody>
 <tr>
 <td>AMS-101</td>
-<td>CR-2026-041: Plan Tier Upgrade Option</td>
+<td>US-2026-041: Plan Tier Upgrade Option</td>
 <td>QA</td>
 <td>Priya Nair</td>
 <td>Seeded Jira replay cache</td>
 </tr>
 <tr>
 <td>AMS-102</td>
-<td>CR-2026-042: Amendment Priority Field</td>
+<td>US-2026-042: Amendment Priority Field</td>
 <td>In Progress</td>
 <td>Ravi Kumar</td>
 <td>Seeded Jira replay cache</td>
 </tr>
 <tr>
 <td>AMS-103</td>
-<td>CR-2026-043: Claims Deductible Handling (ClaimsPortal)</td>
+<td>US-2026-043: Claims Deductible Handling (ClaimsPortal)</td>
 <td>To Do</td>
 <td>Ravi Kumar</td>
 <td>Seeded Jira replay cache</td>
@@ -516,14 +516,14 @@ work never returns to the manager.</p>
 <td>Flag urgent amendment requests (from Support Ops)</td>
 <td>To Do</td>
 <td>Ravi Kumar</td>
-<td><code>demo/seed_s3_repo_selection_ticket.sh</code> (CR-2026-044)</td>
+<td><code>demo/seed_s3_repo_selection_ticket.sh</code> (US-2026-044)</td>
 </tr>
 <tr>
 <td><strong>AMS-1045</strong></td>
-<td><strong>CR-2026-045: Prospect Member Eligibility Check For Online Enrolment</strong></td>
+<td><strong>US-2026-045: Prospect Member Eligibility Check For Online Enrolment</strong></td>
 <td><strong>To Do</strong></td>
 <td><strong>— unassigned —</strong></td>
-<td><strong>Opened automatically from <code>crs/CR-2026-045.md</code></strong></td>
+<td><strong>Opened automatically from <code>stories/US-2026-045.md</code></strong></td>
 </tr>
 </tbody>
 </table>
@@ -532,12 +532,12 @@ moved them to, and <code>reset_s3.sh</code> restores the seeded set — except t
 cannot run today (section 5), so expect to see wherever the last rehearsal
 left them until the <code>repos/</code> move is committed. <code>git checkout -- 's3_enhancement/cache/jira_*.json'</code> plus <code>rm -f data/ticket_events.jsonl</code> is
 the manual equivalent.</p>
-<p><strong>AMS-1045 is the beat worth showing.</strong> Nobody seeded it. Dropping a CR file
-into the top-level <code>crs/</code> opens a ticket for it, keyed deterministically off
-the CR id (<code>CR-2026-045</code> → <code>AMS-1045</code>, in the AMS-1000+ band so it can never
+<p><strong>AMS-1045 is the beat worth showing.</strong> Nobody seeded it. Dropping a user story file
+into the top-level <code>stories/</code> opens a ticket for it, keyed deterministically off
+the user story id (<code>US-2026-045</code> → <code>AMS-1045</code>, in the AMS-1000+ band so it can never
 collide with the hand-seeded AMS-100..999 tickets), and it lands <strong>unassigned</strong>
 — which is exactly what puts it in front of the manager on the dashboard, with
-an Assign control next to it. See <code>s3_enhancement/cr_intake.py</code>.</p>
+an Assign control next to it. See <code>s3_enhancement/story_intake.py</code>.</p>
 <p>Pair it with the reassignment beat: log in as <strong>Manager / 9000</strong>, assign
 AMS-1045 to an engineer, then press <strong>Reassign</strong> on the row and change your
 mind. Assignment used to be set-once; it is now assign / reassign / unassign,
@@ -554,7 +554,7 @@ before any AI step runs.</p>
 # NO repo here. Routing succeeds; automation correctly stays off.
 demo/seed_problem_record_ticket.sh
 
-# The other half: routes to a team AND offers the CR to run against it.
+# The other half: routes to a team AND offers the user story to run against it.
 SEED_CI=ClaimsPortal SEED_BUSINESS_SERVICE=&quot;Claims Management&quot; \
   demo/seed_problem_record_ticket.sh
 </code></pre>
@@ -589,7 +589,7 @@ data on the screen… open it in a pop-up&quot; feedback.</p></div>
 <tr>
 <td>0</td>
 <td>The board itself — AMS-1045 sitting there unassigned</td>
-<td>Onboarding a change is dropping its CR file in. The ticket opened itself, and landed unassigned so a manager routes it</td>
+<td>Onboarding a change is dropping its user story file in. The ticket opened itself, and landed unassigned so a manager routes it</td>
 </tr>
 <tr>
 <td>0b</td>
@@ -619,7 +619,7 @@ data on the screen… open it in a pop-up&quot; feedback.</p></div>
 <tr>
 <td>5</td>
 <td>Apply, then look at PolicyCore on :8501/sl_policycore</td>
-<td>The client's running application changed — on CR-2026-041 the new plan tier is selectable and the monthly contribution recalculates</td>
+<td>The client's running application changed — on US-2026-041 the new plan tier is selectable and the monthly contribution recalculates</td>
 </tr>
 <tr>
 <td>5b</td>
@@ -639,7 +639,7 @@ data on the screen… open it in a pop-up&quot; feedback.</p></div>
 <tr>
 <td>7</td>
 <td><strong>Draft test scenarios</strong>, edit one, approve the plan</td>
-<td>QA reviews <em>what will be checked</em>, in prose traced to the CR's acceptance criteria, before any test code exists — and can change it</td>
+<td>QA reviews <em>what will be checked</em>, in prose traced to the user story's acceptance criteria, before any test code exists — and can change it</td>
 </tr>
 <tr>
 <td>8</td>
@@ -649,7 +649,7 @@ data on the screen… open it in a pop-up&quot; feedback.</p></div>
 <tr>
 <td>9</td>
 <td><strong>Run the regression suite</strong></td>
-<td>A human-authored suite the AI cannot write to still passes — the CR cost nothing that already worked</td>
+<td>A human-authored suite the AI cannot write to still passes — the user story cost nothing that already worked</td>
 </tr>
 <tr>
 <td>10</td>
@@ -702,7 +702,7 @@ button carries a <code>reset_blocked_reason</code> saying which, instead of firi
 script that would fail halfway. That is the gate working, and it is a fine
 thing to say out loud.</p>
 <p>On beats 12-13: the deployment order is <strong>derived</strong>, not drafted — on
-CR-2026-043 the plan puts policy_service before claims_service because
+US-2026-043 the plan puts policy_service before claims_service because
 claims_service calls it, and says why. The release record is assembled from
 what the run actually produced; its &quot;Not evidenced by this release&quot; block is
 the part worth pausing on, because a release document that only lists
@@ -715,7 +715,7 @@ panel says so on screen and the release record repeats it under &quot;Not eviden
 by this release&quot;. Nothing runs git and no remote is contacted. That is
 deliberate: the target apps live inside this repo and the reset scripts restore
 the baseline from <code>HEAD</code>, so a real commit would make them start restoring the
-CR instead. The point of the beat is the <em>shape</em> of the flow — branch before
+user story instead. The point of the beat is the <em>shape</em> of the flow — branch before
 edit, commit gated on green tests, pipeline on push — which is what a reviewer
 asks about when they see an AI editing code.</p>
 <p>Two things are worth clicking rather than describing. Press <strong>Commit to branch</strong>
@@ -730,7 +730,7 @@ honest undo at that point is a revert commit, not a rewritten history.</p>
 layers and the cross-service arrow are read from the changed-file set, so it
 costs no LLM call and needs no cache warming. The <code>NEW</code> badge comes from git
 (the file is absent from <code>HEAD</code>), which is why <code>claim_rules.py</code> carries one on
-CR-2026-043 and nothing does on CR-2026-042. The PDF is rendered server-side by
+US-2026-043 and nothing does on US-2026-042. The PDF is rendered server-side by
 headless Chromium; if <code>playwright install chromium</code> has not been run on the
 presenter machine the endpoint answers 503 and the console silently falls back to
 the browser's own print-to-PDF, so the button always does something.</p>
@@ -744,7 +744,7 @@ saying out loud when showing them:</p>
 what makes &quot;the pre-existing tests still pass&quot; a result rather than a claim.</li>
 <li>In the matrix, only the scenario→test column is inferred, and it is
 deliberately conservative: an ambiguous pairing renders as &quot;no automated
-test&quot; rather than guessing. On CR-2026-043 two criteria legitimately land
+test&quot; rather than guessing. On US-2026-043 two criteria legitimately land
 there — that is the honest answer, and a good moment to make the point that
 the tool reports gaps instead of hiding them.</li>
 </ul>
@@ -816,8 +816,8 @@ the tool reports gaps instead of hiding them.</li>
 <li><code>demo/warm_s3_cache.sh</code> ran <em>after</em> the resets</li>
 <li>Console reachable at <code>:5173</code>; you are logged in</li>
 <li>PolicyCore reachable at <code>:8501/sl_policycore</code> in a second window</li>
-<li>For the ClaimsPortal CR: <code>:8081</code> and <code>:8082</code> both responding</li>
-<li>For the EnrolDirect CR: <code>:8083</code> responding</li>
+<li>For the ClaimsPortal user story: <code>:8081</code> and <code>:8082</code> both responding</li>
+<li>For the EnrolDirect user story: <code>:8083</code> responding</li>
 <li>AMS-1045 is on the board and unassigned</li>
 <li>You have opened and closed at least one artifact modal, so the click-path is muscle memory</li>
 <li>You have walked beats 0–13 once, end to end, on this machine</li>

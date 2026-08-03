@@ -121,16 +121,16 @@
   <p class="subtitle">The relevance funnel behind S3, the numbers that justify it,
     and an honest comparison with GitLab Duo.</p>
   <p class="meta">MapleSure Insurance · All figures measured live against
-    CR-2026-041 on 3 August 2026 · Local embedding backend</p>
+    US-2026-041 on 3 August 2026 · Local embedding backend</p>
 </div>
 
 <div class="callout">
   <div class="lead">If you are asked "how does it rank?" — say this</div>
   <p class="say">"We never paste the repo into the prompt. First we score each
-  subsystem's own design document against the change request and discard whole
+  subsystem's own design document against the user story and discard whole
   subsystems that don't match — the AI reads the architecture docs before it opens
   a single source file. Then we rank only what survived, and send a handful. On this
-  change request that's 4 files out of 58, and the console shows you every score
+  user story that's 4 files out of 58, and the console shows you every score
   and everything we threw away."</p>
 </div>
 
@@ -139,7 +139,7 @@
 
 <figure>
   <div class="fig-title">Figure 1 · What happens to 58 files</div>
-  <div class="fig-sub">CR-2026-041 (new top plan tier) against the PolicyCore target.</div>
+  <div class="fig-sub">US-2026-041 (new top plan tier) against the PolicyCore target.</div>
   <svg viewBox="0 0 700 268" role="img"
        aria-label="Flow diagram: 58 discovered files reduce to 4 files sent to the model. 52 files are cut at stage 1 by subsystem screening — 50 Java decoys plus the 2 Python files of the enrolment subsystem. Of the 6 files that survive, 1 is structurally blocked, 2 are scored and both fall below the floor, and 3 core files plus 1 not-yet-existing core file are sent.">
     <defs>
@@ -197,9 +197,9 @@
     <rect x="0" y="210" width="700" height="52" rx="4" fill="#f6ecee" stroke="#a83244" stroke-width="1.2"/>
     <text x="14" y="238" font-size="21" font-weight="700" fill="#a83244">4</text>
     <text x="40" y="238" font-size="10" font-weight="700" fill="#1a1a1a">files sent to the model</text>
-    <text x="14" y="254" font-size="8.5" fill="#5c5c5c">app.py · core/db.py · core/models.py — always included, never scored — plus core/tiers.py, sent empty because the CR creates it</text>
+    <text x="14" y="254" font-size="8.5" fill="#5c5c5c">app.py · core/db.py · core/models.py — always included, never scored — plus core/tiers.py, sent empty because the user story creates it</text>
   </svg>
-  <figcaption><strong>The ranker's job on this CR is exclusion, not selection.</strong>
+  <figcaption><strong>The ranker's job on this user story is exclusion, not selection.</strong>
     Nothing cleared the floor; the four files that went were the ones the target's
     core-file contract guarantees. That is the design working as intended — ranking
     decides what <em>else</em> the model may see, and it declined to add anything.
@@ -219,7 +219,7 @@ would have to beat its own ceiling by a wide margin to get in.</p>
 
 <figure>
   <div class="fig-title">Figure 2 · Measured cosine similarity vs. the cut-off</div>
-  <div class="fig-sub">Every scored item on this change request. Same unit and scale in both panels; each panel carries its own floor.</div>
+  <div class="fig-sub">Every scored item on this user story. Same unit and scale in both panels; each panel carries its own floor.</div>
   <svg viewBox="0 0 700 362" role="img"
        aria-label="Two-panel bar chart of cosine similarity scores. Panel A, seven subsystem design docs, scores from 0.122 to 0.354, all below the 0.45 floor. Panel B, two candidate files, 0.459 and 0.441, both below the 0.55 floor.">
     <!-- ============ PANEL A ============ -->
@@ -343,7 +343,7 @@ would have to beat its own ceiling by a wide margin to get in.</p>
     <span>cosine similarity, 0–1 · higher is more relevant</span>
   </div>
   <figcaption><strong>The gap is the argument.</strong> <code>core/claims.py</code> is
-    the hardest case in the corpus — same group-benefits vocabulary as the CR,
+    the hardest case in the corpus — same group-benefits vocabulary as the user story,
     genuinely adjacent, but not what the change is about. It scores 0.459 against a
     0.55 floor. The nearest decoy subsystem, <em>settlement</em>, tops out at 0.354
     against 0.45. Both are comfortably clear, and
@@ -369,7 +369,7 @@ would have to beat its own ceiling by a wide margin to get in.</p>
 <em>what if the ranker is wrong?</em></p>
 
 <h3>Core files bypass scoring entirely</h3>
-<p>The files a CR provably needs are declared per target and always included —
+<p>The files a user story provably needs are declared per target and always included —
 and, more importantly, <strong>required back in the model's response</strong>.
 <code>verify_core_recall()</code> runs against the LLM's actual returned file set,
 not just the prompt. A generation that quietly drops a required file is rejected,
@@ -384,7 +384,7 @@ broken one raises at import instead of being skipped. The contract is in
 
 <h3>The top-scoring file in the whole corpus is hard-blocked</h3>
 <p>The best line in the deck. <code>repos/policycore/core/seed.py</code> would score higher
-against this CR than any other candidate — it is the file most densely packed with
+against this user story than any other candidate — it is the file most densely packed with
 <code>Policy</code> field names. It is also the one file that must never be edited,
 because it constructs <code>Policy(...)</code> with six positional arguments that
 the whole walkthrough depends on. So it is excluded structurally, by
@@ -403,7 +403,7 @@ the whole walkthrough depends on. So it is excluded structurally, by
 
 <figure>
   <div class="fig-title">Figure 3 · File payload sent to the model</div>
-  <div class="fig-sub">Estimated tokens of file content, CR-2026-041. Prompt scaffolding is identical on both sides and excluded.</div>
+  <div class="fig-sub">Estimated tokens of file content, US-2026-041. Prompt scaffolding is identical on both sides and excluded.</div>
   <svg viewBox="0 0 700 132" role="img"
        aria-label="Two bars comparing file payload. Whole app: 18,310 estimated tokens across 58 files. Scoped selection: 5,336 estimated tokens across 4 files, a 3.4 times reduction.">
     <text x="164" y="36" font-size="9" fill="#5c5c5c" text-anchor="end">whole app in prompt</text>
@@ -420,7 +420,7 @@ the whole walkthrough depends on. So it is excluded structurally, by
     <text x="168" y="124" font-size="9" fill="#5c5c5c"><tspan font-weight="700" fill="#a83244">3.4× smaller</tspan> — 70.9% of the file payload never reaches the model</text>
   </svg>
   <figcaption><strong>Use the real multiple, not a rounder one.</strong> 3.4× is
-    what this CR measures, because the four files that <em>do</em> go are the large
+    what this user story measures, because the four files that <em>do</em> go are the large
     ones. The compelling number is not the ratio — it is that the ratio
     <em>widens as the repository grows</em>, since the selection stays at a handful
     while the denominator climbs. It moved from 3.6× to 3.4× when the enrolment
@@ -440,7 +440,7 @@ the whole walkthrough depends on. So it is excluded structurally, by
 <h3>Large repositories add a cheaper tier first</h3>
 <p>For a GitLab-backed target the funnel gains a stage that runs <em>before</em>
 any content is fetched: list every path (cheap), rank the bare path segments against
-the CR with TF-IDF, keep the top 20, and only then fetch those files' contents. A
+the user story with TF-IDF, keep the top 20, and only then fetch those files' contents. A
 twenty-repository account never costs more than a handful of small HTTP GETs,
 whatever any individual repo's size.</p>
 <p>Note the deliberate asymmetry, because it reads as an inconsistency if unexplained:
@@ -593,7 +593,7 @@ page nobody reads.</em> That is a roadmap conversation, not a weakness.</p>
 <p class="footnote">
 <strong>Method.</strong> All figures produced by running this repository's own
 <code>s3_enhancement/relevance.py</code> against
-<code>crs/CR-2026-041.md</code> on 3 August 2026, with the local embedding
+<code>stories/US-2026-041.md</code> on 3 August 2026, with the local embedding
 backend active (not the lexical fallback). Token counts use the repository's
 ~4-characters-per-token estimator and are explicitly estimates; a billed figure
 always comes from the provider's reported usage. Scores drift slightly as the

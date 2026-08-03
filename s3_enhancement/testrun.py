@@ -18,7 +18,7 @@ tree is byte-identical afterwards no matter how the run ends.
 parsing, but pointed at the target app's checked-in suite instead of the
 generated one. Keeping them as two calls rather than one merged run is the
 whole point — "12 new tests pass" and "20 pre-existing tests still pass" are
-different claims, and a CR that breaks the second while satisfying the first
+different claims, and a user story that breaks the second while satisfying the first
 is exactly the failure this beat exists to catch.
 """
 
@@ -217,7 +217,7 @@ def run_regression(target: Target) -> SuiteRun:
     run: the point of the beat is that these tests predate the change, so they
     are runnable before a single line of it has been generated. That also makes
     them usable as a *baseline* — run them before Apply and again after, and
-    the pair is the evidence that the CR broke nothing.
+    the pair is the evidence that the user story broke nothing.
     """
     if not target.has_regression_suite:
         raise NoRegressionSuiteError(

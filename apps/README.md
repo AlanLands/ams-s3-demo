@@ -24,15 +24,15 @@ below; only the middle two depend on each other.
 | 1 | **Console** | `apps/run-console.sh` | 8000 + **5173** | The AMS console the presenter drives. FastAPI backend + React UI, both from this folder (`console/`). Open **:5173**. |
 | 2 | **PolicyCore** | `apps/run-policycore.sh` | 8501 | The client's plan-administration portal (`repos/policycore/`, Python/Streamlit/SQLite). The window the audience watches change. Open **:8501/sl_policycore** — see below. |
 | 3 | **Policy-Service** | `apps/run-policy-service.sh` | 8081 | ClaimsPortal's contracts side (`repos/claimsportal/policy_service/`). Start before Claims-Service. |
-| 4 | **Claims-Service** | `apps/run-claims-service.sh` | 8082 | ClaimsPortal's claims side (`repos/claimsportal/claims_service/`). Target of CR-2026-043. |
-| 5 | **EnrolDirect** | `apps/run-enroldirect.sh` | 8083 | The online enrolment channel and its access-preference analysis (`repos/enroldirect/`). Target of CR-2026-045. |
+| 4 | **Claims-Service** | `apps/run-claims-service.sh` | 8082 | ClaimsPortal's claims side (`repos/claimsportal/claims_service/`). Target of US-2026-043. |
+| 5 | **EnrolDirect** | `apps/run-enroldirect.sh` | 8083 | The online enrolment channel and its access-preference analysis (`repos/enroldirect/`). Target of US-2026-045. |
 
 Only the console lives here as source. Scripts 2–5 launch code out of `repos/`
 — they are here because starting the applications is a tooling job, not because the
 apps they start are.
 
-You do **not** need all five for every beat. The PolicyCore CRs (CR-2026-041,
-CR-2026-042) need 1 and 2. CR-2026-043 needs 1, 3 and 4. CR-2026-045 needs 1
+You do **not** need all five for every beat. The PolicyCore user stories (US-2026-041,
+US-2026-042) need 1 and 2. US-2026-043 needs 1, 3 and 4. US-2026-045 needs 1
 and 5, and EnrolDirect runs on nothing but the venv.
 
 A manager can also see and control 2–5 from the console's **admin panel**
@@ -110,9 +110,9 @@ place before any AI step runs (`s3_enhancement/applications.py`):
 
 | Repo | CI / application name | Owning team | Automatable |
 |---|---|---|---|
-| `repos/policycore/` | PolicyCore | App Support — PolicyCore | yes (CR-2026-041, CR-2026-042) |
-| `repos/claimsportal/` | ClaimsPortal | App Support — ClaimsPortal | yes (CR-2026-043) |
-| `repos/enroldirect/` | EnrolDirect | App Support — PolicyCore | yes (CR-2026-045) |
+| `repos/policycore/` | PolicyCore | App Support — PolicyCore | yes (US-2026-041, US-2026-042) |
+| `repos/claimsportal/` | ClaimsPortal | App Support — ClaimsPortal | yes (US-2026-043) |
+| `repos/enroldirect/` | EnrolDirect | App Support — PolicyCore | yes (US-2026-045) |
 | — | BillingGateway | App Support — BillingGateway | no — routes only, no repo here |
 | — | DocumentHub | App Support — DocumentHub | no — routes only, no repo here |
 
@@ -120,7 +120,7 @@ The last two exist on purpose: they show a ticket reaching the correct team
 for an application this console has no code for, instead of the console
 pretending it can generate a fix.
 
-EnrolDirect was a third kind of row until CR-2026-045: the console had its code
+EnrolDirect was a third kind of row until US-2026-045: the console had its code
 but no registered target, so it carried an empty `repo_path` and reported
 `automation_available=False`. Both halves exist now. The property still answers
 "can we act on this ticket" rather than "is the source on disk", and
@@ -152,7 +152,7 @@ beat that fails when a presenter clicks it.
   files are 50 of PolicyCore's 58-file candidate pool, so it was a real risk,
   not a cosmetic edit. It was safe only because it was verified rather than
   assumed: the candidate pool and the selected file set came back
-  byte-identical for both PolicyCore CRs, and codegen/testgen still replayed
+  byte-identical for both PolicyCore user stories, and codegen/testgen still replayed
   from cache. `.cache/vectordb` had to be deleted first — the embedding index
   is keyed by path and `demo/reset_s3.sh` clears only `.cache/llm`, so a stale
   index would have hidden any drift. Verify the same way, or don't do it.

@@ -48,7 +48,7 @@ export default function BoardStage() {
       <div id="quick-question" className="ams-card" style={{ marginBottom: '1.25rem' }}>
         <strong>Quick question</strong>
         <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
-          Ask about a hypothetical change before there's a formal CR — e.g. "how much would it
+          Ask about a hypothetical change before there's a formal user story — e.g. "how much would it
           cost if I just changed a text field on the amendment form?" Asks a clarifying
           question or two if it needs more detail, then sizes it.
         </p>
@@ -132,7 +132,7 @@ export default function BoardStage() {
             {quickChatResult.code_change_warranted && (
               <p style={{ fontSize: 'var(--ams-text-sm)', marginTop: '0.5rem' }}>
                 A concrete code change looks warranted:{' '}
-                <strong>{quickChatResult.suggested_cr_summary}</strong>
+                <strong>{quickChatResult.suggested_story_summary}</strong>
               </p>
             )}
           </div>

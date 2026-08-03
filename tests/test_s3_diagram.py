@@ -69,7 +69,7 @@ def test_no_crossing_claimed_for_a_single_service():
 
 
 def test_new_files_are_badged_and_existing_ones_are_not():
-    """claim_rules.py does not exist until CR-2026-043 creates it. Fakes git
+    """claim_rules.py does not exist until US-2026-043 creates it. Fakes git
     so the assertion doesn't depend on whether this checkout has committed
     the rewritten target's baseline files yet."""
 
@@ -145,10 +145,10 @@ def test_parses_the_shapes_the_model_actually_emits():
 
 def test_document_html_carries_letterhead_and_metadata():
     html = render_document_html(
-        SAMPLE_DOC, cr_label="CR-2026-042", ticket_key="AMS-102", today=date(2026, 7, 29)
+        SAMPLE_DOC, story_label="US-2026-042", ticket_key="AMS-102", today=date(2026, 7, 29)
     )
     assert "MapleSure Insurance" in html
-    assert "CR-2026-042" in html and "AMS-102" in html
+    assert "US-2026-042" in html and "AMS-102" in html
     assert "29 July 2026" in html
     assert "<strong>Backward compatibility</strong>" in html
 
@@ -159,7 +159,7 @@ def test_document_html_embeds_the_diagram_with_its_provenance():
     svg, change_map = build_svg(POLICYCORE)
     html = render_document_html(
         SAMPLE_DOC,
-        cr_label="CR",
+        story_label="user story",
         ticket_key="AMS-102",
         diagram_svg=svg,
         diagram_caption=caption_for(change_map),
@@ -180,13 +180,13 @@ def test_caption_only_claims_what_the_diagram_shows():
 
 
 def test_document_html_omits_the_figure_when_no_diagram_is_given():
-    html = render_document_html(SAMPLE_DOC, cr_label="CR", ticket_key="AMS-102")
+    html = render_document_html(SAMPLE_DOC, story_label="user story", ticket_key="AMS-102")
     assert "<figure>" not in html
 
 
 def test_document_html_escapes_the_model_text():
     html = render_document_html(
-        "<script>alert(1)</script>", cr_label="CR", ticket_key="AMS-102"
+        "<script>alert(1)</script>", story_label="user story", ticket_key="AMS-102"
     )
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html

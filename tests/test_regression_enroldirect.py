@@ -6,11 +6,11 @@ same reason the other two suites do: anything ending `.py` under a target root
 joins the codegen candidate pool, and a suite the pipeline can rewrite is not
 an independent check of anything.
 
-**Every assertion here holds before and after CR-2026-045.** That is the rule
+**Every assertion here holds before and after US-2026-045.** That is the rule
 for these suites — they are invariants, not assertions about the change under
-test. The CR settles how a prospect is classified at the gate, so nothing here
+test. The user story settles how a prospect is classified at the gate, so nothing here
 asserts a prospect's gate outcome. What it asserts instead is the ground the
-CR must not move:
+user story must not move:
 
 1. The contract gate runs before the preference gate. A lapsed contract keeps
    whatever preferences it was configured with, so reversing those two would
@@ -21,7 +21,7 @@ CR must not move:
    makes to every other consumer of these preferences: if it moved a member's
    outcome, the change would not be contained to the population it was scoped
    to. Asserted as absolute values rather than as a comparison, because a
-   comparison of two things the CR changes together proves nothing.
+   comparison of two things the user story changes together proves nothing.
 3. The gate's decision for a classified category matches what the contract
    configuration says it should be. `impact.py` models the gate's rules
    against that same configuration to size an option the gate does not
@@ -46,7 +46,7 @@ from repos.enroldirect.main import app
 client = TestClient(app)
 
 # Fields every consumer of a decision reads. Deliberately does not include
-# fields the CR may add — this is a floor, not a schema.
+# fields the user story may add — this is a floor, not a schema.
 DECISION_FIELDS = [
     "granted",
     "applicantId",
@@ -97,7 +97,7 @@ def test_every_decision_exposes_the_fields_consumers_read():
 
 
 def test_member_and_guest_outcomes_are_exactly_what_they_are_today():
-    """The population the CR is not scoped to must not move.
+    """The population the user story is not scoped to must not move.
 
     Absolute expected values, not a before/after comparison — every one of
     these must read the same on both sides of the change.
@@ -304,7 +304,7 @@ def test_enrolment_refusal_matches_the_gate_for_every_applicant():
     """The enrolment path may add refusals; it may never add an admission.
 
     Whatever the gate says about someone, the enrolment path must not be more
-    permissive. This holds across the CR because it is stated relative to the
+    permissive. This holds across the user story because it is stated relative to the
     gate rather than against a fixed list of outcomes.
     """
     for applicant in client.get("/api/applicants").json():

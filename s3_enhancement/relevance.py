@@ -1,6 +1,6 @@
 """File-relevance selection for S3's codegen/analysis prompts.
 
-Scopes the LLM's context to a small, CR-relevant subset of `repos/policycore/`
+Scopes the LLM's context to a small, story-relevant subset of `repos/policycore/`
 instead of concatenating every file's full content into every prompt. This
 is what lets S3 scale to a realistic ~100-file app without token usage
 growing linearly with app size — the concern this module exists to answer.
@@ -9,16 +9,16 @@ Selection runs in two stages:
 
 1. **Subsystem screening** (`screen_subsystems`): each subsystem under
    `repos/policycore/systems/` ships a `DESIGN.md` declaring its scope. A subsystem
-   scoring below `min_score` against the CR is screened out entirely —
+   scoring below `min_score` against the user story is screened out entirely —
    none of its source files are even opened for stage 2. This is what lets
    the demo say "the AI reads the design docs first" rather than "the AI
    opened every file and scored it."
 2. **File-level ranking** (`select_relevant_files`) and subsystem screening
    (`screen_subsystems`) score real prose (DESIGN.md scope keywords, file
-   content) against the CR text, so both prefer real semantic embeddings
+   content) against the user story text, so both prefer real semantic embeddings
    (`common/vectorstore.py`, the shared local vector store) over TF-IDF
    bag-of-words, falling back to TF-IDF only if the embedding backend is
-   unavailable. `_rank_gitlab_paths_by_cr` (the path-only GitLab pre-rank,
+   unavailable. `_rank_gitlab_paths_by_story` (the path-only GitLab pre-rank,
    below) stays TF-IDF-only on purpose: it scores bare path segments
    ("src billing export py"), not prose, and short literal path tokens are
    a poor fit for a sentence-embedding model built for natural-language
@@ -27,7 +27,7 @@ Selection runs in two stages:
    The two backends' cosine-similarity scales differ: embedding similarity
    for topically-unrelated text still tends to sit noticeably above zero
    (empirically ~0.3-0.45 for this repo's own decoy subsystems/files against
-   the real CR text), where TF-IDF's sparse cosine sits much closer to zero
+   the real user story text), where TF-IDF's sparse cosine sits much closer to zero
    for the same pairs. Every `min_score` below is a `float | None` --
    `None` (the default) resolves to the threshold calibrated for whichever
    backend actually serves the request; an explicit value overrides that for
@@ -53,12 +53,12 @@ from s3_enhancement.targets import Target
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MOCKAPP_ROOT = REPO_ROOT / "repos" / "policycore"
 
-# The files CR-2026-041 actually needs — always included as prompt context
+# The files US-2026-041 actually needs — always included as prompt context
 # regardless of what the relevance scorer says, and always required back in
 # the model's response (see codegen.py's _validate_file_set). This is the
 # safety net that keeps the demo from ever flaking on the real files.
-# repos/policycore/core/tiers.py does not exist until the CR creates it — it's
-# still a core file, just with empty pre-CR content (mirrors how the
+# repos/policycore/core/tiers.py does not exist until the user story creates it — it's
+# still a core file, just with empty pre-user story content (mirrors how the
 # original hardcoded-allowlist prompt handled a not-yet-existing file).
 # Bound to the default Target so there's one source of truth across S3's
 # modules (see s3_enhancement/targets.py) — value is unchanged from before.
@@ -67,7 +67,7 @@ CORE_FILES: tuple[str, ...] = targets.MOCKAPP_TIER_UPGRADE.core_files
 # Structurally off-limits regardless of relevance score: seed.py constructs
 # Policy(...) with 6 fixed positional args (see codegen.py's
 # _validate_policy_backward_compatible) and must never be an editable file,
-# even though it scores highest of any candidate against the CR text (it's
+# even though it scores highest of any candidate against the user story text (it's
 # the file most densely full of Policy field names). Still counted in
 # discover_mockapp_files() for an honest total-app-size figure — just never
 # eligible to be selected as extra editable context.
@@ -75,7 +75,7 @@ NEVER_EXTRA: frozenset[str] = targets.MOCKAPP_TIER_UPGRADE.never_extra
 
 # "target" is Maven's build-output directory (the Spring Boot target's root
 # contains two Maven services) and ".baseline" is that target's pristine
-# pre-CR snapshot (demo/reset_s3_claimsportal.sh restores from it) — sources
+# pre-user story snapshot (demo/reset_s3_claimsportal.sh restores from it) — sources
 # under either must never enter the candidate pool, same reasoning as
 # __pycache__ for Python.
 #
@@ -92,7 +92,7 @@ _SOURCE_GLOBS = ("*.py", "*.java")
 
 @dataclass(frozen=True)
 class SubsystemScreen:
-    """Result of scoring each `repos/policycore/systems/*/DESIGN.md` against the CR,
+    """Result of scoring each `repos/policycore/systems/*/DESIGN.md` against the user story,
     before any individual source file is opened for stage-2 ranking."""
 
     in_scope: tuple[str, ...]
@@ -156,7 +156,7 @@ def _looks_like_gitlab_source(path: str) -> bool:
     return not any(part in path for part in _GITLAB_EXCLUDED_PATH_PARTS)
 
 
-def _rank_gitlab_paths_by_cr(cr_text: str, paths: list[str]) -> list[str]:
+def _rank_gitlab_paths_by_story(story_text: str, paths: list[str]) -> list[str]:
     """Path-only relevance pre-rank — no file content read yet. Splits each
     path into path-segment "words" (dropping `/`, `_`, `.`) so TF-IDF has
     real tokens to score instead of one opaque string per path. This is the
@@ -167,7 +167,7 @@ def _rank_gitlab_paths_by_cr(cr_text: str, paths: list[str]) -> list[str]:
         return []
     tokenized = [path.replace("/", " ").replace("_", " ").replace(".", " ") for path in paths]
     vectors = TfidfVectorizer(stop_words="english", ngram_range=(1, 2)).fit_transform(
-        [cr_text, *tokenized]
+        [story_text, *tokenized]
     )
     scores = cosine_similarity(vectors[0:1], vectors[1:]).flatten()
     ranked = sorted(zip(paths, scores, strict=True), key=lambda pair: pair[1], reverse=True)
@@ -176,7 +176,7 @@ def _rank_gitlab_paths_by_cr(cr_text: str, paths: list[str]) -> list[str]:
 
 def discover_gitlab_files(
     project_id: int | str,
-    cr_text: str,
+    story_text: str,
     *,
     ref: str = "main",
     max_candidates: int = 20,
@@ -187,7 +187,7 @@ def discover_gitlab_files(
 
     Two-tier funnel, same spirit as mockapp's subsystem-then-file screening:
     1. List every file path in the target repo (cheap — no content) via
-       `common.gitlab_client`, then rank paths against the CR text by a
+       `common.gitlab_client`, then rank paths against the user story text by a
        lightweight TF-IDF pass over paths alone, keeping only the top
        `max_candidates` (default 20). This is what keeps a 20-repo GitLab
        account from ever costing more than a handful of small HTTP GETs,
@@ -203,17 +203,17 @@ def discover_gitlab_files(
     if not paths:
         return {}
 
-    shortlist = _rank_gitlab_paths_by_cr(cr_text, paths)[:max_candidates]
+    shortlist = _rank_gitlab_paths_by_story(story_text, paths)[:max_candidates]
     return client.fetch_files(project_id, shortlist, ref=ref)
 
 
-def discover_files_for_target(target: Target, cr_text: str) -> dict[str, str]:
+def discover_files_for_target(target: Target, story_text: str) -> dict[str, str]:
     """Dispatch discovery to the strategy matching `target.source_kind` — the
     seam that lets a caller (codegen/testgen/analyze) work against any
     registered target instead of always reading repos/policycore/ directly."""
     if target.source_kind == "local":
         return discover_mockapp_files(target.root)
-    return discover_gitlab_files(target.project_id, cr_text, ref=target.ref)
+    return discover_gitlab_files(target.project_id, story_text, ref=target.ref)
 
 
 def _document(rel_path: str, content: str) -> str:
@@ -231,7 +231,7 @@ def discover_subsystem_design_docs(root: Path = MOCKAPP_ROOT) -> dict[str, str]:
     its parent (subsystem) directory.
 
     Each doc's "## Scope keywords" section (short, deliberately written in
-    that subsystem's own domain vocabulary rather than the CR's) is what
+    that subsystem's own domain vocabulary rather than the user story's) is what
     `screen_subsystems` actually scores — falling back to the whole doc if a
     design doc omits that section, since a doc without declared keywords
     should still be considered, not silently skipped.
@@ -267,7 +267,7 @@ def discover_subsystem_design_docs(root: Path = MOCKAPP_ROOT) -> dict[str, str]:
         # "the root is in scope". Onboarding docs must not move the funnel:
         # every repo under repos/ carries ARCHITECTURE.md and DESIGN.md as its
         # read-this-first pair, and adding one to a new drop-in target must
-        # not change which files that target's CR selects.
+        # not change which files that target's user story selects.
         if path.parent == root:
             continue
         rel_dir = path.parent.relative_to(key_base).as_posix()
@@ -282,7 +282,7 @@ def _extract_scope_keywords(design_doc_text: str) -> str:
 
 # Empirically measured against this repo's own decoy subsystems: the six
 # repos/policycore/systems/legacy_platform/* DESIGN.md docs top out at 0.336
-# cosine similarity against the real CR-2026-041 text (settlement, the
+# cosine similarity against the real US-2026-041 text (settlement, the
 # closest decoy) -- well above where TF-IDF's sparse cosine sits for the same
 # pairs (<= 0.012). 0.45 sits with margin above that decoy ceiling; re-verify
 # against test_s3_relevance.py's "screens out every legacy subsystem"
@@ -293,11 +293,11 @@ _SUBSYSTEM_COLLECTION_NAME = "s3_subsystem_design_docs"
 
 
 def _screen_subsystems_vector(
-    cr_text: str, design_docs: dict[str, str], min_score: float
+    story_text: str, design_docs: dict[str, str], min_score: float
 ) -> SubsystemScreen:
     names = list(design_docs)
     embed_corpus(_SUBSYSTEM_COLLECTION_NAME, names, [design_docs[n] for n in names], None)
-    hits = semantic_search(_SUBSYSTEM_COLLECTION_NAME, cr_text, n_results=len(names))
+    hits = semantic_search(_SUBSYSTEM_COLLECTION_NAME, story_text, n_results=len(names))
     scores = {hit.id: round(hit.score, 4) for hit in hits}
 
     in_scope = tuple(sorted(name for name in names if scores[name] >= min_score))
@@ -306,10 +306,10 @@ def _screen_subsystems_vector(
 
 
 def _screen_subsystems_tfidf(
-    cr_text: str, design_docs: dict[str, str], min_score: float
+    story_text: str, design_docs: dict[str, str], min_score: float
 ) -> SubsystemScreen:
     names = list(design_docs)
-    documents = [cr_text, *(design_docs[name] for name in names)]
+    documents = [story_text, *(design_docs[name] for name in names)]
     vectors = TfidfVectorizer(stop_words="english", ngram_range=(1, 2)).fit_transform(documents)
     raw_scores = cosine_similarity(vectors[0:1], vectors[1:]).flatten()
     scores = {
@@ -322,12 +322,12 @@ def _screen_subsystems_tfidf(
 
 
 def screen_subsystems(
-    cr_text: str,
+    story_text: str,
     design_docs: dict[str, str],
     *,
     min_score: float | None = None,
 ) -> SubsystemScreen:
-    """Score each subsystem's design doc against the CR text (embeddings by
+    """Score each subsystem's design doc against the user story text (embeddings by
     default, TF-IDF cosine similarity fallback) and split subsystems into
     in-scope vs screened-out.
 
@@ -335,7 +335,7 @@ def screen_subsystems(
     whichever backend actually serves the request — well above each
     backend's empirically measured ceiling for these decoy subsystems'
     design docs, but a genuinely low bar otherwise: a subsystem doc that
-    shares real terms with the CR clears it easily, so a real signal is
+    shares real terms with the user story clears it easily, so a real signal is
     never mistaken for noise.
     """
     if not design_docs:
@@ -343,16 +343,16 @@ def screen_subsystems(
 
     try:
         floor = _SUBSYSTEM_VECTOR_MIN_SCORE_DEFAULT if min_score is None else min_score
-        return _screen_subsystems_vector(cr_text, design_docs, floor)
+        return _screen_subsystems_vector(story_text, design_docs, floor)
     except VectorStoreError:
         floor = _SUBSYSTEM_TFIDF_MIN_SCORE_DEFAULT if min_score is None else min_score
-        return _screen_subsystems_tfidf(cr_text, design_docs, floor)
+        return _screen_subsystems_tfidf(story_text, design_docs, floor)
 
 
 # Empirically measured: this repo's one non-core, non-decoy repos/policycore/ file
 # (repos/policycore/core/claims.py) scores 0.4501 embedding cosine similarity against
-# CR-2026-041's real text -- domain-adjacent (both insurance/policy vocabulary)
-# but not what the CR is actually about. 0.55 sits above that with margin;
+# US-2026-041's real text -- domain-adjacent (both insurance/policy vocabulary)
+# but not what the user story is actually about. 0.55 sits above that with margin;
 # re-verify against test_s3_relevance.py's "selects only core files" assertion
 # before lowering this.
 _FILE_VECTOR_MIN_SCORE_DEFAULT = 0.55
@@ -361,9 +361,9 @@ _FILE_COLLECTION_NAME = "s3_file_candidates"
 
 
 def _score_file_candidates(
-    cr_text: str, candidates: dict[str, str], min_score: float | None
+    story_text: str, candidates: dict[str, str], min_score: float | None
 ) -> tuple[dict[str, float], float]:
-    """Score every candidate file against `cr_text` (embeddings by default,
+    """Score every candidate file against `story_text` (embeddings by default,
     TF-IDF cosine similarity fallback). Returns the full unfiltered score map
     (used as-is for the UI's "why these files" panel) plus the floor that
     should be applied to it -- resolved here since which floor applies
@@ -376,14 +376,14 @@ def _score_file_candidates(
         ids = list(candidates)
         documents = [_document(path, candidates[path]) for path in ids]
         embed_corpus(_FILE_COLLECTION_NAME, ids, documents, None)
-        query_doc = _document("CR-2026-041", cr_text)
+        query_doc = _document("US-2026-041", story_text)
         hits = semantic_search(_FILE_COLLECTION_NAME, query_doc, n_results=len(ids))
         return {hit.id: round(hit.score, 4) for hit in hits}, floor
     except VectorStoreError:
         floor = _FILE_TFIDF_MIN_SCORE_DEFAULT if min_score is None else min_score
         candidate_paths = list(candidates)
         documents = [
-            _document("CR-2026-041", cr_text),
+            _document("US-2026-041", story_text),
             *(_document(path, candidates[path]) for path in candidate_paths),
         ]
         vectors = TfidfVectorizer(stop_words="english", ngram_range=(1, 2)).fit_transform(
@@ -398,7 +398,7 @@ def _score_file_candidates(
 
 
 def select_relevant_files(
-    cr_text: str,
+    story_text: str,
     all_files: dict[str, str],
     *,
     core_files: tuple[str, ...] = CORE_FILES,
@@ -408,7 +408,7 @@ def select_relevant_files(
     design_doc_root: Path | None = None,
 ) -> SelectionResult:
     """Screen subsystems by design doc, then rank the surviving repos/policycore/
-    files by semantic similarity to the CR text (embeddings by default,
+    files by semantic similarity to the user story text (embeddings by default,
     TF-IDF cosine similarity fallback), returning the core files (always
     included, empty content if the file doesn't exist yet) plus up to
     `max_extra` other files scoring at or above `min_score`.
@@ -435,7 +435,7 @@ def select_relevant_files(
         design_docs = discover_subsystem_design_docs(
             MOCKAPP_ROOT if design_doc_root is None else design_doc_root
         )
-    subsystem_screen = screen_subsystems(cr_text, design_docs)
+    subsystem_screen = screen_subsystems(story_text, design_docs)
     screened_out_prefixes = tuple(f"{name}/" for name in subsystem_screen.screened_out)
 
     excluded = set(core_files) | NEVER_EXTRA
@@ -444,7 +444,7 @@ def select_relevant_files(
         for path, content in all_files.items()
         if path not in excluded and not path.startswith(screened_out_prefixes)
     }
-    scores, floor = _score_file_candidates(cr_text, candidates, min_score)
+    scores, floor = _score_file_candidates(story_text, candidates, min_score)
 
     ranked_extra = sorted(
         (path for path, score in scores.items() if score >= floor),
@@ -509,7 +509,7 @@ def naive_prompt_tokens(
     The naive prompt is the scoped prompt with every file substituted for
     the selected ones, so it differs from what was actually billed by
     exactly the *unselected* files' contents — everything else (system
-    prompt, CR text, task instructions) is identical and must not be
+    prompt, user story text, task instructions) is identical and must not be
     dropped from one side of the comparison. Summing all file bodies alone
     was the earlier approach and it compared a full prompt against bare
     source: it undercounted the naive side by the whole prompt scaffold, so

@@ -1,6 +1,6 @@
-"""Test scenarios drafted from a CR, before any test code exists.
+"""Test scenarios drafted from a user story, before any test code exists.
 
-The beat this fills: S3 used to go straight from change request to a pytest
+The beat this fills: S3 used to go straight from user story to a pytest
 file. Every QA function this demo is shown to writes scenarios first — a
 numbered plan of what will be checked, in prose a business analyst can sign
 off, traced to the acceptance criteria it came from — and only then automates
@@ -10,7 +10,7 @@ review, which is the wrong review for "did we understand the requirement?".
 
 What this module deliberately does *not* do:
 
-* It does not invent acceptance criteria. Those are parsed out of the CR
+* It does not invent acceptance criteria. Those are parsed out of the user story
   (`acceptance.py`); the model's job is to propose coverage *of* them, and
   every scenario must cite the criterion it serves. A scenario citing an
   unknown criterion is a validation error, not a warning — an untraceable
@@ -39,7 +39,7 @@ SYSTEM_PROMPT = (
 
 # The four categories a test analyst would recognise. "regression" is the
 # interesting one: it marks a scenario that is satisfied by the app's existing
-# suite rather than by anything the CR adds, which is how the traceability
+# suite rather than by anything the user story adds, which is how the traceability
 # matrix knows to point that row at the regression run instead of at a
 # generated test.
 KINDS = ("positive", "negative", "boundary", "regression")
@@ -154,7 +154,7 @@ def validate_scenarios(scenarios: list[Scenario], criteria: list[Criterion]) -> 
 
     Applied to the model's draft *and* to a tester-edited list arriving from
     the console — an edit that strips a scenario's expected result or points
-    it at a criterion the CR doesn't contain is just as broken as a bad
+    it at a criterion the user story doesn't contain is just as broken as a bad
     generation, and the API is the only place both paths meet.
     """
     if not scenarios:
@@ -183,7 +183,7 @@ def validate_scenarios(scenarios: list[Scenario], criteria: list[Criterion]) -> 
             raise LLMError(f"{scenario.id} has no expected result.")
         if not scenario.steps:
             raise LLMError(f"{scenario.id} has no steps.")
-        # Only enforced when the CR actually has criteria to trace to; an
+        # Only enforced when the user story actually has criteria to trace to; an
         # ad-hoc ticket has none, and an untraceable plan is better than no
         # plan there.
         if known:
@@ -193,7 +193,7 @@ def validate_scenarios(scenarios: list[Scenario], criteria: list[Criterion]) -> 
                 if ref not in known:
                     raise LLMError(
                         f"{scenario.id} cites unknown acceptance criterion {ref!r}; "
-                        f"this CR has {sorted(known)}."
+                        f"this user story has {sorted(known)}."
                     )
 
         blob = " ".join(
@@ -211,16 +211,16 @@ def uncovered_criteria(scenarios: list[Scenario], criteria: list[Criterion]) -> 
     return [criterion.id for criterion in criteria if criterion.id not in cited]
 
 
-def build_prompt(cr_text: str, criteria: list[Criterion], *, target: Target) -> str:
+def build_prompt(story_text: str, criteria: list[Criterion], *, target: Target) -> str:
     criteria_block = (
         "\n".join(f"{criterion.id}: {criterion.text}" for criterion in criteria)
         or "(this ticket has no numbered acceptance criteria)"
     )
     language = "Python"
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
-Acceptance criteria, already extracted from the CR above — cite these ids
+Acceptance criteria, already extracted from the user story above — cite these ids
 verbatim, and do not invent, renumber, merge or reword them:
 {criteria_block}
 
@@ -233,7 +233,7 @@ Rules:
   about existing behaviour being unaffected is covered by a scenario of kind
   "regression".
 - Use test-design technique deliberately: include the boundary cases (values
-  at, just below and just above any threshold or limit the CR names) and the
+  at, just below and just above any threshold or limit the user story names) and the
   negative cases (invalid, missing or out-of-range input), not just the happy
   path. Mark those with kind "boundary" and "negative" respectively.
 - Prefer few, sharp scenarios over many overlapping ones. At most
@@ -283,12 +283,12 @@ def _parse_response(response: str) -> list[Scenario]:
     return scenarios
 
 
-def draft_scenarios(cr_text: str, *, target: Target | None = None) -> ScenarioDraft:
-    """Draft the test plan for `cr_text`. Never writes to the working tree —
+def draft_scenarios(story_text: str, *, target: Target | None = None) -> ScenarioDraft:
+    """Draft the test plan for `story_text`. Never writes to the working tree —
     this beat produces a document, not code."""
     target = target or targets.get_target(None)
-    criteria = parse_acceptance_criteria(cr_text)
-    prompt = build_prompt(cr_text, criteria, target=target)
+    criteria = parse_acceptance_criteria(story_text)
+    prompt = build_prompt(story_text, criteria, target=target)
     usage: dict = {}
 
     response = complete(

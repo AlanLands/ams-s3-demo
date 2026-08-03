@@ -7,10 +7,10 @@ so a field inserted anywhere but the end — or added without a default —
 breaks seeding rather than the model. That failure surfaces at reseed time,
 well away from the edit that caused it, which is what makes it worth a test.
 
-Every assertion here holds before and after every CR. Nothing asserts the
-*presence* of a field a CR introduces (`plan_tier` for CR-2026-041, amendment
-`priority` for CR-2026-042) — those are the changes under test and belong in
-the generated suites. What is asserted instead is the property those CRs must
+Every assertion here holds before and after every user story. Nothing asserts the
+*presence* of a field a user story introduces (`plan_tier` for US-2026-041, amendment
+`priority` for US-2026-042) — those are the changes under test and belong in
+the generated suites. What is asserted instead is the property those user stories must
 preserve: **the positional call sites that predate them keep working.**
 
 Lives in `tests/` rather than under `repos/policycore/`, for the reason
@@ -33,8 +33,8 @@ def test_policy_accepts_the_six_positional_arguments_seed_uses():
     """`core/seed.py` constructs every Policy positionally, in this order.
 
     Asserted as a construction rather than as a field list so it keeps holding
-    when a CR appends a new trailing field with a default — which is exactly
-    what CR-2026-041 does — and starts failing the moment one is inserted
+    when a user story appends a new trailing field with a default — which is exactly
+    what US-2026-041 does — and starts failing the moment one is inserted
     earlier or made required.
     """
     policy = Policy(
@@ -55,10 +55,10 @@ def test_policy_accepts_the_six_positional_arguments_seed_uses():
 
 
 def test_every_policy_field_after_the_sixth_has_a_default():
-    """Anything a CR appends must be optional, or seeding breaks.
+    """Anything a user story appends must be optional, or seeding breaks.
 
     The six above are required by design. Field seven onward is territory a
-    CR may extend, and the contract is that it extends it with defaults.
+    user story may extend, and the contract is that it extends it with defaults.
     """
     fields = dataclasses.fields(Policy)
     for extra in fields[6:]:

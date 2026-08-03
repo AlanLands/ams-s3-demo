@@ -123,7 +123,7 @@ def test_ci_route_carries_team_project_and_targets():
 
 
 def test_one_ci_can_offer_several_candidate_changes():
-    """A CI identifies an application, not a change — mockapp hosts two CRs."""
+    """A CI identifies an application, not a change — mockapp hosts two user stories."""
     decision = routing.route_ticket(ci="PolicyCore")
     assert set(decision.candidate_target_ids) == {
         targets.DEFAULT_TARGET_ID,
@@ -271,7 +271,7 @@ def test_ci_route_skips_the_llm_repo_match_entirely(tmp_path, monkeypatch):
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={
-                "cr_text": "Claim payout ignores the deductible.",
+                "story_text": "Claim payout ignores the deductible.",
                 "ticket_number": "AMS-140",
                 "ci": "ClaimsPortal",
             },
@@ -301,7 +301,7 @@ def test_missing_ci_still_reaches_the_llm_repo_match(tmp_path, monkeypatch):
             suggest.return_value = None
             response = client.post(
                 "/api/s3/analyze-adhoc",
-                json={"cr_text": "Something about claims.", "ticket_number": "AMS-141"},
+                json={"story_text": "Something about claims.", "ticket_number": "AMS-141"},
             )
 
     assert response.status_code == 200

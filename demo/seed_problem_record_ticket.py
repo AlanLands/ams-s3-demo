@@ -1,6 +1,6 @@
 """One-time demo seed: create a ticket tagged origin=problem_record so a
 rehearsal can show S3's two intake flavors side by side on the same board —
-a direct business CR (AMS-101/102/103) and a ticket derived from a problem
+a direct business user story (AMS-101/102/103) and a ticket derived from a problem
 record (repeated incidents -> a permanent-fix problem record -> this
 ticket, from the incident-reduction pipeline — a separate workstream, see
 CLAUDE.md). Not part of the reset/warm cycle; run once per rehearsal,
@@ -30,7 +30,7 @@ PROBLEM_ID = "PRB0012345"
 # routes to App Support — BillingGateway, an application this console has no
 # repo for: the ticket reaches the right team and automation stays off, which
 # is the boundary worth showing. Override to demo the other half —
-# `SEED_CI=ClaimsPortal` routes to a team *and* offers the CR to run against
+# `SEED_CI=ClaimsPortal` routes to a team *and* offers the user story to run against
 # it (see s3_enhancement/applications.py for the registry).
 CI = os.environ.get("SEED_CI", "BillingGateway")
 BUSINESS_SERVICE = os.environ.get("SEED_BUSINESS_SERVICE", "Premium Billing")

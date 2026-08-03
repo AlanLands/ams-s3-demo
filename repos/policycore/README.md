@@ -25,13 +25,13 @@ lives; `apps/` holds the console and the launch scripts. See
 [`../README.md`](../README.md) for the drop-folder contract.
 
 > **S3 target.** This repo is the pipeline's first enhancement target, twice
-> over: CR-2026-041 (plan tier upgrade, `mockapp-coverage-upgrade`) and
-> CR-2026-042 (amendment priority, `mockapp-endorsement-field-add`). The
-> checked-in source is the pre-CR baseline. Reset with `demo/reset_s3.sh` and
+> over: US-2026-041 (plan tier upgrade, `mockapp-coverage-upgrade`) and
+> US-2026-042 (amendment priority, `mockapp-endorsement-field-add`). The
+> checked-in source is the pre-user story baseline. Reset with `demo/reset_s3.sh` and
 > `demo/reset_s3_endorsement.sh`, or from the console's `/admin` panel.
 >
 > `AGENTS.md` and `CLAUDE.md` in this directory are the agent-harness prompt
-> contract for CR-2026-041, not general documentation. They are pinned, and
+> contract for US-2026-041, not general documentation. They are pinned, and
 > they must stay in sync with each other.
 
 ## Layout

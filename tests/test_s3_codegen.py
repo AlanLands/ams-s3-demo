@@ -56,7 +56,7 @@ def test_apply_change_unknown_proposal_raises(staged_proposal):
 def test_drop_unchanged_files_keeps_only_real_changes(monkeypatch, tmp_path):
     """A proposal should never stage a file the model returned byte-identical
     to the repo (or one an earlier run already applied) — only actual pending
-    changes reach the review cards. A file the repo doesn't have yet (the CR
+    changes reach the review cards. A file the repo doesn't have yet (the user story
     creates it) always counts as changed, even when returned empty."""
     repo_root = tmp_path / "repo"
     repo_root.mkdir()

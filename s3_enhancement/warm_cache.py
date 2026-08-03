@@ -22,24 +22,24 @@ from contextlib import contextmanager
 from s3_enhancement import targets
 from s3_enhancement.analyze import draft_effort_estimate, draft_impact_analysis
 from s3_enhancement.codegen import generate_change
-from s3_enhancement.cr import raw_cr_template, render_cr
+from s3_enhancement.story import raw_story_template, render_story
 from s3_enhancement.docgen import (
     draft_design_doc,
     draft_release_note_set,
     draft_release_notes,
 )
 from s3_enhancement.scenarios import draft_scenarios
-from s3_enhancement.target_match import resolve_target_for_cr
+from s3_enhancement.target_match import resolve_target_for_story
 from s3_enhancement.testgen import generate_tests
 
 
 def _warm_target_resolution() -> list[str]:
-    """Warm `/s3/target/resolve` for every CR under `crs/`.
+    """Warm `/s3/target/resolve` for every user story under `stories/`.
 
-    Only the AI tier costs anything — a CR whose title matches a registered
-    target's `cr_template_path.stem`, or whose `Application:` header narrows
+    Only the AI tier costs anything — a user story whose title matches a registered
+    target's `story_template_path.stem`, or whose `Application:` header narrows
     to exactly one target, resolves deterministically with no model call, so
-    calling this for every CR warms precisely the ones that need it.
+    calling this for every user story warms precisely the ones that need it.
 
     Without this the AI tier is a guaranteed cold call on stage:
     `demo/reset_s3.sh` wipes `.cache/llm` every rehearsal, and
@@ -50,11 +50,11 @@ def _warm_target_resolution() -> list[str]:
     match, which the console would show as "couldn't identify the repo".
     """
     messages = []
-    crs_root = targets.REPO_ROOT / "crs"
-    for cr_path in sorted(crs_root.glob("*.md")):
-        match = resolve_target_for_cr(cr_path.read_text(encoding="utf-8"))
+    stories_root = targets.REPO_ROOT / "stories"
+    for story_path in sorted(stories_root.glob("*.md")):
+        match = resolve_target_for_story(story_path.read_text(encoding="utf-8"))
         messages.append(
-            f"{cr_path.name} -> {match.target.target_id if match.resolved else 'unresolved'}"
+            f"{story_path.name} -> {match.target.target_id if match.resolved else 'unresolved'}"
             f" via {match.method}"
         )
     return messages
@@ -64,25 +64,25 @@ def warm(tier_name: str = "Elite") -> list[str]:
     messages = _warm_target_resolution()
     for target in targets.all_targets():
         # GitLab-sourced targets are read-only discovery/relevance previews
-        # (see targets.py's module docstring) with no local CR template to
+        # (see targets.py's module docstring) with no local user story template to
         # render narrative drafts against — nothing to warm. Registry-only
         # test fixtures can likewise lack a template; skip both rather than
         # crash on a target this function was never meant to cover.
-        if target.cr_template_path is None:
+        if target.story_template_path is None:
             continue
-        cr_text = render_cr(tier_name, target=target)
-        draft_effort_estimate(cr_text, target=target)
-        draft_impact_analysis(cr_text, target=target)
-        draft_design_doc(cr_text, target=target)
-        draft_release_notes(cr_text, target=target)
-        draft_release_note_set(cr_text, target=target)
-        draft_scenarios(cr_text, target=target)
+        story_text = render_story(tier_name, target=target)
+        draft_effort_estimate(story_text, target=target)
+        draft_impact_analysis(story_text, target=target)
+        draft_design_doc(story_text, target=target)
+        draft_release_notes(story_text, target=target)
+        draft_release_note_set(story_text, target=target)
+        draft_scenarios(story_text, target=target)
         messages.append(f"narrative cache warmed for {target.target_id}")
     return messages
 
 
 def record(tier_name: str = "Elite") -> list[str]:
-    template = raw_cr_template()
+    template = raw_story_template()
     with _temporary_env("LLM_MODE", "record"):
         generate_change(tier_name, template)
         generate_tests(tier_name, template)

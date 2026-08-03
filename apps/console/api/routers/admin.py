@@ -197,7 +197,7 @@ class OnboardRequest(BaseModel):
     display_name: str = ""
     target_id: str = ""
     cache_namespace: str = ""
-    cr: str | None = None
+    story: str | None = None
     application_id: str = ""
     language: str = ""
     core_files: list[str] = Field(default_factory=list)
@@ -261,7 +261,7 @@ def onboard_repo(payload: OnboardRequest, identity: Identity = Depends(require_m
             )
 
     # Then discovery's own rules — required keys, list-vs-string types, the
-    # CR path existing, mutation shape.
+    # user story path existing, mutation shape.
     try:
         discovery._build_target(entry, repo_dir, manifest_path)
     except discovery.ManifestError as exc:

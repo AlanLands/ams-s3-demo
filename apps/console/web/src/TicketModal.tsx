@@ -17,7 +17,7 @@ function initials(name: string | null | undefined): string {
   return name.trim().charAt(0).toUpperCase()
 }
 
-// The CR files in crs/*.md all share one shape: a title line, a run of
+// The user story files in stories/*.md all share one shape: a title line, a run of
 // "Key: Value" header lines, then "Section:" headings over hard-wrapped
 // prose or "- " bullets. Rendering that raw (white-space: pre-wrap) turned
 // the description into a wall of text where the headings, the metadata and
@@ -88,7 +88,7 @@ function parseCrText(raw: string, summary: string): CrBlock[] {
   const lines = raw.replace(/\r\n/g, '\n').split('\n')
   let start = 0
   while (start < lines.length && !lines[start].trim()) start += 1
-  // The first line is the CR title, which the <h2> above already shows.
+  // The first line is the user story title, which the <h2> above already shows.
   const first = (lines[start] ?? '').trim()
   if (first && (first === summary.trim() || TITLE_LINE.test(first))) start += 1
 
@@ -106,10 +106,10 @@ function parseCrText(raw: string, summary: string): CrBlock[] {
   return blocks
 }
 
-// Read one "Key: Value" header off the CR. The Details rail used to hardcode
+// Read one "Key: Value" header off the user story. The Details rail used to hardcode
 // PolicyCore / MapleSure Product Team, which was simply wrong on the
-// ClaimsPortal CR — the CR states both, so read them from it.
-function crMeta(text: string, label: string): string | null {
+// ClaimsPortal user story — the user story states both, so read them from it.
+function storyMeta(text: string, label: string): string | null {
   for (const block of parseCrText(text, '')) {
     if (block.kind !== 'meta') continue
     const row = block.rows.find((candidate) => candidate.label.toLowerCase() === label.toLowerCase())
@@ -124,26 +124,26 @@ function shortAppName(value: string): string {
   return value.split(' (')[0].trim()
 }
 
-// Long CRs pushed the "Run AI impact analysis" button below the fold, which
+// Long user stories pushed the "Run AI impact analysis" button below the fold, which
 // is the one control the demo always reaches for next. Collapse the long
 // ones behind a fade instead of making the presenter scroll past them.
 const COLLAPSE_OVER_CHARS = 900
 
-function CrDescription({ text, summary }: { text: string; summary: string | null }) {
+function StoryDescription({ text, summary }: { text: string; summary: string | null }) {
   const blocks = useMemo(() => parseCrText(text, summary ?? ''), [text, summary])
   const collapsible = text.length > COLLAPSE_OVER_CHARS
   const [expanded, setExpanded] = useState(false)
   const collapsed = collapsible && !expanded
 
   return (
-    <div className="ams-cr">
-      <div className={`ams-cr-body${collapsed ? ' ams-cr-body-collapsed' : ''}`}>
+    <div className="ams-story">
+      <div className={`ams-story-body${collapsed ? ' ams-story-body-collapsed' : ''}`}>
         {blocks.map((block, index) => {
           if (block.kind === 'meta') {
             return (
-              <dl className="ams-cr-meta" key={index}>
+              <dl className="ams-story-meta" key={index}>
                 {block.rows.map((row) => (
-                  <div className="ams-cr-meta-row" key={row.label}>
+                  <div className="ams-story-meta-row" key={row.label}>
                     <dt>{row.label}</dt>
                     <dd>{row.value}</dd>
                   </div>
@@ -153,14 +153,14 @@ function CrDescription({ text, summary }: { text: string; summary: string | null
           }
           if (block.kind === 'heading') {
             return (
-              <h4 className="ams-cr-heading" key={index}>
+              <h4 className="ams-story-heading" key={index}>
                 {block.text}
               </h4>
             )
           }
           if (block.kind === 'list') {
             return (
-              <ul className="ams-cr-list" key={index}>
+              <ul className="ams-story-list" key={index}>
                 {block.items.map((item, itemIndex) => (
                   <li key={itemIndex}>{item}</li>
                 ))}
@@ -168,15 +168,15 @@ function CrDescription({ text, summary }: { text: string; summary: string | null
             )
           }
           return (
-            <p className="ams-cr-para" key={index}>
+            <p className="ams-story-para" key={index}>
               {block.text}
             </p>
           )
         })}
       </div>
       {collapsible && (
-        <button className="ams-cr-toggle" onClick={() => setExpanded(!expanded)}>
-          {expanded ? 'Show less' : 'Show full change request'}
+        <button className="ams-story-toggle" onClick={() => setExpanded(!expanded)}>
+          {expanded ? 'Show less' : 'Show full user story'}
         </button>
       )}
     </div>
@@ -322,8 +322,8 @@ function RoutingPanel({ decision }: { decision: RouteDecision }) {
 
 export interface TicketModalProps {
   issue: JiraIssue
-  crText: string
-  crLabel: string | null
+  storyText: string
+  storyLabel: string | null
   onClose: () => void
 
   analysisResult?: AnalyzeResponse
@@ -361,8 +361,8 @@ const ACTOR_LABEL: Record<TicketEvent['actor'], string> = {
 
 export default function TicketModal({
   issue,
-  crText,
-  crLabel,
+  storyText,
+  storyLabel,
   onClose,
   analysisResult,
   analysisLoading,
@@ -390,9 +390,9 @@ export default function TicketModal({
   )
   const [clarificationAnswer, setClarificationAnswer] = useState('')
 
-  const application = crMeta(crText, 'Application')
-  const crApplication = application ? shortAppName(application) : null
-  const crReporter = crMeta(crText, 'Requested by')
+  const application = storyMeta(storyText, 'Application')
+  const storyApplication = application ? shortAppName(application) : null
+  const storyReporter = storyMeta(storyText, 'Requested by')
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -414,7 +414,7 @@ export default function TicketModal({
       <div className="ams-modal" onClick={(event) => event.stopPropagation()}>
         <div className="ams-modal-header">
           <div className="ams-modal-breadcrumb">
-            {crLabel && <>{crLabel} / </>}
+            {storyLabel && <>{storyLabel} / </>}
             <strong>{issue.key}</strong>
             <span className="ams-modal-status">{issue.status || 'To Do'}</span>
           </div>
@@ -429,8 +429,8 @@ export default function TicketModal({
 
             <div className="ams-modal-section">
               <div className="ams-modal-section-title">Description</div>
-              {crText || issue.description ? (
-                <CrDescription text={crText || issue.description || ''} summary={issue.summary} />
+              {storyText || issue.description ? (
+                <StoryDescription text={storyText || issue.description || ''} summary={issue.summary} />
               ) : (
                 <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)' }}>
                   No description on file for this ticket.
@@ -438,13 +438,13 @@ export default function TicketModal({
               )}
             </div>
 
-            {(crLabel || issue.summary || issue.description) && (
+            {(storyLabel || issue.summary || issue.description) && (
               <div className="ams-modal-section">
                 <div className="ams-modal-section-title">AI actions</div>
-                {!crLabel && (
+                {!storyLabel && (
                   <p style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)', marginBottom: '0.5rem' }}>
-                    No CR linked to this ticket in this console — impact analysis below runs off
-                    the ticket's own text instead.
+                    No user story linked to this ticket in this console — impact analysis below runs
+                    off the ticket's own text instead.
                   </p>
                 )}
                 {clarificationQuestion && (
@@ -494,7 +494,7 @@ export default function TicketModal({
                   {analysisResult && !analysisLoading && (
                     <span className="ams-pill ams-pill-general">✓ Analyzed</span>
                   )}
-                  {crLabel && (
+                  {storyLabel && (
                     <>
                       <button
                         className={crossTeamImpacts !== undefined ? 'ams-button-secondary' : 'ams-button'}
@@ -683,13 +683,13 @@ export default function TicketModal({
                 </div>
                 <div className="ams-modal-detail-row">
                   <dt>Application</dt>
-                  <dd>{crApplication ?? (crLabel ? 'PolicyCore' : '—')}</dd>
+                  <dd>{storyApplication ?? (storyLabel ? 'PolicyCore' : '—')}</dd>
                 </div>
                 <div className="ams-modal-detail-row">
                   <dt>Reporter</dt>
                   <dd>
-                    {crReporter ??
-                      (crLabel ? 'MapleSure Product Team' : 'AMS Console (auto-created)')}
+                    {storyReporter ??
+                      (storyLabel ? 'MapleSure Product Team' : 'AMS Console (auto-created)')}
                   </dd>
                 </div>
                 <div className="ams-modal-detail-row">
@@ -705,7 +705,7 @@ export default function TicketModal({
                         )}
                       </>
                     ) : (
-                      'Business CR'
+                      'Business user story'
                     )}
                   </dd>
                 </div>

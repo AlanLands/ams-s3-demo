@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # App 4 of 5 — Claims-Service (ClaimsPortal's claims side), Python / FastAPI.
 #
-# The target of CR-2026-043 (deductible handling). Needs Policy-Service on
+# The target of US-2026-043 (deductible handling). Needs Policy-Service on
 # :8081 already running — see run-policy-service.sh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
