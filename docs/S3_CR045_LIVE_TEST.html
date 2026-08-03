@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AMS S3 — CR-2026-045 Live Test Record</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #5c5c5c;
+    --line: #d8d8d8;
+    --accent: #8b1e2d;
+    --accent-soft: #f6ecee;
+    --ok: #1c6b3c;
+    --warn: #8a5a00;
+    --warn-soft: #fdf6e6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font: 10.5pt/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    margin: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1 { font-size: 22pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
+  h2 {
+    font-size: 13pt; margin: 0 0 3mm; padding-bottom: 1.5mm;
+    border-bottom: 2px solid var(--accent); letter-spacing: -0.2pt;
+  }
+  h3 { font-size: 11pt; margin: 5mm 0 2mm; }
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  p { margin: 0 0 2.5mm; }
+
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  code { background: #f2f2f2; padding: 0.5pt 2pt; border-radius: 2px; }
+  pre {
+    font-family: var(--mono); font-size: 8.5pt; line-height: 1.45;
+    background: #f7f7f7; border-left: 2.5pt solid var(--line);
+    padding: 2.5mm 3mm; margin: 2mm 0 3mm; white-space: pre-wrap;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  pre code { background: none; padding: 0; }
+  pre.out { border-left-color: var(--accent); background: #fbf8f8; }
+
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3.5mm; font-size: 9.5pt; }
+  th, td { text-align: left; padding: 1.6mm 2mm; border-bottom: 0.5pt solid var(--line); vertical-align: top; }
+  th { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.4pt; color: var(--ink-soft); border-bottom: 1pt solid var(--ink-soft); }
+  td.mono, th.mono { font-family: var(--mono); font-size: 9pt; line-height: 1.5; }
+  .nowrap { white-space: nowrap; }
+
+  ol, ul { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.5mm; }
+
+  .cover { border-bottom: 3pt solid var(--accent); padding-bottom: 4mm; margin-bottom: 6mm; }
+  .kicker { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.6pt; color: var(--accent); font-weight: 700; margin-bottom: 2mm; }
+  .subtitle { font-size: 11pt; color: var(--ink-soft); margin: 0; }
+  .meta { font-size: 8.5pt; color: var(--ink-soft); margin-top: 3mm; }
+
+  .step { break-inside: avoid; page-break-inside: avoid; margin-bottom: 6mm; }
+  .step-head { display: flex; align-items: baseline; gap: 3mm; margin-bottom: 1.5mm; }
+  .num {
+    font-family: var(--mono); font-size: 9pt; font-weight: 700; color: #fff;
+    background: var(--accent); padding: 0.8mm 2.2mm; border-radius: 2px; flex: none;
+  }
+  .step-title { font-size: 12pt; font-weight: 700; letter-spacing: -0.2pt; }
+
+  .callout {
+    border: 0.75pt solid var(--line); border-left: 3pt solid var(--accent);
+    background: var(--accent-soft); padding: 2.5mm 3mm; margin: 3mm 0; font-size: 9.5pt;
+    break-inside: avoid;
+  }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .callout .label {
+    font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1pt;
+    font-weight: 700; color: var(--accent); display: block; margin-bottom: 1mm;
+  }
+  .callout.warn .label { color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .page-break { break-before: page; page-break-before: always; }
+  .tiny { font-size: 8pt; color: var(--ink-soft); margin-top: 0.5mm; }
+  td.before { background: #f6f6f5; }
+  td.after { background: var(--accent-soft); }
+  .statecol { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.4pt; }
+  .pass { color: var(--ok); font-weight: 600; }
+  .fail { color: var(--accent); font-weight: 600; }
+  /* Keep the provenance note whole — split across a page boundary it orphaned
+     a two-word line onto a page of its own. */
+  .footer-note {
+    font-size: 8.5pt; color: var(--ink-soft); border-top: 0.5pt solid var(--line);
+    padding-top: 2.5mm; margin-top: 3.5mm;
+    break-inside: avoid; page-break-inside: avoid;
+  }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="kicker">MapleSure Insurance · AMS Console · S3</div>
+  <h1>CR-2026-045 — Live Test Record</h1>
+  <p class="subtitle">Prospect member eligibility at the online enrolment gate — executed before/after evidence</p>
+  <p class="meta">
+    Executed 3 August 2026, 15:00–15:06 IST · repo <span class="mono">ams-s3-demo</span> ·
+    branch <span class="mono">s3-resolve-dropped-cr-targets</span> at <span class="mono">3a5bd59</span><br>
+    Target <span class="mono">enroldirect-prospect-access</span> ·
+    ticket <span class="mono nowrap">AMS-1045</span> ·
+    Python 3.12.13 · uvicorn 0.51.0<br>
+    Companion docs: <span class="mono">docs/ENROLDIRECT_APP.pdf</span> ·
+    <span class="mono">demo/DEMO_TEST_GUIDE.md</span>
+  </p>
+</header>
+
+<div class="callout">
+  <span class="label">What this document is</span>
+  <p>A record of a test that was actually run, not a script to follow later. Every
+  output block below is copied from the live service on <span class="mono">localhost:8083</span>
+  during the session named above — nothing here is illustrative or reconstructed.
+  Where a step behaved differently from expectation, the document says so.</p>
+</div>
+
+<h2>Why the change looked invisible</h2>
+
+<p>The starting complaint was that applying CR-2026-045 in the console produced no
+visible difference in the app. Two independent causes, both confirmed:</p>
+
+<table>
+  <tr><th>#</th><th>Cause</th><th>Effect on stage</th></tr>
+  <tr>
+    <td class="mono">1</td>
+    <td><strong>The post-apply link pointed at the wrong app.</strong>
+      <span class="mono">TARGET_APPS</span> in <span class="mono">useS3Controller.ts</span> had an entry
+      for ClaimsPortal only; every other target fell through to
+      <span class="mono">DEFAULT_TARGET_APP</span>, the PolicyCore portal.
+      <div class="tiny">Fixed — an <span class="mono">enroldirect-prospect-access</span> entry now points at :8083.</div></td>
+    <td>"Applied — open the policy portal" sent the presenter to an app CR-2026-045
+      does not touch. Nothing there changes, because nothing there was changed.</td>
+  </tr>
+  <tr>
+    <td class="mono">2</td>
+    <td><strong>The target service serves the code it imported at startup.</strong>
+      <span class="mono">apps/run-enroldirect.sh</span> ran plain uvicorn with no reload.
+      <div class="tiny">Applying rewrites <span class="mono">.py</span> files on disk; a running process does not notice.</div></td>
+    <td>Even on the right app, :8083 keeps answering with the baseline while the
+      console's diff insists the change landed.</td>
+  </tr>
+</table>
+
+<div class="callout warn">
+  <span class="label">The trap in its original form</span>
+  <p>In the session that prompted this test, the files changed at
+  <span class="mono">14:53:06</span> and the EnrolDirect process had been running since
+  <span class="mono">14:36</span>. The change only became visible because the process
+  happened to be restarted at <span class="mono">14:54:46</span>. Had it not been, the
+  demo would have shown an applied diff and an unchanged app.</p>
+</div>
+
+<h2>Test subject</h2>
+
+<p>One applicant carries the whole scenario. <strong>Devon Achebe</strong>
+(<span class="mono">AP-4003</span>) is on contract <span class="mono">MS-2001</span>'s roster
+holding no active benefit — the PROSPECT population neither access preference was
+written for. Two controls run alongside to prove the CR changed nothing else:</p>
+
+<table>
+  <tr><th class="mono">Applicant</th><th>Name</th><th>Category</th><th>Role in the test</th></tr>
+  <tr><td class="mono nowrap">AP-4003</td><td>Devon Achebe</td><td class="mono">PROSPECT</td><td><strong>The subject</strong> — refused before, admitted after</td></tr>
+  <tr><td class="mono nowrap">AP-4001</td><td>Rowan Iqbal</td><td class="mono">MEMBER</td><td>Control — must be unchanged</td></tr>
+  <tr><td class="mono nowrap">AP-4002</td><td>Priya Chandrasekar</td><td class="mono">GUEST</td><td>Control — must be unchanged</td></tr>
+</table>
+
+<div class="page-break"></div>
+
+<h2>The run, step by step</h2>
+
+<div class="step">
+  <div class="step-head"><span class="num">0</span><span class="step-title">Preserve the applied state</span></div>
+  <p>The CR was already applied in the working tree and uncommitted. Reverting to
+  capture a "before" would have destroyed it, so it was snapshotted first and
+  verified byte-identical on restore at the end.</p>
+<pre><code>git diff HEAD -- repos/enroldirect &gt; scratch/CR-2026-045.patch   # 254 lines
+cp repos/enroldirect/{applicants,eligibility,enrolments,main}.py scratch/applied/</code></pre>
+  <p class="tiny">Confirmed beforehand that <span class="mono">HEAD</span> holds the clean baseline for this
+  target on this branch — <span class="mono">git diff main -- repos/enroldirect</span> and
+  <span class="mono">git diff HEAD -- repos/enroldirect</span> were identical, so no committed CR
+  could be silently restored as "baseline".</p>
+</div>
+
+<div class="step">
+  <div class="step-head"><span class="num">1</span><span class="step-title">Revert to baseline and restart</span></div>
+<pre><code>pkill -f "repos.enroldirect.main"
+git checkout HEAD -- repos/enroldirect
+PYTHONPATH=$PWD .venv/bin/uvicorn repos.enroldirect.main:app --port 8083</code></pre>
+  <p>Baseline confirmed structurally, not just by file state — the pre-CR module has
+  no prospect policy at all:</p>
+<pre class="out"><code>$ grep -c "PROSPECT_POLICY" repos/enroldirect/applicants.py
+0
+$ curl -s localhost:8083/health
+{"status":"ok"}</code></pre>
+</div>
+
+<div class="step">
+  <div class="step-head"><span class="num">2</span><span class="step-title">BEFORE — the gate refuses the prospect</span></div>
+<pre><code>curl -X POST localhost:8083/api/eligibility/check \
+  -H 'content-type: application/json' -d '{"applicantId":"AP-4003"}'</code></pre>
+<pre class="out"><code>{
+  "granted": false,
+  "applicantId": "AP-4003",
+  "fullName": "Devon Achebe",
+  "category": "PROSPECT",
+  "requiredPreference": null,
+  "authorisingPreference": null,
+  "reasons": [
+    "Applicant category PROSPECT has no online enrolment preference
+     and cannot be granted access."
+  ]
+}</code></pre>
+  <p>This is the refusal the CR describes as "not a decision anyone took" — the
+  narrower option in force by omission. Note <span class="mono">requiredPreference</span> is
+  <span class="mono">null</span>: there is no preference to check against, so the second gate
+  cannot pass.</p>
+</div>
+
+<div class="step">
+  <div class="step-head"><span class="num">3</span><span class="step-title">BEFORE — the enrolment path refuses too</span></div>
+<pre><code>curl -X POST localhost:8083/api/enrolments -H 'content-type: application/json' \
+  -d '{"applicantId":"AP-4003","planCode":"PL-1001","coverageTier":"Single"}'</code></pre>
+<pre class="out"><code>{
+  "reference": "ENR-000001",
+  "status": "REFUSED",
+  "refusalCode": "NO_CHANNEL_ACCESS",
+  "category": "PROSPECT",
+  "authorisingPreference": null,
+  "coverageTier": null,
+  "monthlyPremium": null
+}</code></pre>
+  <div class="callout warn">
+    <span class="label">Correction made during the run</span>
+    <p>The first attempt at this step sent <span class="mono">"tier"</span> and got a 422
+    <span class="mono">Field required</span> on <span class="mono">coverageTier</span>. The request field is
+    <span class="mono">coverageTier</span>, not <span class="mono">tier</span>. Worth knowing before typing it
+    live in front of an audience.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-head"><span class="num">4</span><span class="step-title">BEFORE — the catalogue already disagrees with the gate</span></div>
+<pre><code>curl -s localhost:8083/api/applicants/AP-4003/plans</code></pre>
+<pre class="out"><code>category: PROSPECT | effectiveCategory: None
+  PL-1001  Extended Health Care         memberOnly=False  available=True
+  PL-1002  Dental Care                  memberOnly=False  available=True
+  PL-1003  Health Care Spending Top-Up  memberOnly=True   available=False
+           -> "Requires existing coverage under the contract."</code></pre>
+  <div class="callout">
+    <span class="label">The subtlest before/after on the page</span>
+    <p>Pre-CR the catalogue offers this applicant two plans as
+    <span class="mono">available: true</span> while the gate refuses them outright, and
+    <span class="mono">effectiveCategory</span> is <span class="mono">null</span>. The catalogue and the gate
+    are describing the same person differently. That is precisely the inconsistency
+    the CR's last acceptance bullet closes — and it is visible without changing a
+    single line of the console UI.</p>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<div class="step">
+  <div class="step-head"><span class="num">5</span><span class="step-title">Restart with the new reload switch, still on baseline</span></div>
+  <p>Rather than restart manually, the run exercised the fix added to
+  <span class="mono">apps/run-enroldirect.sh</span>:</p>
+<pre><code>TARGET_RELOAD=1 ./apps/run-enroldirect.sh</code></pre>
+<pre class="out"><code>  EnrolDirect -&gt; http://localhost:8083/
+  (TARGET_RELOAD=1 — watching repos/enroldirect for applied changes)
+INFO:     Started reloader process [35986] using WatchFiles</code></pre>
+  <p>Verified it was still serving the baseline before the apply, so the next step
+  proves the reload rather than a coincidence:</p>
+<pre class="out"><code>granted = False | reason = Applicant category PROSPECT has no online enrolment preferen…</code></pre>
+</div>
+
+<div class="step">
+  <div class="step-head"><span class="num">6</span><span class="step-title">APPLY — with no manual restart</span></div>
+<pre><code>cp scratch/applied/{applicants,eligibility,enrolments,main}.py repos/enroldirect/
+# files applied at 15:05:33</code></pre>
+<pre class="out"><code>WARNING:  WatchFiles detected changes in 'repos/enroldirect/enrolments.py',
+          'repos/enroldirect/eligibility.py', 'repos/enroldirect/applicants.py',
+          'repos/enroldirect/main.py'. Reloading...
+INFO:     Started server process [36051]</code></pre>
+  <p>The service picked the change up on its own. This is the step that removes
+  cause #2 from the demo.</p>
+</div>
+
+<div class="step">
+  <div class="step-head"><span class="num">7</span><span class="step-title">AFTER — the gate admits the prospect, and says under what</span></div>
+<pre class="out"><code>{
+  "granted": true,
+  "applicantId": "AP-4003",
+  "fullName": "Devon Achebe",
+  "category": "PROSPECT",
+  "requiredPreference": "Online Enrolment - Guest",
+  "authorisingPreference": "Online Enrolment - Guest",
+  "prospectPolicyApplied": "GUEST",
+  "reasons": ["Granted under 'Online Enrolment - Guest'."]
+}</code></pre>
+  <p>Three fields carry the CR's intent, not just the boolean:
+  <span class="mono">category</span> still reports what the applicant <em>is</em> (PROSPECT),
+  <span class="mono">authorisingPreference</span> reports what actually opened the gate
+  (Guest), and <span class="mono">prospectPolicyApplied</span> records <em>why</em> those differ.
+  A prospect admitted as a guest is recorded as such — which is what the CR
+  requires for DocumentHub and NightlyBatch downstream.</p>
+</div>
+
+<div class="step">
+  <div class="step-head"><span class="num">8</span><span class="step-title">AFTER — admitted at the gate, still narrowed past it</span></div>
+  <p>Enrolling in an open plan now succeeds:</p>
+<pre class="out"><code>PL-1001 Extended Health Care
+  status: SUBMITTED          coverageTier: Single
+  effectiveCategory: GUEST   prospectPolicyApplied: GUEST
+  reasons: ["Access granted under 'Online Enrolment - Guest'.",
+            "Enrolled in 'Extended Health Care' at Single tier."]</code></pre>
+  <p>Enrolling in a member-only plan is refused — for a different reason than before:</p>
+<pre class="out"><code>PL-1003 Health Care Spending Top-Up
+  status: REFUSED
+  refusalCode: PLAN_REQUIRES_EXISTING_COVERAGE      &lt;- not NO_CHANNEL_ACCESS
+  effectiveCategory: GUEST
+  reasons: ["'Health Care Spending Top-Up' attaches to existing coverage under
+             the contract and is open to members only.",
+            "This applicant is categorised GUEST."]</code></pre>
+  <div class="callout">
+    <span class="label">This is the demo's strongest single frame</span>
+    <p>The CR states the classification "decides two things, not one, and both are in
+    scope… the two effects run in opposite directions". Here they are in one screen:
+    the Guest policy <em>admits</em> Devon at the gate and <em>narrows</em> what Devon can
+    reach past it. The refusal code moving from
+    <span class="mono">NO_CHANNEL_ACCESS</span> to <span class="mono">PLAN_REQUIRES_EXISTING_COVERAGE</span>
+    is the proof that AC2's "every existing refusal code keeps its current meaning"
+    holds — the refusal moved from the gate to the catalogue, deliberately.</p>
+  </div>
+</div>
+
+<h2>Before / after at a glance</h2>
+
+<table>
+  <tr>
+    <th>Observation</th>
+    <th class="statecol">Before (baseline)</th>
+    <th class="statecol">After (CR applied)</th>
+  </tr>
+  <tr>
+    <td>Gate decision, <span class="mono nowrap">AP-4003</span></td>
+    <td class="before mono">granted: false</td>
+    <td class="after mono">granted: true</td>
+  </tr>
+  <tr>
+    <td>Preference resolved</td>
+    <td class="before mono">null</td>
+    <td class="after mono">Online Enrolment - Guest</td>
+  </tr>
+  <tr>
+    <td>Policy recorded on the decision</td>
+    <td class="before mono">field absent</td>
+    <td class="after mono">prospectPolicyApplied: GUEST</td>
+  </tr>
+  <tr>
+    <td>Effective category on the catalogue</td>
+    <td class="before mono">null <span class="tiny">(disagrees with the gate)</span></td>
+    <td class="after mono">GUEST</td>
+  </tr>
+  <tr>
+    <td>Enrolment in <span class="mono">PL-1001</span> (open plan)</td>
+    <td class="before mono">REFUSED · NO_CHANNEL_ACCESS</td>
+    <td class="after mono">SUBMITTED · Single tier</td>
+  </tr>
+  <tr>
+    <td>Enrolment in <span class="mono">PL-1003</span> (member-only)</td>
+    <td class="before mono">REFUSED · NO_CHANNEL_ACCESS<div class="tiny">refused at the gate</div></td>
+    <td class="after mono">REFUSED · PLAN_REQUIRES_EXISTING_COVERAGE<div class="tiny">refused at the catalogue</div></td>
+  </tr>
+  <tr>
+    <td>Control — MEMBER <span class="mono nowrap">AP-4001</span></td>
+    <td class="before mono">granted, under Member</td>
+    <td class="after mono">granted, under Member<div class="tiny">prospectPolicyApplied: null</div></td>
+  </tr>
+  <tr>
+    <td>Control — GUEST <span class="mono nowrap">AP-4002</span></td>
+    <td class="before mono">granted, under Guest</td>
+    <td class="after mono">granted, under Guest<div class="tiny">prospectPolicyApplied: null</div></td>
+  </tr>
+</table>
+
+<p>Both controls are byte-identical across the change except for the new
+<span class="mono">prospectPolicyApplied</span> field, which is <span class="mono">null</span> for them —
+exactly as the CR specifies ("populated for prospects and null for everyone else").</p>
+
+<h2>Independent regression evidence</h2>
+
+<p><span class="mono">tests/test_regression_enroldirect.py</span> is the human-authored suite the
+pipeline is forbidden to write to. It is an invariant check, so it must pass on
+both sides of the CR — and did:</p>
+
+<table>
+  <tr><th>State</th><th>Command</th><th>Result</th></tr>
+  <tr><td>Baseline</td><td class="mono">pytest tests/test_regression_enroldirect.py -q</td><td class="pass">24 passed in 0.21s</td></tr>
+  <tr><td>CR applied</td><td class="mono">pytest tests/test_regression_enroldirect.py -q</td><td class="pass">24 passed in 0.22s</td></tr>
+</table>
+
+<div class="callout warn">
+  <span class="label">Run the file, not the directory</span>
+  <p>A bare <span class="mono">pytest tests/</span> reaches an unpatched beat that makes
+  <strong>live, billable LLM calls</strong> when <span class="mono">.cache/llm</span> is cold. Both runs
+  above named the single file deliberately. Keep it that way in any rehearsal.</p>
+</div>
+
+<h2>What this run does not evidence</h2>
+
+<ul>
+  <li><strong>The console's own Apply path.</strong> Step 6 copied the snapshotted files
+    in directly, so what is proven is that the applied <em>code</em> produces these
+    results — not that the console's Apply button wrote them. That path was
+    exercised separately in the session that produced the snapshot.</li>
+  <li><strong>The generated test suite.</strong> Not run here; the console still reported
+    "the generated suite has not been run against this change yet", which is why
+    the commit gate stays closed.</li>
+  <li><strong>Source control.</strong> Nothing was committed or pushed by the pipeline —
+    <span class="mono">scm.py</span> models branch/commit/push and runs no git, by design.</li>
+  <li><strong>Any live LLM call.</strong> The whole run is replay/deterministic; no model
+    was invoked at any step above.</li>
+</ul>
+
+<h2>Presenter cut — the 90-second version</h2>
+
+<ol>
+  <li>EnrolDirect at <span class="mono">localhost:8083</span> → <strong>Access check</strong> → Devon Achebe.
+    Read the refusal aloud: <em>"PROSPECT has no online enrolment preference."</em></li>
+  <li>Console → Apply CR-2026-045.</li>
+  <li>Back to <strong>Access check</strong> → same applicant → <em>granted</em>, under
+    <em>Online Enrolment - Guest</em>, with the policy named on the decision.</li>
+  <li><strong>Enrol in a benefit</strong> → Devon → catalogue now resolves them as GUEST;
+    enrol in Extended Health Care (succeeds), then Health Care Spending Top-Up
+    (refused, and for a different reason). That contrast is the point of the CR.</li>
+</ol>
+
+<div class="callout">
+  <span class="label">Two things to have set before you present</span>
+  <p>Start EnrolDirect with <span class="mono">TARGET_RELOAD=1</span> so step 2 lands without a
+  restart — or restart :8083 by hand between steps 2 and 3. And the post-apply link
+  in the console now goes to EnrolDirect rather than the policy portal; if you are
+  running an older build, ignore it and go to :8083 directly.</p>
+</div>
+
+<p class="footer-note">
+  Executed and recorded 3 August 2026 on <span class="mono">s3-resolve-dropped-cr-targets</span>
+  at <span class="mono">3a5bd59</span>. Every output block is live capture from
+  <span class="mono">localhost:8083</span>; the applied working-tree state was restored and
+  verified identical to its pre-test snapshot.
+</p>
+
+</body>
+</html>
