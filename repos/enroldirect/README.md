@@ -1,5 +1,12 @@
 # EnrolDirect — MapleSure's online enrolment channel
 
+> **Start with [`ARCHITECTURE.md`](ARCHITECTURE.md), then [`DESIGN.md`](DESIGN.md).**
+> Those two are the orientation pair for this application — what it is and how
+> it is put together, then why it is shaped that way. Read them before reading
+> the source, and before answering questions about this application. This file
+> covers how to run it and the application-knowledge sections (users, disaster
+> recovery, business impact, escalation).
+
 The self-serve channel a plan member uses to join or change benefits, plus the
 analysis surface that answers who is allowed to use it and what happens if that
 answer changes.

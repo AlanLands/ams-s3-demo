@@ -70,6 +70,30 @@ skipped — a repo shipping a manifest is asking to be registered, and silently
 ignoring a typo presents as "S3 didn't pick up my repo" with nothing to look
 at.
 
+## Every repo carries `ARCHITECTURE.md` and `DESIGN.md`
+
+Each application here documents itself with the same pair, at its own root:
+
+| File | Answers |
+|---|---|
+| `ARCHITECTURE.md` | **What it is** — purpose, context, components, data model, runtime, and where to look for what |
+| `DESIGN.md` | **Why it is shaped that way** — decisions, load-bearing rules, trade-offs, deliberate non-goals |
+| `README.md` | How to run it, plus the application-knowledge sections (users, DR, business impact, escalation) |
+
+**These are the read-this-first pair**, for a person or a tool. Anything
+answering questions about an application should read them before reading its
+source — they carry the intent and the invariants that source alone does not.
+A new repo dropped in here should ship both.
+
+One rule if you add them to a new target: a `DESIGN.md` at the **repo root** is
+documentation of the application, and `relevance.py` deliberately skips it when
+collecting subsystem design docs — a repo is not a subsystem of itself.
+`DESIGN.md` in a *subdirectory* is a different thing entirely: it declares a
+subsystem, its "## Scope keywords" section is scored against the CR, and it
+therefore moves the relevance funnel. Do not put subsystem-shaped scope
+keywords in a root-level design doc expecting them to be inert; they are inert
+because of the path, not the content.
+
 ## What a dropped-in repo gets, and what it doesn't
 
 It gets relevance scoping, CR→target routing, the propose/apply/revert cycle,

@@ -259,6 +259,17 @@ def discover_subsystem_design_docs(root: Path = MOCKAPP_ROOT) -> dict[str, str]:
         # not a second subsystem.
         if any(part in _EXCLUDED_DIR_NAMES for part in path.parts):
             continue
+        # A DESIGN.md at the target root documents the *application*, not a
+        # subsystem of it — a repo is not a subsystem of itself. Counting it
+        # would register the whole target as one more screening candidate,
+        # overlapping every real subsystem and (for a target whose subsystems
+        # all screen out) flipping the screen from "excludes nothing" to
+        # "the root is in scope". Onboarding docs must not move the funnel:
+        # every repo under repos/ carries ARCHITECTURE.md and DESIGN.md as its
+        # read-this-first pair, and adding one to a new drop-in target must
+        # not change which files that target's CR selects.
+        if path.parent == root:
+            continue
         rel_dir = path.parent.relative_to(key_base).as_posix()
         docs[rel_dir] = _extract_scope_keywords(path.read_text(encoding="utf-8"))
     return docs
