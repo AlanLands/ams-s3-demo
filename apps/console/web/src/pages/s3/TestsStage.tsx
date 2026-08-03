@@ -29,7 +29,7 @@ type OpenArtifact =
 
 export default function TestsStage() {
   const {
-    isEngineer,
+    isTester,
     scenarios,
     scenarioDraft,
     handleDraftScenarios,
@@ -70,7 +70,10 @@ export default function TestsStage() {
 
   return (
     <StageFrame stageId="tests" title="Generate tests + run" activity={activity}>
-      {isEngineer ? (
+      {/* The tester runs this stage. `canTest` additionally requires the
+          ticket to be in QA and this person to be its assignee, so a
+          second tester sees the stage but not the controls. */}
+      {isTester ? (
     <>
         {/* Beat 1 — the test plan, in prose, before any test code exists. The
             tester edits it; what they approve is what gets generated. The

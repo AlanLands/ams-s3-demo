@@ -56,6 +56,7 @@ function renderDocBody(blocks: DocBlock[]): ReactNode[] {
 export default function DesignDocStage() {
   const {
     isEngineer,
+    isTester,
     handleDraftDesignDoc,
     draftingDesignDoc,
     designDocError,
@@ -81,13 +82,20 @@ export default function DesignDocStage() {
 
   return (
     <StageFrame stageId="design-doc" title="Draft design doc (for QA)" activity={activity}>
-      {isEngineer ? (
+      {/* Both see the document — it is the hand-off artefact, and the
+          tester needs to read what they are testing against. Only the
+          engineer drafts it (below); the hand-off control self-gates on
+          `!inQa`, so a tester holding a QA ticket sees the assignment
+          line rather than the controls. */}
+      {isEngineer || isTester ? (
     <>
-        <div>
-          <button className="ams-button" onClick={handleDraftDesignDoc} disabled={draftingDesignDoc}>
-            Draft design doc
-          </button>
-        </div>
+        {isEngineer && (
+          <div>
+            <button className="ams-button" onClick={handleDraftDesignDoc} disabled={draftingDesignDoc}>
+              Draft design doc
+            </button>
+          </div>
+        )}
         {designDocError && <p style={{ color: 'var(--ams-error)' }}>{designDocError}</p>}
         {designDoc && activeTicketKey && (() => {
           const crLabel = activeLinked?.crLabel ?? activeTicketKey

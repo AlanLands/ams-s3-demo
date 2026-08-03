@@ -1851,9 +1851,14 @@ export function useS3Controller() {
   const canGenerate = generateLockedReason === null
 
   const canDesignDoc = generated !== null && (generated.diff_text.trim() === '' || applied)
+  // Role-aware: the fix is on the "Generate the change" stage, which a tester
+  // does not have. Telling them to go there sends them somewhere their console
+  // will not take them.
   const designDocLockedReason = canDesignDoc
     ? null
-    : 'Apply the proposed change on the "Generate the change" stage before drafting a design doc.'
+    : isTester
+      ? 'Waiting on the developer — this opens once the change is applied and the ticket is handed to QA.'
+      : 'Apply the proposed change on the "Generate the change" stage before drafting a design doc.'
 
   // Tests belong to QA: the ticket must be handed off (status QA) and the
   // logged-in user must be the assigned tester — the developer who wrote the
@@ -1866,10 +1871,16 @@ export function useS3Controller() {
       : !designDoc
         ? 'Draft the design doc on the "Draft design doc (for QA)" stage before generating tests.'
         : !inQa
-          ? 'Hand the ticket off to QA on the "Draft design doc (for QA)" stage — the assigned tester runs this step.'
+          ? isTester
+            ? 'Not handed to QA yet — the developer moves the ticket here when the design doc is ready.'
+            : 'Hand the ticket off to QA on the "Draft design doc (for QA)" stage — the assigned tester runs this step.'
           : `With QA — only ${activeIssue?.assignee || 'the assigned tester'} can generate and run tests.`
 
-  const canDraftNotes = !!testsRun && (!inQa || isActiveAssignee)
+  // The manager drafts these, and a manager is never a ticket's assignee —
+  // without the isManager arm they would be locked out of their own stage
+  // from the moment the ticket reached QA, which is the only moment the
+  // evidence exists.
+  const canDraftNotes = !!testsRun && (isManager || !inQa || isActiveAssignee)
   const notesLockedReason = canDraftNotes
     ? null
     : testsRun
