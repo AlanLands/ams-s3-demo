@@ -1,10 +1,80 @@
-# S3's demo beat has the harness/AMS console overwrite mockapp source files
-# (repos/policycore/app.py, core/coverage.py, core/endorsements.py, ...) on disk while
+# S3's demo beat has the harness/AMS console overwrite PolicyCore source files
+# (repos/policycore/app.py, core/tiers.py, core/amendments.py, ...) on disk while
 # repos/policycore/app.py is already running as a separate live Streamlit process.
 # Streamlit's default (runOnSave = false) only shows a dismissable "Source
 # file changed" prompt in the corner instead of re-running — easy to miss
 # live, and the app keeps rendering stale UI (e.g. a just-added form field or
-# recalculated premium) until someone notices and clicks it. Auto-rerun on
+# recalculated contribution) until someone notices and clicks it. Auto-rerun on
 # save closes that gap so the demo reflects applied changes immediately.
 [server]
 runOnSave = true
+
+# ---------------------------------------------------------------------------
+# Theme
+#
+# The portal's appearance lives here rather than in `app.py` on purpose.
+# `repos/policycore/app.py` is in the codegen allowlist for *both* PolicyCore
+# targets, and the committed recordings return whole-file replacements — so
+# styling written into app.py would be silently reverted the moment a CR is
+# applied, mid-demo, and the Apply diff would show the styling being deleted.
+# Config is outside the allowlist, so it survives every apply, revert and
+# reset. Keep it that way: if a change cannot be expressed here, it costs a
+# re-record of both targets.
+#
+# Colours are the same maroon the React console and the PDF briefs use, so the
+# three surfaces read as one product. Every text pair below was checked against
+# WCAG: maroon-on-white and white-on-maroon are 9.05:1, body ink 17.5:1, muted
+# ink 7.3:1 — all AAA except muted-on-panel at 6.65:1, which is AA.
+#
+# No webfont. Hard rule 4 (must survive a port to a locked-down environment)
+# rules out fetching from a font CDN, and a font that 404s offline is worse
+# than the system stack — which is also what the PDF briefs use.
+# ---------------------------------------------------------------------------
+[theme]
+base = "light"
+
+# House maroon. Drives buttons, focus rings, selection and the active tab.
+primaryColor = "#8b1e2d"
+backgroundColor = "#FFFFFF"
+# Warm off-white for panels/sidebar. A cool grey fights the maroon; this sits
+# under it. Used by st.form, st.metric, expanders and the sidebar.
+secondaryBackgroundColor = "#F6F4F2"
+textColor = "#1C1917"
+linkColor = "#8b1e2d"
+
+font = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+headingFont = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+codeFont = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
+# Left at Streamlit's 16px default rather than tightened. This is shown on a
+# projector to an executive audience; density matters less than legibility at
+# the back of a room.
+baseFontSize = 16
+
+# Streamlit's default h1 is display-sized, which suits a landing page and
+# fights a screen whose real content is a dense contract table — the heading
+# was outweighing the data under it. Tightened into a clear but quieter
+# hierarchy so the tables lead and the headings orient.
+headingFontSizes = ["1.9rem", "1.4rem", "1.15rem", "1rem", "0.95rem", "0.9rem"]
+headingFontWeights = [700, 650, 600, 600, 600, 600]
+
+# Restrained radius — a plan administration portal should read as a system of
+# record, not a consumer app. Enough to soften, not enough to look playful.
+baseRadius = "0.375rem"
+buttonRadius = "0.375rem"
+borderColor = "#DDD6D1"
+# Slightly darker than borderColor: the contract/member/claim tables are the
+# densest thing on screen and need their gridlines to survive a projector.
+dataframeBorderColor = "#CFC7C1"
+dataframeHeaderBackgroundColor = "#F1EDEA"
+# Widget outlines on. Without them the form inputs on the amendment and claim
+# forms float with no edge against the panel fill.
+showWidgetBorder = true
+
+# Semantic status colours, used by st.success / st.error / st.warning and by
+# the status pills in the contract tables. Checked for contrast on white:
+# success 6.54:1, error 7.75:1.
+greenColor = "#1A6B3C"
+redColor = "#A4161A"
+# Charts: maroon leads, then desaturated companions that stay distinguishable
+# in greyscale — these documents get printed.
+chartCategoricalColors = ["#8b1e2d", "#4A6D7C", "#B8860B", "#5C5552", "#7A3B4E", "#2F4F4F"]
