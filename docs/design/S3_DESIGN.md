@@ -798,13 +798,14 @@ it is a 400, not an attempt, because it cannot restart the process serving the r
 **a written manifest needs a console restart** before the target registers, since discovery
 runs at import.
 
-The panel is also where the current reset breakage surfaces. `demo/reset_s3.sh` and
-`reset_s3_endorsement.sh` restore with `git checkout HEAD -- repos/…`, but the `apps/` →
-`repos/` move is not committed yet, so HEAD still carries those paths under `apps/` and the
-checkout fails with "pathspec did not match". `head_missing_paths()` detects it with
+The panel is also where an unrestorable reset surfaces before it runs. `demo/reset_s3.sh` and
+`reset_s3_endorsement.sh` restore with `git checkout HEAD -- repos/…`, which can only restore
+paths HEAD already has — so moving a target breaks them until the move is committed, and the
+checkout fails with "pathspec did not match". `head_missing_paths()` detects that with
 `git cat-file -e HEAD:<path>` and reports a named `reset_blocked_reason` instead of letting a
-raw git error out of a button. Committing the move is the fix. ClaimsPortal and EnrolDirect
-restore by copying their `.baseline/` snapshots and are unaffected.
+raw git error out of a button; committing the move is the fix. The check is not tied to any
+one move — it is the standing guard for the next one. ClaimsPortal and EnrolDirect restore by
+copying their `.baseline/` snapshots and never depend on HEAD.
 
 ---
 
@@ -938,8 +939,9 @@ content validator branch in `codegen._validate_content`; confirm the runner emit
   are supplied.
 - Live codegen against a GitLab-hosted target is deliberately not supported — that path is
   read-only discovery/relevance preview, and nothing is ever written back to GitLab.
-- `demo/reset_s3.sh` and `demo/reset_s3_endorsement.sh` are **broken until the `apps/` →
-  `repos/` move is committed** (§9.2). The admin panel names the reason; the two
-  `.baseline/`-based resets are unaffected.
+- `demo/reset_s3.sh` and `demo/reset_s3_endorsement.sh` restore from `HEAD`, so they can only
+  restore paths HEAD already has: **a target move breaks them until it is committed** (§9.2).
+  The admin panel names the reason rather than failing halfway; the two `.baseline/`-based
+  resets never depend on HEAD.
 - `deploy/aws/` deploys the console and PolicyCore only — there are no systemd units for
   ClaimsPortal's two services or EnrolDirect.

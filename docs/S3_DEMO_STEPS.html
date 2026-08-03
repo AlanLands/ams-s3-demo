@@ -326,19 +326,18 @@ CR-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared
 ClaimsPortal source baseline restored; generated files removed.
 EnrolDirect source baseline restored; generated files removed.
 </code></pre>
-<div class="callout warn"><span class="label">The two PolicyCore resets are broken right now</span>
-<p>They restore source with <code>git checkout HEAD -- repos/…</code>, but the
-<code>apps/</code> → <code>repos/</code> move is <strong>not committed yet</strong>, so HEAD
-still carries those files under <code>apps/</code> and the checkout fails with
-<em>"pathspec did not match"</em>. <strong>Committing the move fixes it; nothing else
-does.</strong> The ClaimsPortal and EnrolDirect resets copy from their committed
-<code>.baseline/</code> snapshots and are unaffected. Until then, clear staged proposals
-by hand with <code>rm -rf s3_enhancement/out/*</code>.</p></div>
+<div class="callout"><span class="label">The two PolicyCore resets restore from HEAD</span>
+<p>They restore source with <code>git checkout HEAD -- repos/…</code>, so <strong>HEAD must
+already carry the paths they name</strong>. Move a target directory and both stop at the
+checkout with <em>"pathspec did not match"</em> until the move is committed — committing it
+is the whole fix, nothing in the scripts needs changing. The ClaimsPortal and EnrolDirect
+resets copy from their committed <code>.baseline/</code> snapshots, so they never depend on
+HEAD.</p></div>
 <h3>Or reset from the console</h3>
 <p>Log in as <strong>Manager</strong> and open <code>/admin</code>. Same scopes, no
 terminal, plus a preview of exactly what each one restores and deletes. It refuses
 (409) rather than overwriting a dirty tree, there is deliberately no "reset
-everything" scope, and it reports the breakage above up front as a named
+everything" scope, and it reports a path missing from HEAD up front as a named
 <code>reset_blocked_reason</code> instead of surfacing a raw git error out of a button.</p>
 <hr />
 <h2>6. Start the applications</h2>
@@ -575,7 +574,7 @@ the tool reports gaps instead of hiding them.</li>
 </tr>
 <tr>
 <td><code>pathspec 'repos/policycore/app.py' did not match</code> from a reset</td>
-<td>Known: the <code>apps/</code> → <code>repos/</code> move is uncommitted, so HEAD does not have those paths. Commit the move. Nothing else fixes it; see section 5.</td>
+<td>A target directory was moved and the move is not committed, so HEAD does not have those paths for the script to restore from. Commit the move. Nothing else fixes it; see section 5.</td>
 </tr>
 <tr>
 <td><code>codegen returned unexpected file set</code></td>

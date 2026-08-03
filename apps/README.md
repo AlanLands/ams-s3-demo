@@ -85,20 +85,22 @@ a tester. Its honest limits are part of the design, not gaps:
 - **A written manifest needs a console restart** before the target registers.
 
 The `policycore` and `enroldirect`/`claimsportal` reset scopes shell out to the
-`demo/reset_s3*.sh` scripts, so they inherit the breakage noted below.
+`demo/reset_s3*.sh` scripts, so what holds for those scripts holds for the
+panel.
 
-### The PolicyCore resets are currently broken
+### The PolicyCore resets depend on HEAD
 
 `demo/reset_s3.sh` and `demo/reset_s3_endorsement.sh` restore source with
-`git checkout HEAD -- repos/…`, but the `apps/` → `repos/` move is **not
-committed yet**, so HEAD still carries those files under `apps/` and the
-checkout dies with "pathspec did not match". Committing the move fixes it;
-nothing else does. The admin panel detects this up front
-(`admin_ops.head_missing_paths`) and reports a named `reset_blocked_reason`
-rather than surfacing a raw git error out of a button.
+`git checkout HEAD -- repos/…`, so **HEAD must already carry the paths they
+name**. Move a target and the resets stop working until the move is committed —
+`git checkout` fails on paths HEAD has never seen. That is the durable rule;
+commit the move and they run again. The admin panel checks the condition up
+front (`admin_ops.head_missing_paths`) and reports a named
+`reset_blocked_reason` rather than surfacing a raw git error out of a button —
+keep that check, because the situation recurs on every target move.
 
 The ClaimsPortal and EnrolDirect resets restore by copying from their
-committed `.baseline/` snapshots and are unaffected.
+committed `.baseline/` snapshots, so they never depend on HEAD at all.
 
 ## How these map to the demo's story
 

@@ -143,21 +143,23 @@ the harness beat isn't rehearsed to that bar by demo day, present S3 on the
 console pipeline only (rung 3) — it's fully proven and zero-risk on its own.
 
 **Demo-day prep, in order**:
-1. **Confirm `demo/reset_s3.sh` actually runs.** It fails today with
-   `error: pathspec 'repos/policycore/app.py' did not match any file(s) known
-   to git` — the `repos/` move is uncommitted, so HEAD still has PolicyCore
-   under `apps/`. Committing the move fixes it. Until then the script stops
-   before reseeding, before wiping `.cache/llm` and before clearing the ticket
-   timeline, so steps 2–3 below are operating on an un-reset tree. The
-   ClaimsPortal and EnrolDirect resets are unaffected (they `cp` from
-   `.baseline/`). `/admin` reports the block as `reset_blocked_reason`.
+1. **Confirm `demo/reset_s3.sh` actually runs** — watch it print its success
+   line, don't assume. It restores PolicyCore with `git checkout HEAD --
+   repos/policycore/...`, so it only works while HEAD carries those paths: if a
+   target has just been moved and the move is uncommitted, it dies on `error:
+   pathspec ... did not match any file(s) known to git` and stops before
+   reseeding, before wiping `.cache/llm` and before clearing the ticket
+   timeline — which would leave steps 2–3 operating on an un-reset tree.
+   Committing the move is the fix. The ClaimsPortal and EnrolDirect resets `cp`
+   from `.baseline/` and never depend on HEAD. `/admin` reports the condition
+   as `reset_blocked_reason` rather than failing halfway.
 2. Morning of: `demo/reset_s3.sh`, then re-record the replay cache against the exact
    repo state — `python -c "from s3_enhancement.warm_cache import record; record()"`.
 3. `demo/reset_s3.sh` again so the app starts featureless (record leaves the
    generated feature applied).
 4. `python -m tools.verify_s3_live --skip-live` — all seven architecture checks green.
-   (Its `reset_s3.sh` check fails for the reason in step 1; that is the gate
-   working, not a new bug.)
+   (Its `reset_s3.sh` check is the automated version of step 1 — if it goes
+   red, commit the move rather than editing the check.)
 5. `demo/warm_s3_cache.sh` last, after the final reset.
 
 *(A step here used to hand off to S4 by running

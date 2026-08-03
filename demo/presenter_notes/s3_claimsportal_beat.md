@@ -37,9 +37,8 @@ module-level functions.
 ## Pre-flight (before the audience is in the room)
 
 ```bash
-./demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-CR baseline — works
+./demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-CR baseline
 ./demo/reset_s3.sh                # shared state: out/, ticket events, .cache/llm
-                                  #   ⚠ BROKEN — see below
 uvicorn apps.console.api.main:app --port 8000  # terminal 1 — API :8000 (never --reload:
                                   # Generate/Apply write .py files, the watcher
                                   # restarts, and your login session 401s)
@@ -47,16 +46,16 @@ uvicorn apps.console.api.main:app --port 8000  # terminal 1 — API :8000 (never
 ./demo/run_s3_claimsportal.sh     # terminal 3 — both team consoles :8081/:8082
 ```
 
-> **`reset_s3.sh` fails today.** It restores PolicyCore with
-> `git checkout HEAD -- repos/policycore/...`, but HEAD still has those files
-> under `apps/policycore/` — the `repos/` move is uncommitted — so it dies on
-> `error: pathspec 'repos/policycore/app.py' did not match any file(s) known to
-> git` and never reaches the shared-state cleanup this beat wants from it.
-> **Committing the move fixes it.** `reset_s3_claimsportal.sh` is
-> **unaffected**: it restores by `cp` from `repos/claimsportal/.baseline/` and
-> never touches git. Until the move lands, clear the shared state by hand
-> (`rm -rf s3_enhancement/out/* .cache/llm data/ticket_events.jsonl`) or use
-> the `/admin` panel's proposals / caches / tickets scopes, which are
+> Both resets work. `reset_s3.sh` is only here for the shared state this beat
+> wants cleared (`out/`, ticket events, `.cache/llm`) — but it restores
+> PolicyCore first with `git checkout HEAD -- repos/policycore/...`, so if a
+> target has just been moved without committing the move, it dies on `error:
+> pathspec ... did not match any file(s) known to git` and never reaches the
+> cleanup. Committing the move is the fix.
+> `reset_s3_claimsportal.sh` restores by `cp` from
+> `repos/claimsportal/.baseline/` and never touches git, so it is immune to
+> that. If you ever need the shared state cleared without the PolicyCore
+> restore, the `/admin` panel's proposals / caches / tickets scopes are
 > delete-only and never blocked.
 
 Check: :8081 policies show **no Deductible**; claims console accepts an

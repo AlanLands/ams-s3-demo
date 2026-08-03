@@ -22,9 +22,10 @@
 # the beat and use the console "Generate the change" / "Generate tests + run"
 # buttons (the unmodified pipeline, itself replay-primary).
 #
-# A --live run edits repos/policycore/ in the working tree. The usual way back
-# is demo/reset_s3.sh, which is broken until the repos/ move is committed —
-# see the note at the top of that script before you rehearse the live path.
+# A --live run edits repos/policycore/ in the working tree. The way back is
+# demo/reset_s3.sh, which restores those files from HEAD — so it only works
+# while HEAD carries the paths it names. Commit any target move before you
+# rehearse the live path; see the note at the top of that script.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate

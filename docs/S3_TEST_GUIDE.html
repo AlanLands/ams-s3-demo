@@ -294,17 +294,17 @@ there is no "reset everything" scope, by design — you name one.</p>
 <p>Then restart the services. Hard-refresh the browser tab —
 the console caches per-ticket state in <code>localStorage</code> and drops it when the reset marker changes.</p>
 
-<div class="callout warn">
-  <span class="label">Known broken right now — the two PolicyCore resets</span>
+<div class="callout">
+  <span class="label">The two PolicyCore resets restore from HEAD</span>
   <p><code>demo/reset_s3.sh</code> and <code>demo/reset_s3_endorsement.sh</code> restore source
-  with <code>git checkout HEAD -- repos/…</code>, but the <code>apps/</code> → <code>repos/</code>
-  move is <strong>not committed yet</strong>, so HEAD still carries those files under
-  <code>apps/</code> and the checkout dies with <em>"pathspec did not match"</em>.
-  <strong>Committing the move fixes it; nothing else does.</strong></p>
-  <p>The admin panel detects this before it runs anything and reports a named
+  with <code>git checkout HEAD -- repos/…</code>, so <strong>HEAD must already carry the paths
+  they name</strong>. Move a target directory and both stop at the checkout with
+  <em>"pathspec did not match"</em> until the move is committed — committing it is the whole
+  fix, nothing in the scripts needs changing.</p>
+  <p>The admin panel checks that before it runs anything and reports a named
   <code>reset_blocked_reason</code> rather than surfacing a raw git error out of a button.
   The ClaimsPortal and EnrolDirect resets copy from their committed
-  <code>.baseline/</code> snapshots and are unaffected.</p>
+  <code>.baseline/</code> snapshots, so they never depend on HEAD.</p>
 </div>
 
 <div class="callout">
@@ -769,12 +769,13 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   <tr>
     <td class="mono">1</td>
     <td><code>demo/reset_s3.sh</code> and <code>demo/reset_s3_endorsement.sh</code> restore with
-        <code>git checkout HEAD -- repos/…</code>, but HEAD still carries those files under
-        <code>apps/</code> — the move is uncommitted</td>
-    <td>Both PolicyCore resets fail with <em>"pathspec did not match"</em></td>
-    <td><strong>Open</strong> — committing the move fixes it. The admin panel already
-        reports it as a named <code>reset_blocked_reason</code>. ClaimsPortal and
-        EnrolDirect resets copy from <code>.baseline/</code> and are unaffected.</td>
+        <code>git checkout HEAD -- repos/…</code>, and the <code>apps/</code> →
+        <code>repos/</code> move was uncommitted, so HEAD did not have those paths</td>
+    <td>Both PolicyCore resets failed with <em>"pathspec did not match"</em></td>
+    <td><span class="pass">Fixed</span> — 3 Aug 2026, by committing the move
+        (<code>e5af8ed</code>); all four resets verified to exit 0. The standing rule: a target
+        move must be committed before these two can restore. The admin panel's
+        <code>reset_blocked_reason</code> check stays, for the next move.</td>
   </tr>
   <tr>
     <td class="mono">2</td>
@@ -873,8 +874,8 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   </tr>
   <tr>
     <td>A PolicyCore reset dies with <code>pathspec 'repos/policycore/app.py' did not match</code></td>
-    <td>Known issue #1 — the <code>apps/</code> → <code>repos/</code> move is uncommitted, so those
-        paths are not in HEAD. Commit the move. Nothing else fixes it.</td>
+    <td>A target directory was moved and the move is not committed, so those paths are not in
+        HEAD for the script to restore from. Commit the move. Nothing else fixes it.</td>
   </tr>
   <tr>
     <td><code>codegen returned unexpected file set</code></td>

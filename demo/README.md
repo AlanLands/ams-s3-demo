@@ -19,54 +19,39 @@ them.
 
 ---
 
-## ⚠ Two reset scripts are broken right now
+## All four reset scripts work
 
-`demo/reset_s3.sh` and `demo/reset_s3_endorsement.sh` restore PolicyCore with
-`git checkout HEAD -- repos/policycore/...`, but **HEAD still has those files
-under `apps/policycore/`** — the `repos/` move is uncommitted. Both scripts
-therefore fail with `error: pathspec 'repos/policycore/app.py' did not match
-any file(s) known to git` and stop before reseeding, before clearing
-`.cache/llm`, and before clearing the ticket timeline.
+Verified 2026-08-03: all four run to their success line and leave the working
+tree matching `HEAD` exactly.
 
-Verify for yourself, read-only:
+The one durable thing to know about them: `demo/reset_s3.sh` and
+`demo/reset_s3_endorsement.sh` restore PolicyCore with `git checkout HEAD --
+repos/policycore/...`, so **they can only restore paths that HEAD already
+has**. Move a target directory and both scripts fail (`error: pathspec ... did
+not match any file(s) known to git`) until the move is committed. That is the
+whole fix when it happens — nothing in the scripts needs changing. It bit on
+2026-08-03 while the `apps/` → `repos/` move was still uncommitted, and
+committing the move (`e5af8ed`) resolved it.
+
+Check it read-only any time you suspect it:
 
 ```bash
 git cat-file -e HEAD:repos/policycore/app.py 2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
-git cat-file -e HEAD:apps/policycore/app.py  2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
 ```
 
-**Committing the `repos/` move fixes it** — nothing in the scripts needs
-changing. Until then:
+Two things worth carrying forward:
 
-- **ClaimsPortal and EnrolDirect resets are unaffected.**
+- **ClaimsPortal and EnrolDirect resets never depend on git.**
   `reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` restore by `cp` from
-  the in-repo `.baseline/` snapshots and never touch git.
-- The admin panel already surfaces this. `GET /api/admin/status` returns a
-  `reset_blocked_reason` naming the four missing paths, and the panel's
-  PolicyCore reset button is disabled with that reason on it.
-- **Do not "fix" this by restoring from `HEAD:apps/policycore/...`.** That
-  content is *pre-reskin* — it still says endorsement / coverage tier /
-  premium / policyholder — so it would undo the GRS rename as well as the CR.
-  Until the move is committed, undo a PolicyCore CR the way the console
-  offers: **Revert all** in the Generate stage, which restores from the
-  per-proposal backups under `s3_enhancement/out/`. Then, by hand:
+  the in-repo `.baseline/` snapshots, so a target move cannot break them.
+- The admin panel checks for the condition rather than discovering it halfway.
+  `GET /api/admin/status` returns a `reset_blocked_reason` naming any paths
+  missing from HEAD, and disables the PolicyCore reset button with that reason
+  on it. That check is deliberate and stays — it earns its keep the next time
+  someone moves a target.
 
-  ```bash
-  rm -f repos/policycore/core/tiers.py \
-        tests/test_s3_tier_upgrade.py \
-        tests/test_s3_amendment_priority.py
-  python -m repos.policycore.core.seed
-  rm -rf s3_enhancement/out/* .cache/llm
-  rm -f data/ticket_events.jsonl
-  git checkout -- 's3_enhancement/cache/jira_*.json'
-  date +%s%N > data/.s3_reset_marker
-  ```
-
-  Confirm with the baseline checks in `DEMO_TEST_GUIDE.md` section 0a rather
-  than assuming it worked.
-
-Do not present a reset as working until the move is committed and you have
-watched all four scripts print their success line.
+Confirm a reset with the baseline checks in `DEMO_TEST_GUIDE.md` section 0a
+rather than assuming it worked.
 
 ---
 
@@ -78,8 +63,8 @@ watched all four scripts print their success line.
 | `run_mockapp.sh` | Serves `repos/policycore/app.py` on :8501/sl_policycore — the "client's app" window for the before/after proof. Same job as `apps/run-policycore.sh`. |
 | `run_s3_claimsportal.sh` | Runs the two Python/FastAPI ClaimsPortal services (:8081 contracts, :8082 claims) |
 | `run_s3_harness.sh` | The live agent-harness variant of the codegen beat — see below |
-| `reset_s3.sh` | CR-2026-041 (PolicyCore plan tier) back to pre-CR baseline; also clears shared state. **Broken — see above.** |
-| `reset_s3_endorsement.sh` | CR-2026-042 (PolicyCore amendment Priority field) back to baseline, restored from `HEAD` (**not** from the `s3-endorsement-baseline` tag — see the comment in the script). **Broken — see above.** |
+| `reset_s3.sh` | CR-2026-041 (PolicyCore plan tier) back to pre-CR baseline; also clears shared state. Restores from `HEAD` — see above. |
+| `reset_s3_endorsement.sh` | CR-2026-042 (PolicyCore amendment Priority field) back to baseline, restored from `HEAD` (**not** from the `s3-endorsement-baseline` tag — see the comment in the script). |
 | `reset_s3_claimsportal.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `repos/claimsportal/.baseline/` |
 | `reset_s3_enroldirect.sh` | CR-2026-045 (EnrolDirect) back to baseline, from `repos/enroldirect/.baseline/` |
 | `warm_s3_cache.sh` | Pre-warms `.cache/llm` for the narrative drafts before presenting |
@@ -192,9 +177,10 @@ back to replay invisibly, that one recording replays for any audience-chosen
 tier name, that `reset_s3.sh` restores baseline in <10s, and that the relevance
 funnel keeps core files while screening out the legacy decoys.
 
-> The `reset_s3.sh` check in that gate will fail until the `repos/` move is
-> committed, for the pathspec reason at the top of this file. That is the gate
-> working, not a new bug.
+> That `reset_s3.sh` check is exactly what catches an uncommitted target move:
+> the script cannot restore paths HEAD lacks, so the gate goes red. If it ever
+> does, commit the move rather than editing the check — see the top of this
+> file.
 
 `tools/autofix/` goes further: an unattended detect → propose → apply →
 safety-gate → re-verify → accept/revert loop that can fix a failing calibration

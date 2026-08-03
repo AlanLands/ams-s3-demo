@@ -415,24 +415,23 @@ ssh $INSTANCE 'cd /opt/ams-s3-demo && sudo -u ubuntu ./demo/reset_s3_enroldirect
 Order matters: `reset_s3.sh` reseeds the database the amendment baseline builds
 on, so it goes first.
 
-> **Known breakage — check this before you rely on Step 12.** The first two
-> scripts restore source with `git checkout HEAD -- repos/…`. On a checkout
-> where the `apps/` → `repos/` move is **not yet committed**, HEAD still
-> carries those files under `apps/` and both scripts die with "pathspec did not
-> match" — a rehearsal cannot be reset, which is exactly the failure that
-> surfaces on demo morning. **Deploy from a commit that contains the move.**
-> Confirm on the instance before demo day with:
->
-> ```bash
-> ssh $INSTANCE 'cd /opt/ams-s3-demo && git cat-file -e HEAD:repos/policycore/app.py && echo OK'
-> ```
->
-> `reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` restore by copying
-> their committed `.baseline/` snapshots and are unaffected either way.
+All four scripts work. One pre-flight check is still worth doing, because it is
+the one way Step 12 can fail on demo morning: the first two scripts restore
+source with `git checkout HEAD -- repos/…`, so **the commit you deploy must
+contain the target paths at their current location**. Deploy a commit from
+before a target move (or a dirty tree whose move is uncommitted) and the
+checkout has nothing to restore from. Confirm on the instance:
+
+```bash
+ssh $INSTANCE 'cd /opt/ams-s3-demo && git cat-file -e HEAD:repos/policycore/app.py && echo OK'
+```
+
+`reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` restore by copying
+their committed `.baseline/` snapshots, so they never depend on HEAD.
 
 A manager can run the same resets from the console's `/admin` page instead of
 over SSH — one explicit scope at a time, refused while the paths it would
-overwrite are dirty, and reporting the breakage above as a named
+overwrite are dirty, and reporting a missing-from-HEAD path as a named
 `reset_blocked_reason` rather than a raw git error.
 
 ## Step 13. Re-warm, then restart
@@ -478,7 +477,7 @@ ssh $INSTANCE 'sudo bash /opt/ams-s3-demo/deploy/aws/bootstrap.sh'
 | Console 404s on every page | `apps/console/web/dist` not built or not shipped (Steps 4–5) |
 | Mockapp stuck "connecting" | nginx missing websocket `Upgrade` headers, or `--server.baseUrlPath` not matching the location block |
 | Pipeline hangs during analyze | `GITLAB_MODE` still `live` with no outbound route (Step 6) |
-| `reset_s3.sh` fails: "pathspec did not match" | Deployed from a commit that predates the `apps/` → `repos/` move, or `.git` was excluded from the rsync (Steps 5, 12) |
+| `reset_s3.sh` fails: "pathspec did not match" | Deployed from a commit that predates a target move, so HEAD lacks the `repos/…` paths the script restores, or `.git` was excluded from the rsync (Steps 5, 12) |
 | App restarts mid-codegen | `--reload` was added to the unit. Never use it: the pipeline writes `.py` files into the tree uvicorn would be watching |
 | A rehearsed-instant beat now pauses | Unwarmed `.cache/llm` entry calling Bedrock live (Step 10) |
 

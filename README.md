@@ -131,15 +131,15 @@ demo/reset_s3_enroldirect.sh   # CR-2026-045 (EnrolDirect prospect access)
 demo/warm_s3_cache.sh          # ALWAYS last — reset_s3.sh wipes .cache/llm
 ```
 
-> **The two PolicyCore resets are broken on this checkout.** `reset_s3.sh` and
-> `reset_s3_endorsement.sh` restore source with `git checkout HEAD --
-> repos/…`, but the `apps/` → `repos/` move is not committed yet, so HEAD
-> still carries those files under `apps/` and the checkout fails with
-> "pathspec did not match". **Committing the move fixes it**; nothing else
-> does. The admin panel detects the condition up front and reports it as
-> `reset_blocked_reason` rather than running the script and failing halfway.
+> All four resets work. The two PolicyCore ones restore source with `git
+> checkout HEAD -- repos/…`, so **HEAD has to carry the paths they name**: any
+> time a target moves, commit the move before expecting them to run. (That is
+> what bit on 2026-08-03, while the `apps/` → `repos/` move was still
+> uncommitted; committing it was the whole fix.) The admin panel checks the
+> same condition up front and reports it as `reset_blocked_reason` rather than
+> running a script that would fail halfway.
 > `reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` restore by copying
-> from their committed `.baseline/` snapshots and are unaffected.
+> from their committed `.baseline/` snapshots, so they never depend on HEAD.
 
 A manager can run the same resets from the console's `/admin` panel, one
 explicit scope at a time. Source-restoring scopes refuse (409) while the paths

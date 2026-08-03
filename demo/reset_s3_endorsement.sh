@@ -10,8 +10,9 @@
 # cache namespace `endorsement_field_add` likewise keep their old spelling —
 # those are cache identity, and renaming either is a replay miss.
 #
-# ⚠ KNOWN BROKEN as of 2026-08-03, same as demo/reset_s3.sh: the
-# `git checkout HEAD -- repos/policycore/...` below fails with "pathspec did
+# The `git checkout HEAD -- repos/policycore/...` below can only restore paths
+# HEAD already has, so a target move must be committed before this script
+# works — same as demo/reset_s3.sh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate

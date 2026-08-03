@@ -162,57 +162,37 @@ ClaimsPortal source baseline restored; generated files removed.
 EnrolDirect source baseline restored; generated files removed.
 ```
 
-### ⚠ The first two do not run today
+### The first two restore from `HEAD`
 
 `reset_s3.sh` and `reset_s3_endorsement.sh` restore PolicyCore with
-`git checkout HEAD -- repos/policycore/...`, but **HEAD still has those files
-under `apps/policycore/`** — the `repos/` move is uncommitted. Both fail:
+`git checkout HEAD -- repos/policycore/...`, so **HEAD has to contain those
+paths**. Move a target directory and both stop at the checkout —
 
 ```text
 error: pathspec 'repos/policycore/app.py' did not match any file(s) known to git
 ```
 
-They stop there, so nothing after the checkout runs either: no reseed, no
-`.cache/llm` wipe, no ticket-timeline clear. Check it read-only before you
-plan around it:
+— before the reseed, the `.cache/llm` wipe and the ticket-timeline clear.
+**Committing the move is the fix**; nothing in the scripts needs changing.
+(This is not hypothetical: it happened on 2026-08-03 while the `apps/` →
+`repos/` move was uncommitted, and commit `e5af8ed` cleared it.) Check it
+read-only whenever a target has just moved:
 
 ```bash
 git cat-file -e HEAD:repos/policycore/app.py 2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
-git cat-file -e HEAD:apps/policycore/app.py  2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
 ```
 
-**Committing the `repos/` move fixes it.** Nothing in the scripts is wrong;
-they are describing a tree state that has not been committed yet.
+- **`reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` never touch git**
+  — they restore by `cp` from the in-repo `.baseline/` snapshots, so a target
+  move cannot affect them.
+- The admin panel checks the same thing up front: `GET /api/admin/status`
+  carries a `reset_blocked_reason` naming any path missing from HEAD, and
+  disables the PolicyCore reset with that reason on it rather than running a
+  script that would fail halfway.
 
-- **`reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` are unaffected**
-  — they restore by `cp` from the in-repo `.baseline/` snapshots and never
-  touch git.
-- The admin panel already reports it: `GET /api/admin/status` carries a
-  `reset_blocked_reason` naming the four missing paths, and the panel's
-  PolicyCore reset is disabled with that reason on it.
-- **Do not substitute `git checkout HEAD -- apps/policycore/...`.** That
-  content is *pre-reskin* — endorsement / coverage tier / premium /
-  policyholder — so it would undo the GRS rename along with the CR. Undo a
-  PolicyCore CR with the console's **Revert all** (it restores from the
-  per-proposal backups under `s3_enhancement/out/`), then clear the rest by
-  hand:
-
-  ```bash
-  rm -f repos/policycore/core/tiers.py \
-        tests/test_s3_tier_upgrade.py \
-        tests/test_s3_amendment_priority.py
-  python -m repos.policycore.core.seed
-  rm -rf s3_enhancement/out/* .cache/llm
-  rm -f data/ticket_events.jsonl
-  git checkout -- 's3_enhancement/cache/jira_*.json'
-  date +%s%N > data/.s3_reset_marker      # tells the console UI to drop its localStorage
-  ```
-
-  Then confirm with the baseline checks in `DEMO_TEST_GUIDE.md` section 0a
-  rather than assuming it worked.
-
-Do not tell anyone the resets work until you have watched all four scripts
-print their success line on this machine.
+Either way, confirm a reset with the baseline checks in
+`DEMO_TEST_GUIDE.md` section 0a rather than assuming it worked — watch all
+four scripts print their success line.
 
 ---
 
@@ -363,10 +343,11 @@ repo**. It is worth showing precisely because of what it refuses to do:
   it, but a written manifest **needs a console restart** to take effect —
   discovery runs at import. The panel says so.
 
-Today the PolicyCore reset button is disabled with a `reset_blocked_reason`
-naming the four paths missing from HEAD — the same uncommitted-`repos/`-move
-problem as section 5. That is the gate working, and it is a fine thing to say
-out loud.
+All four reset scopes run today. When one *is* refused — a dirty tree, or a
+path missing from HEAD after an uncommitted target move (section 5) — the
+button carries a `reset_blocked_reason` saying which, instead of firing a
+script that would fail halfway. That is the gate working, and it is a fine
+thing to say out loud.
 
 On beats 12-13: the deployment order is **derived**, not drafted — on
 CR-2026-043 the plan puts policy_service before claims_service because
@@ -428,7 +409,7 @@ For the full per-scenario talk track and the fallback ladder, see
 
 | Symptom | Cause and fix |
 |---------|---------------|
-| `error: pathspec 'repos/policycore/app.py' did not match any file(s) known to git` | `reset_s3.sh` / `reset_s3_endorsement.sh`. The `repos/` move is uncommitted so HEAD still has those files under `apps/`. **Commit the move.** See section 5 for the manual stand-in; the ClaimsPortal and EnrolDirect resets are unaffected. |
+| `error: pathspec 'repos/policycore/app.py' did not match any file(s) known to git` | `reset_s3.sh` / `reset_s3_endorsement.sh` restore from HEAD, and a target directory was moved without committing the move, so HEAD does not have that path. **Commit the move** — see section 5. The ClaimsPortal and EnrolDirect resets restore from `.baseline/` and are unaffected. |
 | `FOREIGN KEY constraint failed` during a reset or seed | An old baseline whose `wipe_db()` predates the amendments table (it was called `endorsements` before the 2026-08-03 GRS reskin). Fixed in the current scripts. If you hit it on an older checkout: `rm -f data/mockapp.db`, then re-run the reset. |
 | `codegen returned unexpected file set` | A target directory under `repos/` was renamed or moved. `relevance.py` folds each file's path into the text it scores, so a rename reshuffles the selection and desyncs it from the committed recordings. Restore the directory name — see `repos/README.md` and the "File paths are load-bearing" section of the root `CLAUDE.md`. |
 | A reset button in `/admin` is greyed out | Deliberate. Hover it — `reset_blocked_reason` says whether it is the dirty tree or a path missing from HEAD. Source resets never run over uncommitted work. |

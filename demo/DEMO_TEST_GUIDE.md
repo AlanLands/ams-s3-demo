@@ -236,40 +236,37 @@ roster`; scheme documented in `common/roster.py`):
 
 ---
 
-## ⚠ Before you rely on any "Reset:" step below
+## About the "Reset:" steps below
 
-`demo/reset_s3.sh` and `demo/reset_s3_endorsement.sh` **fail today.** They
-restore PolicyCore with `git checkout HEAD -- repos/policycore/...`, but HEAD
-still has those files under `apps/policycore/` — the `repos/` move is
-uncommitted. Both die on:
+All four reset scripts work, verified 2026-08-03: each runs to its success line
+and leaves the working tree matching `HEAD`.
+
+One thing to know about the two PolicyCore ones. `demo/reset_s3.sh` and
+`demo/reset_s3_endorsement.sh` restore with `git checkout HEAD --
+repos/policycore/...`, so **HEAD must already contain those paths**. If a
+target directory is moved and the move is not committed, both stop at the
+checkout —
 
 ```text
 error: pathspec 'repos/policycore/app.py' did not match any file(s) known to git
 ```
 
-and stop there, so nothing downstream in the script runs either: no reseed, no
-`.cache/llm` wipe, no ticket-timeline clear. Verify read-only:
+— before the reseed, the `.cache/llm` wipe and the ticket-timeline clear.
+**Committing the move fixes it**; the scripts themselves are correct. Verify
+read-only after any such move:
 
 ```bash
 git cat-file -e HEAD:repos/policycore/app.py 2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
-git cat-file -e HEAD:apps/policycore/app.py  2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
 ```
 
-**Committing the `repos/` move fixes it** — the scripts themselves are correct.
-`demo/reset_s3_claimsportal.sh` and `demo/reset_s3_enroldirect.sh` are
-**unaffected**: they restore by `cp` from the in-repo `.baseline/` snapshots and
-never touch git. The admin panel already reports the block as
-`reset_blocked_reason` and greys out the PolicyCore reset.
+`demo/reset_s3_claimsportal.sh` and `demo/reset_s3_enroldirect.sh` restore by
+`cp` from the in-repo `.baseline/` snapshots and never touch git, so nothing
+about HEAD can affect them. The admin panel checks the HEAD condition up front
+and greys out the PolicyCore reset with a `reset_blocked_reason` rather than
+failing halfway through a script.
 
-**Do not work around it by checking out `apps/policycore/` instead.** That
-content is *pre-reskin* — endorsement, coverage tier, premium, policyholder —
-so it would undo the GRS rename along with the CR. Undo a PolicyCore CR with
-the console's **Revert all**, which restores from the per-proposal backups
-under `s3_enhancement/out/`, then clear the rest by hand
-(`rm -f repos/policycore/core/tiers.py tests/test_s3_tier_upgrade.py
-tests/test_s3_amendment_priority.py`, reseed, `rm -rf s3_enhancement/out/*
-.cache/llm`). Either way, **use section 0a to confirm you are actually at
-baseline** rather than trusting a reset that did not run.
+Either way, **use section 0a to confirm you are actually at baseline** rather
+than trusting that a reset did what you expected.
 
 ---
 
@@ -279,7 +276,7 @@ The flagship demo beat: audience picks the new tier's name live.
 
 **Reset:**
 ```bash
-demo/reset_s3.sh     # see the warning above — broken until the repos/ move is committed
+demo/reset_s3.sh     # restores from HEAD — see the note above
 ```
 
 **Run (3 terminals):**
@@ -331,7 +328,7 @@ one change.
 
 **Reset:**
 ```bash
-demo/reset_s3_endorsement.sh   # see the warning above — broken until the repos/ move is committed
+demo/reset_s3_endorsement.sh   # restores from HEAD — see the note above
 ```
 
 > The script keeps its old filename on purpose (teammates invoke it by name);
@@ -379,8 +376,8 @@ committed recording.
 
 **Reset:**
 ```bash
-demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-CR baseline (works — cp from .baseline/)
-demo/reset_s3.sh                # shared out/, ticket events, .cache/llm (broken — see warning above)
+demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-CR baseline (cp from .baseline/)
+demo/reset_s3.sh                # shared out/, ticket events, .cache/llm
 ```
 
 **Run (3 terminals):**
@@ -425,8 +422,8 @@ demo/run_s3_claimsportal.sh
 
 **Reset between rehearsals:**
 ```bash
-demo/reset_s3_claimsportal.sh   # works
-demo/reset_s3.sh                # broken until the repos/ move is committed
+demo/reset_s3_claimsportal.sh   # ClaimsPortal source, from .baseline/
+demo/reset_s3.sh                # shared out/, ticket events, .cache/llm
 ```
 
 ---
@@ -507,9 +504,9 @@ Warms the fixed-key narrative drafts so the first live click doesn't pay
 full LLM latency. Note `.cache/llm` is shared across scenarios — a reset
 wipes everyone's warmed cache, so warm it last, after your final reset.
 
-> While `reset_s3.sh` is broken it never reaches its `rm -rf .cache/llm`, so
-> the cache survives and this ordering does not bite. Do not rely on that —
-> it changes the moment the `repos/` move is committed.
+> This ordering matters now that the resets run end to end: `reset_s3.sh`
+> reaches its `rm -rf .cache/llm` every time, so any warm-up done before a
+> reset is thrown away. Warm last.
 
 ## Automated pre-demo check
 
@@ -520,8 +517,9 @@ python -m tools.verify_s3_live --gate 10     # rehearsal gate: live codegen must
 ```
 
 The `--skip-live` gate includes a "`reset_s3.sh` restores baseline in <10s"
-check, which fails today for the pathspec reason above. That is the gate
-working.
+check. It passes today. It is also what catches an uncommitted target move —
+if it ever goes red for the pathspec reason above, commit the move rather than
+editing the check.
 
 ## Fallback ladder (all scenarios)
 
