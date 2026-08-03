@@ -765,6 +765,29 @@ def analyze(
     selection = select_relevant_files(
         story_text, all_files, core_files=target.core_files, design_doc_root=target.root
     )
+    # Part of the analysis, not a button next to it. Asked for on the 2026-08-03
+    # walkthrough: "why do we have to prompt it — it should come automatically
+    # in the main analysis itself. If somebody forgets to click the button then
+    # we lose that impact analysis for the other teams."
+    #
+    # Deliberately a *second* call rather than one merged prompt: the two beats
+    # have separate cache keys, and folding them into one prompt would strand
+    # both recordings. A failure here degrades to "not checked" rather than
+    # taking the whole analysis down with it — the analysis is the beat, the
+    # cross-team list is an addition to it.
+    cross_team: list[dict] | None = None
+    try:
+        cross_team = [
+            {
+                "app_name": item.app_name,
+                "reason": item.reason,
+                "suggested_summary": item.suggested_summary,
+            }
+            for item in draft_cross_team_impact(story_text, target=target, usage_out=usage)
+        ]
+    except LLMError:
+        cross_team = None
+
     if payload.ticket_number:
         record_event(
             payload.ticket_number,
@@ -772,6 +795,13 @@ def analyze(
             "impact_analysis_drafted",
             detail=f"{effort.hours_class} / {effort.priority_equivalent}",
         )
+        if cross_team is not None:
+            record_event(
+                payload.ticket_number,
+                "ai",
+                "cross_team_impact_checked",
+                detail=", ".join(item["app_name"] for item in cross_team) or "none found",
+            )
     return {
         "label": AI_SUGGESTION_LABEL,
         "needs_clarification": False,
@@ -782,6 +812,7 @@ def analyze(
             "priority_equivalent": effort.priority_equivalent,
             "reasoning": effort.reasoning,
         },
+        "cross_team_impacts": cross_team,
         "file_selection": _selection_dict(selection),
         "token_panel": _token_panel(usage, all_files, selection.selected),
     }

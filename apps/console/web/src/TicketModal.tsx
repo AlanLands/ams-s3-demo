@@ -389,6 +389,11 @@ export default function TicketModal({
     (event) => activityFilter === 'all' || event.actor === activityFilter
   )
   const [clarificationAnswer, setClarificationAnswer] = useState('')
+  // Two-step confirm for a re-run that would overwrite an analysis later stages
+  // are already built on. Only ever armed for a ticket past To Do — a fresh
+  // ticket has nothing to lose, so its first run stays one click.
+  const [confirmRerun, setConfirmRerun] = useState(false)
+  const rerunNeedsConfirm = Boolean(analysisResult) && issue.status !== 'To Do'
 
   const application = storyMeta(storyText, 'Application')
   const storyApplication = application ? shortAppName(application) : null
@@ -478,43 +483,61 @@ export default function TicketModal({
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {/* Re-running the analysis on a ticket that has already moved
+                      past To Do restarts the beat under work that has already
+                      been done, and the run has to be reset to recover. Raised
+                      on the 2026-08-03 walkthrough: "everything is enabled,
+                      there could be chances we'll be clicking somewhere and the
+                      system would break". So the first run stays a plain
+                      button; a re-run on a ticket already in flight asks first.
+                      Nothing is removed — the control a presenter needs mid-demo
+                      is still there, it just cannot be hit by accident. */}
                   {!clarificationQuestion && (
                     <button
                       className={analysisResult ? 'ams-button-secondary' : 'ams-button'}
-                      onClick={onRunAnalysis}
+                      onClick={() => {
+                        if (rerunNeedsConfirm && !confirmRerun) {
+                          setConfirmRerun(true)
+                          return
+                        }
+                        setConfirmRerun(false)
+                        onRunAnalysis()
+                      }}
                       disabled={analysisLoading}
                     >
                       {analysisLoading
                         ? 'Running…'
-                        : analysisResult
-                          ? 'Re-run AI impact analysis'
-                          : 'Run AI impact analysis'}
+                        : confirmRerun
+                          ? 'Confirm re-run'
+                          : analysisResult
+                            ? 'Re-run AI impact analysis'
+                            : 'Run AI impact analysis'}
                     </button>
+                  )}
+                  {confirmRerun && !analysisLoading && (
+                    <>
+                      <button className="ams-button-secondary" onClick={() => setConfirmRerun(false)}>
+                        Cancel
+                      </button>
+                      <span style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-warning)' }}>
+                        {issue.key} is already {issue.status} — re-running replaces the analysis
+                        this work was based on.
+                      </span>
+                    </>
                   )}
                   {analysisResult && !analysisLoading && (
                     <span className="ams-pill ams-pill-general">✓ Analyzed</span>
                   )}
-                  {storyLabel && (
-                    <>
-                      <button
-                        className={crossTeamImpacts !== undefined ? 'ams-button-secondary' : 'ams-button'}
-                        onClick={onCheckCrossTeam}
-                        disabled={crossTeamLoading}
-                      >
-                        {crossTeamLoading
-                          ? 'Checking…'
-                          : crossTeamImpacts !== undefined
-                            ? 'Re-check for other teams affected'
-                            : 'Check for other teams affected'}
-                      </button>
-                      {crossTeamImpacts !== undefined && !crossTeamLoading && (
-                        <span className="ams-pill ams-pill-general">
-                          {crossTeamImpacts.length === 0
-                            ? '✓ No teams affected'
-                            : `✓ ${crossTeamImpacts.length} team${crossTeamImpacts.length > 1 ? 's' : ''} affected`}
-                        </span>
-                      )}
-                    </>
+                  {/* No "check for other teams" button any more — the analysis
+                      runs it itself (see /s3/analyze). A step the presenter has
+                      to remember to click is a step that gets skipped, and then
+                      the downstream-team impact silently never appears. */}
+                  {storyLabel && crossTeamImpacts !== undefined && !analysisLoading && (
+                    <span className="ams-pill ams-pill-general">
+                      {crossTeamImpacts.length === 0
+                        ? '✓ No other teams affected'
+                        : `✓ ${crossTeamImpacts.length} other team${crossTeamImpacts.length > 1 ? 's' : ''} affected`}
+                    </span>
                   )}
                 </div>
                 {analysisError && (

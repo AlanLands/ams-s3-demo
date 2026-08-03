@@ -1519,6 +1519,15 @@ export function useS3Controller() {
           effort_estimate: analyzeResult.effort_estimate as EffortEstimate,
           file_selection: analyzeResult.file_selection,
           token_panel: analyzeResult.token_panel,
+          cross_team_impacts: analyzeResult.cross_team_impacts,
+        }
+        // The server now runs the cross-team check as part of the analysis, so
+        // seed the same state the old button used to fill. `null` means the
+        // check could not run — leave it unset so the panel can say so rather
+        // than claiming nobody is affected.
+        if (analyzeResult.cross_team_impacts) {
+          const impacts = analyzeResult.cross_team_impacts
+          setTicketCrossTeam((prev) => ({ ...prev, [ticketKey]: impacts }))
         }
       } else {
         // Either no user story/target registered for this ticket at all (e.g. a

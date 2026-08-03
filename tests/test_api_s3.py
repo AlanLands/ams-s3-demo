@@ -265,6 +265,12 @@ def test_analyze_returns_impact_effort_and_file_selection():
                     "reasoning": "Small scoped change across policy and UI files.",
                 }
             )
+        # /analyze now also runs the cross-team check itself rather than
+        # leaving it behind a button (2026-08-03 walkthrough), so its prompt
+        # arrives here too. Answer it with "nobody else affected" — this test
+        # is about the analysis payload, and the cross-team list has its own.
+        if "suggested_summary" in prompt or "other application teams" in prompt.lower():
+            return json.dumps({"impacts": []})
         assert "impact analysis" in prompt.lower()
         # No assumptions: a draft that declares one is withheld and asked
         # about instead of returned (test_analyze_asks_about_the_drafts_own_

@@ -71,13 +71,34 @@ def warm(tier_name: str = "Elite") -> list[str]:
         if target.story_template_path is None:
             continue
         story_text = render_story(tier_name, target=target)
-        draft_effort_estimate(story_text, target=target)
-        draft_impact_analysis(story_text, target=target)
-        draft_design_doc(story_text, target=target)
-        draft_release_notes(story_text, target=target)
-        draft_release_note_set(story_text, target=target)
-        draft_scenarios(story_text, target=target)
-        messages.append(f"narrative cache warmed for {target.target_id}")
+        # Per-beat rather than one try over the whole target, and per-target
+        # rather than aborting the loop: warming is a pre-rehearsal convenience,
+        # and one target's beat failing must not leave every *later* target
+        # cold. That is not hypothetical — on 2026-08-03 `draft_scenarios`
+        # raised on ClaimsPortal ("TS-05 cites no acceptance criterion"), which
+        # is early in the target order, so EnrolDirect — the demo target — was
+        # never reached and went into the run making live calls.
+        failures: list[str] = []
+        for beat, draft in (
+            ("effort_estimate", draft_effort_estimate),
+            ("impact_analysis", draft_impact_analysis),
+            ("design_doc", draft_design_doc),
+            ("release_notes", draft_release_notes),
+            ("release_note_set", draft_release_note_set),
+            ("test_scenarios", draft_scenarios),
+        ):
+            try:
+                draft(story_text, target=target)
+            except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+                failures.append(f"{beat}: {exc}")
+        if failures:
+            # Loud, and last in the output, so a failed beat cannot be mistaken
+            # for a warm one — the whole point of warming is knowing the beat
+            # will not call out live on stage.
+            for failure in failures:
+                messages.append(f"!! NOT WARMED — {target.target_id} {failure}")
+        else:
+            messages.append(f"narrative cache warmed for {target.target_id}")
     return messages
 
 

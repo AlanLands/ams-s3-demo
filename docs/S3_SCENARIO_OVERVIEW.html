@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Enhancement Delivery — What Changes, and What AI Is Expected To Do</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm 12mm; }
+
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #5c5c5c;
+    --ink-faint: #8a8a8a;
+    --line: #d8d8d8;
+    --accent: #8b1e2d;
+    --accent-soft: #f6ecee;
+    --ok: #1c6b3c;
+    --ok-soft: #edf5f0;
+    --warn: #8a5a00;
+    --warn-soft: #fdf6e6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font: 11pt/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    margin: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1 { font-size: 23pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
+  h2 {
+    font-size: 13pt; margin: 0 0 3mm; padding-bottom: 1.5mm;
+    border-bottom: 2px solid var(--accent); letter-spacing: -0.2pt;
+  }
+  p { margin: 0 0 2.5mm; }
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+
+  .cover { border-bottom: 3pt solid var(--accent); padding-bottom: 4mm; margin-bottom: 6mm; }
+  .kicker { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.6pt; color: var(--accent); font-weight: 700; margin-bottom: 2mm; }
+  .subtitle { font-size: 12pt; color: var(--ink-soft); margin: 0; }
+
+  .section { margin-bottom: 7mm; }
+
+  /* --- the business change, before any tooling is shown --- */
+  .change { display: grid; grid-template-columns: 1fr auto 1fr; gap: 5mm; align-items: stretch; margin-bottom: 3mm; }
+  .state { border: 1pt solid var(--line); border-radius: 3px; padding: 4mm; background: #fcfcfb; }
+  .state.after { border-color: var(--ok); background: var(--ok-soft); }
+  .state .lead { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; font-weight: 700; color: var(--ink-soft); margin-bottom: 2.5mm; }
+  .state.after .lead { color: var(--ok); }
+  .arrow { display: flex; align-items: center; font-size: 20pt; color: var(--accent); font-weight: 700; }
+
+  .who { display: flex; align-items: baseline; gap: 2.5mm; margin-bottom: 2mm; }
+  .who:last-child { margin-bottom: 0; }
+  .who-name { font-weight: 700; min-width: 26mm; }
+  .who-note { font-size: 9.5pt; color: var(--ink-soft); }
+  .yes { color: var(--ok); font-weight: 700; }
+  .no { color: var(--accent); font-weight: 700; }
+
+  /* --- the five steps --- */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4mm; }
+  .step {
+    border: 1pt solid var(--line); border-top: 3pt solid var(--accent);
+    border-radius: 3px; padding: 4mm 3.5mm; background: #fff; break-inside: avoid;
+    display: flex; flex-direction: column;
+  }
+  .step-n {
+    font-size: 8pt; font-weight: 700; letter-spacing: 1pt; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 2mm;
+  }
+  .step-title { font-size: 11pt; font-weight: 700; margin-bottom: 2.5mm; line-height: 1.3; }
+  .step-body { font-size: 9.5pt; color: var(--ink-soft); margin: 0 0 3mm; }
+  .step-human {
+    margin-top: auto; font-size: 8.5pt; padding-top: 2.5mm;
+    border-top: 0.5pt solid var(--line); color: var(--ink);
+  }
+  .step-human .lead {
+    display: block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.8pt;
+    color: var(--ok); font-weight: 700; margin-bottom: 1mm;
+  }
+
+  .callout {
+    background: var(--accent-soft); border-left: 2.5pt solid var(--accent);
+    padding: 3mm 3.5mm; margin: 4mm 0 0; break-inside: avoid;
+  }
+  .callout .lead { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; color: var(--accent); font-weight: 700; margin-bottom: 1.5mm; }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .footnote { font-size: 8.5pt; color: var(--ink-soft); border-top: 0.5pt solid var(--line); padding-top: 2mm; margin-top: 5mm; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="kicker">MapleSure Insurance · Enhancement Delivery · Scenario Overview</div>
+  <h1>Extending online enrolment to prospect members</h1>
+  <p class="subtitle">What the business asked for, and what AI is expected to do about it —
+    before we open the tooling.</p>
+</div>
+
+<div class="section">
+  <h2>1 · The application, and the change being requested</h2>
+  <p><strong>EnrolDirect</strong> is MapleSure's online enrolment channel — where someone on a
+    group contract enrols in their benefit plan themselves, without calling anyone. Who is
+    allowed to use it is decided by two access preferences the sponsor agrees at inception.</p>
+
+  <div class="change">
+    <div class="state">
+      <div class="lead">Today</div>
+      <div class="who"><span class="who-name">Members</span><span class="who-note"><span class="yes">Can enrol online</span> — on the roster, holding an active benefit</span></div>
+      <div class="who"><span class="who-name">Guests</span><span class="who-note"><span class="yes">Can enrol online</span> — off the roster, under a sponsor-agreed exception</span></div>
+      <div class="who"><span class="who-name">Prospects</span><span class="who-note"><span class="no">Refused</span> — on the roster, no active benefit yet. Neither preference was written for them.</span></div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="state after">
+      <div class="lead">After this change</div>
+      <div class="who"><span class="who-name">Members</span><span class="who-note"><span class="yes">Unchanged</span></span></div>
+      <div class="who"><span class="who-name">Guests</span><span class="who-note"><span class="yes">Unchanged</span></span></div>
+      <div class="who"><span class="who-name">Prospects</span><span class="who-note"><span class="yes">Can enrol online</span> — classified and admitted under the guest access preference</span></div>
+    </div>
+  </div>
+
+  <p style="font-size:9.5pt;color:var(--ink-soft);margin:0">The business request is one sentence:
+    <em>decide whether a prospect member is eligible for online enrolment, and return that
+    decision through the channel's existing eligibility check.</em> It arrives as a user story
+    with acceptance criteria, on the delivery team's board.</p>
+</div>
+
+<div class="section">
+  <h2>2 · What AI is expected to do with it</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-n">Step 1</div>
+      <div class="step-title">Understand the request</div>
+      <p class="step-body">Reads the user story <em>and</em> the source code together, and asks
+        the business a question when the story leaves something unsaid — rather than guessing
+        and writing the wrong thing.</p>
+      <div class="step-human"><span class="lead">Human decides</span>Answers the clarifying
+        questions. Nothing proceeds until they do.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-n">Step 2</div>
+      <div class="step-title">Assess the impact</div>
+      <p class="step-body">Names the components that have to change, sizes the effort, and
+        identifies which <em>other</em> application teams this change also needs work from.</p>
+      <div class="step-human"><span class="lead">Human decides</span>Accepts the assessment and
+        routes the work to an engineer.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-n">Step 3</div>
+      <div class="step-title">Write the code</div>
+      <p class="step-body">Cuts a feature branch and drafts the change file by file, each one
+        with its reason. Nothing is written to the repository until it is approved.</p>
+      <div class="step-human"><span class="lead">Human decides</span>Peer-reviews the diff, asks
+        the AI why it made a change, requests amendments, applies or rejects.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-n">Step 4</div>
+      <div class="step-title">Prove it works</div>
+      <p class="step-body">Designs the test scenarios first, then writes and runs the tests —
+        and separately re-runs the pre-existing suite it is not allowed to touch, to show
+        nothing else broke.</p>
+      <div class="step-human"><span class="lead">Human decides</span>QA reviews and edits the
+        test plan, and approves it before any test code exists.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-n">Step 5</div>
+      <div class="step-title">Hand it over</div>
+      <p class="step-body">Commits only once the tests actually pass, then produces the release
+        notes, the deployment and rollback plan, and a record of what was — and was not —
+        proven.</p>
+      <div class="step-human"><span class="lead">Human decides</span>Approves the release and
+        closes the ticket.</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="lead">The point of the demo</div>
+    <p>Every step above is AI-assisted and every step has a human gate. What follows is the same
+      five steps, run for real against a working application — you will see the request arrive on
+      the board, the code change proposed and reviewed, the tests pass, and the prospect who was
+      refused a moment ago get through.</p>
+  </div>
+</div>
+
+<div class="footnote">
+  MapleSure Insurance is a fictional insurer; all data is synthetic.
+  Scenario: US-2026-045 · EnrolDirect · prospect access at the online enrolment gate.
+</div>
+
+</body>
+</html>

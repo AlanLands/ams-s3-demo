@@ -116,6 +116,11 @@ export interface AnalyzeResponse {
   target_repo?: TargetRepo | null
   // How the ticket reached its application, when it carried CI context.
   routing?: RouteDecision
+  // Other application teams this change also needs work from. Part of the
+  // analysis rather than a separate button (2026-08-03 walkthrough) — `null`
+  // means the check could not be run, which is different from `[]` meaning it
+  // ran and found nobody.
+  cross_team_impacts?: CrossTeamImpact[] | null
 }
 
 // Raw wire shape of POST /analyze — unlike AnalyzeResponse (used for
@@ -134,6 +139,7 @@ export interface AnalyzeApiResponse {
   effort_estimate?: EffortEstimate
   file_selection?: FileSelection
   token_panel?: TokenPanel
+  cross_team_impacts?: CrossTeamImpact[] | null
 }
 
 export interface TokenPanel {
