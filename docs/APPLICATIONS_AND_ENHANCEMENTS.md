@@ -193,7 +193,7 @@ this order: non-active policy status first, then over the coverage limit,
 then at-or-below the deductible, otherwise accepted. Every existing flow
 (policy list/detail, claim submission, claim list) keeps working unchanged.
 
-**Worked example** — real values from the demo's seed data:
+**Worked example** — real values from the seeded data:
 
 | Group contract | Annual maximum | Deductible (new) | Claim amount | Before the CR | After the CR |
 |---|---|---|---|---|---|
