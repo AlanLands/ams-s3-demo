@@ -1430,6 +1430,12 @@ def test_apply_calls_apply_change_with_file_path():
         # reads them to sync its per-file Rejected/Revert state after an apply.
         "rejected_files": {},
         "revertable_files": [],
+        # Apply restarts the target app so the running process serves the code
+        # it just wrote. `conftest._no_real_process_control` stubs that out, so
+        # the honest answer here is "nothing was restarted" — which is exactly
+        # what the console must not report as success.
+        "restarted": False,
+        "restarts": [],
     }
     # Apply opens the change's feature branch before writing, and reports it —
     # see s3_enhancement/scm.py for why the branch is modelled, not real.

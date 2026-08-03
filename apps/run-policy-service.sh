@@ -14,4 +14,16 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
 echo "  Policy-Service -> http://localhost:${POLICY_SERVICE_PORT:-8081}/"
-uvicorn repos.claimsportal.policy_service.main:app --port "${POLICY_SERVICE_PORT:-8081}"
+
+# Record this shell's PID so the console can restart the app after an Apply.
+# Applying rewrites this target's .py files, but a running uvicorn keeps serving
+# the code it imported at startup — so without a restart the console reports the
+# change applied while the port still answers with the baseline. The console
+# only ever stops a process it holds a PID for (admin_ops.owned_pid), and until
+# this existed a service started here, in a terminal, could never be one of
+# them. `exec` below means this PID *is* uvicorn's, not a parent shell's.
+mkdir -p logs
+echo $$ > "logs/policy_service.pid"
+trap 'rm -f "logs/policy_service.pid"' EXIT
+
+exec uvicorn repos.claimsportal.policy_service.main:app --port "${POLICY_SERVICE_PORT:-8081}"

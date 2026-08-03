@@ -31,7 +31,16 @@ from common.ticket_events import (
     events_log_marker,
     record_event,
 )
-from s3_enhancement import applications, story_intake, routing, scm, scm_live, targets, testrun
+from s3_enhancement import (
+    admin_ops,
+    applications,
+    routing,
+    scm,
+    scm_live,
+    story_intake,
+    targets,
+    testrun,
+)
 from s3_enhancement.acceptance import parse_acceptance_criteria
 from s3_enhancement.analyze import (
     build_assumption_question,
@@ -1411,6 +1420,30 @@ def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity))
             "code_change_applied",
             detail=payload.file_path or payload.proposal_id,
         )
+
+    # Applying wrote the files; the target process is still serving the old code
+    # from memory until it is restarted. Without this the console's "the app now
+    # has this capability — open the console to try it" is false at the exact
+    # moment the audience goes and checks, which is the worst possible time for
+    # it to be false. Restart is part of Apply rather than a button next to it
+    # for the same reason the cross-team check is (see /s3/analyze).
+    restarts: list[dict] = []
+    if target.application_id:
+        try:
+            restarts = admin_ops.restart_application(target.application_id)
+        except Exception:  # noqa: BLE001 - reported below, never fatal
+            restarts = []
+    # A failed or impossible restart must not read as success: the UI keys off
+    # this to say "restart it yourself" instead of inviting a click-through to
+    # behaviour that has not changed yet.
+    restarted = bool(restarts) and all(item.get("ok") for item in restarts)
+    if payload.ticket_number and restarts:
+        record_event(
+            payload.ticket_number,
+            "system",
+            "target_app_restarted" if restarted else "target_app_restart_failed",
+            detail=", ".join(f"{item.get('id')}: {item.get('detail', '')}" for item in restarts),
+        )
     return {
         "proposal_id": payload.proposal_id,
         "applied_files": applied_files,
@@ -1418,6 +1451,8 @@ def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity))
         "rejected_files": rejected_files(payload.proposal_id),
         "revertable_files": revertable_files(payload.proposal_id),
         "scm": branch.to_dict(),
+        "restarted": restarted,
+        "restarts": restarts,
     }
 
 

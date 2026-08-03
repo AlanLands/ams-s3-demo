@@ -210,6 +210,11 @@ export function useS3Controller() {
   const [fileReasons, setFileReasons] = useState<Record<string, string>>({})
 
   const [applied, setApplied] = useState(false)
+  // Whether Apply also got the target process onto the new code. Separate from
+  // `applied` on purpose — the files landing and the running app changing are
+  // different facts, and the banner has to be able to tell them apart.
+  const [applyRestarted, setApplyRestarted] = useState(false)
+  const [applyRestartDetail, setApplyRestartDetail] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [appliedFiles, setAppliedFiles] = useState<Record<string, boolean>>({})
@@ -620,6 +625,12 @@ export function useS3Controller() {
       for (const path of result.applied_files) nextAppliedFiles[path] = true
       const failure = result.post_apply && !result.post_apply.ok ? result.post_apply : null
       setApplied(true)
+      setApplyRestarted(Boolean(result.restarted))
+      setApplyRestartDetail(
+        result.restarted
+          ? null
+          : (result.restarts || []).map((item) => item.detail).filter(Boolean).join(' ') || null,
+      )
       setAppliedFiles(nextAppliedFiles)
       setRejectedFiles(result.rejected_files)
       setPostApplyFailure(failure)
@@ -1959,6 +1970,8 @@ export function useS3Controller() {
     fileReasons,
     setFileReasons,
     applied,
+    applyRestarted,
+    applyRestartDetail,
     setApplied,
     applying,
     setApplying,

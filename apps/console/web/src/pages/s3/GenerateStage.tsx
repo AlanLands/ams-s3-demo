@@ -42,6 +42,8 @@ export default function GenerateStage() {
     setPerFileQuestion,
     handleAskAboutFile,
     applied,
+    applyRestarted,
+    applyRestartDetail,
     handleApplyFile,
     handleApply,
     appliedFiles,
@@ -528,14 +530,34 @@ export default function GenerateStage() {
                     readOnly
                   />
                 )}
+                {/* Two different claims, because they are different facts. The
+                    files are written either way; whether the *running* app has
+                    the capability depends on the restart having worked. Saying
+                    "the app now has this capability" when the process is still
+                    serving the old code sends the audience to check and see the
+                    old behaviour. */}
                 {applied && !postApplyFailure && (
-                  <p style={{ color: 'var(--ams-success)', fontSize: 'var(--ams-text-sm)' }}>
-                    Applied. The app now has this capability —{' '}
-                    <a href={targetApp.url} target="_blank" rel="noopener noreferrer">
-                      {targetApp.label}
-                    </a>{' '}
-                    to try it.
-                  </p>
+                  applyRestarted ? (
+                    <p style={{ color: 'var(--ams-success)', fontSize: 'var(--ams-text-sm)' }}>
+                      Applied and {targetApp.label} restarted. The running app now has this
+                      capability —{' '}
+                      <a href={targetApp.url} target="_blank" rel="noopener noreferrer">
+                        open it
+                      </a>{' '}
+                      to try it.
+                    </p>
+                  ) : (
+                    <p style={{ color: 'var(--ams-warning)', fontSize: 'var(--ams-text-sm)' }}>
+                      Applied to the repo, but {targetApp.label} could not be restarted from here,
+                      so it is still serving the previous code. Restart it (Admin → Environment
+                      control) before trying the new behaviour.
+                      {applyRestartDetail && (
+                        <span style={{ display: 'block', color: 'var(--ams-ink-soft)' }}>
+                          {applyRestartDetail}
+                        </span>
+                      )}
+                    </p>
+                  )
                 )}
                 {applied &&
                   designSync?.findings

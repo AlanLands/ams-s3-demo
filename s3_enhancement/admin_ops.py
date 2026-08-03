@@ -844,6 +844,51 @@ def restart_service(service: Service) -> dict[str, Any]:
 ACTIONS = {"start": start_service, "stop": stop_service, "restart": restart_service}
 
 
+# Which OS processes serve a given application. ClaimsPortal is the reason this
+# is a tuple rather than a lookup: one folder, one target, two services, and a
+# change to it can land in either — restarting one and not the other leaves the
+# demo half on the new code.
+SERVICES_BY_APPLICATION: dict[str, tuple[str, ...]] = {
+    "policycore": ("policycore",),
+    "claimsportal": ("policy_service", "claims_service"),
+    "enroldirect": ("enroldirect",),
+}
+
+
+def restart_application(app_id: str) -> list[dict[str, Any]]:
+    """Hard-restart every process serving `app_id`, newest code first.
+
+    Applying writes files; it does not reload the running process. Until this
+    happens the app keeps serving the pre-change code from memory, so the
+    console saying "the app now has this capability" is not yet true — the
+    audience clicks through and sees the old behaviour. That gap was closed by
+    hand mid-rehearsal before this existed.
+
+    A stopped service is *started*, not skipped: after a change is applied the
+    intended end state is "running the new code", and refusing to start
+    something that happens to be down would leave the claim false in exactly
+    the case the presenter is least likely to notice.
+
+    Returns one result per service. Callers must treat a failure as "not
+    restarted" and say so, rather than reporting the apply as complete —
+    process control can legitimately be unavailable (`process_control_enabled`
+    off, a hardened host with no job control), and on those hosts the honest
+    answer is that the operator has to restart it themselves.
+    """
+    results: list[dict[str, Any]] = []
+    for service_id in SERVICES_BY_APPLICATION.get(app_id, ()):
+        service = SERVICES_BY_ID.get(service_id)
+        if service is None:
+            continue
+        if not process_control_enabled():
+            results.append(
+                _result(service, "restart", False, "Process control is disabled on this host.")
+            )
+            continue
+        results.append(restart_service(service))
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Demo state summary
 # ---------------------------------------------------------------------------

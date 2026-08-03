@@ -257,6 +257,19 @@ export interface ApplyResponse {
   revertable_files: string[]
   // The feature branch apply opened before writing anything.
   scm?: ScmState | null
+  // Whether every process serving the target application was restarted onto the
+  // newly applied code. False also covers "could not even try" (process control
+  // disabled on this host) — either way the running app is still on the old
+  // code, which is the only distinction the console needs to draw.
+  restarted?: boolean
+  restarts?: ServiceRestart[]
+}
+
+export interface ServiceRestart {
+  id: string
+  label: string
+  ok: boolean
+  detail: string
 }
 
 export interface RejectResponse {

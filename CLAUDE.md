@@ -176,6 +176,36 @@ Seetha also asked for the *release* document to be retitled "Change Request".
 That is **deliberately not done** — held by the project owner on 2026-08-03.
 Do not apply it without asking.
 
+## Apply restarts the target app, and that is the whole point
+
+Applying rewrites a target's `.py` files, but a running uvicorn keeps serving
+the code it imported at startup. Before this existed the console said "the app
+now has this capability" while the port still answered with the baseline — the
+audience clicks through and sees the old behaviour, which reads as "the change
+did nothing". `/s3/apply` now calls `admin_ops.restart_application(...)` and
+returns `restarted` / `restarts`.
+
+Three things hold it together:
+
+- **The launch scripts record their PID** (`logs/<service_id>.pid`, written
+  before an `exec`, so the PID *is* uvicorn's). `admin_ops.owned_pid` only ever
+  stops a process the console holds a PID for — deliberately, so it never kills
+  a developer's own process — and before this a service started the documented
+  way, `apps/run-*.sh` in a terminal, could never be one of them.
+- **A failed restart is reported, never hidden.** `restarted` is false when the
+  restart failed *or* could not be attempted (`PROCESS_CONTROL` off, a hardened
+  host), and `GenerateStage` then says the app is still on the previous code
+  instead of inviting a click-through. Do not collapse those two states into a
+  green banner.
+- **`tests/conftest.py` stubs `restart_application` suite-wide.** Without it
+  `pytest tests/` performs real process control: the first run of this change
+  spawned a uvicorn on :8083 and left ClaimsPortal and PolicyCore up. A test
+  that wants to exercise restart behaviour patches it with its own fake.
+
+`TARGET_RELOAD=1` in the launch scripts predates this and stays as-is — it needs
+`watchfiles`, which is not in `requirements.txt` (hard rule 4), so it cannot be
+the default answer.
+
 ## File paths are load-bearing — don't move targets
 
 `s3_enhancement/relevance.py::_document()` folds each file's path into the text
