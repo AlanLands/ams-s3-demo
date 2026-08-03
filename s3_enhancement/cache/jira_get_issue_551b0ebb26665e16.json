@@ -6,9 +6,9 @@
   "response": {
     "key": "AMS-132",
     "status": "To Do",
-    "summary": "Handle mid-cycle premium adjustments for coverage tier upgrades in BillingGateway.",
+    "summary": "Handle mid-cycle contribution adjustments for plan tier upgrades in BillingGateway.",
     "issue_type": "Task",
     "assignee": "Elena Cruz",
-    "description": "BillingGateway needs to handle mid-cycle premium adjustments due to the coverage tier upgrades."
+    "description": "BillingGateway needs to handle mid-cycle contribution adjustments due to the plan tier upgrades."
   }
 }

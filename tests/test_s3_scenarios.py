@@ -18,7 +18,7 @@ from s3_enhancement.scenarios import (
     uncovered_criteria,
     validate_scenarios,
 )
-from s3_enhancement.targets import MOCKAPP_ENDORSEMENT_FIELD_ADD
+from s3_enhancement.targets import MOCKAPP_AMENDMENT_FIELD_ADD
 
 CRITERIA = [
     Criterion("AC-1", "The form has a Priority field."),
@@ -35,7 +35,7 @@ def _raw(**overrides) -> dict:
         "preconditions": "A seeded policy exists",
         "test_data": "POL-10001",
         "steps": ["Open the form", "Submit without touching priority"],
-        "expected": "The stored endorsement has priority Standard",
+        "expected": "The stored amendment has priority Standard",
     }
     base.update(overrides)
     return base
@@ -146,7 +146,7 @@ def test_draft_scenarios_reports_uncovered_criteria():
 def test_prompt_carries_the_criteria_ids_verbatim():
     from s3_enhancement.scenarios import build_prompt
 
-    prompt = build_prompt("some cr", CRITERIA, target=MOCKAPP_ENDORSEMENT_FIELD_ADD)
+    prompt = build_prompt("some cr", CRITERIA, target=MOCKAPP_AMENDMENT_FIELD_ADD)
     assert "AC-1: The form has a Priority field." in prompt
     assert "AC-2: Existing flows are unaffected." in prompt
 
@@ -159,8 +159,8 @@ def test_every_demo_target_has_a_distinct_scenario_cache_key():
     keys = [
         target.cache_key("test_scenarios")
         for target in (
-            targets.MOCKAPP_COVERAGE_UPGRADE,
-            targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
+            targets.MOCKAPP_TIER_UPGRADE,
+            targets.MOCKAPP_AMENDMENT_FIELD_ADD,
             targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
         )
     ]

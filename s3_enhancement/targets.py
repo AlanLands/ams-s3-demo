@@ -1,7 +1,7 @@
 """S3 target registry — the seam that lets S3 scale beyond one repo/one CR.
 
 Every S3 module today (`codegen.py`, `testgen.py`, `harness.py`, `cr.py`,
-`analyze.py`, `docgen.py`) is hardcoded to CR-2026-041 against `apps/policycore/`: file
+`analyze.py`, `docgen.py`) is hardcoded to CR-2026-041 against `repos/policycore/`: file
 allowlists, the CR template path, and — critically — LLM cache keys are all
 fixed literals. `common/llm.py`'s `complete()`/`stream_complete()` build their
 on-disk cache path from a supplied `cache_key` alone, with no hash of the actual
@@ -12,7 +12,7 @@ because nothing today varies the target.
 `Target` is the unit that would need to be registered per repo in a real
 30-repo estate. `register_target()` makes cache-identity collisions
 unrepresentable (raises at import time) rather than merely unlikely.
-`MOCKAPP_COVERAGE_UPGRADE` is today's one target, wired up to return the exact
+`MOCKAPP_TIER_UPGRADE` is today's one target, wired up to return the exact
 legacy cache-key literals so the two committed replay recordings
 (`s3_enhancement/cache/s3_codegen.json`, `s3_testgen.json`) and `.cache/llm`'s
 existing entries stay byte-identical — this module changes no runtime
@@ -196,43 +196,62 @@ def register_target(target: Target) -> None:
         _NAMESPACES[target.cache_namespace] = target.target_id
 
 
+# The 2026-08-03 GRS reskin renamed PolicyCore's vocabulary (endorsement ->
+# amendment, coverage tier -> plan tier, premium -> contribution) across the
+# source, the CRs and the fields below. `DEFAULT_TARGET_ID`,
+# `AMENDMENT_TARGET_ID` and the `cache_namespace`/`_LEGACY_CACHE_KEYS` literals
+# deliberately keep their pre-reskin spellings: cache_namespace *is* the
+# committed recording's filename (s3_{beat}__{cache_namespace}.json) and the
+# legacy keys are `.cache/llm` entries, so renaming either without moving the
+# recordings is a replay miss that silently falls through to a live call. They
+# are internal identifiers, not display strings — except target_id, which
+# scm.branch_name_for folds into the branch shown at Step 0. Rename them only
+# together with the recordings (see the ClaimsPortal note below for the shape
+# of that change).
 DEFAULT_TARGET_ID = "mockapp-coverage-upgrade"
 
-MOCKAPP_COVERAGE_UPGRADE = Target(
+MOCKAPP_TIER_UPGRADE = Target(
     target_id=DEFAULT_TARGET_ID,
     source_kind="local",
-    display_name="PolicyCore — coverage tier upgrade (CR-2026-041)",
+    display_name="PolicyCore — plan tier upgrade (CR-2026-041)",
     application_id=applications.POLICY_CORE_ID,
-    root=REPO_ROOT / "apps" / "policycore",
+    root=REPO_ROOT / "repos" / "policycore",
     cr_template_path=REPO_ROOT / "crs" / "CR-2026-041.md",
     core_files=(
-        "apps/policycore/core/models.py",
-        "apps/policycore/core/db.py",
-        "apps/policycore/core/coverage.py",
-        "apps/policycore/app.py",
+        "repos/policycore/core/models.py",
+        "repos/policycore/core/db.py",
+        "repos/policycore/core/tiers.py",
+        "repos/policycore/app.py",
     ),
-    never_extra=frozenset({"apps/policycore/core/seed.py"}),
+    never_extra=frozenset({"repos/policycore/core/seed.py"}),
     codegen_allowlist=(
-        "apps/policycore/core/models.py",
-        "apps/policycore/core/db.py",
-        "apps/policycore/core/coverage.py",
-        "apps/policycore/app.py",
+        "repos/policycore/core/models.py",
+        "repos/policycore/core/db.py",
+        "repos/policycore/core/tiers.py",
+        "repos/policycore/app.py",
     ),
-    testgen_allowlist=("tests/test_s3_coverage_upgrade.py",),
+    testgen_allowlist=("tests/test_s3_tier_upgrade.py",),
     regression_paths=("tests/test_regression_policycore.py",),
     harness_expected_files=(
-        "apps/policycore/core/models.py",
-        "apps/policycore/core/db.py",
-        "apps/policycore/core/coverage.py",
-        "apps/policycore/app.py",
-        "tests/test_s3_coverage_upgrade.py",
+        "repos/policycore/core/models.py",
+        "repos/policycore/core/db.py",
+        "repos/policycore/core/tiers.py",
+        "repos/policycore/app.py",
+        "tests/test_s3_tier_upgrade.py",
     ),
-    post_apply_command=("{python}", "-m", "apps.policycore.core.seed"),
+    post_apply_command=("{python}", "-m", "repos.policycore.core.seed"),
     mutations=(
         Mutation(
-            rel_path="apps/policycore/core/coverage.py",
-            old_snippet="if new_index <= old_index:",
-            new_snippet="if new_index < old_index:",
+            rel_path="repos/policycore/core/tiers.py",
+            # Quotes the generated `tiers.py` verbatim, so it has to be
+            # re-checked after every codegen re-record: the 2026-08-03 GRS
+            # re-record changed this guard's shape from two `new_index` /
+            # `old_index` locals to inline `PLAN_TIERS.index(...)` calls, and
+            # the old snippet silently stopped matching — the seeded-bug beat
+            # then finds nothing to mutate and the demo's "the tests caught it"
+            # claim never gets made.
+            old_snippet="if PLAN_TIERS.index(new_tier) <= PLAN_TIERS.index(old_tier):",
+            new_snippet="if PLAN_TIERS.index(new_tier) < PLAN_TIERS.index(old_tier):",
             description=(
                 "Weakened the same-tier/downgrade guard from `<=` to `<` — "
                 "a same-tier \"upgrade\" is now silently accepted instead of "
@@ -242,57 +261,61 @@ MOCKAPP_COVERAGE_UPGRADE = Target(
     ),
     cache_namespace="",
 )
-register_target(MOCKAPP_COVERAGE_UPGRADE)
+register_target(MOCKAPP_TIER_UPGRADE)
 
-ENDORSEMENT_TARGET_ID = "mockapp-endorsement-field-add"
+AMENDMENT_TARGET_ID = "mockapp-endorsement-field-add"
 
-MOCKAPP_ENDORSEMENT_FIELD_ADD = Target(
-    target_id=ENDORSEMENT_TARGET_ID,
+MOCKAPP_AMENDMENT_FIELD_ADD = Target(
+    target_id=AMENDMENT_TARGET_ID,
     source_kind="local",
-    display_name="PolicyCore — endorsement priority field (CR-2026-042)",
+    display_name="PolicyCore — amendment priority field (CR-2026-042)",
     application_id=applications.POLICY_CORE_ID,
-    root=REPO_ROOT / "apps" / "policycore",
+    root=REPO_ROOT / "repos" / "policycore",
     cr_template_path=REPO_ROOT / "crs" / "CR-2026-042.md",
     cr_placeholder="",  # this CR has no audience-picked placeholder token
     core_files=(
-        "apps/policycore/core/models.py",
-        "apps/policycore/core/db.py",
-        "apps/policycore/core/endorsements.py",
-        "apps/policycore/app.py",
+        "repos/policycore/core/models.py",
+        "repos/policycore/core/db.py",
+        "repos/policycore/core/amendments.py",
+        "repos/policycore/app.py",
     ),
-    never_extra=frozenset({"apps/policycore/core/seed.py"}),
+    never_extra=frozenset({"repos/policycore/core/seed.py"}),
     codegen_allowlist=(
-        "apps/policycore/core/models.py",
-        "apps/policycore/core/db.py",
-        "apps/policycore/core/endorsements.py",
-        "apps/policycore/app.py",
+        "repos/policycore/core/models.py",
+        "repos/policycore/core/db.py",
+        "repos/policycore/core/amendments.py",
+        "repos/policycore/app.py",
     ),
-    testgen_allowlist=("tests/test_s3_endorsement_priority.py",),
+    testgen_allowlist=("tests/test_s3_amendment_priority.py",),
     regression_paths=("tests/test_regression_policycore.py",),
     harness_expected_files=(),
-    post_apply_command=("{python}", "-m", "apps.policycore.core.seed"),
+    post_apply_command=("{python}", "-m", "repos.policycore.core.seed"),
     mutations=(
         Mutation(
-            rel_path="apps/policycore/core/endorsements.py",
-            old_snippet='priority: str = "Standard",',
-            new_snippet='priority: str = "Urgent",',
+            rel_path="repos/policycore/core/amendments.py",
+            # No trailing comma: the 2026-08-03 re-record emits this as the
+            # last parameter without one. Same re-check-after-every-re-record
+            # rule as the tier-upgrade mutation above — a snippet that stops
+            # matching fails silently, it does not raise.
+            old_snippet='priority: str = "Standard"',
+            new_snippet='priority: str = "Urgent"',
             description=(
                 'Flipped the default priority from "Standard" to "Urgent" — '
-                "endorsements submitted without an explicit priority are now "
+                "amendments submitted without an explicit priority are now "
                 "silently marked Urgent."
             ),
         ),
     ),
     cache_namespace="endorsement_field_add",
 )
-register_target(MOCKAPP_ENDORSEMENT_FIELD_ADD)
+register_target(MOCKAPP_AMENDMENT_FIELD_ADD)
 
 
 CLAIMSPORTAL_TARGET_ID = "claimsportal-claims-deductible"
 
-_CLAIMSPORTAL_ROOT = REPO_ROOT / "apps" / "claimsportal"
-_CLAIMSPORTAL_CLAIMS_SRC = "apps/claimsportal/claims_service"
-_CLAIMSPORTAL_POLICY_SRC = "apps/claimsportal/policy_service"
+_CLAIMSPORTAL_ROOT = REPO_ROOT / "repos" / "claimsportal"
+_CLAIMSPORTAL_CLAIMS_SRC = "repos/claimsportal/claims_service"
+_CLAIMSPORTAL_POLICY_SRC = "repos/claimsportal/policy_service"
 
 # target_id and cache_namespace were renamed off their original
 # "spring"/"springdemo" literals once nothing in this target was Spring any
@@ -319,7 +342,7 @@ CLAIMSPORTAL_CLAIMS_DEDUCTIBLE = Target(
         f"{_CLAIMSPORTAL_CLAIMS_SRC}/policy_client.py",
         f"{_CLAIMSPORTAL_CLAIMS_SRC}/main.py",
         # Does not exist until the CR creates it — same idiom as
-        # apps/policycore/core/coverage.py on the default target.
+        # repos/policycore/core/tiers.py on the default target.
         f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
     ),
     codegen_allowlist=(
@@ -352,8 +375,8 @@ register_target(CLAIMSPORTAL_CLAIMS_DEDUCTIBLE)
 
 ENROLDIRECT_TARGET_ID = "enroldirect-prospect-access"
 
-_ENROLDIRECT_ROOT = REPO_ROOT / "apps" / "enroldirect"
-_ENROLDIRECT_SRC = "apps/enroldirect"
+_ENROLDIRECT_ROOT = REPO_ROOT / "repos" / "enroldirect"
+_ENROLDIRECT_SRC = "repos/enroldirect"
 
 # EnrolDirect's third target-shaped property is that its baseline is a
 # *removal*: the checked-in source is the state after the impact analysis and
@@ -408,6 +431,21 @@ ENROLDIRECT_PROSPECT_ACCESS = Target(
     cache_namespace="enroldirect_prospect_access",
 )
 register_target(ENROLDIRECT_PROSPECT_ACCESS)
+
+
+# Anything dropped into `repos/` with a `.s3targets.json` manifest registers
+# itself here, after the three built-ins. This is what makes the onboarding
+# claim ("drop the repo in, add its CRs") literally true rather than a
+# description of work someone still has to do in this file. Built-ins win on
+# an id clash — they carry bespoke codegen validators a manifest cannot
+# express — but two dropped repos colliding still raises, loudly, at import.
+# See s3_enhancement/discovery.py for what a discovered target does and does
+# not get.
+from s3_enhancement.discovery import register_discovered  # noqa: E402
+
+DISCOVERED_TARGET_IDS: tuple[str, ...] = tuple(
+    register_discovered(register_target, _REGISTRY)
+)
 
 
 def get_target(target_id: str | None) -> Target:

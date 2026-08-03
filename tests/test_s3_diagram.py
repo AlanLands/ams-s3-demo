@@ -24,14 +24,14 @@ from s3_enhancement.diagram import (
 )
 
 SPRING = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
-POLICYCORE = targets.MOCKAPP_ENDORSEMENT_FIELD_ADD
+POLICYCORE = targets.MOCKAPP_AMENDMENT_FIELD_ADD
 
 
 def test_layers_files_by_convention():
     change_map = build_change_map(POLICYCORE)
     by_name = {node.filename: node.layer for node in change_map.nodes}
     assert by_name["app.py"] == "Interface"
-    assert by_name["endorsements.py"] == "Logic"
+    assert by_name["amendments.py"] == "Logic"
     assert by_name["db.py"] == "Data"
     assert by_name["models.py"] == "Data"
 
@@ -42,10 +42,10 @@ def test_python_records_land_in_the_data_layer():
     Logic."""
     change_map = build_change_map(SPRING)
     by_path = {node.rel_path: node.layer for node in change_map.nodes}
-    assert by_path["apps/claimsportal/policy_service/policy.py"] == "Data"
-    assert by_path["apps/claimsportal/claims_service/claim.py"] == "Data"
-    assert by_path["apps/claimsportal/claims_service/main.py"] == "Interface"
-    assert by_path["apps/claimsportal/claims_service/claim_rules.py"] == "Logic"
+    assert by_path["repos/claimsportal/policy_service/policy.py"] == "Data"
+    assert by_path["repos/claimsportal/claims_service/claim.py"] == "Data"
+    assert by_path["repos/claimsportal/claims_service/main.py"] == "Interface"
+    assert by_path["repos/claimsportal/claims_service/claim_rules.py"] == "Logic"
 
 
 def test_single_service_target_is_one_column():
@@ -53,7 +53,7 @@ def test_single_service_target_is_one_column():
 
 
 def test_two_service_target_splits_by_python_package():
-    """apps/claimsportal is one target root holding two deployables; the
+    """repos/claimsportal is one target root holding two deployables; the
     diagram has to show them apart or the change looks like one service."""
     assert set(build_change_map(SPRING).services) == {"claims_service", "policy_service"}
 
@@ -80,14 +80,14 @@ def test_new_files_are_badged_and_existing_ones_are_not():
     with patch.object(diagram.subprocess, "run", side_effect=fake_run):
         change_map = build_change_map(SPRING)
     by_path = {node.rel_path: node.is_new for node in change_map.nodes}
-    assert by_path["apps/claimsportal/claims_service/claim_rules.py"] is True
-    assert by_path["apps/claimsportal/claims_service/main.py"] is False
+    assert by_path["repos/claimsportal/claims_service/claim_rules.py"] is True
+    assert by_path["repos/claimsportal/claims_service/main.py"] is False
 
 
 def test_new_file_detection_degrades_to_modified_without_git():
     """An unbadged box is a smaller error than a wrong badge."""
     with patch.object(diagram.subprocess, "run", side_effect=OSError("no git")):
-        assert diagram._is_new("apps/policycore/app.py") is False
+        assert diagram._is_new("repos/policycore/app.py") is False
 
 
 def test_svg_is_self_contained():
@@ -134,7 +134,7 @@ Adds a priority field.
 
 2. Risk areas
 - **Backward compatibility**: existing submissions must still work.
-- Schema migration on the endorsements table.
+- Schema migration on the amendments table.
 """
 
 

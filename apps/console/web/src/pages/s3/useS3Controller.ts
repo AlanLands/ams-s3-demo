@@ -34,7 +34,7 @@ import { downloadBlob, parseDiff } from './utils'
 
 const AI_LABEL = 'AI suggestion — verify with your specialist before applying.'
 
-// The MapleSure mockapp's own Streamlit UI (apps/policycore/app.py) — launched
+// The MapleSure mockapp's own Streamlit UI (repos/policycore/app.py) — launched
 // separately from the AMS console (see demo/run_mockapp.sh), same
 // port/path .env.example documents as MOCKAPP_URL. Overridable at build time
 // via VITE_MOCKAPP_URL (see web/.env.example) so the link still resolves when
@@ -82,7 +82,7 @@ const TESTER_ROSTER = ['Priya Nair', 'Tom Becker']
 const TICKET_CRS: Record<string, { crFile: string | null; tierName: string }> = {
   'AMS-101': { crFile: 'CR-2026-041.md', tierName: 'Elite' },
   'AMS-102': { crFile: 'CR-2026-042.md', tierName: 'Elite' },
-  // The ClaimsPortal target (apps/claimsportal) — S3's proof that the
+  // The ClaimsPortal target (repos/claimsportal) — S3's proof that the
   // pipeline handles a second repo. tierName is a required placeholder like
   // AMS-102's; CR-2026-043 has no {{TIER_NAME}}.
   'AMS-103': { crFile: 'CR-2026-043.md', tierName: 'Elite' },
@@ -306,6 +306,12 @@ export function useS3Controller() {
   // create-a-cross-team-ticket flow inside the modal's AI Actions section.
   const [boardAssignee, setBoardAssignee] = useState<Record<string, string>>({})
   const [assigningBoardTicket, setAssigningBoardTicket] = useState<string | null>(null)
+  // Which already-assigned ticket the manager has opened the reassign dialog
+  // for, or null. One at a time, and never the default state: an assigned
+  // ticket shows its assignee as plain text until the manager asks to change
+  // it, so the board stays readable and a reassignment can't happen by
+  // brushing past a dropdown.
+  const [reassignTicket, setReassignTicket] = useState<string | null>(null)
 
   // Which ticket's CR the codegen section (Generate/Tests/Release notes)
   // currently targets — set by clicking a board ticket. null means "nothing
@@ -380,14 +386,37 @@ export function useS3Controller() {
     }
   }, [])
 
+  // TICKET_CRS covers the seeded demo tickets. A CR dropped into `crs/` is
+  // opened on the board automatically and is not in that table — the board
+  // row carries its own `cr_file`/`target_id` instead, so fall back to those
+  // rather than growing a lookup table nobody remembers to edit. Without this
+  // an auto-opened ticket appears on the board but cannot be worked, which is
+  // the half of "pick the CR up automatically" that would actually matter.
+  function crLinkFor(
+    ticketKey: string
+  ): { crFile: string | null; tierName: string } | undefined {
+    const known = TICKET_CRS[ticketKey]
+    if (known) return known
+    const issue = (boardIssues || []).find((candidate) => candidate.key === ticketKey)
+    if (!issue?.cr_file) return undefined
+    // Elite is the placeholder every non-{{TIER_NAME}} CR already uses; a
+    // dropped-in CR has no audience-picked token to substitute.
+    return { crFile: issue.cr_file, tierName: 'Elite' }
+  }
+
   function getLinked(
     ticketKey: string | null | undefined
   ): { targetId: string | null; tierName: string; crLabel: string } | undefined {
     if (!ticketKey) return undefined
-    const cr = TICKET_CRS[ticketKey]
+    const cr = crLinkFor(ticketKey)
     if (!cr) return undefined
+    // Prefer the resolver's answer; fall back to the target the board already
+    // resolved server-side, which is the only source for an auto-opened ticket
+    // until its own resolveTarget call lands.
+    const boardTargetId =
+      (boardIssues || []).find((candidate) => candidate.key === ticketKey)?.target_id ?? null
     return {
-      targetId: cr.crFile ? resolvedTarget[ticketKey]?.target_id ?? null : null,
+      targetId: cr.crFile ? resolvedTarget[ticketKey]?.target_id ?? boardTargetId : null,
       tierName: cr.tierName,
       crLabel: crLabelFromFile(cr.crFile),
     }
@@ -1312,16 +1341,44 @@ export function useS3Controller() {
     }
   }
 
-  async function handleAssignBoardTicket(key: string) {
-    const assignee = boardAssignee[key] || ASSIGNEE_ROSTER[0]
+  // One writer for assign, reassign and unassign — the endpoint has always
+  // been unconditional, so these are the same call with a different value,
+  // and splitting them would be three ways for the in-flight state to drift.
+  // `assignee: null` unassigns. Nothing about who may do this is decided
+  // here: the server owns assignment (see CLAUDE.md), and the controls only
+  // render for a manager.
+  async function assignBoardTicketTo(key: string, assignee: string | null) {
     setAssigningBoardTicket(key)
     try {
       await s3Api.assignTicket(key, assignee)
       setBoardIssues((prev) => (prev || []).map((issue) => (issue.key === key ? { ...issue, assignee } : issue)))
+      setReassignTicket(null)
       loadTicketEvents(key)
     } finally {
       setAssigningBoardTicket(null)
     }
+  }
+
+  async function handleAssignBoardTicket(key: string) {
+    await assignBoardTicketTo(key, boardAssignee[key] || ASSIGNEE_ROSTER[0])
+  }
+
+  async function handleUnassignBoardTicket(key: string) {
+    await assignBoardTicketTo(key, null)
+  }
+
+  // Opens the reassign dialog with the picker already on the current
+  // assignee, so "Save" without touching it is a no-op rather than a silent
+  // reassignment to whoever happens to be first in the roster.
+  function handleOpenReassign(key: string, currentAssignee: string | null | undefined) {
+    setBoardAssignee((prev) => ({
+      ...prev,
+      [key]:
+        currentAssignee && ASSIGNEE_ROSTER.includes(currentAssignee)
+          ? currentAssignee
+          : prev[key] || ASSIGNEE_ROSTER[0],
+    }))
+    setReassignTicket(key)
   }
 
   function handleTicketClick(ticketKey: string) {
@@ -1421,11 +1478,11 @@ export function useS3Controller() {
           // server keeps the transcript server-side).
           crText = (clarificationAnswer || '').trim()
           if (!crText) return
-        } else if (TICKET_CRS[ticketKey]?.crFile) {
+        } else if (crLinkFor(ticketKey)?.crFile) {
           // There *is* a CR, it just doesn't say which repo it's for. Read
           // it rather than falling back to the ticket's summary, so the
           // analysis and the resolver both work from the same document.
-          const crFile = TICKET_CRS[ticketKey].crFile as string
+          const crFile = crLinkFor(ticketKey)!.crFile as string
           crText = (await s3Api.crFile(crFile)).cr_text.trim()
           if (!crText) return
         } else {
@@ -1593,7 +1650,10 @@ export function useS3Controller() {
         return prev
       }
       const mine = boardIssues.find(
-        (issue) => issue.assignee === identity?.name && TICKET_CRS[issue.key]
+        // Inlined rather than calling crLinkFor: this runs inside an effect,
+        // and closing over the helper would add it to the dependency list for
+        // no benefit — both sources it reads are already dependencies here.
+        (issue) => issue.assignee === identity?.name && (TICKET_CRS[issue.key] || issue.cr_file)
       )
       return mine ? mine.key : null
     })
@@ -2071,6 +2131,10 @@ export function useS3Controller() {
     ASSIGNEE_ROSTER,
     handleLoadBoard,
     handleAssignBoardTicket,
+    handleUnassignBoardTicket,
+    handleOpenReassign,
+    reassignTicket,
+    setReassignTicket,
     handleTicketClick,
     handleCheckCrossTeamForTicket,
     loadDependencies,

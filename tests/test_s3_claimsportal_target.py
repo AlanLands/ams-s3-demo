@@ -53,7 +53,7 @@ def test_spring_target_uses_the_generic_pytest_path():
 def test_spring_discovery_excludes_baseline_and_pycache_dirs():
     target = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
     files = relevance.discover_files_for_target(target, cr_text="deductible")
-    assert files, "expected python sources under apps/claimsportal"
+    assert files, "expected python sources under repos/claimsportal"
     for path in files:
         assert "/.baseline/" not in path, path
         assert "/__pycache__/" not in path, path
@@ -61,35 +61,35 @@ def test_spring_discovery_excludes_baseline_and_pycache_dirs():
 
 
 def test_validate_claim_rules_contract_accepts_valid_source():
-    files = {"apps/claimsportal/claims_service/claim_rules.py": VALID_CLAIM_RULES}
+    files = {"repos/claimsportal/claims_service/claim_rules.py": VALID_CLAIM_RULES}
     codegen._validate_claim_rules_contract(files)
 
 
 def test_validate_claim_rules_contract_rejects_invalid_python():
     truncated = VALID_CLAIM_RULES.rsplit("return", 1)[0]
-    files = {"apps/claimsportal/claims_service/claim_rules.py": truncated}
+    files = {"repos/claimsportal/claims_service/claim_rules.py": truncated}
     with pytest.raises(LLMError, match="invalid Python"):
         codegen._validate_claim_rules_contract(files)
 
 
 def test_validate_claim_rules_contract_rejects_missing_function():
     content = VALID_CLAIM_RULES.replace("def payable(", "def compute_payable(")
-    files = {"apps/claimsportal/claims_service/claim_rules.py": content}
+    files = {"repos/claimsportal/claims_service/claim_rules.py": content}
     with pytest.raises(LLMError, match="missing function"):
         codegen._validate_claim_rules_contract(files)
 
 
 def test_validate_claim_rules_contract_rejects_missing_token():
     content = VALID_CLAIM_RULES.replace("REJECTED_BELOW_DEDUCTIBLE", "REJECTED_UNDER_DEDUCTIBLE")
-    files = {"apps/claimsportal/claims_service/claim_rules.py": content}
+    files = {"repos/claimsportal/claims_service/claim_rules.py": content}
     with pytest.raises(LLMError, match="required contract token"):
         codegen._validate_claim_rules_contract(files)
 
 
 def test_validate_claim_rules_contract_requires_deductible_in_policy_files():
     files = {
-        "apps/claimsportal/claims_service/claim_rules.py": VALID_CLAIM_RULES,
-        "apps/claimsportal/policy_service/policy.py": "class Policy:\n    policyNumber: str\n",
+        "repos/claimsportal/claims_service/claim_rules.py": VALID_CLAIM_RULES,
+        "repos/claimsportal/policy_service/policy.py": "class Policy:\n    policyNumber: str\n",
     }
     with pytest.raises(LLMError, match="deductible"):
         codegen._validate_claim_rules_contract(files)
@@ -98,7 +98,7 @@ def test_validate_claim_rules_contract_requires_deductible_in_policy_files():
 def test_testgen_accepts_valid_python_file():
     allowlist = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.testgen_allowlist
     content = (
-        "from apps.claimsportal.claims_service.claim_rules import decide, payable\n\n\n"
+        "from repos.claimsportal.claims_service.claim_rules import decide, payable\n\n\n"
         "def test_accepted():\n"
         '    assert decide("ACTIVE", 1000, 100, 200) == "ACCEPTED"\n'
     )

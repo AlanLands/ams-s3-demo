@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# CR-2026-045 (EnrolDirect target) between-rehearsals reset.
+# CR-2026-045 ("Prospect Member Eligibility Check For Online Enrolment",
+# board ticket AMS-1045 — opened automatically from crs/CR-2026-045.md, not
+# seeded by any script) between-rehearsals reset.
 # Same shape as demo/reset_s3_claimsportal.sh, and for a stronger reason: the
 # pre-CR baseline comes from the committed-in-place snapshot at
-# apps/enroldirect/.baseline/ rather than `git checkout HEAD --`. This CR
+# repos/enroldirect/.baseline/ rather than `git checkout HEAD --`. This CR
 # creates no new file, so every path below has a pre-CR counterpart — but the
 # baseline for this target is a *removal* (the gate does not classify
-# prospects), and restoring it from git would depend on apps/enroldirect/
+# prospects), and restoring it from git would depend on repos/enroldirect/
 # being committed at the baseline state rather than at whatever a rehearsal
 # last applied.
 set -euo pipefail
@@ -22,7 +24,7 @@ if [[ "$_current_branch" == feature/AMS-* ]] && ! git checkout main 2>/dev/null;
   echo "note: staying on '$_current_branch' — switching to main would conflict with local changes"
 fi
 
-ENROLDIRECT=apps/enroldirect
+ENROLDIRECT=repos/enroldirect
 BASELINE_FILES=(
   applicants.py
   eligibility.py
@@ -37,4 +39,5 @@ rm -f tests/test_s3_prospect_access.py
 
 echo "EnrolDirect source baseline restored; generated files removed."
 echo "Note: staged proposals under s3_enhancement/out/ are shared with the other targets —"
-echo "run demo/reset_s3.sh too for a full between-rehearsals reset."
+echo "run demo/reset_s3.sh too for a full between-rehearsals reset (it is currently broken;"
+echo "until the repos/ move is committed, clear them with 'rm -rf s3_enhancement/out/*')."

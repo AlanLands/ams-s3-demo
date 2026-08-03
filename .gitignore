@@ -61,3 +61,9 @@ scenario/
 
 # PID files and stdout/stderr from deploy/production/start-apps.sh.
 logs/
+
+# Client-supplied source material — real call recordings, transcripts and
+# stories. Never committed: hard rule 1 (no real client data) and hard rule 2
+# (no client names). Drop files here to work with them locally; they stay out
+# of the repo.
+ScenariosFromClient/

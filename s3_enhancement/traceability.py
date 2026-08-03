@@ -82,7 +82,7 @@ _SYNONYMS = {
     "policies": "policy",
     "tiers": "tier",
     "requests": "request",
-    "endorsements": "endorsement",
+    "amendments": "amendment",
     "limits": "limit",
     "deductibles": "deductible",
 }

@@ -17,7 +17,7 @@ def test_check_cr_gaps_asks_about_an_unstated_default():
     )
     with patch("s3_enhancement.analyze.complete", return_value=canned) as mock_complete:
         result = check_cr_gaps(
-            "Add a 'priority' field (Standard/Urgent) to the endorsement request form."
+            "Add a 'priority' field (Standard/Urgent) to the amendment request form."
         )
 
     assert mock_complete.call_args.kwargs["json_mode"] is True
@@ -29,7 +29,7 @@ def test_check_cr_gaps_passes_through_a_fully_specified_cr():
     canned = json.dumps({"needs_clarification": False})
     with patch("s3_enhancement.analyze.complete", return_value=canned):
         result = check_cr_gaps(
-            "Add a 'priority' field (Standard/Urgent) to the endorsement request form, "
+            "Add a 'priority' field (Standard/Urgent) to the amendment request form, "
             "defaulting to Standard."
         )
 

@@ -121,7 +121,7 @@
   <p class="subtitle">The relevance funnel behind S3, the numbers that justify it,
     and an honest comparison with GitLab Duo.</p>
   <p class="meta">MapleSure Insurance demo build · All figures measured live against
-    CR-2026-041 on 27 July 2026 · Local embedding backend</p>
+    CR-2026-041 on 3 August 2026 · Local embedding backend</p>
 </div>
 
 <div class="callout">
@@ -130,7 +130,7 @@
   subsystem's own design document against the change request and discard whole
   subsystems that don't match — the AI reads the architecture docs before it opens
   a single source file. Then we rank only what survived, and send a handful. On this
-  change request that's 4 files out of 56, and the console shows you every score
+  change request that's 4 files out of 58, and the console shows you every score
   and everything we threw away."</p>
 </div>
 
@@ -138,10 +138,10 @@
 <h2>The funnel, with real counts</h2>
 
 <figure>
-  <div class="fig-title">Figure 1 · What happens to 56 files</div>
-  <div class="fig-sub">CR-2026-041 (new top coverage tier) against the MapleSure mockapp target.</div>
+  <div class="fig-title">Figure 1 · What happens to 58 files</div>
+  <div class="fig-sub">CR-2026-041 (new top plan tier) against the PolicyCore target.</div>
   <svg viewBox="0 0 700 268" role="img"
-       aria-label="Flow diagram: 56 discovered files reduce to 4 files sent to the model. 50 Java files are cut at stage 1 by subsystem screening. Of 6 Python files, 1 is structurally blocked, 2 are scored and both fall below the floor, and 3 core files plus 1 not-yet-existing core file are sent.">
+       aria-label="Flow diagram: 58 discovered files reduce to 4 files sent to the model. 52 files are cut at stage 1 by subsystem screening — 50 Java decoys plus the 2 Python files of the enrolment subsystem. Of the 6 files that survive, 1 is structurally blocked, 2 are scored and both fall below the floor, and 3 core files plus 1 not-yet-existing core file are sent.">
     <defs>
       <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8a8a"/>
@@ -156,24 +156,25 @@
 
     <!-- col 1: discovered -->
     <rect x="0" y="34" width="150" height="52" rx="4" fill="#f4f4f2" stroke="#d8d8d8"/>
-    <text x="12" y="60" font-size="21" font-weight="700" fill="#1a1a1a">56</text>
+    <text x="12" y="60" font-size="21" font-weight="700" fill="#1a1a1a">58</text>
     <text x="47" y="60" font-size="9.5" fill="#5c5c5c">source files</text>
-    <text x="12" y="76" font-size="8.5" fill="#8a8a8a">50 Java · 6 Python</text>
+    <text x="12" y="76" font-size="8.5" fill="#8a8a8a">50 Java · 8 Python</text>
 
     <!-- arrows into stage 1 -->
     <line x1="150" y1="60" x2="192" y2="60" stroke="#8a8a8a" stroke-width="1.2" marker-end="url(#arrow)"/>
 
     <!-- col 2: screening -->
     <rect x="196" y="30" width="230" height="60" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
-    <text x="208" y="48" font-size="9" fill="#5c5c5c">6 subsystem DESIGN.md scored</text>
-    <text x="208" y="66" font-size="15" font-weight="700" fill="#6b7280">6 of 6</text>
+    <text x="208" y="48" font-size="9" fill="#5c5c5c">7 subsystem DESIGN.md scored</text>
+    <text x="208" y="66" font-size="15" font-weight="700" fill="#6b7280">7 of 7</text>
     <text x="262" y="66" font-size="9.5" fill="#5c5c5c">screened out</text>
-    <text x="208" y="82" font-size="8.5" fill="#8a8a8a">top score 0.339 · floor 0.45</text>
+    <text x="208" y="82" font-size="8.5" fill="#8a8a8a">top score 0.354 · floor 0.45</text>
 
     <!-- cut path -->
     <line x1="311" y1="90" x2="311" y2="126" stroke="#8a8a8a" stroke-width="1.2" marker-end="url(#arrow)"/>
     <rect x="196" y="130" width="230" height="34" rx="4" fill="#f4f4f2" stroke="#d8d8d8" stroke-dasharray="3 2"/>
-    <text x="208" y="152" font-size="9.5" fill="#5c5c5c"><tspan font-size="13" font-weight="700" fill="#6b7280">50</tspan> Java files never opened</text>
+    <text x="208" y="147" font-size="9.5" fill="#5c5c5c"><tspan font-size="13" font-weight="700" fill="#6b7280">52</tspan> files never opened</text>
+    <text x="208" y="159" font-size="8" fill="#8a8a8a">50 Java decoys · 2 Python in enrolment</text>
 
     <!-- survivors down to python -->
     <line x1="426" y1="60" x2="450" y2="60" stroke="#8a8a8a" stroke-width="1.2" marker-end="url(#arrow)"/>
@@ -183,7 +184,7 @@
     <text x="466" y="48" font-size="9" fill="#5c5c5c">2 remaining files scored</text>
     <text x="466" y="66" font-size="15" font-weight="700" fill="#6b7280">0 of 2</text>
     <text x="512" y="66" font-size="9.5" fill="#5c5c5c">cleared the floor</text>
-    <text x="466" y="82" font-size="8.5" fill="#8a8a8a">best 0.458 · floor 0.55</text>
+    <text x="466" y="82" font-size="8.5" fill="#8a8a8a">best 0.459 · floor 0.55</text>
 
     <line x1="577" y1="90" x2="577" y2="126" stroke="#8a8a8a" stroke-width="1.2" marker-end="url(#arrow)"/>
     <rect x="454" y="130" width="246" height="34" rx="4" fill="#f4f4f2" stroke="#d8d8d8" stroke-dasharray="3 2"/>
@@ -196,12 +197,16 @@
     <rect x="0" y="210" width="700" height="52" rx="4" fill="#f6ecee" stroke="#a83244" stroke-width="1.2"/>
     <text x="14" y="238" font-size="21" font-weight="700" fill="#a83244">4</text>
     <text x="40" y="238" font-size="10" font-weight="700" fill="#1a1a1a">files sent to the model</text>
-    <text x="14" y="254" font-size="8.5" fill="#5c5c5c">app.py · core/db.py · core/models.py — always included, never scored — plus core/coverage.py, sent empty because the CR creates it</text>
+    <text x="14" y="254" font-size="8.5" fill="#5c5c5c">app.py · core/db.py · core/models.py — always included, never scored — plus core/tiers.py, sent empty because the CR creates it</text>
   </svg>
   <figcaption><strong>The ranker's job on this CR is exclusion, not selection.</strong>
     Nothing cleared the floor; the four files that went were the ones the target's
     core-file contract guarantees. That is the design working as intended — ranking
-    decides what <em>else</em> the model may see, and it declined to add anything.</figcaption>
+    decides what <em>else</em> the model may see, and it declined to add anything.
+    Note what stage 1 cuts: not only the 50 Java decoys but PolicyCore's own
+    <em>enrolment</em> subsystem, two live Python modules in the same language and
+    the same repository as the change. Screening is a scope decision, not a
+    file-extension filter.</figcaption>
 </figure>
 </section>
 
@@ -215,117 +220,122 @@ would have to beat its own ceiling by a wide margin to get in.</p>
 <figure>
   <div class="fig-title">Figure 2 · Measured cosine similarity vs. the cut-off</div>
   <div class="fig-sub">Every scored item on this change request. Same unit and scale in both panels; each panel carries its own floor.</div>
-  <svg viewBox="0 0 700 340" role="img"
-       aria-label="Two-panel bar chart of cosine similarity scores. Panel A, six subsystem design docs, scores from 0.090 to 0.339, all below the 0.45 floor. Panel B, two candidate files, 0.458 and 0.388, both below the 0.55 floor.">
+  <svg viewBox="0 0 700 362" role="img"
+       aria-label="Two-panel bar chart of cosine similarity scores. Panel A, seven subsystem design docs, scores from 0.122 to 0.354, all below the 0.45 floor. Panel B, two candidate files, 0.459 and 0.441, both below the 0.55 floor.">
     <!-- ============ PANEL A ============ -->
     <text x="0" y="12" font-size="9.5" font-weight="700" fill="#1a1a1a">A · Subsystem design docs</text>
     <text x="150" y="12" font-size="8.5" fill="#8a8a8a">scored before any source file is opened</text>
 
     <!-- grid -->
     <g stroke="#e6e6e4" stroke-width="1">
-      <line x1="168" y1="22" x2="168" y2="170"/>
-      <line x1="255" y1="22" x2="255" y2="170"/>
-      <line x1="341" y1="22" x2="341" y2="170"/>
-      <line x1="428" y1="22" x2="428" y2="170"/>
-      <line x1="515" y1="22" x2="515" y2="170"/>
-      <line x1="601" y1="22" x2="601" y2="170"/>
+      <line x1="168" y1="22" x2="168" y2="192"/>
+      <line x1="255" y1="22" x2="255" y2="192"/>
+      <line x1="341" y1="22" x2="341" y2="192"/>
+      <line x1="428" y1="22" x2="428" y2="192"/>
+      <line x1="515" y1="22" x2="515" y2="192"/>
+      <line x1="601" y1="22" x2="601" y2="192"/>
     </g>
 
-    <!-- floor 0.45 -> 168 + 0.45*866.67*0.6 ... recomputed: scale 520px per 0.6 -->
-    <line x1="558" y1="22" x2="558" y2="170" stroke="#8b1e2d" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <!-- floor 0.45 -> x0 168 + 0.45 * 866.67 = 558 -->
+    <line x1="558" y1="22" x2="558" y2="192" stroke="#8b1e2d" stroke-width="1.5" stroke-dasharray="4 3"/>
     <text x="562" y="32" font-size="8.5" font-weight="700" fill="#8b1e2d">floor 0.45</text>
 
     <!-- bars: x0=168, scale = 520/0.6 = 866.67 px per unit -->
-    <!-- settlement 0.3386 -> 293.5 -->
+    <!-- settlement 0.3539 -> 307 -->
     <text x="164" y="43" font-size="8.5" fill="#5c5c5c" text-anchor="end">settlement</text>
-    <rect x="168" y="33" width="293" height="13" rx="4" fill="#6b7280"/>
-    <text x="468" y="43" font-size="8.5" font-weight="700" fill="#1a1a1a">0.339</text>
+    <rect x="168" y="33" width="307" height="13" rx="4" fill="#6b7280"/>
+    <text x="482" y="43" font-size="8.5" font-weight="700" fill="#1a1a1a">0.354</text>
 
-    <!-- underwriting 0.2802 -> 242.8 -->
-    <text x="164" y="65" font-size="8.5" fill="#5c5c5c" text-anchor="end">underwriting</text>
-    <rect x="168" y="55" width="243" height="13" rx="4" fill="#6b7280"/>
-    <text x="418" y="65" font-size="8.5" font-weight="700" fill="#1a1a1a">0.280</text>
+    <!-- enrolment 0.2203 -> 191 -->
+    <text x="164" y="65" font-size="8.5" fill="#5c5c5c" text-anchor="end">enrolment</text>
+    <rect x="168" y="55" width="191" height="13" rx="4" fill="#6b7280"/>
+    <text x="366" y="65" font-size="8.5" font-weight="700" fill="#1a1a1a">0.220</text>
 
-    <!-- risk 0.2725 -> 236.2 -->
+    <!-- risk 0.2071 -> 179 -->
     <text x="164" y="87" font-size="8.5" fill="#5c5c5c" text-anchor="end">risk</text>
-    <rect x="168" y="77" width="236" height="13" rx="4" fill="#6b7280"/>
-    <text x="411" y="87" font-size="8.5" font-weight="700" fill="#1a1a1a">0.273</text>
+    <rect x="168" y="77" width="179" height="13" rx="4" fill="#6b7280"/>
+    <text x="354" y="87" font-size="8.5" font-weight="700" fill="#1a1a1a">0.207</text>
 
-    <!-- audit 0.2570 -> 222.7 -->
-    <text x="164" y="109" font-size="8.5" fill="#5c5c5c" text-anchor="end">audit</text>
-    <rect x="168" y="99" width="223" height="13" rx="4" fill="#6b7280"/>
-    <text x="398" y="109" font-size="8.5" font-weight="700" fill="#1a1a1a">0.257</text>
+    <!-- billing 0.2022 -> 175 -->
+    <text x="164" y="109" font-size="8.5" fill="#5c5c5c" text-anchor="end">billing</text>
+    <rect x="168" y="99" width="175" height="13" rx="4" fill="#6b7280"/>
+    <text x="350" y="109" font-size="8.5" font-weight="700" fill="#1a1a1a">0.202</text>
 
-    <!-- billing 0.1898 -> 164.5 -->
-    <text x="164" y="131" font-size="8.5" fill="#5c5c5c" text-anchor="end">billing</text>
-    <rect x="168" y="121" width="165" height="13" rx="4" fill="#6b7280"/>
-    <text x="340" y="131" font-size="8.5" font-weight="700" fill="#1a1a1a">0.190</text>
+    <!-- underwriting 0.1945 -> 169 -->
+    <text x="164" y="131" font-size="8.5" fill="#5c5c5c" text-anchor="end">underwriting</text>
+    <rect x="168" y="121" width="169" height="13" rx="4" fill="#6b7280"/>
+    <text x="344" y="131" font-size="8.5" font-weight="700" fill="#1a1a1a">0.195</text>
 
-    <!-- reporting 0.0895 -> 77.6 -->
-    <text x="164" y="153" font-size="8.5" fill="#5c5c5c" text-anchor="end">reporting</text>
-    <rect x="168" y="143" width="78" height="13" rx="4" fill="#6b7280"/>
-    <text x="253" y="153" font-size="8.5" font-weight="700" fill="#1a1a1a">0.090</text>
+    <!-- audit 0.1486 -> 129 -->
+    <text x="164" y="153" font-size="8.5" fill="#5c5c5c" text-anchor="end">audit</text>
+    <rect x="168" y="143" width="129" height="13" rx="4" fill="#6b7280"/>
+    <text x="304" y="153" font-size="8.5" font-weight="700" fill="#1a1a1a">0.149</text>
+
+    <!-- reporting 0.1219 -> 106 -->
+    <text x="164" y="175" font-size="8.5" fill="#5c5c5c" text-anchor="end">reporting</text>
+    <rect x="168" y="165" width="106" height="13" rx="4" fill="#6b7280"/>
+    <text x="281" y="175" font-size="8.5" font-weight="700" fill="#1a1a1a">0.122</text>
 
     <!-- axis A -->
-    <line x1="168" y1="170" x2="688" y2="170" stroke="#8a8a8a" stroke-width="1"/>
+    <line x1="168" y1="192" x2="688" y2="192" stroke="#8a8a8a" stroke-width="1"/>
     <g font-size="8" fill="#8a8a8a" text-anchor="middle">
-      <text x="168" y="182">0</text>
-      <text x="255" y="182">0.10</text>
-      <text x="341" y="182">0.20</text>
-      <text x="428" y="182">0.30</text>
-      <text x="515" y="182">0.40</text>
-      <text x="601" y="182">0.50</text>
-      <text x="688" y="182">0.60</text>
+      <text x="168" y="204">0</text>
+      <text x="255" y="204">0.10</text>
+      <text x="341" y="204">0.20</text>
+      <text x="428" y="204">0.30</text>
+      <text x="515" y="204">0.40</text>
+      <text x="601" y="204">0.50</text>
+      <text x="688" y="204">0.60</text>
     </g>
 
-    <!-- margin annotation -->
-    <line x1="461" y1="196" x2="558" y2="196" stroke="#8b1e2d" stroke-width="1"/>
-    <line x1="461" y1="192" x2="461" y2="200" stroke="#8b1e2d" stroke-width="1"/>
-    <line x1="558" y1="192" x2="558" y2="200" stroke="#8b1e2d" stroke-width="1"/>
-    <text x="509" y="192" font-size="8" font-weight="700" fill="#8b1e2d" text-anchor="middle">0.111 headroom</text>
+    <!-- margin annotation: settlement bar end 475 -> floor 558 -->
+    <line x1="475" y1="218" x2="558" y2="218" stroke="#8b1e2d" stroke-width="1"/>
+    <line x1="475" y1="214" x2="475" y2="222" stroke="#8b1e2d" stroke-width="1"/>
+    <line x1="558" y1="214" x2="558" y2="222" stroke="#8b1e2d" stroke-width="1"/>
+    <text x="516" y="214" font-size="8" font-weight="700" fill="#8b1e2d" text-anchor="middle">0.096 headroom</text>
 
     <!-- ============ PANEL B ============ -->
-    <text x="0" y="232" font-size="9.5" font-weight="700" fill="#1a1a1a">B · Candidate files</text>
-    <text x="150" y="232" font-size="8.5" fill="#8a8a8a">the survivors of stage 1, scored on path + content</text>
+    <text x="0" y="250" font-size="9.5" font-weight="700" fill="#1a1a1a">B · Candidate files</text>
+    <text x="150" y="250" font-size="8.5" fill="#8a8a8a">the survivors of stage 1, scored on path + content</text>
 
     <g stroke="#e6e6e4" stroke-width="1">
-      <line x1="168" y1="242" x2="168" y2="300"/>
-      <line x1="255" y1="242" x2="255" y2="300"/>
-      <line x1="341" y1="242" x2="341" y2="300"/>
-      <line x1="428" y1="242" x2="428" y2="300"/>
-      <line x1="515" y1="242" x2="515" y2="300"/>
-      <line x1="601" y1="242" x2="601" y2="300"/>
+      <line x1="168" y1="260" x2="168" y2="318"/>
+      <line x1="255" y1="260" x2="255" y2="318"/>
+      <line x1="341" y1="260" x2="341" y2="318"/>
+      <line x1="428" y1="260" x2="428" y2="318"/>
+      <line x1="515" y1="260" x2="515" y2="318"/>
+      <line x1="601" y1="260" x2="601" y2="318"/>
     </g>
 
-    <!-- floor 0.55 -> 168 + 476.7 = 644.7 -->
-    <line x1="645" y1="242" x2="645" y2="300" stroke="#8b1e2d" stroke-width="1.5" stroke-dasharray="4 3"/>
-    <text x="641" y="252" font-size="8.5" font-weight="700" fill="#8b1e2d" text-anchor="end">floor 0.55</text>
+    <!-- floor 0.55 -> 168 + 476.7 = 645 -->
+    <line x1="645" y1="260" x2="645" y2="318" stroke="#8b1e2d" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="641" y="270" font-size="8.5" font-weight="700" fill="#8b1e2d" text-anchor="end">floor 0.55</text>
 
-    <!-- claims.py 0.4581 -> 397 -->
-    <text x="164" y="263" font-size="8.5" fill="#5c5c5c" text-anchor="end">core/claims.py</text>
-    <rect x="168" y="253" width="397" height="13" rx="4" fill="#6b7280"/>
-    <text x="572" y="263" font-size="8.5" font-weight="700" fill="#1a1a1a">0.458</text>
+    <!-- claims.py 0.4590 -> 398 -->
+    <text x="164" y="281" font-size="8.5" fill="#5c5c5c" text-anchor="end">core/claims.py</text>
+    <rect x="168" y="271" width="398" height="13" rx="4" fill="#6b7280"/>
+    <text x="573" y="281" font-size="8.5" font-weight="700" fill="#1a1a1a">0.459</text>
 
-    <!-- endorsements.py 0.3880 -> 336 -->
-    <text x="164" y="285" font-size="8.5" fill="#5c5c5c" text-anchor="end">core/endorsements.py</text>
-    <rect x="168" y="275" width="336" height="13" rx="4" fill="#6b7280"/>
-    <text x="511" y="285" font-size="8.5" font-weight="700" fill="#1a1a1a">0.388</text>
+    <!-- amendments.py 0.4413 -> 383 -->
+    <text x="164" y="303" font-size="8.5" fill="#5c5c5c" text-anchor="end">core/amendments.py</text>
+    <rect x="168" y="293" width="383" height="13" rx="4" fill="#6b7280"/>
+    <text x="558" y="303" font-size="8.5" font-weight="700" fill="#1a1a1a">0.441</text>
 
-    <line x1="168" y1="300" x2="688" y2="300" stroke="#8a8a8a" stroke-width="1"/>
+    <line x1="168" y1="318" x2="688" y2="318" stroke="#8a8a8a" stroke-width="1"/>
     <g font-size="8" fill="#8a8a8a" text-anchor="middle">
-      <text x="168" y="312">0</text>
-      <text x="255" y="312">0.10</text>
-      <text x="341" y="312">0.20</text>
-      <text x="428" y="312">0.30</text>
-      <text x="515" y="312">0.40</text>
-      <text x="601" y="312">0.50</text>
-      <text x="688" y="312">0.60</text>
+      <text x="168" y="330">0</text>
+      <text x="255" y="330">0.10</text>
+      <text x="341" y="330">0.20</text>
+      <text x="428" y="330">0.30</text>
+      <text x="515" y="330">0.40</text>
+      <text x="601" y="330">0.50</text>
+      <text x="688" y="330">0.60</text>
     </g>
 
-    <line x1="565" y1="326" x2="645" y2="326" stroke="#8b1e2d" stroke-width="1"/>
-    <line x1="565" y1="322" x2="565" y2="330" stroke="#8b1e2d" stroke-width="1"/>
-    <line x1="645" y1="322" x2="645" y2="330" stroke="#8b1e2d" stroke-width="1"/>
-    <text x="605" y="322" font-size="8" font-weight="700" fill="#8b1e2d" text-anchor="middle">0.092 headroom</text>
+    <line x1="566" y1="344" x2="645" y2="344" stroke="#8b1e2d" stroke-width="1"/>
+    <line x1="566" y1="340" x2="566" y2="348" stroke="#8b1e2d" stroke-width="1"/>
+    <line x1="645" y1="340" x2="645" y2="348" stroke="#8b1e2d" stroke-width="1"/>
+    <text x="606" y="340" font-size="8" font-weight="700" fill="#8b1e2d" text-anchor="middle">0.091 headroom</text>
   </svg>
   <div class="legend">
     <span><i class="swatch" style="background:#6b7280"></i> below floor — excluded</span>
@@ -333,11 +343,14 @@ would have to beat its own ceiling by a wide margin to get in.</p>
     <span>cosine similarity, 0–1 · higher is more relevant</span>
   </div>
   <figcaption><strong>The gap is the argument.</strong> <code>core/claims.py</code> is
-    the hardest case in the corpus — same insurance vocabulary as the CR, genuinely
-    adjacent, but not what the change is about. It scores 0.458 against a 0.55 floor.
-    The nearest decoy subsystem, <em>settlement</em>, tops out at 0.339 against 0.45.
-    Both are comfortably clear, and <code>tests/test_s3_relevance.py</code> asserts
-    they stay that way.</figcaption>
+    the hardest case in the corpus — same group-benefits vocabulary as the CR,
+    genuinely adjacent, but not what the change is about. It scores 0.459 against a
+    0.55 floor. The nearest decoy subsystem, <em>settlement</em>, tops out at 0.354
+    against 0.45. Both are comfortably clear, and
+    <code>tests/test_s3_relevance.py</code> (17 tests) asserts they stay that way.
+    Note also how little daylight there is between <code>core/claims.py</code> and
+    <code>core/amendments.py</code>: the ranker is not confidently separating them,
+    it is confidently excluding both.</figcaption>
 </figure>
 
 <div class="caution">
@@ -361,9 +374,16 @@ and, more importantly, <strong>required back in the model's response</strong>.
 <code>verify_core_recall()</code> runs against the LLM's actual returned file set,
 not just the prompt. A generation that quietly drops a required file is rejected,
 not shipped. Duo suggests; this one refuses.</p>
+<p>"Declared per target" is literal, and it is the onboarding step. Each repository
+under <code>repos/</code> ships a <code>.s3targets.json</code> manifest naming its core
+files, its codegen allowlist and its regression suite, and S3 registers it at next
+start with no code change. Those three lists are decisions, not facts inferable from
+source — which is why the manifest is required rather than optional, and why a
+broken one raises at import instead of being skipped. The contract is in
+<code>repos/README.md</code>.</p>
 
 <h3>The top-scoring file in the whole corpus is hard-blocked</h3>
-<p>The best line in the deck. <code>apps/policycore/core/seed.py</code> would score higher
+<p>The best line in the deck. <code>repos/policycore/core/seed.py</code> would score higher
 against this CR than any other candidate — it is the file most densely packed with
 <code>Policy</code> field names. It is also the one file that must never be edited,
 because it constructs <code>Policy(...)</code> with six positional arguments that
@@ -385,33 +405,36 @@ the whole demo depends on. So it is excluded structurally, by
   <div class="fig-title">Figure 3 · File payload sent to the model</div>
   <div class="fig-sub">Estimated tokens of file content, CR-2026-041. Prompt scaffolding is identical on both sides and excluded.</div>
   <svg viewBox="0 0 700 132" role="img"
-       aria-label="Two bars comparing file payload. Whole app: 13,765 estimated tokens. Scoped selection: 3,873 estimated tokens, a 3.6 times reduction.">
+       aria-label="Two bars comparing file payload. Whole app: 18,310 estimated tokens across 58 files. Scoped selection: 5,336 estimated tokens across 4 files, a 3.4 times reduction.">
     <text x="164" y="36" font-size="9" fill="#5c5c5c" text-anchor="end">whole app in prompt</text>
     <rect x="168" y="24" width="520" height="18" rx="4" fill="#6b7280"/>
-    <text x="680" y="37" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="end">13,765</text>
-    <text x="164" y="52" font-size="8" fill="#8a8a8a" text-anchor="end">56 files</text>
+    <text x="680" y="37" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="end">18,310</text>
+    <text x="164" y="52" font-size="8" fill="#8a8a8a" text-anchor="end">58 files</text>
 
     <text x="164" y="82" font-size="9" fill="#5c5c5c" text-anchor="end">scoped selection</text>
-    <rect x="168" y="70" width="146" height="18" rx="4" fill="#a83244"/>
-    <text x="322" y="83" font-size="9.5" font-weight="700" fill="#1a1a1a">3,873</text>
+    <rect x="168" y="70" width="152" height="18" rx="4" fill="#a83244"/>
+    <text x="328" y="83" font-size="9.5" font-weight="700" fill="#1a1a1a">5,336</text>
     <text x="164" y="98" font-size="8" fill="#8a8a8a" text-anchor="end">4 files</text>
 
     <line x1="168" y1="108" x2="688" y2="108" stroke="#e6e6e4" stroke-width="1"/>
-    <text x="168" y="124" font-size="9" fill="#5c5c5c"><tspan font-weight="700" fill="#a83244">3.6× smaller</tspan> — 71.9% of the file payload never reaches the model</text>
+    <text x="168" y="124" font-size="9" fill="#5c5c5c"><tspan font-weight="700" fill="#a83244">3.4× smaller</tspan> — 70.9% of the file payload never reaches the model</text>
   </svg>
-  <figcaption><strong>Use the real multiple, not a rounder one.</strong> 3.6× is
+  <figcaption><strong>Use the real multiple, not a rounder one.</strong> 3.4× is
     what this CR measures, because the four files that <em>do</em> go are the large
     ones. The compelling number is not the ratio — it is that the ratio
     <em>widens as the repository grows</em>, since the selection stays at a handful
-    while the denominator climbs.</figcaption>
+    while the denominator climbs. It moved from 3.6× to 3.4× when the enrolment
+    subsystem was added, which is the honest shape of this metric: it tracks the
+    corpus, so it gets re-measured rather than quoted from an old deck.</figcaption>
 </figure>
 
 <div class="caution">
   <div class="lead">Do not oversell this slide</div>
-  <p>On the ClaimsPortal target the pool is 8 files and scoping has nothing
-  to remove — selection is the whole repo. If someone asks whether it always saves
-  tokens, the answer is no: <strong>on a small codebase it saves nothing, and that
-  is correct behaviour.</strong> The funnel earns its keep at scale, not on a toy.</p>
+  <p>On the ClaimsPortal target the pool is 5 files and scoping has nothing
+  to remove — selection is the whole repo, and the console says so rather than
+  inventing a saving. If someone asks whether it always saves tokens, the answer is
+  no: <strong>on a small codebase it saves nothing, and that is correct
+  behaviour.</strong> The funnel earns its keep at scale, not on a toy.</p>
 </div>
 
 <h3>Large repositories add a cheaper tier first</h3>
@@ -429,6 +452,17 @@ lexical matching.</p>
 
 <section class="section">
 <h2>Against GitLab Duo — where we are genuinely stronger</h2>
+
+<div class="callout">
+  <div class="lead">How the client actually uses Duo — confirmed, not assumed</div>
+  <p>On the 2 August 2026 call the client confirmed their own deployment:
+  <strong>GitLab Duo, no CLI, used "just as an assistant."</strong> Chat and
+  in-editor suggestions; nothing that runs a change end to end. Earlier drafts of
+  this brief guessed at their setup — do not guess on stage. The comparison below
+  is against Duo's capabilities in general; the row that matters most for
+  <em>this</em> client is <strong>Output enforcement</strong>, because an assistant
+  used conversationally has no place to put a contract at all.</p>
+</div>
 
 <table>
   <thead>
@@ -477,7 +511,7 @@ lexical matching.</p>
     </tr>
     <tr>
       <td><strong>Repository scale</strong></td>
-      <td>Thresholds hand-measured against a 56-file corpus. Re-calibration is a
+      <td>Thresholds hand-measured against a 58-file corpus. Re-calibration is a
         real per-repo task.</td>
       <td>Continuous indexing across large real repositories, maintained for you.</td>
       <td class="verdict v-duo">Duo</td>
@@ -485,7 +519,8 @@ lexical matching.</p>
     <tr>
       <td><strong>Developer surface</strong></td>
       <td>A standalone console. One workflow, deliberately.</td>
-      <td>In the IDE, in merge requests, in CI, where developers already are.</td>
+      <td>In the IDE and in merge requests, where developers already are — which is
+        exactly how the client uses it today.</td>
       <td class="verdict v-duo">Duo</td>
     </tr>
     <tr>
@@ -501,9 +536,10 @@ lexical matching.</p>
 <div class="callout">
   <div class="lead">The positioning line</div>
   <p class="say">"Duo is the better general-purpose assistant, and we would not try
-  to out-build it. What we've built is the governed path: every file the model saw,
-  every file it was denied, and a generation that gets rejected when it breaks the
-  contract. In a regulated change process that difference is the product."</p>
+  to out-build it — you already use it that way, and you should keep it. What we've
+  built is the governed path: every file the model saw, every file it was denied,
+  and a generation that gets rejected when it breaks the contract. In a regulated
+  change process that difference is the product."</p>
 </div>
 
 <h3>The prerequisite, framed correctly</h3>
@@ -523,7 +559,7 @@ page nobody reads.</em> That is a roadmap conversation, not a weakness.</p>
   <tbody>
     <tr>
       <td>"How did you pick 0.55?"</td>
-      <td>Measured. The closest irrelevant file scores 0.458; the floor sits above
+      <td>Measured. The closest irrelevant file scores 0.459; the floor sits above
         it with headroom, and a test asserts it.</td>
     </tr>
     <tr>
@@ -557,7 +593,7 @@ page nobody reads.</em> That is a roadmap conversation, not a weakness.</p>
 <p class="footnote">
 <strong>Method.</strong> All figures produced by running this repository's own
 <code>s3_enhancement/relevance.py</code> against
-<code>apps/policycore/crs/CR-2026-041.md</code> on 27 July 2026, with the local embedding
+<code>crs/CR-2026-041.md</code> on 3 August 2026, with the local embedding
 backend active (not the lexical fallback). Token counts use the repository's
 ~4-characters-per-token estimator and are explicitly estimates; a billed figure
 always comes from the provider's reported usage. Scores drift slightly as the

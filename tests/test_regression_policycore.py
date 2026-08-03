@@ -19,12 +19,12 @@ Two rules for anything added here:
    pre-CR baseline is a broken regression test, not a caught regression.
 2. **It must not live under a target root.** `relevance.py::discover_mockapp_files`
    rglobs `*.py`/`*.java` under each target's root, so a file placed under
-   `apps/policycore/` would join the codegen candidate pool, reshuffle the
+   `repos/policycore/` would join the codegen candidate pool, reshuffle the
    relevance funnel, and desync the committed replay recordings. Top-level
    `tests/` is outside every target root — keep it that way.
 
-Deliberately excluded: anything touching `coverage_tier` upgrades
-(CR-2026-041) or endorsement `priority` (CR-2026-042). Those are the changes
+Deliberately excluded: anything touching `plan_tier` upgrades
+(CR-2026-041) or amendment `priority` (CR-2026-042). Those are the changes
 under test, and they belong in the generated suites.
 """
 
@@ -32,26 +32,26 @@ from __future__ import annotations
 
 import pytest
 
-from apps.policycore.core.claims import submit_claim
-from apps.policycore.core.db import (
+from repos.policycore.core.amendments import submit_amendment
+from repos.policycore.core.claims import submit_claim
+from repos.policycore.core.db import (
     get_policy,
+    list_amendments,
     list_claims,
-    list_endorsements,
     list_plan_members,
     list_policies,
 )
-from apps.policycore.core.endorsements import submit_endorsement
-from apps.policycore.core.seed import reseed
+from repos.policycore.core.seed import reseed
 
-# Facts about the synthetic seed data (apps/policycore/core/seed.py) that the
+# Facts about the synthetic seed data (repos/policycore/core/seed.py) that the
 # assertions below lean on. Pinned here so a seed change fails loudly in one
 # place instead of subtly skewing several tests.
 SEEDED_POLICY_COUNT = 18
 SEEDED_MEMBER_COUNT = 13
 SEEDED_CLAIM_COUNT = 6
 KNOWN_POLICY = "POL-10001"
-KNOWN_POLICY_HOLDER = "Northwind Logistics Ltd."
-KNOWN_POLICY_PREMIUM = 4820.50
+KNOWN_POLICY_SPONSOR = "Northwind Logistics Ltd."
+KNOWN_POLICY_CONTRIBUTION = 4820.50
 LAPSED_POLICY = "POL-10006"
 UNKNOWN_POLICY = "POL-99999"
 
@@ -79,7 +79,7 @@ def test_policy_list_preserves_core_fields() -> None:
     that drops or renames one breaks the portal's group contract table."""
     for policy in list_policies():
         assert policy.policy_number.startswith("POL-")
-        assert policy.holder_name
+        assert policy.sponsor_name
         assert policy.product_type in {
             "Health",
             "Dental",
@@ -87,8 +87,8 @@ def test_policy_list_preserves_core_fields() -> None:
             "Disability",
             "Critical Illness",
         }
-        assert isinstance(policy.premium, float)
-        assert policy.premium > 0
+        assert isinstance(policy.contribution, float)
+        assert policy.contribution > 0
         assert policy.status in {"Active", "Lapsed", "Terminated"}
 
 
@@ -105,9 +105,9 @@ def test_policy_detail_returns_the_requested_policy() -> None:
     policy = get_policy(KNOWN_POLICY)
     assert policy is not None
     assert policy.policy_number == KNOWN_POLICY
-    assert policy.holder_name == KNOWN_POLICY_HOLDER
+    assert policy.sponsor_name == KNOWN_POLICY_SPONSOR
     assert policy.product_type == "Health"
-    assert policy.premium == KNOWN_POLICY_PREMIUM
+    assert policy.contribution == KNOWN_POLICY_CONTRIBUTION
     assert policy.status == "Active"
 
 
@@ -174,15 +174,15 @@ def test_claim_list_totals_match_the_seed() -> None:
     assert total == SEEDED_CLAIM_COUNT
 
 
-# --- Endorsement submission flow -------------------------------------------
+# --- Amendment submission flow ---------------------------------------------
 
 
-def test_endorsement_submission_with_the_original_field_set_still_succeeds() -> None:
+def test_amendment_submission_with_the_original_field_set_still_succeeds() -> None:
     """CR-2026-042 adds a sixth form field with a default. This call uses the
     pre-CR argument list verbatim and must keep working untouched — it is the
     executable form of that CR's "submitting without changing the priority
     still succeeds exactly as before" criterion."""
-    endorsement = submit_endorsement(
+    amendment = submit_amendment(
         KNOWN_POLICY,
         "Address Change",
         "Update mailing address to 44 Rosewood Ave",
@@ -191,18 +191,18 @@ def test_endorsement_submission_with_the_original_field_set_still_succeeds() -> 
         "sponsor@example.invalid",
     )
 
-    assert endorsement.policy_number == KNOWN_POLICY
-    assert endorsement.endorsement_type == "Address Change"
-    assert endorsement.requested_change == "Update mailing address to 44 Rosewood Ave"
-    assert endorsement.effective_date == "2026-09-01"
-    assert endorsement.contact_phone == "555-0142"
-    assert endorsement.contact_email == "sponsor@example.invalid"
-    assert endorsement.endorsement_number.startswith("END-")
-    assert endorsement.filed_at
+    assert amendment.policy_number == KNOWN_POLICY
+    assert amendment.amendment_type == "Address Change"
+    assert amendment.requested_change == "Update mailing address to 44 Rosewood Ave"
+    assert amendment.effective_date == "2026-09-01"
+    assert amendment.contact_phone == "555-0142"
+    assert amendment.contact_email == "sponsor@example.invalid"
+    assert amendment.amendment_number.startswith("AMD-")
+    assert amendment.filed_at
 
 
-def test_endorsement_round_trips_through_the_list_view() -> None:
-    submit_endorsement(
+def test_amendment_round_trips_through_the_list_view() -> None:
+    submit_amendment(
         KNOWN_POLICY,
         "Name Correction",
         "Correct surname spelling",
@@ -211,14 +211,14 @@ def test_endorsement_round_trips_through_the_list_view() -> None:
         "sponsor@example.invalid",
     )
 
-    stored = list_endorsements(KNOWN_POLICY)
+    stored = list_amendments(KNOWN_POLICY)
     assert len(stored) == 1
-    assert stored[0].endorsement_type == "Name Correction"
+    assert stored[0].amendment_type == "Name Correction"
     assert stored[0].contact_email == "sponsor@example.invalid"
 
 
-def test_endorsement_list_is_empty_for_a_policy_with_none() -> None:
-    assert list_endorsements("POL-10003") == []
+def test_amendment_list_is_empty_for_a_policy_with_none() -> None:
+    assert list_amendments("POL-10003") == []
 
 
 # --- Plan member roster flow ------------------------------------------------

@@ -1,6 +1,6 @@
 """Regression suite for the enrolment subsystem.
 
-Lives in tests/ rather than under apps/policycore/ for the reason CLAUDE.md
+Lives in tests/ rather than under repos/policycore/ for the reason CLAUDE.md
 gives: anything ending .py under a target root joins the codegen candidate
 pool, and a test file in there would be scored against every CR.
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from apps.policycore.enrolment.dependants import (
+from repos.policycore.enrolment.dependants import (
     CHILD_AGE_OUT,
     STUDENT_AGE_OUT,
     Dependant,
@@ -23,7 +23,7 @@ from apps.policycore.enrolment.dependants import (
     is_covered,
     rejection_reason,
 )
-from apps.policycore.enrolment.eligibility import (
+from repos.policycore.enrolment.eligibility import (
     eligibility_date,
     enrolment_window_closes,
     has_served_waiting_period,

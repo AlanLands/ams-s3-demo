@@ -341,6 +341,10 @@ export interface TestsRunResponse {
   duration_s: number
   summary: TestRunSummary
   cases: TestCaseResult[]
+  // Set when every failure is a missing attribute/keyword/name — the shape of
+  // running the generated suite against code the change was never applied to.
+  // Without it the run reads as "the AI wrote broken tests".
+  unapplied_change_hint?: string | null
 }
 
 // One planned check, before any test code exists. Editable by the tester —
@@ -555,6 +559,14 @@ export interface JiraIssue {
   // deterministic routing; absent means the AI repo-match tier decides.
   ci?: string
   business_service?: string
+  // Set only on a ticket the board opened automatically from a file under
+  // `crs/` (see s3_enhancement/cr_intake.py). The target fields are present
+  // only when that CR resolved to a registered target — an unresolved CR is
+  // still a valid ticket.
+  cr_file?: string
+  target_id?: string
+  target_display_name?: string
+  target_method?: string
 }
 
 export interface JiraBoardResponse {
@@ -1060,7 +1072,10 @@ export const s3Api = {
         assignee,
       }),
     }),
-  assignTicket: (key: string, assignee: string) =>
+  // `assignee: null` unassigns, putting the ticket back in the manager's
+  // queue. The endpoint has always been unconditional, so the same call
+  // reassigns an already-assigned ticket.
+  assignTicket: (key: string, assignee: string | null) =>
     request<{ label: string; issue: JiraIssue }>('/api/s3/jira/assign-ticket', {
       method: 'POST',
       body: JSON.stringify({ key, assignee }),

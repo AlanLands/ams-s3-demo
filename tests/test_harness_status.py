@@ -13,7 +13,7 @@ from s3_enhancement import harness
 
 
 def _fake_target() -> SimpleNamespace:
-    return SimpleNamespace(harness_expected_files=["apps/policycore/core/models.py"])
+    return SimpleNamespace(harness_expected_files=["repos/policycore/core/models.py"])
 
 
 def test_run_live_writes_failed_status_on_harness_error(tmp_path, monkeypatch):
@@ -49,7 +49,7 @@ def test_run_live_success_status_is_marked_ok(tmp_path, monkeypatch):
         harness, "build_command", lambda tier_name, cr_text: ("fake-cli", ["fake-cli"])
     )
     # One expected file "changes" during the run so the touched-files check passes.
-    tracked = iter([{"apps/policycore/core/models.py": "before"}, {"apps/policycore/core/models.py": "after"}])
+    tracked = iter([{"repos/policycore/core/models.py": "before"}, {"repos/policycore/core/models.py": "after"}])
     monkeypatch.setattr(harness, "_untracked_paths", lambda: set())
     monkeypatch.setattr(harness, "_tracked_content_hashes", lambda: next(tracked))
     monkeypatch.setattr(harness, "_snapshot_expected_files", lambda expected: {})
@@ -62,9 +62,9 @@ def test_run_live_success_status_is_marked_ok(tmp_path, monkeypatch):
 
     result = harness._run_live("Elite", _fake_target())
 
-    assert result.files_changed == ["apps/policycore/core/models.py"]
+    assert result.files_changed == ["repos/policycore/core/models.py"]
     status_files = list(tmp_path.glob("*/harness/status.json"))
     assert len(status_files) == 1
     status = json.loads(status_files[0].read_text(encoding="utf-8"))
     assert status["status"] == "ok"
-    assert status["files_changed"] == ["apps/policycore/core/models.py"]
+    assert status["files_changed"] == ["repos/policycore/core/models.py"]

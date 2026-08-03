@@ -1,4 +1,4 @@
-import { StageFrame } from './components'
+import { Chip, Modal, StageFrame } from './components'
 import { useS3 } from './context'
 
 export default function BoardStage() {
@@ -21,6 +21,10 @@ export default function BoardStage() {
     ASSIGNEE_ROSTER,
     setBoardAssignee,
     handleAssignBoardTicket,
+    handleUnassignBoardTicket,
+    handleOpenReassign,
+    reassignTicket,
+    setReassignTicket,
     assigningBoardTicket,
     isEngineer,
     identity,
@@ -45,7 +49,7 @@ export default function BoardStage() {
         <strong>Quick question</strong>
         <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
           Ask about a hypothetical change before there's a formal CR — e.g. "how much would it
-          cost if I just changed a text field on the endorsement form?" Asks a clarifying
+          cost if I just changed a text field on the amendment form?" Asks a clarifying
           question or two if it needs more detail, then sizes it.
         </p>
         {quickChatMessages.length > 0 && (
@@ -170,17 +174,32 @@ export default function BoardStage() {
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
                   {issue.assignee ? (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: 'var(--ams-text-sm)' }}>
-                      <span className="ams-avatar" title={issue.assignee}>
-                        {issue.assignee.trim().charAt(0).toUpperCase()}
+                    // Assigned: the name stays plain text on the row — a
+                    // board of dropdowns is unreadable, and reassignment is
+                    // rare enough that it belongs behind a deliberate step.
+                    // The picker lives in the dialog below.
+                    <>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: 'var(--ams-text-sm)' }}>
+                        <span className="ams-avatar" title={issue.assignee}>
+                          {issue.assignee.trim().charAt(0).toUpperCase()}
+                        </span>
+                        {issue.assignee}
                       </span>
-                      {issue.assignee}
-                    </span>
+                      <button
+                        className="ams-button-secondary"
+                        onClick={() => handleOpenReassign(issue.key, issue.assignee)}
+                        disabled={assigningBoardTicket === issue.key}
+                        aria-label={`Reassign ${issue.key}, currently assigned to ${issue.assignee}`}
+                      >
+                        {assigningBoardTicket === issue.key ? 'Saving…' : 'Reassign'}
+                      </button>
+                    </>
                   ) : (
                     <>
                       <select
                         className="ams-select"
                         style={{ width: 'auto' }}
+                        aria-label={`Assignee for ${issue.key}`}
                         value={boardAssignee[issue.key] || ASSIGNEE_ROSTER[0]}
                         onChange={(event) =>
                           setBoardAssignee((prev) => ({ ...prev, [issue.key]: event.target.value }))
@@ -207,6 +226,76 @@ export default function BoardStage() {
           </div>
         )}
       </div>
+
+      {/* Reassign / unassign. A dialog rather than an inline picker so the
+          board keeps reading as a list of names, and so changing an existing
+          assignment is a decision the manager has to open, confirm, and can
+          back out of. Rendered only under isManager, like the controls that
+          open it — the server is what actually enforces who may assign. */}
+      {reassignTicket && (() => {
+        const issue = (boardIssues || []).find((candidate) => candidate.key === reassignTicket)
+        if (!issue) return null
+        const inFlight = assigningBoardTicket === issue.key
+        const picked = boardAssignee[issue.key] || ASSIGNEE_ROSTER[0]
+        return (
+          <Modal
+            title={`Reassign ${issue.key}`}
+            subtitle={issue.summary || undefined}
+            onClose={() => setReassignTicket(null)}
+          >
+            <p style={{ fontSize: 'var(--ams-text-sm)', margin: '0 0 0.6rem' }}>
+              Currently assigned to <Chip>{issue.assignee || 'nobody'}</Chip>
+            </p>
+            <label
+              style={{ display: 'block', fontSize: 'var(--ams-text-sm)', marginBottom: '0.3rem' }}
+              htmlFor="reassign-picker"
+            >
+              Reassign to
+            </label>
+            <select
+              id="reassign-picker"
+              className="ams-select"
+              style={{ width: 'auto' }}
+              value={picked}
+              disabled={inFlight}
+              onChange={(event) =>
+                setBoardAssignee((prev) => ({ ...prev, [issue.key]: event.target.value }))
+              }
+            >
+              {ASSIGNEE_ROSTER.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+              <button
+                className="ams-button"
+                onClick={() => handleAssignBoardTicket(issue.key)}
+                disabled={inFlight || picked === issue.assignee}
+              >
+                {inFlight ? 'Saving…' : 'Reassign'}
+              </button>
+              {/* Back to the manager's own queue, where it shows up
+                  unassigned with an Assign control again. */}
+              <button
+                className="ams-button-secondary"
+                onClick={() => handleUnassignBoardTicket(issue.key)}
+                disabled={inFlight || !issue.assignee}
+              >
+                Unassign
+              </button>
+              <button
+                className="ams-button-secondary"
+                onClick={() => setReassignTicket(null)}
+                disabled={inFlight}
+              >
+                Cancel
+              </button>
+            </div>
+          </Modal>
+        )
+      })()}
       </>
       )}
 
@@ -335,7 +424,7 @@ export default function BoardStage() {
                 <div style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>Before</div>
                 <img
                   src={`data:image/png;base64,${screenshotBefore}`}
-                  alt="Endorsement form before the change"
+                  alt="Amendment form before the change"
                   style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 4 }}
                 />
               </div>
@@ -345,7 +434,7 @@ export default function BoardStage() {
                 <div style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>After</div>
                 <img
                   src={`data:image/png;base64,${screenshotAfter}`}
-                  alt="Endorsement form after the change"
+                  alt="Amendment form after the change"
                   style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 4 }}
                 />
               </div>

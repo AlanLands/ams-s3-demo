@@ -285,9 +285,11 @@ class JiraClient:
             _write_cache(path, call_name, args, result)
         return result
 
-    def assign_issue(self, key: str, assignee_name: str) -> dict:
-        """Assign an already-created issue — split from `create_issue` so a
-        ticket can land open/unassigned first and get assigned later.
+    def assign_issue(self, key: str, assignee_name: str | None) -> dict:
+        """Assign, reassign, or unassign an already-created issue — split from
+        `create_issue` so a ticket can land open/unassigned first and get
+        assigned later. `assignee_name=None` clears the assignee, which is
+        Jira's own `"assignee": null`, not an assignment to an empty name.
 
         Same demo-only caveat as `create_issue`: a real Jira Cloud site needs
         an `accountId`, not a plain name; wire in a `/rest/api/3/user/search`
@@ -300,7 +302,11 @@ class JiraClient:
             self._request_json(
                 "PUT",
                 f"/rest/api/3/issue/{key}",
-                body={"fields": {"assignee": {"name": assignee_name}}},
+                body={
+                    "fields": {
+                        "assignee": {"name": assignee_name} if assignee_name else None
+                    }
+                },
             )
         result = {"key": key, "assignee": assignee_name}
         self._update_get_issue_cache(key, assignee=assignee_name)

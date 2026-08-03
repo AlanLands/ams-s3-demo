@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
-# CR-2026-042's demo beat mutates mockapp source files. Restore the
-# pre-codegen mockapp files from the baseline tag, remove the generated test
-# file, then reseed to restore pristine policy/claim/endorsement state.
+# CR-2026-042 ("Amendment Priority Field") mutates PolicyCore source files.
+# Restore the pre-codegen PolicyCore files from HEAD (not from the tag — see
+# the note above the checkout below), remove the generated test file, then
+# reseed to restore pristine contract/claim/amendment state.
+#
+# The filename still says "endorsement" on purpose: teammates invoke this
+# script by name, so the 2026-08-03 GRS reskin (endorsement -> amendment)
+# changed only its contents. The git tag `s3-endorsement-baseline` and the
+# cache namespace `endorsement_field_add` likewise keep their old spelling —
+# those are cache identity, and renaming either is a replay miss.
+#
+# ⚠ KNOWN BROKEN as of 2026-08-03, same as demo/reset_s3.sh: the
+# `git checkout HEAD -- repos/policycore/...` below fails with "pathspec did
+# not match" because the apps/ -> repos/ move is uncommitted, and `set -e`
+# stops the script before the reseed and the .cache/llm wipe. Committing the
+# move fixes it. The ClaimsPortal and EnrolDirect resets are unaffected.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
@@ -22,10 +35,12 @@ fi
 
 # Restored from HEAD, not from the `s3-endorsement-baseline` tag.
 #
-# Two reasons. The tag predates the apps/ restructure, so every path in it
-# (`mockapp/...`) no longer exists — `git show <tag>:apps/policycore/app.py`
-# fails outright. And the tag's `db.py` predates the endorsements table, so its
-# `wipe_db()` drops `policies` while `endorsements` still references it: once
+# Two reasons. The tag predates every directory move this repo has had, so
+# every path in it (`mockapp/...`) no longer exists — `git show
+# <tag>:repos/policycore/app.py` fails outright. And the tag's `db.py`
+# predates the amendments table, so its
+# `wipe_db()` drops `policies` while the amendment table — named
+# `endorsements` before the 2026-08-03 GRS reskin — still references it: once
 # any rehearsal has created that table, reseeding dies on a FOREIGN KEY error
 # and the reset can never complete again.
 #
@@ -34,11 +49,11 @@ fi
 # redirect *before* git runs and fails, destroying the source it was meant to
 # restore. `git checkout` writes only on success.
 git checkout HEAD -- \
-  apps/policycore/app.py \
-  apps/policycore/core/models.py \
-  apps/policycore/core/db.py \
-  apps/policycore/core/endorsements.py
-rm -f tests/test_s3_endorsement_priority.py
-python -m apps.policycore.core.seed
+  repos/policycore/app.py \
+  repos/policycore/core/models.py \
+  repos/policycore/core/db.py \
+  repos/policycore/core/amendments.py
+rm -f tests/test_s3_amendment_priority.py
+python -m repos.policycore.core.seed
 rm -rf .cache/llm
-echo "CR-2026-042 source baseline restored, mockapp reseeded, and LLM cache cleared."
+echo "CR-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared."

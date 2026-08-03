@@ -22,7 +22,7 @@ def test_check_cr_clarity_passes_through_a_specific_ticket():
     canned = json.dumps({"needs_clarification": False})
     with patch("s3_enhancement.analyze.complete", return_value=canned):
         result = check_cr_clarity(
-            "Add a 'Priority' field (Standard/Urgent) to the endorsement request form, "
+            "Add a 'Priority' field (Standard/Urgent) to the amendment request form, "
             "defaulting to Standard."
         )
 

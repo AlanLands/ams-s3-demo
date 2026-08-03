@@ -123,7 +123,7 @@ def find_affected_subsystems(
     containing it, so a nested subsystem wins over its parent rather than both
     matching. Files outside every documented directory are attributed to
     nothing, which is why this returns empty for all three of today's demo
-    CRs — `apps/policycore/core/` and `apps/claimsportal/` carry no `DESIGN.md`.
+    CRs — `repos/policycore/core/` and `repos/claimsportal/` carry no `DESIGN.md`.
     """
     docs = relevance.discover_subsystem_design_docs(
         relevance.MOCKAPP_ROOT if design_doc_root is None else design_doc_root

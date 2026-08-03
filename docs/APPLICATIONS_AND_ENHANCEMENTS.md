@@ -1,4 +1,4 @@
-# PolicyCore & ClaimsPortal — What They Are, What's Changing, How It's Tested
+# PolicyCore, ClaimsPortal & EnrolDirect — What They Are, What's Changing, How It's Tested
 
 For a team that needs the business/functional picture — what each application
 does today, what small enhancement is being added to it, how that enhancement
@@ -6,20 +6,29 @@ gets proven correct before it ships, and what "everything is running" looks
 like in practice.
 
 All data in every application below is **synthetic** — a fictional insurer
-("MapleSure Insurance"), fictional policyholders, no real client data anywhere.
+("MapleSure Insurance"), fictional plan sponsors, no real client data anywhere.
+The domain is group retirement and group benefits: a **plan sponsor** (an
+employer) holds a **group contract**, **plan members** enrol under it, a change
+to an in-force contract is an **amendment**, and what the sponsor pays is a
+**contribution**.
 
 ---
 
-## The four applications
+## The applications
+
+The three target applications live under `repos/` — the folder holding
+everything the AI pipeline *changes*. The console lives under `apps/`, with the
+launch scripts: the tooling that *does* the changing.
 
 | Application | Port | Role |
 |---|---|---|
-| **AMS Console** | 8000 (API) + 5173 (UI) | The console the change is driven from — a developer opens a ticket here, an AI drafts the change, a reviewer approves it file by file, and it's applied to one of the three apps below. |
-| **PolicyCore** | 8501 (path `/sl_policycore`) | The policyholder-facing portal — see below. Target of CR-2026-041 and CR-2026-042. |
-| **policy-service** | 8081 | Half of ClaimsPortal — serves policy records. |
-| **claims-service** | 8082 | Half of ClaimsPortal — claims intake. Target of CR-2026-043. |
+| **AMS Console** (`apps/console/`) | 8000 (API) + 5173 (UI) | The console the change is driven from — a developer opens a ticket here, an AI drafts the change, a reviewer approves it file by file, and it's applied to one of the three apps below. Managers also get an `/admin` page for resets, logs, and starting/stopping the apps. |
+| **PolicyCore** (`repos/policycore/`) | 8501 (path `/sl_policycore`) | The plan-administration portal — see below. Target of CR-2026-041 and CR-2026-042. |
+| **policy-service** (`repos/claimsportal/`) | 8081 | Half of ClaimsPortal — serves group contract records. |
+| **claims-service** (`repos/claimsportal/`) | 8082 | Half of ClaimsPortal — claims intake. Target of CR-2026-043. |
+| **EnrolDirect** (`repos/enroldirect/`) | 8083 | The online enrolment channel — who may self-serve, and what they can reach. Target of CR-2026-045. |
 
-**All 5 up looks like this** (health-check pass, in this exact order — start
+**All 6 up looks like this** (health-check pass, in this exact order — start
 policy-service before claims-service, since claims-service calls it):
 
 ```
@@ -28,79 +37,96 @@ Console UI    :5173  ->  200
 PolicyCore    :8501/sl_policycore  ->  200
 policy-service:8081  ->  {"status": "ok"}
 claims-service:8082  ->  {"status": "ok"}
+EnrolDirect   :8083  ->  200
 ```
 
-![PolicyCore's policy list](screenshots/policycore-list.jpg)
-*PolicyCore (`:8501/sl_policycore`) — the policy list every enhancement below builds on.*
+> **The screenshots in this document are out of date.** The PolicyCore ones
+> predate the 2026-08-03 group-retirement reskin and still show the earlier
+> property & casualty wording — "Premium", "Coverage Tier", "Endorsement",
+> Auto/Home/Life products, individual policyholders — against an older seed.
+> The ClaimsPortal ones show individual holder names rather than today's plan
+> sponsors. Every figure in the tables below comes from the current seed data
+> and the current code, and is the one to trust where the two disagree.
+> Re-capture is outstanding.
 
-![policy-service's Policy Team console](screenshots/policyservice-list.jpg)
+![PolicyCore's contract list](screenshots/policycore-list.jpg)
+*PolicyCore (`:8501/sl_policycore`) — the contract list every enhancement below builds on.*
+
+![policy-service's Contracts Team console](screenshots/policyservice-list.jpg)
 *policy-service (`:8081`) — half of ClaimsPortal.*
 
 ![claims-service's Claims Team console](screenshots/claimsservice-console.jpg)
 *claims-service (`:8082`) — the other half, validates against policy-service.*
 
+There is no screenshot of EnrolDirect yet; its six-screen console is described
+in `repos/enroldirect/README.md` and in `docs/ENROLDIRECT_APP.pdf`.
+
 ---
 
-## PolicyCore — the policy administration portal
+## PolicyCore — the plan administration portal
 
-**What it is today**: the app policyholders and support engineers use to
-manage active policies. Three things it already does:
+**What it is today**: the app plan sponsors and support engineers use to
+manage active group contracts. Three things it already does:
 
-- **Policy list & detail** — view a policyholder's policy, its product type,
-  premium, and status.
-- **Claim submission** — file a claim against a policy.
-- **Endorsement requests** — request a change to an active policy (e.g.
-  updating coverage details or personal information on file) through a
-  5-field form: endorsement type, requested change, effective date, contact
+- **Contract list & detail** — view a plan sponsor's group contract, its
+  product type, contribution, and status.
+- **Claim submission** — file a claim against a group contract.
+- **Amendment requests** — request a change to an in-force group contract
+  (e.g. updating plan details or the sponsor's information on file) through a
+  5-field form: amendment type, requested change, effective date, contact
   phone, contact email.
 
 Two small enhancements are being added to it.
 
-### Enhancement 1 — Coverage-Upgrade Option (CR-2026-041)
+### Enhancement 1 — Plan-Tier Upgrade Option (CR-2026-041)
 
-**The problem**: a policyholder who wants to move to a higher coverage tier
+**The problem**: a plan sponsor who wants to move to a higher plan tier
 (e.g. Standard → Premium → a new top tier) has no self-service way to do it —
 today that requires a manual back-office process.
 
-**What's being added**: an upgrade control directly on the policy detail
-view. Selecting a higher tier recalculates the premium automatically and
+**What's being added**: an upgrade control directly on the contract detail
+view. Selecting a higher tier recalculates the contribution automatically and
 saves it — no downgrades in this change, and every existing flow (contract
 list, plan-member roster, claim submission) keeps working unchanged.
 
 **Worked example** — group contract `POL-10001` (Northwind Logistics Ltd.,
-Health), monthly premium $4,820.50 at the "Standard" tier:
+Health), monthly contribution $4,820.50 at the "Standard" tier, with the
+generated multipliers Standard ×1.0, Premium ×1.25, Elite ×1.5:
 
 | Action | Result |
 |---|---|
-| Before the CR | No tier concept exists at all — the policy just has a premium. |
-| Upgrade to "Premium" (×1.25) | Premium recalculates to **$1,015.62** |
+| Before the CR | No tier concept exists at all — the contract just has a contribution. |
+| Upgrade to "Premium" (×1.25) | Contribution recalculates to **$6,025.63** |
 | Upgrade "Premium" → "Premium" again (same tier) | Rejected — no same-tier "upgrades" |
 | Downgrade "Premium" → "Standard" | Rejected — this CR is upgrades only |
-| Upgrade an unknown policy number | Rejected with a clear "not found" error |
+| Upgrade an unknown contract number | Rejected with a clear "not found" error |
 
-![Before: no coverage tier](screenshots/cr041-before.jpg)
-*Before — just a premium, no tier concept.*
+The audience picks the *top* tier's name live, so "Elite" above is whatever
+they choose; Standard and Premium are fixed.
 
-![After: Premium tier, recalculated premium](screenshots/cr041-after.jpg)
-*After — Coverage Tier: Premium, Premium: $1,015.62 (verified live, not estimated).*
+![Before: no plan tier](screenshots/cr041-before.jpg)
+*Before — just a contribution, no tier concept. (Pre-reskin screenshot: reads "Premium", an older seed, and an individual holder.)*
+
+![After: Premium tier, recalculated contribution](screenshots/cr041-after.jpg)
+*After — the tier is now shown and the contribution has been recalculated. (Pre-reskin screenshot; the figures are from the older seed, not the ones in the table above.)*
 
 **How it's tested**:
 - A generated test suite proves the logic in the table above — including
   both rejection cases, not just the happy path.
 - A separate, pre-existing regression suite (written by hand, not by the
-  tool that made this change) re-runs and proves policy list, policy detail,
-  and claim submission still work exactly as before.
+  tool that made this change) re-runs and proves contract list, contract
+  detail, and claim submission still work exactly as before.
 - A deliberately seeded bug (weakening the downgrade check) is injected to
   prove the generated tests would actually catch a real regression, not just
   pass by coincidence — then the bug is reverted.
 
-### Enhancement 2 — Endorsement Priority Field (CR-2026-042)
+### Enhancement 2 — Amendment Priority Field (CR-2026-042)
 
 **The problem**: support engineers currently have no way to tell which
-submitted endorsement requests are time-sensitive versus routine — urgent
+submitted amendment requests are time-sensitive versus routine — urgent
 and routine requests sit in the same unsorted queue.
 
-**What's being added**: a 6th field on the endorsement request form,
+**What's being added**: a 6th field on the amendment request form,
 "Priority," with exactly two choices — "Standard" or "Urgent" — defaulting
 to "Standard." A plan sponsor who doesn't touch the new field gets the exact
 same behavior as before this change.
@@ -110,17 +136,17 @@ same behavior as before this change.
 
 | Field | Before the CR | After the CR |
 |---|---|---|
-| Endorsement type | "Address Change" | "Address Change" |
+| Amendment type | "Address Change" | "Address Change" |
 | Requested change | "Update mailing address" | "Update mailing address" |
 | Effective date | 2026-07-30 | 2026-07-30 |
 | Contact phone / email | (unchanged) | (unchanged) |
 | Priority | *(field doesn't exist)* | **"Urgent"** *(or left blank → defaults to "Standard")* |
 
 ![Before: 5-field form, no Priority](screenshots/cr042-before.jpg)
-*Before — Endorsement type, requested change, effective date, contact phone, contact email. No Priority.*
+*Before — Amendment type, requested change, effective date, contact phone, contact email. No Priority. (Pre-reskin screenshot: the form is still labelled "Endorsement".)*
 
 ![After: Priority field set to Urgent](screenshots/cr042-after.jpg)
-*After — the 6th field, ready to submit as "Urgent."*
+*After — the 6th field, ready to submit as "Urgent." (Pre-reskin screenshot.)*
 
 Submitting the form without touching the new field behaves exactly as it did
 before this CR — that's the acceptance bar, not just "the field works."
@@ -133,21 +159,28 @@ proving nothing else broke, and a seeded-bug check (flipping the default to
 
 ---
 
-## ClaimsPortal — claims intake and policy lookup
+## ClaimsPortal — claims intake and contract lookup
 
 **What it is today**: two connected pieces —
 
-- **Policy lookup** (`policy-service`) serves policy records (policy number,
-  holder, product, status, coverage limit).
-- **Claims intake** (`claims-service`) accepts a submitted claim and
-  validates it against the policy lookup piece over a live request: the
-  policy must exist, be active, and the claim amount must not exceed the
-  policy's coverage limit.
+- **Contract lookup** (`policy-service`) serves group contract records
+  (contract number, plan sponsor, benefit, status, annual maximum).
+- **Claims intake** (`claims-service`) accepts a submitted benefit claim and
+  validates it against the contract lookup piece over a live request: the
+  contract must exist, be active, and the claim amount must not exceed the
+  contract's annual maximum.
+
+ClaimsPortal kept its own vocabulary through the group-retirement reskin, on
+purpose: **claim**, **deductible** and **annual maximum** are already the right
+words for group health, dental and disability benefits. Its API field names
+(`policyNumber`, `holderName`, …) are a published contract that CR-2026-043 and
+the committed AI recording depend on by exact name, so they keep their original
+spelling even where the prose says "group contract" and "plan sponsor".
 
 ### Enhancement 3 — Claims Deductible Handling (CR-2026-043)
 
-**The problem**: policies carry no deductible today, so a claim for less
-than what the policyholder would owe out of pocket anyway is accepted and
+**The problem**: contracts carry no deductible today, so a claim for less
+than what the plan member would owe out of pocket anyway is accepted and
 routed to an adjuster — wasted handling time for a claim that was never
 going to pay out. Accepted claims also don't record a payable amount for
 downstream settlement.
@@ -199,6 +232,71 @@ API response, not the page:
 - A seeded bug (weakening the deductible boundary check so a claim for
   exactly the deductible amount is wrongly accepted) proves the generated
   tests would catch it.
+
+---
+
+## EnrolDirect — the online enrolment channel
+
+**What it is today**: the self-serve channel a plan member uses to join or
+change benefits. Two things it already does:
+
+- **An access gate** — `POST /api/eligibility/check` decides whether someone
+  may use the channel at all, in three steps: the group contract is active,
+  the applicant's category resolves to an access preference, and the plan
+  sponsor has enabled that preference. A decision carries its reasons, not
+  just a yes or no.
+- **An analysis surface** — `/api/analysis/*` counts, across the whole book,
+  which contracts enable which preference and who that admits. Every figure is
+  computed from the seeded directory by ordinary code, not drafted by an AI.
+
+Access is governed by two preferences the plan sponsor agrees at contract
+inception: *Online Enrolment — Member* (people already holding an active
+benefit) and *Online Enrolment — Guest* (people with none). EnrolDirect
+enforces them; PolicyCore owns them.
+
+### Enhancement 4 — Prospect Member Eligibility Check (CR-2026-045)
+
+**The problem**: there is a third population neither preference was written
+for. A **prospect** is someone the plan sponsor has already accepted onto the
+contract roster who has not taken up any coverage — on the roster, holding no
+active benefit. Treating them as a guest (a stranger to the contract) is
+uncomfortable; treating them as a member (someone with coverage to change) is
+inaccurate. Because nothing decides, the gate resolves *no* preference for
+them and refuses them at step 2. That refusal is not a decision anyone took —
+it is the narrower option in force by default.
+
+**What's being added**: the classification is settled. A prospect is checked
+against the **Guest** preference, which the impact analysis recommended as the
+narrower grant, and the decision records which policy resolved them. Every
+existing refusal code keeps its current meaning, and members and guests resolve
+exactly as they do now.
+
+**This one is different from the other three**, and that is the point of
+including it: its baseline is a *removal*, not a missing feature. The
+checked-in state is the moment after the analysis and before the gate acts on
+it. The AI has to read the analysis to understand what the change is —
+`impact.py` is given to it as context but is explicitly off the list of files
+it may edit, and a run that comes back having modified it fails loudly.
+
+**Worked example** — the classification bites twice, in opposite directions:
+
+| Where | What the classification decides | Which option grants more |
+|---|---|---|
+| At the gate | How many prospects are admitted at all | Member |
+| At the catalogue | How much of the benefit catalogue those admitted can reach, since member-only plans attach to existing coverage | Member |
+
+Both effects are measured separately, and catalogue reach is only counted for
+prospects the gate would actually admit — a plan you cannot reach because you
+were refused at the door is already counted as a denial, and counting it twice
+would inflate the gap. The recommendation reports its own cost: the prospects
+it denies that the alternative would have admitted.
+
+**How it's tested**: the same three-part approach, with the regression suite
+carrying more weight than usual. `tests/test_regression_enroldirect.py`
+asserts the gate's *ordering* (a lapsed contract must still deny a prospect
+regardless of the policy), that the prospect decision never moves a member's or
+a guest's outcome, and that the two options genuinely disagree — none of which
+a type checker or an endpoint smoke test can see.
 
 ---
 

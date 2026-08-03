@@ -15,4 +15,4 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
 echo "  EnrolDirect -> http://localhost:${ENROLDIRECT_PORT:-8083}/"
-uvicorn apps.enroldirect.main:app --port "${ENROLDIRECT_PORT:-8083}"
+uvicorn repos.enroldirect.main:app --port "${ENROLDIRECT_PORT:-8083}"

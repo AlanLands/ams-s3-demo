@@ -12,7 +12,7 @@ def test_draft_impact_analysis_surfaces_assumptions_separately_from_the_text():
     canned = json.dumps(
         {
             "impact_analysis": "Update coverage.py and app.py to add the new tier.",
-            "assumptions": ["Assumed premium recalculation stays a simple ratio, not tiered."],
+            "assumptions": ["Assumed contribution recalculation stays a simple ratio, not tiered."],
         }
     )
 
@@ -22,7 +22,7 @@ def test_draft_impact_analysis_surfaces_assumptions_separately_from_the_text():
     assert mock_complete.call_args.kwargs["json_mode"] is True
     assert impact.text == "Update coverage.py and app.py to add the new tier."
     assert impact.assumptions == [
-        "Assumed premium recalculation stays a simple ratio, not tiered."
+        "Assumed contribution recalculation stays a simple ratio, not tiered."
     ]
 
 

@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MapleSure Insurance — Group Benefits &amp; Workplace Plans</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Asap:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap');
+
+  :root {
+    --ink: #363530;
+    --ink-soft: #6E6D66;
+    --accent: #A20A29;
+    --accent-hover: #850822;
+    --accent-ink: #7A0820;
+    --accent-soft: #F5E6E9;
+    --secondary: #005656;
+    --secondary-soft: #E3EFEF;
+    --line: rgba(54,53,48,0.16);
+    --surface: #F7F7F6;
+    --shadow: 0 2px 10px rgba(147,148,142,0.3);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
+    color: var(--ink);
+    background: #fff;
+  }
+  h1, h2, h3 { font-family: 'Asap', system-ui, sans-serif; font-weight: 700; margin: 0 0 0.5rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-hover); text-decoration: underline; }
+  img { max-width: 100%; display: block; }
+
+  .skip-link {
+    position: absolute;
+    left: -999px;
+    top: 0;
+    background: var(--accent);
+    color: #fff;
+    padding: 0.6rem 1rem;
+    z-index: 100;
+  }
+  .skip-link:focus { left: 0; }
+
+  /* ---- top utility bar ---- */
+  .utility-bar {
+    background: var(--ink);
+    color: #fff;
+    font-size: 0.78rem;
+  }
+  .utility-bar .wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0.4rem 1.5rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1.5rem;
+  }
+  .utility-bar a { color: #fff; opacity: 0.85; }
+  .utility-bar a:hover { opacity: 1; text-decoration: underline; }
+
+  /* ---- header / nav ---- */
+  header.main {
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 20;
+  }
+  .nav-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0.9rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: 'Asap', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--ink);
+  }
+  .brand .mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 4px;
+    background: linear-gradient(135deg, var(--accent), var(--secondary));
+    flex-shrink: 0;
+  }
+  nav.primary {
+    display: flex;
+    gap: 1.75rem;
+    flex: 1;
+    justify-content: center;
+  }
+  nav.primary a {
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+  nav.primary a:hover { color: var(--accent); text-decoration: none; }
+  .nav-actions { display: flex; align-items: center; gap: 0.9rem; }
+  .btn {
+    display: inline-block;
+    padding: 0.55rem 1.15rem;
+    border-radius: 2px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); color: #fff; text-decoration: none; }
+  .btn-ghost { border-color: var(--ink); color: var(--ink); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+
+  /* ---- hero ---- */
+  .hero {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .hero-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 2.5rem;
+    align-items: center;
+  }
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+    padding: 0.25rem 0.6rem;
+    border-radius: 2px;
+    margin-bottom: 0.9rem;
+  }
+  .hero h1 { font-size: 2.4rem; line-height: 1.15; margin-bottom: 0.9rem; }
+  .hero p.lede { font-size: 1.08rem; color: var(--ink-soft); max-width: 46ch; margin-bottom: 1.6rem; }
+  .hero-actions { display: flex; gap: 0.9rem; flex-wrap: wrap; }
+  .hero-art {
+    aspect-ratio: 4 / 3;
+    border-radius: 8px;
+    background:
+      radial-gradient(circle at 30% 30%, rgba(162,10,41,0.18), transparent 60%),
+      radial-gradient(circle at 70% 70%, rgba(0,86,86,0.22), transparent 55%),
+      var(--secondary-soft);
+  }
+
+  section { padding: 3.5rem 1.5rem; }
+  .section-wrap { max-width: 1200px; margin: 0 auto; }
+  .section-head { max-width: 62ch; margin-bottom: 2rem; }
+  .section-head .eyebrow { margin-bottom: 0.6rem; }
+  .section-head h2 { font-size: 1.8rem; }
+  .section-head p { color: var(--ink-soft); font-size: 1rem; }
+
+  /* ---- feature/benefits ---- */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+  .feature-card {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1.6rem;
+    background: #fff;
+  }
+  .feature-card .icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-family: 'Asap', system-ui, sans-serif;
+    margin-bottom: 1rem;
+  }
+  .feature-card h3 { font-size: 1.05rem; margin-bottom: 0.4rem; }
+  .feature-card p { color: var(--ink-soft); font-size: 0.92rem; margin: 0; }
+
+  /* ---- advice / content hub ---- */
+  .advice { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .articles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+  .article-card {
+    background: #fff;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .article-card .thumb {
+    height: 130px;
+    background: linear-gradient(120deg, var(--secondary-soft), var(--accent-soft));
+  }
+  .article-card .body { padding: 1.2rem; }
+  .article-card .tag {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--secondary);
+    margin-bottom: 0.4rem;
+    display: block;
+  }
+  .article-card h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+  .article-card p { color: var(--ink-soft); font-size: 0.88rem; margin: 0 0 0.6rem; }
+  .article-card .read-more { font-size: 0.85rem; font-weight: 600; }
+
+  /* ---- digital tools ---- */
+  .tools-wrap {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+    align-items: center;
+  }
+  .tool-list { list-style: none; margin: 0; padding: 0; }
+  .tool-list li {
+    display: flex;
+    gap: 0.9rem;
+    padding: 0.9rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .tool-list li:last-child { border-bottom: none; }
+  .tool-list .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--secondary);
+    margin-top: 0.5rem;
+    flex-shrink: 0;
+  }
+  .tool-list h3 { font-size: 0.98rem; margin-bottom: 0.2rem; }
+  .tool-list p { margin: 0; color: var(--ink-soft); font-size: 0.88rem; }
+  .tools-art {
+    aspect-ratio: 1 / 1;
+    border-radius: 8px;
+    background:
+      radial-gradient(circle at 65% 35%, rgba(0,86,86,0.2), transparent 55%),
+      radial-gradient(circle at 30% 70%, rgba(162,10,41,0.16), transparent 60%),
+      var(--surface);
+    border: 1px solid var(--line);
+  }
+
+  /* ---- footer ---- */
+  footer {
+    background: var(--ink);
+    color: #E7E6E2;
+    padding: 3rem 1.5rem 1.5rem;
+  }
+  .footer-wrap { max-width: 1200px; margin: 0 auto; }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1.3fr repeat(4, 1fr);
+    gap: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+  }
+  .footer-grid h4 {
+    font-family: 'Asap', system-ui, sans-serif;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #fff;
+    margin-bottom: 0.9rem;
+  }
+  .footer-grid ul { list-style: none; margin: 0; padding: 0; }
+  .footer-grid li { margin-bottom: 0.55rem; }
+  .footer-grid a { color: #C9C8C2; font-size: 0.88rem; }
+  .footer-grid a:hover { color: #fff; }
+  .footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    padding-top: 1.5rem;
+    font-size: 0.78rem;
+    color: #A9A8A2;
+  }
+  .footer-bottom .legal-links { display: flex; gap: 1.2rem; flex-wrap: wrap; }
+  .footer-bottom a { color: #A9A8A2; }
+  .footer-bottom a:hover { color: #fff; }
+
+  @media (max-width: 900px) {
+    .hero-wrap, .tools-wrap { grid-template-columns: 1fr; }
+    .features, .articles { grid-template-columns: 1fr; }
+    .footer-grid { grid-template-columns: 1fr 1fr; }
+    nav.primary { display: none; }
+  }
+</style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="utility-bar">
+    <div class="wrap">
+      <a href="#contact">Find a benefits consultant</a>
+      <a href="#contact">Contact us</a>
+      <a href="#login">EN&nbsp;/&nbsp;FR</a>
+    </div>
+  </div>
+
+  <header class="main">
+    <div class="nav-wrap">
+      <a class="brand" href="#top">
+        <span class="mark" aria-hidden="true"></span>
+        MapleSure Insurance
+      </a>
+      <nav class="primary" aria-label="Primary">
+        <a href="#personal">Personal</a>
+        <a href="#coverage">Workplace Benefits</a>
+        <a href="#advice">Advice</a>
+        <a href="#tools">Plan Administration</a>
+        <a href="#about">About Us</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-ghost" href="#login" id="login">Sign In</a>
+        <a class="btn btn-primary" href="#quote">Request a Quote</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-wrap">
+        <div>
+          <span class="eyebrow">MapleSure Insurance</span>
+          <h1>Benefits your people actually use.</h1>
+          <p class="lede">
+            Group health, dental, life and disability plans built around your
+            workforce — enrol members, manage plan tiers and track claims online,
+            or talk to a benefits consultant when you'd rather have a person
+            walk you through it.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#quote">Request a plan quote</a>
+            <a class="btn btn-ghost" href="#tools">Plan administrator sign-in</a>
+          </div>
+        </div>
+        <div class="hero-art" role="img" aria-label="Illustration placeholder"></div>
+      </div>
+    </section>
+
+    <section id="coverage">
+      <div class="section-wrap">
+        <div class="section-head">
+          <span class="eyebrow">Workplace Benefits</span>
+          <h2>A benefits programme that fits your workforce</h2>
+          <p>
+            Choose the plan tiers your people need, set the deductibles
+            and annual maximums that keep the plan sustainable, and adjust as
+            your organisation grows.
+          </p>
+        </div>
+        <div class="features">
+          <div class="feature-card">
+            <div class="icon">H</div>
+            <h3>Health &amp; Dental</h3>
+            <p>Paramedical, vision, prescription drug and dental coverage, with deductibles and annual maximums you set per plan.</p>
+          </div>
+          <div class="feature-card">
+            <div class="icon">L</div>
+            <h3>Group Life &amp; Critical Illness</h3>
+            <p>Employer-paid base coverage, with optional amounts your plan members can top up at group rates.</p>
+          </div>
+          <div class="feature-card">
+            <div class="icon">D</div>
+            <h3>Disability &amp; Income Protection</h3>
+            <p>Short- and long-term disability with defined waiting periods, keeping income steady through a leave.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="advice" id="advice">
+      <div class="section-wrap">
+        <div class="section-head">
+          <span class="eyebrow">Advice</span>
+          <h2>Advice for life as you know it</h2>
+          <p>Practical reads on coverage, claims, and planning — written for real situations, not just policy fine print.</p>
+        </div>
+        <div class="articles">
+          <article class="article-card">
+            <div class="thumb"></div>
+            <div class="body">
+              <span class="tag">Claims</span>
+              <h3>What to have ready before you file a claim</h3>
+              <p>Five things that make the difference between a same-week payout and weeks of back-and-forth.</p>
+              <a class="read-more" href="#">Read more →</a>
+            </div>
+          </article>
+          <article class="article-card">
+            <div class="thumb"></div>
+            <div class="body">
+              <span class="tag">Administration</span>
+              <h3>Your roster changes. So should your plan.</h3>
+              <p>A short checklist for updating enrolments after a hire, a departure, or a new dependant.</p>
+              <a class="read-more" href="#">Read more →</a>
+            </div>
+          </article>
+          <article class="article-card">
+            <div class="thumb"></div>
+            <div class="body">
+              <span class="tag">Cost Control</span>
+              <h3>Deductibles, coinsurance and annual maximums</h3>
+              <p>How the three levers interact, and which one to move when plan costs start drifting.</p>
+              <a class="read-more" href="#">Read more →</a>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="tools">
+      <div class="section-wrap">
+        <div class="tools-wrap">
+          <div>
+            <span class="eyebrow">Plan Administration</span>
+            <h2>Everything self-serve, when you want it that way</h2>
+            <ul class="tool-list">
+              <li>
+                <span class="dot" aria-hidden="true"></span>
+                <div>
+                  <h3>Enrol and update plan members</h3>
+                  <p>Add a new hire, remove a leaver, or update dependants without a paper form.</p>
+                </div>
+              </li>
+              <li>
+                <span class="dot" aria-hidden="true"></span>
+                <div>
+                  <h3>Review or upgrade plan tiers</h3>
+                  <p>See exactly what each contract covers today and change tiers without calling in.</p>
+                </div>
+              </li>
+              <li>
+                <span class="dot" aria-hidden="true"></span>
+                <div>
+                  <h3>Track claims and plan costs</h3>
+                  <p>Follow claim status by member and see where the benefit spend is going.</p>
+                </div>
+              </li>
+            </ul>
+            <a class="btn btn-primary" href="#login" style="margin-top: 1.5rem;">Go to the plan administration portal</a>
+          </div>
+          <div class="tools-art" role="img" aria-label="Illustration placeholder"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="contact">
+    <div class="footer-wrap">
+      <div class="footer-grid">
+        <div>
+          <h4>MapleSure Insurance</h4>
+          <p style="color:#C9C8C2; font-size:0.85rem; max-width: 32ch;">
+            A fictional demo insurer used for internal AMS scenario testing.
+            Not a real company, not affiliated with any real insurer.
+          </p>
+        </div>
+        <div>
+          <h4>Products</h4>
+          <ul>
+            <li><a href="#coverage">Health &amp; Dental</a></li>
+            <li><a href="#coverage">Group Life &amp; Critical Illness</a></li>
+            <li><a href="#coverage">Disability &amp; Income Protection</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Support</h4>
+          <ul>
+            <li><a href="#tools">Submit a claim</a></li>
+            <li><a href="#advice">Advice hub</a></li>
+            <li><a href="#contact">Find a benefits consultant</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#about">About MapleSure</a></li>
+            <li><a href="#about">Careers</a></li>
+            <li><a href="#about">Newsroom</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#">Privacy</a></li>
+            <li><a href="#">Accessibility</a></li>
+            <li><a href="#">Terms of use</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 MapleSure Insurance. Demo content only — synthetic data, fictional company.</span>
+        <span class="legal-links">
+          <a href="#">Privacy</a>
+          <a href="#">Legal</a>
+          <a href="#">Accessibility</a>
+        </span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -3,7 +3,7 @@ line-length = 100
 
 # Generated snapshots, excluded from lint like any other generated artifact:
 # - s4_knowledge/undocumented_app: docs/comments deliberately stripped from a
-#   copy of apps/policycore/ (see s4_knowledge/make_snapshot.py), regenerated on demand.
+#   copy of repos/policycore/ (see s4_knowledge/make_snapshot.py), regenerated on demand.
 # - s3_enhancement/out: per-run staged files + diffs from S3's live codegen,
 #   one timestamped directory per run (see s3_enhancement/codegen.py/testgen.py).
 extend-exclude = ["s4_knowledge/undocumented_app", "s3_enhancement/out", "tmp"]

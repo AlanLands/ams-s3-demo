@@ -35,7 +35,7 @@ def render() -> None:
     st.session_state.setdefault("s3_beat_tokens", {})
     st.session_state.setdefault("s3_beat_tokens_live", {})
 
-    raw_tier = st.text_input("New coverage tier name", value=st.session_state.s3_tier_name)
+    raw_tier = st.text_input("New plan tier name", value=st.session_state.s3_tier_name)
     tier_name, validation_error = sanitize_tier_name(raw_tier)
     if validation_error:
         st.warning(validation_error)
@@ -211,7 +211,7 @@ def render() -> None:
 
 def _run_pytest() -> str:
     process = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/test_s3_coverage_upgrade.py", "-v"],
+        [sys.executable, "-m", "pytest", "tests/test_s3_tier_upgrade.py", "-v"],
         check=False,
         capture_output=True,
         text=True,

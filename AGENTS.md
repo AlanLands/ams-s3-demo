@@ -38,7 +38,7 @@ real client in code, data, commits, generated UI, screenshots, or docs.
 - Python 3.12+ with type hints and small modules.
 - The console is **React (Vite + TypeScript) over a FastAPI backend** —
   `apps/console/web/` + `apps/console/api/`. Streamlit remains only for the *mock client app*
-  (`apps/policycore/app.py`), which is a separate window the demo shows before/after.
+  (`repos/policycore/app.py`), which is a separate window the demo shows before/after.
 - Put pipeline, LLM, data, and domain logic in importable Python modules; keep
   `apps/console/api/` routers thin.
 - All LLM calls must go through `common/llm.py`.
@@ -98,7 +98,7 @@ the CR. `tools/verify_s3_live.py --skip-live` is the offline rehearsal gate.
 - Keep dependencies minimal and pinned in `requirements.txt`.
 - Prefer SQLite, local files, and deterministic scripts over managed services.
 - Commit message style, when asked to commit:
-  `s3: scope relevance funnel to the endorsement form files`.
+  `s3: scope relevance funnel to the amendment form files`.
 
 ## `/graphify`
 

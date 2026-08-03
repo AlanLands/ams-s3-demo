@@ -35,7 +35,7 @@ def build_prompt(cr_text: str) -> str:
 
 Write:
 1. A short release note (2-4 sentences) suitable for a client-facing change
-   log, describing the new coverage-upgrade capability in the policy portal.
+   log, describing the new tier-upgrade capability in the plan portal.
 2. A one-line doc blurb suitable for a user-guide "What's new" section.
 
 Keep the tone plain and factual - no marketing language, this is an internal
@@ -132,7 +132,7 @@ Application: {target.display_name}
 Write three separate release notes for three audiences.
 
 1. `changelog` — 2-4 sentences for a client-facing change log. What changed,
-   in business terms, from the policyholder's or support engineer's point of
+   in business terms, from the plan sponsor's or support engineer's point of
    view. No file names, no class names, no marketing language.
 2. `ops_note` — 2-4 sentences for the team that runs this application. What
    changes operationally: schema or data migration, configuration, anything

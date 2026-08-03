@@ -4,28 +4,102 @@ Every rehearsal starts from a known-good state, and every beat can be re-run in
 isolation. All scripts `cd` to the repo root themselves and activate `.venv`
 before running anything.
 
-For the full end-to-end walkthrough of the three CR scenarios, see
-**`DEMO_TEST_GUIDE.md`** — this file covers the scripts and the tooling around
+For the full end-to-end walkthrough of the four CR scenarios, see
+**`DEMO_TEST_GUIDE.md`**; for standing the whole thing up from a clean
+checkout, `DEMO_STEPS.md`. This file covers the scripts and the tooling around
 them.
+
+> **Where things live.** `repos/` holds the target repositories S3 *changes* —
+> PolicyCore, ClaimsPortal, EnrolDirect. `apps/` holds the tooling that *does*
+> the changing: the console, and one launch script per running process. The
+> five per-process launchers (`apps/run-console.sh`, `run-policycore.sh`,
+> `run-policy-service.sh`, `run-claims-service.sh`, `run-enroldirect.sh`) are
+> documented in `apps/README.md` — the scripts below are the presenter's
+> reset/seed/warm tooling, not the launchers.
+
+---
+
+## ⚠ Two reset scripts are broken right now
+
+`demo/reset_s3.sh` and `demo/reset_s3_endorsement.sh` restore PolicyCore with
+`git checkout HEAD -- repos/policycore/...`, but **HEAD still has those files
+under `apps/policycore/`** — the `repos/` move is uncommitted. Both scripts
+therefore fail with `error: pathspec 'repos/policycore/app.py' did not match
+any file(s) known to git` and stop before reseeding, before clearing
+`.cache/llm`, and before clearing the ticket timeline.
+
+Verify for yourself, read-only:
+
+```bash
+git cat-file -e HEAD:repos/policycore/app.py 2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
+git cat-file -e HEAD:apps/policycore/app.py  2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
+```
+
+**Committing the `repos/` move fixes it** — nothing in the scripts needs
+changing. Until then:
+
+- **ClaimsPortal and EnrolDirect resets are unaffected.**
+  `reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` restore by `cp` from
+  the in-repo `.baseline/` snapshots and never touch git.
+- The admin panel already surfaces this. `GET /api/admin/status` returns a
+  `reset_blocked_reason` naming the four missing paths, and the panel's
+  PolicyCore reset button is disabled with that reason on it.
+- **Do not "fix" this by restoring from `HEAD:apps/policycore/...`.** That
+  content is *pre-reskin* — it still says endorsement / coverage tier /
+  premium / policyholder — so it would undo the GRS rename as well as the CR.
+  Until the move is committed, undo a PolicyCore CR the way the console
+  offers: **Revert all** in the Generate stage, which restores from the
+  per-proposal backups under `s3_enhancement/out/`. Then, by hand:
+
+  ```bash
+  rm -f repos/policycore/core/tiers.py \
+        tests/test_s3_tier_upgrade.py \
+        tests/test_s3_amendment_priority.py
+  python -m repos.policycore.core.seed
+  rm -rf s3_enhancement/out/* .cache/llm
+  rm -f data/ticket_events.jsonl
+  git checkout -- 's3_enhancement/cache/jira_*.json'
+  date +%s%N > data/.s3_reset_marker
+  ```
+
+  Confirm with the baseline checks in `DEMO_TEST_GUIDE.md` section 0a rather
+  than assuming it worked.
+
+Do not present a reset as working until the move is committed and you have
+watched all four scripts print their success line.
+
+---
 
 ## The scripts
 
 | Script | What it does |
 |---|---|
-| `run_s3.sh` | Streamlit S3 console (the legacy view; the React console at `apps/console/web/` + `api/` is the primary surface) |
-| `run_mockapp.sh` | Serves `apps/policycore/app.py` on :8501/sl_policycore — the "client's app" window for the before/after proof |
-| `run_s3_claimsportal.sh` | Runs the two Python/FastAPI ClaimsPortal services (:8081, :8082) |
+| `run_s3.sh` | Streamlit S3 console (the legacy view; the React console at `apps/console/web/` + `api/` is the primary surface). Defaults to `PORT=8501`, which collides with `run_mockapp.sh` — set `PORT` if you want both. |
+| `run_mockapp.sh` | Serves `repos/policycore/app.py` on :8501/sl_policycore — the "client's app" window for the before/after proof. Same job as `apps/run-policycore.sh`. |
+| `run_s3_claimsportal.sh` | Runs the two Python/FastAPI ClaimsPortal services (:8081 contracts, :8082 claims) |
 | `run_s3_harness.sh` | The live agent-harness variant of the codegen beat — see below |
-| `reset_s3.sh` | CR-2026-041 (mockapp coverage tier) back to pre-CR baseline; also clears shared state |
-| `reset_s3_endorsement.sh` | CR-2026-042 (mockapp endorsement Priority field) back to baseline, via the `s3-endorsement-baseline` git tag |
-| `reset_s3_claimsportal.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `apps/claimsportal/.baseline/` |
-| `reset_s3_enroldirect.sh` | CR-2026-045 (EnrolDirect) back to baseline, from `apps/enroldirect/.baseline/` |
+| `reset_s3.sh` | CR-2026-041 (PolicyCore plan tier) back to pre-CR baseline; also clears shared state. **Broken — see above.** |
+| `reset_s3_endorsement.sh` | CR-2026-042 (PolicyCore amendment Priority field) back to baseline, restored from `HEAD` (**not** from the `s3-endorsement-baseline` tag — see the comment in the script). **Broken — see above.** |
+| `reset_s3_claimsportal.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `repos/claimsportal/.baseline/` |
+| `reset_s3_enroldirect.sh` | CR-2026-045 (EnrolDirect) back to baseline, from `repos/enroldirect/.baseline/` |
 | `warm_s3_cache.sh` | Pre-warms `.cache/llm` for the narrative drafts before presenting |
-| `seed_problem_record_ticket.sh` | Seeds the problem-record intake ticket |
+| `seed_problem_record_ticket.sh` | Seeds the problem-record intake ticket (needs the API on :8000 already running) |
+| `seed_s3_repo_selection_ticket.sh` | Puts AMS-104 (CR-2026-044, the ticket that names no target system) back on the board. Needs no server; run it *after* `reset_s3.sh`, which restores the committed Jira caches and would otherwise drop it. |
 
 > `run_mockapp.sh` and `reset_s3_endorsement.sh` were previously named
 > `run_s4_endorsement.sh` / `reset_s4_endorsement.sh`. The "s4" was a leftover
 > from the six-scenario repo — both are S3 beats. Renamed 2026-07-26.
+> `reset_s3_endorsement.sh` kept its filename through the 2026-08-03 GRS
+> reskin — teammates invoke it by name — even though the CR it resets is now
+> "CR-2026-042: Amendment Priority Field". Only its contents changed.
+
+### No script for CR-2026-045's ticket
+
+There is deliberately none. A `.md` dropped into the top-level `crs/` opens a
+board ticket by itself — the key is derived from the CR id (`CR-2026-045` →
+**AMS-1045**), and the ticket lands **unassigned** so the manager routes it.
+`seed_s3_repo_selection_ticket.sh` is the older hand-seeding path and stays
+only because AMS-104 needs a specific pre-set assignee to make its beat work.
 
 `reset_s3.sh` wipes `.cache/llm` on purpose, so the next click after a reset
 pays full LLM latency. Run `warm_s3_cache.sh` as the last step before
@@ -36,12 +110,36 @@ demo/reset_s3.sh
 demo/warm_s3_cache.sh   # warms the fixed-key drafts (impact analysis, release notes)
 ```
 
+## The admin panel is the in-console equivalent (`/admin`, manager only)
+
+Most of what these scripts do is also a button at `http://localhost:5173/admin`
+— useful when you are already presenting and do not want to switch to a
+terminal. It runs the same reset scripts and the same delete logic, gated
+server-side by `require_manager`.
+
+Four cards: **Reset demo state**, **Target applications** (status + start/stop),
+**Logs**, **Onboard a repo**.
+
+Limits worth knowing before you rely on it live:
+
+- Source-restoring scopes (`policycore`, `claimsportal`, `enroldirect`) **409
+  while the tree is dirty**, and preview exactly what they would restore or
+  delete and which files are currently dirty before you press anything.
+- There is **no "reset everything"** scope. Each is explicit — PolicyCore,
+  ClaimsPortal, EnrolDirect, tickets, logs, proposals, caches.
+- **No service id for the console itself**, so it cannot restart the process
+  serving your request.
+- Service status is a plain TCP port probe — no `ps`, no `lsof` — so it works
+  on a locked-down host, but "up" only means something is listening.
+- A manifest written by **Onboard a repo** needs a console restart to take
+  effect; discovery runs at import.
+
 ## S3 live agent-harness beat (`s3_enhancement/harness.py`, `run_s3_harness.sh`)
 
 Rung 1 of a 3-rung fallback ladder for the codegen+test beat: a real headless
 coding-agent CLI (`claude -p` or `codex exec`, per `AGENT_HARNESS`) edits
-mockapp itself and runs pytest itself, in a second terminal pane the presenter
-opens before the demo starts. `apps/policycore/CLAUDE.md` / `apps/policycore/AGENTS.md` pin the
+PolicyCore itself and runs pytest itself, in a second terminal pane the presenter
+opens before the demo starts. `repos/policycore/CLAUDE.md` / `repos/policycore/AGENTS.md` pin the
 exact file scope and API contract (mirrored from `codegen.py`'s prompt) as the
 determinism lever. `codegen.py`/`testgen.py` are untouched and remain rung 3,
 reachable via the existing console buttons with zero new code.
@@ -94,6 +192,10 @@ back to replay invisibly, that one recording replays for any audience-chosen
 tier name, that `reset_s3.sh` restores baseline in <10s, and that the relevance
 funnel keeps core files while screening out the legacy decoys.
 
+> The `reset_s3.sh` check in that gate will fail until the `repos/` move is
+> committed, for the pathspec reason at the top of this file. That is the gate
+> working, not a new bug.
+
 `tools/autofix/` goes further: an unattended detect → propose → apply →
 safety-gate → re-verify → accept/revert loop that can fix a failing calibration
 check without a human mid-run (see `tools/autofix/loop.py`'s module docstring —
@@ -130,4 +232,5 @@ run-through before the demo.
 
 **Offline gate — re-verified 2026-07-26.** All 7 architecture checks pass.
 (The gate had been crashing before printing any result since the six-scenario
-split; see commit `ba8136f`.)
+split; see commit `ba8136f`.) Re-run it after the `repos/` move is committed —
+that verification predates both the move and the GRS reskin.

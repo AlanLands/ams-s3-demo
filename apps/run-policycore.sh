@@ -15,6 +15,6 @@ if [ -f .env ]; then set -a; . ./.env; set +a; fi
 BASE_URL_PATH="${STREAMLIT_BASE_URL_PATH:-sl_policycore}"
 
 echo "  PolicyCore portal -> http://localhost:${PORT:-8501}/${BASE_URL_PATH}"
-streamlit run apps/policycore/app.py \
+streamlit run repos/policycore/app.py \
     --server.port "${PORT:-8501}" \
     --server.baseUrlPath "${BASE_URL_PATH}"

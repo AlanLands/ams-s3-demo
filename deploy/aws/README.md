@@ -233,7 +233,7 @@ before continuing, or add a Bedrock VPC endpoint.
 and ship the output — this keeps Node off the instance entirely.
 
 ```bash
-cd apps/console/web && npm ci && npm run build && cd ..
+cd apps/console/web && npm ci && npm run build && cd ../../..
 ```
 
 **Verify:** `ls apps/console/web/dist/index.html` exists.
@@ -247,17 +247,21 @@ rsync -av --exclude .venv --exclude 'apps/console/web/node_modules' \
   ./ "$INSTANCE:/opt/ams-s3-demo/"
 ```
 
-> **Do not exclude `.git`.** `demo/reset_s3.sh` restores the pre-CR baseline with
-> `git show s3-baseline:...`. Without the full history and the `s3-baseline` tag,
-> reset fails and you cannot re-run the demo a second time.
+> **Do not exclude `.git`.** `demo/reset_s3.sh` and `demo/reset_s3_endorsement.sh`
+> restore the pre-CR baseline with `git checkout HEAD -- <paths>` (**not** from the
+> `s3-baseline` / `s3-endorsement-baseline` tags — those predate this layout and
+> restoring from them breaks reseeding with an unrecoverable FOREIGN KEY error).
+> Without a working checkout, reset fails and you cannot re-run the demo a second
+> time. Ship the commit you intend to demo, not a dirty tree — see the warning
+> under Step 12.
 
 **Verify:**
 
 ```bash
-ssh $INSTANCE 'cd /opt/ams-s3-demo && git tag -l && ls apps/console/web/dist/index.html'
+ssh $INSTANCE 'cd /opt/ams-s3-demo && git rev-parse --short HEAD && git status --porcelain | head && ls apps/console/web/dist/index.html'
 ```
 
-You must see `s3-baseline` in the tag list and the dist file present.
+You want the commit you intended, a clean status, and the dist file present.
 
 ## Step 6. Create the environment file
 
@@ -357,15 +361,14 @@ seconds to surface.
 
 This is the step that silently ruins an otherwise-working demo.
 
-Cache entries are keyed two different ways. In the current checkout, of the 8
-entries in `.cache/llm/`:
+Cache entries are keyed two different ways. A beat with a pinned `cache_key`
+is provider-independent and travels. Every other entry is content-hashed on
+`provider|model|system|prompt`, so a cache warmed on a laptop against the
+direct Anthropic API is a **guaranteed miss under Bedrock** — the provider and
+model are part of the key.
 
-- **2** are pinned by `cache_key` — provider-independent
-- **6** are content-hashed on `provider|model|system|prompt` — **guaranteed
-  misses under Bedrock**, because the provider and model are part of the key
-
-Unwarmed, those 6 beats make live Bedrock calls during the demo: real latency
-and real spend, on beats you rehearsed as instant.
+Unwarmed, those beats make live Bedrock calls during the demo: real latency and
+real spend, on beats you rehearsed as instant.
 
 `.cache/llm/` is also gitignored, so it never arrives via rsync — and
 `demo/reset_s3.sh` deletes it. **Warm after every reset, on the instance,
@@ -377,7 +380,8 @@ ssh $INSTANCE 'cd /opt/ams-s3-demo && sudo -u ubuntu env \
   ./demo/warm_s3_cache.sh'
 ```
 
-**Verify — 8 or more entries, and the health check still green:**
+**Verify — the count is non-zero and matches what the same script produces
+locally:**
 
 ```bash
 ssh $INSTANCE 'ls /opt/ams-s3-demo/.cache/llm/*.json | wc -l'
@@ -403,7 +407,33 @@ unwarmed cache entry going live. Re-run Step 10 if you see one.
 
 ```bash
 ssh $INSTANCE 'cd /opt/ams-s3-demo && sudo -u ubuntu ./demo/reset_s3.sh'
+ssh $INSTANCE 'cd /opt/ams-s3-demo && sudo -u ubuntu ./demo/reset_s3_endorsement.sh'
+ssh $INSTANCE 'cd /opt/ams-s3-demo && sudo -u ubuntu ./demo/reset_s3_claimsportal.sh'
+ssh $INSTANCE 'cd /opt/ams-s3-demo && sudo -u ubuntu ./demo/reset_s3_enroldirect.sh'
 ```
+
+Order matters: `reset_s3.sh` reseeds the database the amendment baseline builds
+on, so it goes first.
+
+> **Known breakage — check this before you rely on Step 12.** The first two
+> scripts restore source with `git checkout HEAD -- repos/…`. On a checkout
+> where the `apps/` → `repos/` move is **not yet committed**, HEAD still
+> carries those files under `apps/` and both scripts die with "pathspec did not
+> match" — a rehearsal cannot be reset, which is exactly the failure that
+> surfaces on demo morning. **Deploy from a commit that contains the move.**
+> Confirm on the instance before demo day with:
+>
+> ```bash
+> ssh $INSTANCE 'cd /opt/ams-s3-demo && git cat-file -e HEAD:repos/policycore/app.py && echo OK'
+> ```
+>
+> `reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` restore by copying
+> their committed `.baseline/` snapshots and are unaffected either way.
+
+A manager can run the same resets from the console's `/admin` page instead of
+over SSH — one explicit scope at a time, refused while the paths it would
+overwrite are dirty, and reporting the breakage above as a named
+`reset_blocked_reason` rather than a raw git error.
 
 ## Step 13. Re-warm, then restart
 
@@ -433,7 +463,7 @@ sudo journalctl -u ams-s3-mockapp -n 100 --no-pager
 ## Deploying a code update
 
 ```bash
-cd apps/console/web && npm run build && cd ..          # if frontend changed
+cd apps/console/web && npm run build && cd ../../..    # if frontend changed
 rsync -av --exclude .venv --exclude 'apps/console/web/node_modules' ./ "$INSTANCE:/opt/ams-s3-demo/"
 ssh $INSTANCE 'sudo bash /opt/ams-s3-demo/deploy/aws/bootstrap.sh'
 # then Step 10 (warm) if the cache was cleared
@@ -448,7 +478,7 @@ ssh $INSTANCE 'sudo bash /opt/ams-s3-demo/deploy/aws/bootstrap.sh'
 | Console 404s on every page | `apps/console/web/dist` not built or not shipped (Steps 4–5) |
 | Mockapp stuck "connecting" | nginx missing websocket `Upgrade` headers, or `--server.baseUrlPath` not matching the location block |
 | Pipeline hangs during analyze | `GITLAB_MODE` still `live` with no outbound route (Step 6) |
-| `reset_s3.sh` fails on `git show` | `.git` or the `s3-baseline` tag missing — re-ship without excluding `.git` (Step 5) |
+| `reset_s3.sh` fails: "pathspec did not match" | Deployed from a commit that predates the `apps/` → `repos/` move, or `.git` was excluded from the rsync (Steps 5, 12) |
 | App restarts mid-codegen | `--reload` was added to the unit. Never use it: the pipeline writes `.py` files into the tree uvicorn would be watching |
 | A rehearsed-instant beat now pauses | Unwarmed `.cache/llm` entry calling Bedrock live (Step 10) |
 
@@ -458,7 +488,7 @@ ssh $INSTANCE 'sudo bash /opt/ams-s3-demo/deploy/aws/bootstrap.sh'
 pipeline writes generated `.py` files into its own working tree and shells out
 to `pytest` (`api/routers/s3.py`, `s3_enhancement/testrun.py`). Local state that
 must persist across requests includes the SQLite policy/claims DB
-(`apps/policycore/core/db.py`), the ChromaDB vector directory (`common/vectorstore.py`),
+(`repos/policycore/core/db.py`), the ChromaDB vector directory (`common/vectorstore.py`),
 the LLM replay cache, and `s3_enhancement/out/`. A second worker or instance
 would serve inconsistent state mid-demo.
 
@@ -471,9 +501,23 @@ instance and its security group, not the unit file.
 
 | Process | Port | Unit | Serves |
 |---|---|---|---|
-| FastAPI console | 8000 (localhost) | `ams-s3-console` | `/api/*` and the built React SPA |
-| Streamlit mockapp | 8501 (localhost) | `ams-s3-mockapp` | MapleSure portal — the CR target |
-| nginx | 80 (public) | `nginx` | `/` → console, `/sl_policycore/` → mockapp |
+| FastAPI console | 8000 (localhost) | `ams-s3-console` | `/api/*` and the built React SPA, including `/admin` |
+| Streamlit PolicyCore | 8501 (localhost) | `ams-s3-mockapp` | MapleSure portal — the CR-2026-041/042 target |
+| nginx | 80 (public) | `nginx` | `/` → console, `/sl_policycore/` → PolicyCore |
+
+**Only two of the five processes are deployed.** ClaimsPortal's two services
+(:8081, :8082) and EnrolDirect (:8083) have **no systemd unit and no nginx
+location here** — this folder deploys the console and PolicyCore only. Units
+for the ClaimsPortal pair existed once but were lost on 2026-07-28 while
+uncommitted and are unrecoverable; nothing has been written for EnrolDirect.
+Demoing CR-2026-043 or CR-2026-045 on EC2 means writing three units and three
+`location` blocks first, modelled on the two that are here. Do not assume they
+exist because the app does.
+
+The console's `/admin` service controls are correspondingly limited on EC2:
+they spawn a launch script and probe a port, which is not how a
+systemd-managed process should be started or stopped. Use `systemctl` on the
+instance.
 
 ## Appendix B — files in this directory
 
@@ -481,6 +525,17 @@ instance and its security group, not the unit file.
 |---|---|
 | `bootstrap.sh` | Idempotent provisioning script (Step 7) |
 | `ams-s3-console.service` | systemd unit for the FastAPI console |
-| `ams-s3-mockapp.service` | systemd unit for the Streamlit mockapp |
+| `ams-s3-mockapp.service` | systemd unit for the Streamlit PolicyCore portal |
 | `nginx.conf` | Reverse proxy, long timeouts, SSE + websocket support |
 | `bedrock-iam-policy.json` | Least-privilege Bedrock invoke policy (Step 2) |
+
+That is the whole folder — there is nothing here for ClaimsPortal or
+EnrolDirect, per the note above.
+
+**Both units were updated on 2026-08-03 for the `repos/` layout.**
+`ams-s3-mockapp.service` now runs `streamlit run repos/policycore/app.py`
+(was `apps/policycore/app.py`); `ams-s3-console.service` is unchanged, since
+the console did not move and still starts as
+`uvicorn apps.console.api.main:app`. A `.service` file falls outside the
+extension allowlist most path rewrites use, so it was missed on the first pass
+of that move — check these two by hand after any future relayout.

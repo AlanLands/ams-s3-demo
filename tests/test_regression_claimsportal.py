@@ -16,7 +16,7 @@ Two constraints keep this passing on both sides of the CR:
    pre-existing key is a regression.
 
 Must pass before and after CR-2026-043, and must not live under
-`apps/claimsportal/` — see the same two rules in
+`repos/claimsportal/` — see the same two rules in
 `tests/test_regression_policycore.py`.
 """
 
@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from apps.claimsportal.policy_service.main import app
+from repos.claimsportal.policy_service.main import app
 
 client = TestClient(app)
 

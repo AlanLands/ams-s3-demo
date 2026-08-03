@@ -39,7 +39,7 @@ def _branch(**overrides) -> BranchState:
         base="main",
         ticket="AMS-103",
         created_at="2026-07-30 09:00:00",
-        staged_files=["apps/claimsportal/policy_service/policy.py"],
+        staged_files=["repos/claimsportal/policy_service/policy.py"],
     )
     base.update(overrides)
     return BranchState(**base)
@@ -49,7 +49,7 @@ def _commit() -> Commit:
     return Commit(
         sha="abc1234",
         message="AMS-103: add claims deductible",
-        files=("apps/claimsportal/policy_service/policy.py",),
+        files=("repos/claimsportal/policy_service/policy.py",),
         committed_at="2026-07-30 09:30:00",
     )
 
@@ -67,7 +67,7 @@ def _case(name: str, status: str = "passed") -> _TestCase:
 
 
 SPRING = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
-POLICYCORE = targets.MOCKAPP_ENDORSEMENT_FIELD_ADD
+POLICYCORE = targets.MOCKAPP_AMENDMENT_FIELD_ADD
 
 
 # --- deployment plan --------------------------------------------------------
@@ -91,7 +91,7 @@ def test_plan_includes_the_targets_own_migration_step():
     plan = build_deployment_plan(POLICYCORE, build_change_map(POLICYCORE))
     migrate = [step for step in plan.steps if step.kind == "migrate"]
     assert len(migrate) == 1
-    assert "apps.policycore.core.seed" in migrate[0].command
+    assert "repos.policycore.core.seed" in migrate[0].command
 
 
 def test_plan_omits_migration_for_a_target_that_has_none():
@@ -278,7 +278,7 @@ def _record(**overrides) -> ReleaseRecord:
         ticket_key="AMS-102",
         released_by="Priya Nair",
         generated_at=datetime(2026, 7, 29, 20, 30),
-        changed_files=["apps/policycore/core/endorsements.py"],
+        changed_files=["repos/policycore/core/amendments.py"],
         criteria=[],
         matrix=None,
         evidence=[SuiteEvidence("Generated suite", True, 4, 4)],
@@ -376,12 +376,12 @@ def test_note_set_uses_a_distinct_cache_beat_per_target():
     keys = {
         target.cache_key("release_note_set")
         for target in (
-            targets.MOCKAPP_COVERAGE_UPGRADE,
-            targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
+            targets.MOCKAPP_TIER_UPGRADE,
+            targets.MOCKAPP_AMENDMENT_FIELD_ADD,
             targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
         )
     }
     assert len(keys) == 3
-    assert targets.MOCKAPP_COVERAGE_UPGRADE.cache_key(
+    assert targets.MOCKAPP_TIER_UPGRADE.cache_key(
         "release_note_set"
-    ) != targets.MOCKAPP_COVERAGE_UPGRADE.cache_key("release_notes")
+    ) != targets.MOCKAPP_TIER_UPGRADE.cache_key("release_notes")

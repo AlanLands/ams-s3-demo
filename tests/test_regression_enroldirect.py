@@ -1,7 +1,7 @@
 """Pre-existing regression suite for the EnrolDirect enrolment access gate.
 
 Checked in, human-authored, and named by no target's testgen or codegen
-allowlist. It lives in `tests/` rather than under `apps/enroldirect/` for the
+allowlist. It lives in `tests/` rather than under `repos/enroldirect/` for the
 same reason the other two suites do: anything ending `.py` under a target root
 joins the codegen candidate pool, and a suite the pipeline can rewrite is not
 an independent check of anything.
@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from apps.enroldirect.main import app
+from repos.enroldirect.main import app
 
 client = TestClient(app)
 

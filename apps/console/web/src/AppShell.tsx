@@ -31,10 +31,20 @@ function ScenarioIcon() {
   )
 }
 
+function AdminIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+      <path d="M8 2v2M8 12v2M2 8h2M12 8h2M4.1 4.1l1.4 1.4M10.5 10.5l1.4 1.4M11.9 4.1l-1.4 1.4M5.5 10.5l-1.4 1.4" strokeLinecap="round" />
+      <circle cx="8" cy="8" r="2.4" />
+    </svg>
+  )
+}
+
 export default function AppShell() {
   const { identity, logout } = useAuth()
   const navigate = useNavigate()
   const initial = identity?.name?.trim().charAt(0).toUpperCase() ?? '?'
+  const isManager = identity?.role === 'manager'
 
   return (
     <div className="ams-shell">
@@ -103,7 +113,36 @@ export default function AppShell() {
               </NavLink>
             ))}
           </nav>
+
+          {/* S3 portals its stage rail into this slot, so it has to stay
+              directly under the scenario it belongs to. */}
           <div id="ams-sidebar-slot" />
+
+          {/* Manager-only, and absent rather than disabled for an engineer:
+              a visible-but-dead entry advertises a page they cannot use, and
+              every route behind it 403s server-side anyway. Last in the rail —
+              it is housekeeping, not a step in the scenario flow. */}
+          {isManager && (
+            <>
+              <div className="ams-sidebar-divider" />
+              <nav className="ams-sidebar-nav">
+                <NavLink
+                  to="/admin"
+                  className={({ isActive }) =>
+                    isActive ? 'ams-sidebar-link ams-sidebar-link-active' : 'ams-sidebar-link'
+                  }
+                >
+                  <span className="ams-sidebar-link-icon">
+                    <AdminIcon />
+                  </span>
+                  <span>
+                    Admin
+                    <span className="ams-sidebar-link-desc">Demo control</span>
+                  </span>
+                </NavLink>
+              </nav>
+            </>
+          )}
         </aside>
         <main id="main-content" className="ams-shell-main" tabIndex={-1}>
           <Outlet />

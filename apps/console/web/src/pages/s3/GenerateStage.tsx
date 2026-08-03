@@ -1,9 +1,17 @@
-import { StageFrame } from './components'
-import { parseDiff } from './utils'
+import { useState } from 'react'
+import { ArtifactSummary, Chip, DiffView, Modal, StageFrame } from './components'
 import FileSelectionPanel from '../../FileSelectionPanel'
 import TokenPanel from '../../TokenPanel'
 import { ScmPanel } from '../../ScmPanel'
 import { useS3 } from './context'
+
+// Only the genuinely secondary detail moves off this stage. The per-file diff,
+// the Q&A thread and every apply/reject control stay exactly where they were —
+// reviewing the change file by file *is* the main flow here, and hiding it
+// behind a click would be decluttering the one screen that is meant to be busy.
+// What moves: how the AI picked the files, the crash dump behind a failed
+// migration, and the proposed design-doc rewrite.
+type OpenArtifact = { kind: 'selection' | 'crash' | 'docsync'; id?: string } | null
 
 export default function GenerateStage() {
   const {
@@ -76,6 +84,9 @@ export default function GenerateStage() {
     designDocApplying,
     handleApplyDesignDoc
   } = useS3()
+  const [openArtifact, setOpenArtifact] = useState<OpenArtifact>(null)
+  const closeArtifact = () => setOpenArtifact(null)
+  const failedSteps = postApplyFailure?.steps.filter((step) => step.returncode !== 0) ?? []
   const activity = generating ? 'Generating the change.' : applying ? 'Applying the proposal.' : applied ? (postApplyFailure ? 'Applied, but the app crashed on migration.' : 'Applied to repo.') : generateError ?? ''
 
   return (
@@ -396,7 +407,7 @@ export default function GenerateStage() {
                     <input
                       className="ams-input"
                       style={{ flex: '1 1 240px' }}
-                      placeholder="Repo-relative file path, e.g. apps/policycore/core/claims.py"
+                      placeholder="Repo-relative file path, e.g. repos/policycore/core/claims.py"
                       value={newFilePath}
                       onChange={(event) => setNewFilePath(event.target.value)}
                       disabled={addingFile || applied}
@@ -466,22 +477,29 @@ export default function GenerateStage() {
                       The change was written to the repo, but the post-apply step that rebuilds the
                       app against it failed — the portal is likely broken until this is fixed.
                     </p>
-                    {postApplyFailure.steps
-                      .filter((step) => step.returncode !== 0)
-                      .map((step) => (
-                        <div key={step.command} style={{ marginTop: '0.5rem' }}>
-                          <p style={{ fontSize: 'var(--ams-text-xs)', margin: 0 }}>
-                            <code>{step.command}</code> exited with code {step.returncode}:
-                          </p>
-                          <pre style={{ fontSize: 'var(--ams-text-xs)', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
-                            {step.output_tail}
-                          </pre>
-                        </div>
-                      ))}
-                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    {/* Which command failed stays on screen; the output tail —
+                        a stack trace nobody reads from the back of a room —
+                        opens on request. */}
+                    {failedSteps.map((step) => (
+                      <p
+                        key={step.command}
+                        style={{ fontSize: 'var(--ams-text-xs)', margin: '0.3rem 0 0' }}
+                      >
+                        <code>{step.command}</code> exited with code {step.returncode}
+                      </p>
+                    ))}
+                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <button className="ams-button" onClick={handleFixCrash} disabled={fixingCrash}>
                         {fixingCrash ? 'Fixing…' : 'Fix with AI'}
                       </button>
+                      {failedSteps.length > 0 && (
+                        <button
+                          className="ams-button-secondary"
+                          onClick={() => setOpenArtifact({ kind: 'crash' })}
+                        >
+                          View failure output
+                        </button>
+                      )}
                       <span style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>
                         Sends the crash back to the model for a revised proposal — or run
                         demo/reset_s3.sh to roll back.
@@ -545,24 +563,18 @@ export default function GenerateStage() {
                               Applied — <code>{finding.design_doc}</code> now matches the code.
                             </p>
                           ) : (
-                            <>
-                              {parseDiff(finding.diff_text).map((file) => (
-                                <div key={file.path} className="ams-diff-file">
-                                  <div className="ams-diff-file-header">
-                                    <span>{file.path}</span>
-                                  </div>
-                                  <div className="ams-diff-body">
-                                    {file.lines.map((line, index) => (
-                                      <div
-                                        key={index}
-                                        className={`ams-diff-line${line.type !== 'context' ? ` ams-diff-line-${line.type}` : ''}`}
-                                      >
-                                        {line.text}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
+                            // The proposed rewrite is a diff of a *document*,
+                            // not of the change under review — read it if you
+                            // want it, but it should not push the apply button
+                            // off the bottom of the stage.
+                            <div
+                              style={{
+                                display: 'flex',
+                                gap: '0.5rem',
+                                flexWrap: 'wrap',
+                                marginTop: '0.6rem',
+                              }}
+                            >
                               <button
                                 type="button"
                                 className="ams-button"
@@ -573,7 +585,16 @@ export default function GenerateStage() {
                                   ? 'Applying…'
                                   : `Apply ${finding.design_doc}`}
                               </button>
-                            </>
+                              <button
+                                type="button"
+                                className="ams-button-secondary"
+                                onClick={() =>
+                                  setOpenArtifact({ kind: 'docsync', id: finding.proposal_id ?? '' })
+                                }
+                              >
+                                View proposed update
+                              </button>
+                            </div>
                           )
                         ) : (
                           <p style={{ fontSize: 'var(--ams-text-sm)', opacity: 0.8 }}>
@@ -592,11 +613,76 @@ export default function GenerateStage() {
                 </p>
               </div>
             )}
-            <FileSelectionPanel selection={generated.file_selection} />
+            {/* The subsystem screen, the score bars and the screened-out decoy
+                bank answer "how did it decide where to look" — a good question,
+                and a whole card of it under every generated change. */}
+            <ArtifactSummary
+              title="How the AI picked these files"
+              chips={
+                <Chip>
+                  {generated.file_selection.selected_files.length} of{' '}
+                  {generated.file_selection.candidate_pool_size} files
+                </Chip>
+              }
+              detail="Subsystem screen, relevance scores, and everything ruled out as not part of this change."
+              actions={
+                <button
+                  className="ams-button-secondary"
+                  onClick={() => setOpenArtifact({ kind: 'selection' })}
+                >
+                  View file selection
+                </button>
+              }
+            />
             <TokenPanel panel={generated.token_panel} />
           </>
         )}
       </div>
+      {openArtifact?.kind === 'selection' && generated && (
+        <Modal
+          title="How the AI picked these files"
+          subtitle="Which part of the repo this change was matched to, and what was screened out."
+          onClose={closeArtifact}
+        >
+          <FileSelectionPanel selection={generated.file_selection} />
+        </Modal>
+      )}
+      {openArtifact?.kind === 'crash' && postApplyFailure && (
+        <Modal
+          title="Post-apply failure output"
+          subtitle="The step that rebuilds the app against the applied change did not succeed."
+          size="lg"
+          onClose={closeArtifact}
+        >
+          {failedSteps.map((step) => (
+            <div key={step.command} style={{ marginTop: '0.5rem' }}>
+              <p style={{ fontSize: 'var(--ams-text-xs)', margin: 0 }}>
+                <code>{step.command}</code> exited with code {step.returncode}:
+              </p>
+              <pre style={{ fontSize: 'var(--ams-text-xs)', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+                {step.output_tail}
+              </pre>
+            </div>
+          ))}
+        </Modal>
+      )}
+      {openArtifact?.kind === 'docsync' &&
+        (() => {
+          const finding = designSync?.findings.find(
+            (candidate) => candidate.proposal_id === openArtifact.id
+          )
+          if (!finding) return null
+          return (
+            <Modal
+              title={`Proposed update — ${finding.design_doc}`}
+              subtitle={`Keeps ${finding.subsystem}'s design document in step with the code that just changed.`}
+              size="lg"
+              onClose={closeArtifact}
+            >
+              <DiffView diffText={finding.diff_text} />
+            </Modal>
+          )
+        })()}
     </>
   ) : (
     <p className="ams-muted">Only engineers generate and apply code changes.</p>

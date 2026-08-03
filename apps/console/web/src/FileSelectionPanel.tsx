@@ -6,7 +6,7 @@ import type { FileSelection } from './api_s3'
 // the AI pick which part of the repo to touch" should look the same in both
 // places instead of only ever showing up in one of them.
 //
-// apps/policycore/systems/*/DESIGN.md is a bank of decoy subsystems (several of them
+// repos/policycore/systems/*/DESIGN.md is a bank of decoy subsystems (several of them
 // Java) this demo's screening step is meant to rule out — for CRs whose real
 // core files aren't behind their own design doc, in_scope ends up empty and
 // screened_out is the whole decoy bank. Screened-out entries must never look

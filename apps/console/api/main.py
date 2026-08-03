@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from apps.console.api import auth
-from apps.console.api.routers import s3
+from apps.console.api.routers import admin, s3
 
 CONSOLE_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIST = CONSOLE_ROOT / "web" / "dist"
@@ -42,6 +42,9 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(s3.router, prefix="/api")
+# Manager-only demo operations (reset/services/onboarding). Mounted before the
+# SPA catch-all below, like every other API router.
+app.include_router(admin.router, prefix="/api")
 
 
 @app.get("/api/health")

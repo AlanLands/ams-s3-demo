@@ -124,7 +124,7 @@ def test_one_ci_can_offer_several_candidate_changes():
     decision = routing.route_ticket(ci="PolicyCore")
     assert set(decision.candidate_target_ids) == {
         targets.DEFAULT_TARGET_ID,
-        targets.ENDORSEMENT_TARGET_ID,
+        targets.AMENDMENT_TARGET_ID,
     }
 
 

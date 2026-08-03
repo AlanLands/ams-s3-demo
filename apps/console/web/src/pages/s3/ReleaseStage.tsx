@@ -1,6 +1,11 @@
-import { StageFrame } from './components'
+import { useState } from 'react'
+import { ArtifactSummary, Chip, Modal, StageFrame } from './components'
 import { DeploymentPlanPanel, ReleaseNotes } from '../../ReleasePanel'
 import { useS3 } from './context'
+
+// Which artifact body is open, if any. The stage itself shows only that each
+// artifact exists and what shape it is — the reading happens in the dialog.
+type OpenArtifact = 'notes' | 'plan' | null
 
 export default function ReleaseStage() {
   const {
@@ -22,6 +27,7 @@ export default function ReleaseStage() {
     handleMarkTicketDone,
     closingTicket
   } = useS3()
+  const [openArtifact, setOpenArtifact] = useState<OpenArtifact>(null)
   const activity = draftingNotes
     ? 'Drafting release notes.'
     : exportingRecord
@@ -36,123 +42,76 @@ export default function ReleaseStage() {
     : releaseNoteSet
       ? 'Re-draft release notes'
       : 'Draft release notes'
-  const attachStatusColor = attachResult?.attached
-    ? 'var(--ams-success)'
-    : 'var(--ams-warning)'
   const canMarkTicketDone =
     releaseNoteSet &&
     inQa &&
     isActiveAssignee &&
     activeIssue?.status !== 'Done'
   const releaseNotesCard = releaseNoteSet ? (
-    <div
-      className="ams-card"
-      style={{
-        marginTop: '0.75rem',
-      }}
-    >
-      <strong
-        style={{
-          fontSize: 'var(--ams-text-sm)',
-        }}
-      >
-        Release notes — three audiences
-      </strong>
-      <p
-        style={{
-          fontSize: 'var(--ams-text-xs)',
-          color: 'var(--ams-ink-soft)',
-          margin: '0.3rem 0 0.6rem',
-        }}
-      >
-        {AI_LABEL}
-      </p>
-      <ReleaseNotes notes={releaseNoteSet} />
-    </div>
+    <ArtifactSummary
+      title="Release notes"
+      chips={<Chip>3 audiences</Chip>}
+      detail="One note each for the customer, whoever runs the app, and the help page."
+      actions={
+        <button className="ams-button-secondary" onClick={() => setOpenArtifact('notes')}>
+          View release notes
+        </button>
+      }
+    />
   ) : null
   const deploymentPlanCard = deploymentPlan ? (
-    <div
-      className="ams-card"
-      style={{
-        marginTop: '0.75rem',
-      }}
-    >
-      <strong
-        style={{
-          fontSize: 'var(--ams-text-sm)',
-        }}
-      >
-        Deployment &amp; rollback
-      </strong>
-      <div
-        style={{
-          marginTop: '0.5rem',
-        }}
-      >
-        <DeploymentPlanPanel plan={deploymentPlan} />
-      </div>
-    </div>
+    <ArtifactSummary
+      title="Deployment & rollback"
+      chips={
+        <Chip>
+          {deploymentPlan.steps.length} deploy · {deploymentPlan.rollback.length} rollback
+        </Chip>
+      }
+      detail="Derived from the change's own service graph — not drafted by a model."
+      actions={
+        <button className="ams-button-secondary" onClick={() => setOpenArtifact('plan')}>
+          View plan
+        </button>
+      }
+    />
   ) : null
   const releaseRecordCard = releaseNoteSet ? (
-    <div
-      className="ams-card"
-      style={{
-        marginTop: '0.75rem',
-      }}
-    >
-      <strong
-        style={{
-          fontSize: 'var(--ams-text-sm)',
-        }}
-      >
-        Release record
-      </strong>
-      <p
-        style={{
-          fontSize: 'var(--ams-text-sm)',
-          color: 'var(--ams-ink-soft)',
-          margin: '0.4rem 0 0.6rem',
-        }}
-      >
-        One document with what shipped, the change map, the acceptance-criteria matrix,
-        every test run, the approvals from this ticket's own timeline, and the deployment
-        plan. Anything the pipeline could not evidence is listed in it explicitly.
-      </p>
-      <div
-        style={{
-          display: 'flex',
-          gap: '0.5rem',
-          flexWrap: 'wrap',
-        }}
-      >
-        <button
-          className="ams-button"
-          onClick={handleDownloadRecord}
-          disabled={exportingRecord}
-        >
-          {exportingRecord ? 'Building…' : '⬇ Download release record (PDF)'}
-        </button>
-        <button
-          className="ams-button-secondary"
-          onClick={handleAttachRecord}
-          disabled={attachingRecord}
-        >
-          {attachingRecord ? 'Attaching…' : 'Attach to ticket'}
-        </button>
-      </div>
-      {attachResult && (
-        <p
-          style={{
-            fontSize: 'var(--ams-text-sm)',
-            marginTop: '0.6rem',
-            color: attachStatusColor,
-          }}
-        >
-          {attachResult.attached ? '✓ ' : '○ '}
-          {attachResult.detail}
-        </p>
-      )}
-    </div>
+    <ArtifactSummary
+      title="Release record"
+      detail={
+        <>
+          What shipped, the change map, the acceptance-criteria matrix, every test run, this
+          ticket's approvals, and the deployment plan — including anything the pipeline could
+          not evidence.
+          {attachResult && (
+            <span
+              style={{
+                display: 'block',
+                marginTop: '0.4rem',
+                color: attachResult.attached ? 'var(--ams-success)' : 'var(--ams-warning)',
+              }}
+            >
+              {attachResult.attached ? '✓ ' : '○ '}
+              {attachResult.detail}
+            </span>
+          )}
+        </>
+      }
+      actions={
+        <>
+          <button className="ams-button" onClick={handleDownloadRecord} disabled={exportingRecord}>
+            {exportingRecord ? 'Building…' : '⬇ Download (PDF)'}
+          </button>
+          <button
+            className="ams-button-secondary"
+            onClick={handleAttachRecord}
+            disabled={attachingRecord}
+          >
+            {attachingRecord ? 'Attaching…' : 'Attach to ticket'}
+          </button>
+        </>
+      }
+    />
   ) : null
 
   return (
@@ -177,6 +136,24 @@ export default function ReleaseStage() {
           >
             {closingTicket ? 'Closing…' : 'QA passed — mark ticket Done'}
           </button>
+        )}
+        {openArtifact === 'notes' && releaseNoteSet && (
+          <Modal
+            title="Release notes"
+            subtitle={AI_LABEL}
+            onClose={() => setOpenArtifact(null)}
+          >
+            <ReleaseNotes notes={releaseNoteSet} />
+          </Modal>
+        )}
+        {openArtifact === 'plan' && deploymentPlan && (
+          <Modal
+            title="Deployment & rollback"
+            subtitle="Deploy order, migration and verification — derived, not drafted."
+            onClose={() => setOpenArtifact(null)}
+          >
+            <DeploymentPlanPanel plan={deploymentPlan} />
+          </Modal>
         )}
     </>
   ) : (

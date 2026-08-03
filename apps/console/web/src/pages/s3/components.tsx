@@ -1,6 +1,8 @@
-import { Fragment, useEffect, useRef, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useS3, type S3Stage } from './context'
 import StageNav from './StageNav'
+import { parseDiff } from './utils'
 import type { TestCaseResult, TestsRunResponse } from '../../api_s3'
 
 export function StageFrame({
@@ -158,6 +160,237 @@ export function RunSummaryLine({
       </strong>{' '}
       <span style={{ color: 'var(--ams-ink-soft)' }}>in {run.duration_s.toFixed(1)} s</span>
     </p>
+  )
+}
+
+// --- Progressive disclosure ---------------------------------------------------
+// The stages used to render every artifact — release notes, the design doc, the
+// full test checklist, the deploy plan — stacked inline, which buried the one
+// thing a non-technical viewer is following: the flow itself. The rule now is
+// that a stage shows the action, a one-line status, and a compact summary that
+// proves the artifact exists; the body of the artifact opens in a dialog.
+//
+// Nothing here changes behaviour, gating, or an API call. It only decides what
+// is on screen before you ask for it.
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'summary',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ')
+
+// Ref-counted, because the design doc's dialog can sit under a nested one later
+// and the first to close must not unlock the page behind the second.
+let openDialogCount = 0
+let bodyOverflowBeforeLock = ''
+
+/**
+ * The console's one overlay dialog for artifact bodies.
+ *
+ * Renders through a portal on `document.body` so a stage's own stacking and
+ * overflow can never clip it, and so the backdrop covers the stage rail too —
+ * the rail is navigation, and navigating away mid-read is exactly what a modal
+ * is supposed to suspend.
+ *
+ * Mount = open. The caller renders `{open && <Modal .../>}`, which keeps focus
+ * capture/restore tied to the component lifecycle rather than to a prop the
+ * caller has to remember to drive both ways.
+ */
+export function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+  size = 'md',
+}: {
+  title: string
+  subtitle?: ReactNode
+  onClose: () => void
+  children: ReactNode
+  size?: 'md' | 'lg'
+}) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const headingId = useId()
+
+  // Focus moves into the dialog on open and back to whatever opened it on
+  // close — without the restore, dismissing drops a keyboard user at the top
+  // of the document and they have to tab the whole stage again to get back.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null
+    panelRef.current?.focus()
+    return () => opener?.focus?.()
+  }, [])
+
+  // The page behind a modal must not scroll: on a trackpad the backdrop scrolls
+  // the stage underneath it, so closing lands you somewhere you never chose.
+  useEffect(() => {
+    if (openDialogCount === 0) bodyOverflowBeforeLock = document.body.style.overflow
+    openDialogCount += 1
+    document.body.style.overflow = 'hidden'
+    return () => {
+      openDialogCount -= 1
+      if (openDialogCount === 0) document.body.style.overflow = bodyOverflowBeforeLock
+    }
+  }, [])
+
+  // Escape to dismiss, and Tab cycles inside the panel. Bound on the document
+  // rather than the panel so Escape still works when focus sits on the panel
+  // itself, which is where it starts.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const panel = panelRef.current
+      if (!panel) return
+      const focusable = Array.from(
+        panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+      ).filter((node) => node.offsetParent !== null || node === document.activeElement)
+      if (focusable.length === 0) {
+        // Nothing to land on but the panel — keep focus here rather than
+        // letting Tab walk off into the inert page behind the backdrop.
+        event.preventDefault()
+        panel.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      const inside = active instanceof Node && panel.contains(active) && active !== panel
+      if (event.shiftKey) {
+        if (!inside || active === first) {
+          event.preventDefault()
+          last.focus()
+        }
+      } else if (!inside || active === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  return createPortal(
+    // mousedown, not click: a click that *began* inside the panel and ended on
+    // the backdrop is a text selection dragged past the edge, not a dismissal.
+    <div
+      className="ams-modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        className={`ams-sheet${size === 'lg' ? ' ams-sheet-lg' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        ref={panelRef}
+      >
+        <div className="ams-sheet-header">
+          <div className="ams-sheet-heading">
+            <h2 className="ams-sheet-title" id={headingId}>
+              {title}
+            </h2>
+            {subtitle && <p className="ams-sheet-subtitle">{subtitle}</p>}
+          </div>
+          <button
+            type="button"
+            className="ams-modal-close"
+            onClick={onClose}
+            aria-label={`Close ${title}`}
+          >
+            ×
+          </button>
+        </div>
+        <div className="ams-sheet-body">{children}</div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+export type ChipTone = 'pass' | 'fail' | 'warn' | 'neutral'
+
+// Icon *and* wording carry the state — colour never does it alone, and the
+// label reads correctly with the glyph stripped out by a screen reader.
+const CHIP_ICON: Record<ChipTone, string> = { pass: '✓', fail: '✗', warn: '!', neutral: '' }
+
+export function Chip({ tone = 'neutral', children }: { tone?: ChipTone; children: ReactNode }) {
+  const icon = CHIP_ICON[tone]
+  return (
+    <span className={`ams-chip ams-chip-${tone}`}>
+      {icon && (
+        <span className="ams-chip-icon" aria-hidden="true">
+          {icon}
+        </span>
+      )}
+      {children}
+    </span>
+  )
+}
+
+/**
+ * The compact stand-in an artifact leaves in the main flow: what it is, how big
+ * it is, whether it passed, and the button that opens it. Deliberately fixed
+ * shape — every stage's summary should read the same way from the back of a
+ * room, which it will not if each one invents its own layout.
+ */
+export function ArtifactSummary({
+  title,
+  detail,
+  chips,
+  actions,
+}: {
+  title: string
+  detail?: ReactNode
+  chips?: ReactNode
+  actions: ReactNode
+}) {
+  return (
+    <div className="ams-card ams-artifact">
+      <div className="ams-artifact-text">
+        <div className="ams-artifact-head">
+          <strong className="ams-artifact-title">{title}</strong>
+          {chips}
+        </div>
+        {detail && <div className="ams-artifact-detail">{detail}</div>}
+      </div>
+      <div className="ams-artifact-actions">{actions}</div>
+    </div>
+  )
+}
+
+// One rendering of a unified diff, previously copy-pasted into four places —
+// now that three of them live inside a dialog, they must not drift apart.
+export function DiffView({ diffText }: { diffText: string }) {
+  return (
+    <>
+      {parseDiff(diffText).map((file) => (
+        <div key={file.path} className="ams-diff-file">
+          <div className="ams-diff-file-header">
+            <span>{file.path}</span>
+          </div>
+          <div className="ams-diff-body">
+            {file.lines.map((line, index) => (
+              <div
+                key={index}
+                className={`ams-diff-line${line.type !== 'context' ? ` ams-diff-line-${line.type}` : ''}`}
+              >
+                {line.text}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
   )
 }
 

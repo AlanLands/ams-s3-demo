@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
 
-# Repo root on PYTHONPATH so `apps.console.api` and `apps.policycore` import
+# Repo root on PYTHONPATH so `apps.console.api` and `repos.policycore` import
 # without installing the project.
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 

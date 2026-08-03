@@ -128,7 +128,7 @@ def _service_for(rel_path: str, target: Target) -> str:
         return target.display_name
     remainder = rel_path[len(prefix) :]
     head = remainder.split("/", 1)[0]
-    # A file directly under the root (apps/policycore/app.py) means the target
+    # A file directly under the root (repos/policycore/app.py) means the target
     # is not split into services at all.
     if "/" not in remainder or not head.endswith("_service"):
         return target.root.name

@@ -388,8 +388,8 @@ def test_commit_summary_comes_from_the_target_display_name():
         == "claims deductible handling"
     )
     assert (
-        scm.summary_from_display_name("MapleSure mockapp — endorsement priority field (CR-2026-042)")
-        == "endorsement priority field"
+        scm.summary_from_display_name("MapleSure mockapp — amendment priority field (CR-2026-042)")
+        == "amendment priority field"
     )
 
 
@@ -406,8 +406,8 @@ def test_real_targets_all_produce_a_readable_commit_subject():
 
     for target in (
         targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
-        targets.MOCKAPP_ENDORSEMENT_FIELD_ADD,
-        targets.MOCKAPP_COVERAGE_UPGRADE,
+        targets.MOCKAPP_AMENDMENT_FIELD_ADD,
+        targets.MOCKAPP_TIER_UPGRADE,
     ):
         summary = scm.summary_from_display_name(target.display_name)
         assert summary, f"{target.target_id} produced no commit summary"

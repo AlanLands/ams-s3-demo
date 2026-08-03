@@ -1705,7 +1705,15 @@ select:focus-visible,
 .ams-note-audience {
   font-size: var(--ams-text-xs);
   color: var(--ams-ink-soft);
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The exec review's specific complaint: once the head row wrapped, Copy fell to
+   a second line and sat hard left under the title, which reads as a broken
+   layout rather than a wrapped one. margin-left:auto keeps it on the right edge
+   in both states. */
+.ams-note-copy {
+  margin-left: auto;
 }
 .ams-note-body {
   margin: 0.3rem 0 0;
@@ -1956,4 +1964,634 @@ select:focus-visible,
   font-size: var(--ams-text-xs);
   overflow-x: auto;
   white-space: pre;
+}
+
+/* --- Artifact dialog + summaries (pages/s3/components.tsx) -------------------
+   The stages carry the flow; the artifacts they produce open in a dialog. The
+   panel deliberately reuses .ams-modal-backdrop and the ams-modal-in keyframe
+   from the ticket modal rather than defining a second scrim and a second
+   pop-in — two elevation treatments for the same idea is how a product starts
+   looking assembled rather than designed. Only the panel differs: this one is
+   a single scrolling column, not the ticket view's main + details grid. */
+.ams-sheet {
+  animation: ams-modal-in 0.16s ease-out;
+  background: #fff;
+  border-radius: var(--ams-radius-md);
+  width: 100%;
+  max-width: 720px;
+  max-height: calc(100vh - 6rem);
+  margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 36px rgba(15, 23, 31, 0.3);
+  overflow: hidden;
+}
+/* For bodies that are structures rather than prose — diffs, checklists, the
+   traceability matrix — where a 720px column would force horizontal scrolling. */
+.ams-sheet-lg {
+  max-width: 980px;
+}
+.ams-sheet:focus {
+  outline: none;
+}
+.ams-sheet:focus-visible {
+  outline: 2px solid var(--ams-accent);
+  outline-offset: -2px;
+}
+.ams-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ams-space-3);
+  padding: var(--ams-space-4) var(--ams-space-5);
+  border-bottom: 1px solid var(--ams-line);
+  flex-shrink: 0;
+}
+.ams-sheet-heading {
+  min-width: 0;
+}
+.ams-sheet-title {
+  font-size: var(--ams-text-lg);
+  line-height: 1.3;
+  margin: 0;
+  max-width: 40ch;
+}
+.ams-sheet-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  max-width: 60ch;
+}
+.ams-sheet-body {
+  padding: var(--ams-space-5);
+  overflow-y: auto;
+}
+/* Running text inside a dialog is held to a readable measure and never
+   stretched to the panel edge — the exec review called this out by name on the
+   release notes, where four short lines reflowed into a ragged full-bleed
+   block. Structures (tables, diffs, plans) opt out via their own widths. */
+.ams-sheet-body > p,
+.ams-sheet-prose {
+  max-width: 66ch;
+}
+/* The design doc opens in the wide panel so the change-map SVG is legible, but
+   its running text is still held to a measure — a 900px line of serif body copy
+   is exactly the "not looking nice" the exec review flagged. */
+.ams-sheet-body > .ams-doc,
+.ams-sheet-body > .ams-card:first-child {
+  margin-top: 0;
+}
+.ams-doc-body {
+  max-width: 70ch;
+}
+.ams-sheet-note {
+  margin: var(--ams-space-4) 0 0;
+  padding-top: var(--ams-space-3);
+  border-top: 1px solid var(--ams-line);
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  max-width: 66ch;
+}
+
+/* The compact stand-in an artifact leaves behind in the main flow. */
+.ams-artifact {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ams-space-4);
+  flex-wrap: wrap;
+  margin-top: var(--ams-space-3);
+  padding: var(--ams-space-4);
+}
+.ams-artifact-text {
+  min-width: 0;
+  flex: 1 1 22rem;
+}
+.ams-artifact-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+}
+.ams-artifact-title {
+  font-size: var(--ams-text-sm);
+}
+.ams-artifact-detail {
+  margin: 0.3rem 0 0;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  line-height: 1.5;
+  max-width: 68ch;
+}
+/* margin-left:auto rather than a flex-grow spacer: when the row wraps on a
+   narrow window the actions still sit at the right edge instead of snapping
+   back to the left under the title. */
+.ams-artifact-actions {
+  display: flex;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* Status at a glance: glyph + words, so the state survives greyscale, a
+   projector, and a colour-blind viewer. */
+.ams-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.ams-chip-icon {
+  font-weight: 700;
+}
+.ams-chip-pass {
+  background: #dbeee6;
+  color: #125c43;
+  border-color: rgba(18, 92, 67, 0.25);
+}
+.ams-chip-fail {
+  background: #f6dfe3;
+  color: #8a1330;
+  border-color: rgba(138, 19, 48, 0.25);
+}
+.ams-chip-warn {
+  background: #fbeed3;
+  color: var(--ams-warning);
+  border-color: rgba(125, 95, 19, 0.25);
+}
+.ams-chip-neutral {
+  background: var(--ams-surface);
+  color: var(--ams-ink-soft);
+  border-color: var(--ams-line-strong);
+}
+
+/* In-card explanatory copy on the stages. The .ams-stage-view > p measure cap
+   only reaches direct children, so paragraphs inside a card were the ones
+   running to 190 characters a line. */
+.ams-stage-note {
+  font-size: var(--ams-text-sm);
+  color: var(--ams-ink-soft);
+  margin: 0.4rem 0 0.6rem;
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+@media (max-width: 640px) {
+  .ams-sheet {
+    max-height: calc(100vh - 3rem);
+  }
+  .ams-artifact-actions {
+    margin-left: 0;
+  }
+}
+
+/* --- Admin: demo control (Admin.tsx and pages/admin/) -----------------------
+   Nothing here invents a second visual language: the sections are .ams-card,
+   status is the same .ams-chip glyph+word pair the stages use, commands reuse
+   .ams-plan-command, and the counts reuse the .ams-metric-* KPI strip. The new
+   pieces are the ones this page needs and no other page has — a genuinely
+   destructive button, a form field with a label/hint/error triple, and the
+   list-row shape the services and reset scopes share. */
+
+/* The house primary is already crimson, so a destructive control cannot be
+   distinguished by "red" alone. --ams-error is a distinctly hotter red than
+   --ams-accent, but the real separation is structural: this button only ever
+   appears inside a confirmation dialog, behind a typed scope name, on a card
+   with the danger rule down its left edge. White on #d20d35 measures 5.4:1. */
+.ams-button-danger {
+  font-family: inherit;
+  font-size: var(--ams-text-sm);
+  font-weight: 700;
+  color: #fff;
+  background: var(--ams-error);
+  border: 1px solid var(--ams-error);
+  border-radius: var(--ams-radius-sm);
+  padding: 0.5rem 1.1rem;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
+    box-shadow 160ms ease, transform 160ms ease;
+}
+.ams-button-danger:hover:not(:disabled) {
+  background: #a80a2a;
+  border-color: #a80a2a;
+}
+.ams-button-danger:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.ams-button-danger:disabled {
+  background: var(--ams-surface);
+  border-color: var(--ams-line-strong);
+  color: var(--ams-ink-soft);
+  cursor: not-allowed;
+}
+
+/* Row-level control size. Still 36px tall with the 0.4rem padding, so it clears
+   a comfortable pointer target while letting four of them share a row. */
+.ams-button-compact {
+  padding: 0.4rem 0.8rem;
+  font-size: var(--ams-text-xs);
+}
+
+.ams-textarea {
+  font-family: ui-monospace, monospace;
+  font-size: var(--ams-text-xs);
+  line-height: 1.5;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--ams-line-strong);
+  border-radius: 2px;
+  background: var(--ams-surface);
+  color: var(--ams-ink);
+  resize: vertical;
+}
+.ams-textarea:focus-visible {
+  outline: 3px solid var(--ams-accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px var(--ams-accent-soft);
+}
+
+/* Label above, hint below, error below that — never a placeholder standing in
+   for a label, since the placeholder disappears the moment there is a value to
+   check against it. */
+.ams-field {
+  margin-bottom: var(--ams-space-4);
+}
+.ams-field-label {
+  display: block;
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ams-ink-soft);
+  margin-bottom: 0.25rem;
+}
+.ams-field-hint {
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  margin: 0.25rem 0 0;
+  max-width: 62ch;
+}
+.ams-field-error {
+  font-size: var(--ams-text-xs);
+  font-weight: 600;
+  color: var(--ams-error);
+  margin: 0.25rem 0 0;
+  max-width: 62ch;
+}
+
+.ams-admin-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+.ams-admin-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--ams-space-4);
+  flex-wrap: wrap;
+  margin-top: var(--ams-space-3);
+}
+.ams-admin-title {
+  font-size: var(--ams-text-2xl);
+  margin-bottom: var(--ams-space-1);
+}
+/* Reserved height: the announcement appearing must not shove the whole page
+   down a line every time an action completes. */
+.ams-admin-live {
+  min-height: 1.4rem;
+  margin: var(--ams-space-3) 0 var(--ams-space-2);
+  font-size: var(--ams-text-sm);
+  font-weight: 600;
+  color: var(--ams-success);
+}
+
+.ams-admin-section {
+  margin-top: var(--ams-space-5);
+}
+.ams-admin-section-danger {
+  border-left: 3px solid var(--ams-error);
+}
+.ams-admin-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--ams-space-3);
+  flex-wrap: wrap;
+}
+.ams-admin-section-title {
+  font-size: var(--ams-text-lg);
+}
+.ams-admin-group-title {
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ams-ink-soft);
+  margin: var(--ams-space-4) 0 0;
+}
+
+.ams-admin-context {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+}
+.ams-admin-branch {
+  font-size: var(--ams-text-sm);
+  color: var(--ams-ink-soft);
+}
+.ams-admin-branch code {
+  color: var(--ams-ink);
+  overflow-wrap: anywhere;
+}
+/* The KPI strip at full 2xl reads as five headlines competing with the page
+   title; this is the same tile at a size that supports it instead. */
+.ams-admin-strip {
+  margin: var(--ams-space-4) 0 0;
+  gap: var(--ams-space-6);
+}
+.ams-admin-strip .ams-metric-value {
+  font-size: var(--ams-text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.ams-admin-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--ams-space-2);
+}
+.ams-admin-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ams-space-3) var(--ams-space-4);
+  flex-wrap: wrap;
+  padding: var(--ams-space-3) 0;
+}
+.ams-admin-row + .ams-admin-row {
+  border-top: 1px solid var(--ams-line);
+}
+.ams-admin-row-main {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+.ams-admin-row-title {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  font-weight: 700;
+}
+.ams-admin-row-detail {
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  margin: 0.2rem 0 0;
+  max-width: 62ch;
+}
+.ams-admin-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.ams-admin-actions-end {
+  justify-content: flex-end;
+  margin-top: var(--ams-space-3);
+}
+.ams-admin-count-badge,
+.ams-admin-count {
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Glyph + heading text carry the state; the fill only reinforces it. Same
+   contract as .ams-chip, so the page survives greyscale and a projector. */
+.ams-admin-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ams-space-2);
+  border: 1px solid;
+  border-radius: var(--ams-radius-sm);
+  padding: var(--ams-space-3);
+  margin: var(--ams-space-3) 0 0;
+  font-size: var(--ams-text-sm);
+}
+.ams-admin-banner-icon {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--ams-text-xs);
+  border: 1px solid currentColor;
+}
+.ams-admin-banner-title {
+  display: block;
+}
+.ams-admin-banner-body {
+  margin: 0.25rem 0 0;
+  max-width: 68ch;
+}
+.ams-admin-banner-list {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  max-width: 68ch;
+}
+.ams-admin-banner-info {
+  background: var(--ams-surface);
+  border-color: var(--ams-line-strong);
+  color: var(--ams-ink);
+}
+.ams-admin-banner-good {
+  background: #dbeee6;
+  border-color: rgba(18, 92, 67, 0.3);
+  color: #125c43;
+}
+.ams-admin-banner-warn {
+  background: #fbeed3;
+  border-color: rgba(125, 95, 19, 0.35);
+  color: var(--ams-warning);
+}
+.ams-admin-banner-danger {
+  background: #f6dfe3;
+  border-color: rgba(138, 19, 48, 0.3);
+  color: #8a1330;
+}
+
+.ams-admin-cmd {
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--ams-space-2);
+}
+.ams-admin-cmd-status {
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+}
+
+/* A reset preview can name every file in a target, and a list long enough to
+   push the confirm control off screen is a list that stops being read. */
+.ams-admin-files {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0.45rem 0.6rem;
+  max-height: 11rem;
+  overflow: auto;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: var(--ams-radius-sm);
+  font-family: ui-monospace, monospace;
+  font-size: var(--ams-text-xs);
+}
+.ams-admin-files li {
+  padding: 0.1rem 0;
+  overflow-wrap: anywhere;
+}
+.ams-admin-files-danger {
+  border-color: rgba(138, 19, 48, 0.35);
+  background: #fdf3f5;
+}
+.ams-admin-pathgroup {
+  margin-top: var(--ams-space-3);
+}
+.ams-admin-pathgroup-label {
+  margin: 0;
+  font-size: var(--ams-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ams-ink-soft);
+}
+.ams-admin-pathgroup-empty {
+  margin: 0.2rem 0 0;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+}
+
+.ams-admin-confirm {
+  margin-top: var(--ams-space-4);
+  border-top: 1px solid var(--ams-line);
+  padding-top: var(--ams-space-4);
+}
+.ams-admin-confirm-word {
+  font-family: ui-monospace, monospace;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ams-ink);
+}
+.ams-admin-confirm-actions {
+  display: flex;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: var(--ams-space-4);
+}
+
+.ams-admin-tablewrap {
+  overflow-x: auto;
+  margin-top: var(--ams-space-3);
+}
+.ams-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ams-text-sm);
+}
+.ams-admin-table-caption {
+  caption-side: top;
+  text-align: left;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+  padding-bottom: 0.3rem;
+}
+.ams-admin-table th {
+  text-align: left;
+  font-size: var(--ams-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ams-ink-soft);
+  border-bottom: 1px solid var(--ams-line);
+  padding: 0.3rem 0.5rem 0.3rem 0;
+}
+.ams-admin-table td {
+  border-bottom: 1px solid var(--ams-line);
+  padding: 0.35rem 0.5rem 0.35rem 0;
+  overflow-wrap: anywhere;
+}
+.ams-admin-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ams-admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0 var(--ams-space-5);
+}
+.ams-admin-preview {
+  margin-top: var(--ams-space-4);
+}
+.ams-admin-json {
+  margin: var(--ams-space-3) 0 0;
+  max-height: 20rem;
+  overflow: auto;
+  background: var(--ams-surface);
+  border: 1px solid var(--ams-line);
+  border-radius: var(--ams-radius-sm);
+  padding: var(--ams-space-3);
+  font-size: var(--ams-text-xs);
+}
+.ams-admin-details {
+  margin-top: var(--ams-space-3);
+  font-size: var(--ams-text-sm);
+}
+.ams-admin-details summary {
+  cursor: pointer;
+  font-size: var(--ams-text-xs);
+  color: var(--ams-ink-soft);
+}
+.ams-admin-targets {
+  list-style: none;
+  margin: var(--ams-space-2) 0 0;
+  padding: 0;
+  font-size: var(--ams-text-sm);
+}
+.ams-admin-targets li {
+  padding: 0.25rem 0;
+  border-top: 1px solid var(--ams-line);
+  display: flex;
+  align-items: center;
+  gap: var(--ams-space-2);
+  flex-wrap: wrap;
+}
+.ams-admin-target-chips {
+  display: flex;
+  gap: var(--ams-space-1);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .ams-admin-page {
+    padding: 1.25rem 1rem 3rem;
+  }
+  /* Once a row has wrapped, a right-aligned action group reads as belonging to
+     whatever is below it — pin it back to the left under its own text. */
+  .ams-admin-row-actions {
+    margin-left: 0;
+  }
+  .ams-admin-strip {
+    gap: var(--ams-space-4);
+  }
 }

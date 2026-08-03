@@ -34,6 +34,13 @@
     border-bottom: 2px solid var(--accent); letter-spacing: -0.2pt;
   }
   h3 { font-size: 11pt; margin: 5mm 0 2mm; }
+  /* A heading must never be the last thing on a page — keep it with what it
+     introduces. Added 2026-08-03: the doc grew enough that "Scenarios" and
+     "Known issues" started stranding at a page foot. */
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  /* Keep a table row whole. The before/after rows are several lines tall and
+     split badly across a page boundary, which reads as two different rows. */
+  tr { break-inside: avoid; page-break-inside: avoid; }
   p { margin: 0 0 2.5mm; }
 
   code, .mono { font-family: var(--mono); font-size: 0.88em; }
@@ -51,6 +58,10 @@
   /* Match the body line-height so a mono cell's first line sits on the same
      baseline as the prose cell beside it, rather than riding high. */
   td.mono, th.mono { font-family: var(--mono); font-size: 9pt; line-height: 1.5; }
+  /* Ticket and CR keys are identifiers — breaking "AMS-1045" across two lines
+     makes them unreadable at a glance. Opt-in, not a blanket rule on .mono:
+     the file-path cells elsewhere must stay wrappable. */
+  .nowrap { white-space: nowrap; }
 
   ol, ul { margin: 0 0 3mm; padding-left: 5.5mm; }
   li { margin-bottom: 1.5mm; }
@@ -114,36 +125,38 @@
   <h1>S3 Enhancement Delivery</h1>
   <p class="subtitle">Test &amp; demo guide — all scenarios</p>
   <p class="meta">
-    Generated 27 July 2026 · repo <span class="mono">ams-s3-demo</span> ·
-    branch <span class="mono">deploy-bedrock-aws</span><br>
+    Generated 3 August 2026 · repo <span class="mono">ams-s3-demo</span> ·
+    branch <span class="mono">s3-console-stage-routes</span><br>
     Companion docs: <span class="mono">docs/design/S3_DESIGN.md</span> (technical design) ·
-    <span class="mono">demo/DEMO_TEST_GUIDE.md</span> (presenter script)
+    <span class="mono">demo/DEMO_TEST_GUIDE.md</span> (presenter script) ·
+    <span class="mono">repos/README.md</span> (the target repositories, and onboarding a new one)
   </p>
 </header>
 
 <h2>Environment</h2>
 
-<p>Five services make up the full demo environment. All five must be running before you start.</p>
+<p>Six processes make up the full demo environment. The console and the app a given
+CR targets must be running; the rest can stay down if you are not showing that CR.</p>
 
 <table>
   <tr><th class="mono">Port</th><th>Service</th><th class="mono">URL</th><th>Start command (terminal by terminal)</th></tr>
   <tr>
     <td class="mono">8000</td><td>FastAPI backend<div class="tiny">the engine — never on screen</div></td>
     <td class="mono">localhost:8000</td>
-    <td class="mono">uvicorn apps.console.api.main:app --port 8000</td>
+    <td class="mono">apps/run-console.sh<div class="tiny">starts 8000 and 5173 together</div></td>
   </tr>
   <tr>
-    <td class="mono">5173</td><td><strong>AMS Console</strong> — start here<div class="tiny">login, then <code>/s3</code></div></td>
+    <td class="mono">5173</td><td><strong>AMS Console</strong> — start here<div class="tiny">login, then <code>/s3</code>; managers also get <code>/admin</code></div></td>
     <td class="mono">localhost:5173</td>
-    <td class="mono">cd apps/console/web &amp;&amp; npm run dev</td>
+    <td class="mono">apps/run-console.sh</td>
   </tr>
   <tr>
-    <td class="mono">8501</td><td>MapleSure portal (CR-041 / CR-042 target)<div class="tiny">"the client's app"</div></td>
+    <td class="mono">8501</td><td>PolicyCore portal (CR-041 / CR-042 target)<div class="tiny">"the client's app"</div></td>
     <td class="mono">localhost:8501/sl_policycore<div class="tiny">base path — the bare root 404s</div></td>
-    <td class="mono">demo/run_mockapp.sh</td>
+    <td class="mono">apps/run-policycore.sh</td>
   </tr>
   <tr>
-    <td class="mono">8081</td><td>ClaimsPortal Policy Team console (CR-043)</td>
+    <td class="mono">8081</td><td>ClaimsPortal Contracts Team console (CR-043)</td>
     <td class="mono">localhost:8081</td>
     <td class="mono">apps/run-policy-service.sh</td>
   </tr>
@@ -152,11 +165,44 @@
     <td class="mono">localhost:8082</td>
     <td class="mono">apps/run-claims-service.sh</td>
   </tr>
+  <tr>
+    <td class="mono">8083</td><td>EnrolDirect (CR-045 target)<div class="tiny">online enrolment channel</div></td>
+    <td class="mono">localhost:8083</td>
+    <td class="mono">apps/run-enroldirect.sh</td>
+  </tr>
 </table>
 
 <p>Both ClaimsPortal services together, in one foreground terminal:
 <code>demo/run_s3_claimsportal.sh</code>. It traps <code>kill 0</code> on exit, so use the two
-separate commands above if you want them in independent background terminals.</p>
+separate commands above if you want them in independent background terminals.
+<code>demo/run_mockapp.sh</code> is an equivalent launcher for the portal — same base
+path, same <code>PYTHONPATH</code> export — kept because teammates and the admin panel
+both invoke it by name.</p>
+
+<div class="callout">
+  <span class="label">You no longer need a terminal for most of this</span>
+  <p>Log in as <strong>Manager</strong> and open <code>/admin</code>. It shows which of the
+  four target apps are answering on their port, starts or stops them, clears logs,
+  runs the reset scopes, and onboards a repo by writing its
+  <code>.s3targets.json</code>. Service status is a plain TCP connect — no
+  <code>ps</code>, no <code>lsof</code> — so it works on a locked-down host.</p>
+  <p>Two limits worth knowing before you rely on it mid-demo. There is
+  <strong>no service id for the console</strong>: it cannot restart the process serving
+  your request, and naming it is a 400 rather than an attempt. And a manifest the
+  panel just wrote <strong>needs a console restart</strong> before that target
+  registers.</p>
+</div>
+
+<h3>Where the code lives</h3>
+<p>Two folders, and the split is load-bearing. <code>repos/</code> holds the three
+target repositories — <code>policycore</code>, <code>claimsportal</code>,
+<code>enroldirect</code> — which are what S3 <em>changes</em>. <code>apps/</code> holds
+the console and the launch scripts, which are what does the changing. Dropping a
+directory into <code>repos/</code> with a <code>.s3targets.json</code> manifest registers
+it as a target at next start, with no edit to any registry file; putting its CR
+under <code>crs/</code> opens the board ticket. See <code>repos/README.md</code> for the
+manifest contract and the four onboarding steps — it is short, and it is the
+authority.</p>
 
 <h3>Direct URLs for showing raw data</h3>
 <table>
@@ -165,6 +211,7 @@ separate commands above if you want them in independent background terminals.</p
   <tr><td class="mono">localhost:8081/api/policies</td><td>All ClaimsPortal policies as JSON</td></tr>
   <tr><td class="mono">localhost:8081/api/policies/MS-1004</td><td>One policy — the clearest place to show <code>deductible</code> appearing</td></tr>
   <tr><td class="mono">localhost:8082/api/claims</td><td>Submitted claims with decision and <code>payableAmount</code></td></tr>
+  <tr><td class="mono">localhost:8083/api/analysis/prospect-impact</td><td>EnrolDirect's both-policies comparison — the analysis CR-045 acts on</td></tr>
 </table>
 
 <div class="callout warn">
@@ -178,8 +225,10 @@ separate commands above if you want them in independent background terminals.</p
   survives the reset entirely: it keeps serving the <em>post-CR</em> app while the source sits at baseline,
   and both ports answer 200 the whole time. Port-is-up is not process-is-current — check the process
   start time against your reset time.</p>
-  <p><strong>Start the portal only via <code>demo/run_mockapp.sh</code>.</strong> The script exports
-  <code>PYTHONPATH="$PWD"</code> first. Streamlit otherwise puts <code>apps/policycore/</code> on
+  <p><strong>Start the portal via a launch script, never <code>streamlit run</code> by hand.</strong>
+  <code>apps/run-policycore.sh</code> and <code>demo/run_mockapp.sh</code> both export
+  <code>PYTHONPATH="$PWD"</code> first and pass the same base path; either is fine, neither is
+  optional. Streamlit otherwise puts <code>repos/policycore/</code> on
   <code>sys.path</code> instead of the repo root, and the app dies at
   <code>ModuleNotFoundError: No module named 'common'</code>. This one hides: a portal already running from
   a bad launch keeps serving its last good render until something re-executes the script — and a reset
@@ -199,27 +248,68 @@ separate commands above if you want them in independent background terminals.</p
 </table>
 
 <h3>Seeded board</h3>
+<p>Verified against a live <code>GET /api/s3/jira/board</code> on 3 August 2026.</p>
 <table>
-  <tr><th>Ticket</th><th>CR</th><th>Status</th><th>Assignee</th><th>Target</th><th>Language</th></tr>
-  <tr><td class="mono">AMS-101</td><td class="mono">CR-2026-041</td><td>QA</td><td>Priya Nair</td><td>mockapp — coverage tier</td><td>Python</td></tr>
-  <tr><td class="mono">AMS-102</td><td class="mono">CR-2026-042</td><td>In Progress</td><td>Ravi Kumar</td><td>mockapp — endorsement priority</td><td>Python</td></tr>
-  <tr><td class="mono">AMS-103</td><td class="mono">CR-2026-043</td><td>To Do</td><td>Ravi Kumar</td><td>spring-demo — claims deductible</td><td>Python</td></tr>
-  <tr><td class="mono">AMS-098</td><td>—</td><td>Done</td><td>Elena Cruz</td><td>none (ad-hoc path)</td><td>—</td></tr>
+  <tr>
+    <th class="nowrap" style="width:11%">Ticket</th><th class="nowrap" style="width:14%">CR</th>
+    <th style="width:11%">Status</th><th style="width:14%">Assignee</th>
+    <th style="width:32%">Target</th><th style="width:18%">Origin</th>
+  </tr>
+  <tr><td class="mono nowrap">AMS-101</td><td class="mono nowrap">CR-2026-041</td><td>QA</td><td>Priya Nair</td><td>policycore — plan tier upgrade</td><td>seeded</td></tr>
+  <tr><td class="mono nowrap">AMS-102</td><td class="mono nowrap">CR-2026-042</td><td>In Progress</td><td>Ravi Kumar</td><td>policycore — amendment priority</td><td>seeded</td></tr>
+  <tr><td class="mono nowrap">AMS-103</td><td class="mono nowrap">CR-2026-043</td><td>To Do</td><td>Ravi Kumar</td><td>claimsportal — claims deductible</td><td>seeded</td></tr>
+  <tr><td class="mono nowrap">AMS-104</td><td class="mono nowrap">CR-2026-044</td><td>To Do</td><td>Ravi Kumar</td><td>policycore — flag urgent amendments</td><td>seeded</td></tr>
+  <tr><td class="mono nowrap">AMS-098</td><td>—</td><td>Done</td><td>Elena Cruz</td><td>none (ad-hoc path)</td><td>seeded</td></tr>
+  <tr><td class="mono nowrap">AMS-1045</td><td class="mono nowrap">CR-2026-045</td><td>To Do</td><td><em>unassigned</em></td><td>enroldirect — prospect access</td><td><strong>picked up from <code>crs/</code></strong></td></tr>
 </table>
 
+<div class="callout">
+  <span class="label">AMS-1045 is not seeded — it is derived, and that is a beat</span>
+  <p>A <code>.md</code> file dropped into <code>crs/</code> opens a board ticket on its own.
+  The key is a pure function of the CR identifier (<code>CR-2026-045</code> →
+  <strong>AMS-1045</strong>), so it survives restarts and resets with nothing to persist,
+  and it sits in a band the hand-seeded tickets cannot reach. It lands
+  <strong>unassigned</strong> on purpose — that is what puts it in front of the manager,
+  who sees exactly the unassigned ones with an Assign control.</p>
+  <p>Assignment used to be set-once, enforced only by hiding the button. A manager can
+  now reassign or unassign, and <code>POST /s3/jira/assign-ticket</code> is
+  <strong>manager-only server-side</strong> (<code>require_manager</code>) — it previously had
+  no role check at all. If you rehearse the assign flow, the board you hand to the next
+  presenter will show whoever you picked, not <em>unassigned</em>; reset the
+  <code>tickets</code> scope to put it back.</p>
+</div>
+
 <h3>Reset between runs</h3>
-<p>The pipeline mutates real files. Stop the services first, then run all three in <strong>this order</strong> —
-the endorsement reset must come <em>after</em> <code>reset_s3.sh</code>, because it restores the superset
-mockapp state that leaves both AMS-101 and AMS-102 demo-ready.</p>
+<p>The pipeline mutates real files. Stop the services first, then run these in <strong>this order</strong> —
+the CR-042 reset must come <em>after</em> <code>reset_s3.sh</code>, because it restores the superset
+PolicyCore state that leaves both AMS-101 and AMS-102 demo-ready.</p>
 <pre><code>demo/reset_s3.sh              # CR-041 + shared state: .cache/llm, out/, events, Jira caches
 demo/reset_s3_endorsement.sh  # CR-042 baseline  (MUST run after reset_s3.sh)
-demo/reset_s3_claimsportal.sh   # CR-043 target, from apps/claimsportal/.baseline/</code></pre>
-<p>Then restart all five services. Hard-refresh the browser tab —
+demo/reset_s3_claimsportal.sh # CR-043 target, from repos/claimsportal/.baseline/
+demo/reset_s3_enroldirect.sh  # CR-045 target, from repos/enroldirect/.baseline/</code></pre>
+<p><code>reset_s3_endorsement.sh</code> keeps its pre-reskin filename deliberately —
+teammates invoke it by name, and only its contents changed. The same reset scopes are
+on the manager's <code>/admin</code> panel if you would rather not leave the browser;
+there is no "reset everything" scope, by design — you name one.</p>
+<p>Then restart the services. Hard-refresh the browser tab —
 the console caches per-ticket state in <code>localStorage</code> and drops it when the reset marker changes.</p>
+
+<div class="callout warn">
+  <span class="label">Known broken right now — the two PolicyCore resets</span>
+  <p><code>demo/reset_s3.sh</code> and <code>demo/reset_s3_endorsement.sh</code> restore source
+  with <code>git checkout HEAD -- repos/…</code>, but the <code>apps/</code> → <code>repos/</code>
+  move is <strong>not committed yet</strong>, so HEAD still carries those files under
+  <code>apps/</code> and the checkout dies with <em>"pathspec did not match"</em>.
+  <strong>Committing the move fixes it; nothing else does.</strong></p>
+  <p>The admin panel detects this before it runs anything and reports a named
+  <code>reset_blocked_reason</code> rather than surfacing a raw git error out of a button.
+  The ClaimsPortal and EnrolDirect resets copy from their committed
+  <code>.baseline/</code> snapshots and are unaffected.</p>
+</div>
 
 <div class="callout">
   <span class="label">Expected after a reset</span>
-  <p><code>git status</code> shows <code>apps/policycore/{app,core/db,core/endorsements,core/models}.py</code> as
+  <p><code>git status</code> shows <code>repos/policycore/{app,core/db,core/amendments,core/models}.py</code> as
   modified. That is <strong>correct</strong> — repo HEAD is committed in a post-CR-2026-042 state, so the
   pre-CR baseline necessarily differs from it.</p>
   <p>Resets also clear <code>.cache/llm</code>, so impact analysis, design doc and release notes make live
@@ -242,14 +332,14 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
   <tr>
     <td class="mono">AMS-101<div class="tiny">CR-2026-041</div></td>
     <td>Portal :8501/sl_policycore<div class="tiny">Policy Detail</div></td>
-    <td class="before">No coverage tier anywhere in the app.</td>
-    <td class="after">Tier per policy (Standard / Premium / <em>the name the audience picked</em>), upgrade control on the detail view, premium recalculates and persists.</td>
+    <td class="before">No plan tier anywhere in the app.</td>
+    <td class="after">Tier per contract (Standard / Premium / <em>the name the audience picked</em>), upgrade control on the detail view, monthly contribution recalculates and persists.</td>
     <td>Browser refresh</td>
   </tr>
   <tr>
     <td class="mono">AMS-102<div class="tiny">CR-2026-042</div></td>
-    <td>Portal :8501/sl_policycore<div class="tiny">Request a Policy Endorsement</div></td>
-    <td class="before">Exactly 5 fields — endorsement type, description, effective date, contact phone, contact email.</td>
+    <td>Portal :8501/sl_policycore<div class="tiny">Request a Contract Amendment</div></td>
+    <td class="before">Exactly 5 fields — amendment type, describe the requested change, effective date, contact phone, contact email.</td>
     <td class="after">A 6th field, <strong>Priority</strong> (Standard / Urgent, defaults Standard). Existing submit flow unchanged.</td>
     <td>Browser refresh</td>
   </tr>
@@ -260,11 +350,34 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
     <td class="after">Policies gain a deductible (MS-1001 500, MS-1002 1000, MS-1003 500, MS-1004 100). The same <strong>$80 claim on MS-1004 → REJECTED_BELOW_DEDUCTIBLE</strong>. A <strong>$1,200 claim on MS-1001 → ACCEPTED, <code>payableAmount</code> 700</strong>.</td>
     <td><strong>Restart both services</strong></td>
   </tr>
+  <tr>
+    <td class="mono">AMS-1045<div class="tiny">CR-2026-045</div></td>
+    <td>EnrolDirect :8083<div class="tiny">Access check</div></td>
+    <td class="before">A prospect is refused, and the refusal is an omission rather than a rule: <code>"category PROSPECT has no online enrolment preference"</code>, <code>requiredPreference: null</code>. <strong>0 of 6 prospects admitted.</strong></td>
+    <td class="after">A prospect resolves through the configured policy to the <strong>Guest</strong> preference. AP-4003 and AP-4008 are admitted with <code>authorisingPreference: "Online Enrolment - Guest"</code>; the other four are still refused, each for its own named reason (member-only sponsor, no preferences, lapsed contract). <strong>2 of 6 admitted.</strong></td>
+    <td><strong>Restart the service</strong></td>
+  </tr>
 </table>
+
+<div class="callout">
+  <span class="label">Why CR-045 is the different one</span>
+  <p>The other three CRs add something. <strong>CR-2026-045's baseline is a
+  removal</strong> — the checked-in source is the state after the impact analysis and
+  before anyone acted on it, so the "before" is a refusal nobody chose. The CR settles
+  a classification rather than building a feature, which is why the honest before/after
+  is a decision changing, not a control appearing.</p>
+  <p>Second thing worth saying out loud: <code>repos/enroldirect/impact.py</code> is in
+  the target's <strong>core files but deliberately not in its codegen allowlist</strong>.
+  The model must read the analysis to understand the change and must not edit it — the
+  analysis has to keep sizing <em>both</em> options after one is adopted. Core-file
+  recall gets it into the prompt; the allowlist keeps it out of the diff, and this
+  target has its own validator that fails loudly if a read-only file comes back
+  modified.</p>
+</div>
 
 <div class="callout warn">
   <span class="label">The easiest way to make a working demo look broken</span>
-  <p>The two mockapp scenarios need only a browser refresh — Streamlit re-executes <code>app.py</code> on
+  <p>The two PolicyCore scenarios need only a browser refresh — Streamlit re-executes <code>app.py</code> on
   each run. <strong>Scenario 3 does not.</strong> The running processes serve whatever was loaded at
   startup (no <code>--reload</code>), so a just-applied CR is invisible on :8081/:8082 until you restart. Apply
   the change, switch to :8082, and nothing has changed. Ctrl-C both terminals, then
@@ -272,18 +385,31 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
 </div>
 
 <h3>Confirm the baseline is genuinely "before"</h3>
-<p>Run after the resets, before you present. Every line must match the comment.</p>
-<pre><code>grep -c 'coverage_tier\|COVERAGE_TIERS' apps/policycore/app.py    # 0       — no CR-041 yet
-grep -c 'selectbox("Priority"' apps/policycore/app.py              # 0       — no CR-042 yet
-ls apps/policycore/core/coverage.py                                # absent
-ls apps/claimsportal/claims_service/claim_rules.py          # absent
-ls apps/policycore/core/endorsements.py                            # PRESENT — CR-042's "before" needs it
-curl -s localhost:8081/api/policies/MS-1004                # no "deductible" key
-ls s3_enhancement/out/ | wc -l                             # 0</code></pre>
+<p>Run from the repo root after the resets, before you present. Every line must match
+the comment. Re-derived and re-run against the GRS-reskinned tree on 3 August 2026 —
+the old <code>coverage_tier</code> / <code>COVERAGE_TIERS</code> grep now passes
+vacuously, because those symbols no longer exist under any state of the repo.</p>
+<pre><code>grep -c 'plan_tier\|PLAN_TIERS' repos/policycore/app.py     # 0       — no CR-041 yet
+grep -c 'selectbox("Priority"' repos/policycore/app.py      # 0       — no CR-042 yet
+ls repos/policycore/core/tiers.py                           # absent  — CR-041 creates it
+ls repos/claimsportal/claims_service/claim_rules.py         # absent  — CR-043 creates it
+ls repos/policycore/core/amendments.py                      # PRESENT — CR-042's "before" needs it
+grep -c 'DEFAULT_PROSPECT_POLICY' repos/enroldirect/applicants.py   # 0 — no CR-045 yet
+curl -s localhost:8081/api/policies/MS-1004                 # no "deductible" key
+curl -s -X POST localhost:8083/api/eligibility/check \
+  -H 'Content-Type: application/json' -d '{"applicantId":"AP-4003"}'  # "granted": false
+ls s3_enhancement/out/ | wc -l                              # 0</code></pre>
+<p>Two of those are worth reading rather than glancing at. The
+<code>plan_tier</code> grep must be run against <strong><code>app.py</code>
+only</strong> — <code>core/models.py</code> and <code>core/db.py</code> carry a
+<code>plan_tier</code> column at baseline by design, so a repo-wide grep is not zero and
+is not a failure. And the <code>AP-4003</code> check must come back
+<code>"granted": false</code> with <code>"requiredPreference": null</code>; a prospect
+refused for any <em>other</em> reason means the EnrolDirect reset did not take.</p>
 
-<p>Then confirm all five services are up <em>and fresh</em> — every start time must be later than your
+<p>Then confirm the services are up <em>and fresh</em> — every start time must be later than your
 last reset:</p>
-<pre><code>for p in 8000 5173 8501 8081 8082; do
+<pre><code>for p in 8000 5173 8501 8081 8082 8083; do
   url="http://localhost:$p/"
   [ "$p" = 8501 ] &amp;&amp; url="http://localhost:8501/sl_policycore/"   # Streamlit base path
   pid=$(lsof -ti tcp:$p -sTCP:LISTEN | head -1)
@@ -292,11 +418,25 @@ last reset:</p>
     "$(ps -o lstart= -p ${pid:-0} 2>/dev/null)"
 done</code></pre>
 <p>Use <code>-sTCP:LISTEN</code>. Without it a Chrome tab connected to :5173 matches before the real
-listener and you read the wrong process's start time.</p>
-
-<div class="page-break"></div>
+listener and you read the wrong process's start time. The admin panel's service list
+answers the up/down half of this without a terminal, but it is a TCP probe only — it
+cannot tell you a process is <em>stale</em>, which is the failure this loop exists to
+catch.</p>
 
 <h2>Scenarios</h2>
+
+<div class="callout">
+  <span class="label">The screen changed — artifacts now open in a pop-up</span>
+  <p>Acting on the client's "there is a lot of data on the screen… open it in a
+  pop-up" feedback, every produced <strong>artifact</strong> now opens in a modal
+  rather than rendering inline: release notes, deployment plan, design doc, test
+  scenario table, per-case checklists, mutation diff, traceability matrix. What stays
+  in the main flow is what you steer with — action buttons, verdict lines, token-cost
+  lines. The left-hand stage rail is unchanged.</p>
+  <p>Practical effect on these scripts: where a step below says "read the X", expect to
+  click through and then close the modal before the next button is reachable. Nothing
+  moved stage to stage.</p>
+</div>
 
 <!-- 1 -->
 <section class="scenario">
@@ -315,7 +455,7 @@ listener and you read the wrong process's start time.</p>
     <li><strong>Apply to repo.</strong></li>
     <li><strong>Stage 2 · Draft design doc</strong> → <strong>Assign tester &amp; move to QA</strong> (Priya Nair).</li>
     <li>Log out → log in as <strong>Priya Nair</strong> → open AMS-103 → <strong>Stage 3 · Generate tests</strong>
-        → <strong>Run tests</strong> (real pytest, same runner as the other two scenarios).</li>
+        → <strong>Run tests</strong> (real pytest, the same runner every target uses).</li>
     <li><strong>Prove the tests catch bugs</strong> → <strong>Stage 4 · Draft release notes</strong> → mark Done.</li>
   </ol>
 
@@ -323,10 +463,10 @@ listener and you read the wrong process's start time.</p>
     <li>After the second answer it <em>must</em> produce a final analysis — the two-turn cap is hard.</li>
     <li>Activity tab logs: clarification requested ×2 → impact analysis drafted → status In Progress.</li>
     <li>Selection panel reads <span class="pass">Files in this app 5 · used 5</span> and
-        <em>"No subsystem doc matched closely enough"</em> — no <code>apps/policycore/systems/…</code> entry.</li>
+        <em>"No subsystem doc matched closely enough"</em> — no <code>repos/policycore/systems/…</code> entry.</li>
     <li>Token panel says <em>"no saving over whole-app context here"</em> — the honest branch.</li>
     <li>Six Python files, each with a one-line reason.</li>
-    <li>Post-apply link reads <strong>"open the Claims Team console"</strong> → :8082 (not the mockapp portal).</li>
+    <li>Post-apply link reads <strong>"open the Claims Team console"</strong> → :8082 (not the PolicyCore portal).</li>
     <li>On disk: <code>claim_rules.py</code> created, <code>deductible</code> present in <code>policy.py</code>.</li>
     <li>Stage 3 was <em>locked</em> for Ravi — the developer cannot verify their own change.</li>
     <li>Per-case checklist parsed from pytest's JUnit XML output, all green.</li>
@@ -366,20 +506,25 @@ listener and you read the wrong process's start time.</p>
     <li>Click <strong>AMS-101</strong> → <strong>Run AI impact analysis</strong>.</li>
     <li><strong>Stage 1 · Generate</strong> — type an audience-chosen tier name
         (≤ 24 chars, no quotes or slashes, e.g. <em>Platinum</em>).</li>
-    <li><strong>Apply</strong> → post-apply runs <code>python -m apps.policycore.core.seed</code>.</li>
+    <li><strong>Apply</strong> → post-apply runs <code>python -m repos.policycore.core.seed</code>.</li>
     <li><strong>Design doc</strong> → <strong>Generate tests → Run</strong> (pytest)
         → <strong>Mutation check</strong> → <strong>Release notes</strong>.</li>
   </ol>
 
   <ul class="check">
-    <li>Panel reads <span class="pass">Files in this app 56 · used 4</span>.</li>
-    <li>Expand "6 other subsystems screened out" → bar chart, struck through:
-        settlement 0.33, underwriting 0.29, audit 0.29, risk 0.28, billing 0.20, reporting 0.10 —
-        all under the 0.45 floor. <strong>50 Java decoy files never opened.</strong></li>
-    <li>Token panel shows a real multiplier against whole-app context.</li>
-    <li>Your chosen tier name appears verbatim in the generated <code>coverage.py</code> —
+    <li>Panel reads <span class="pass">Files in this app 58 · used 4</span>.</li>
+    <li>Expand "7 other subsystems screened out" → bar chart, struck through:
+        settlement 0.35, enrolment 0.22, risk 0.21, billing 0.20, underwriting 0.19,
+        audit 0.15, reporting 0.12 — all under the 0.45 floor.
+        <strong>52 files never opened</strong> — the 50 Java decoys plus the two Python
+        modules of PolicyCore's own <em>enrolment</em> subsystem, which is the better
+        line: screening is a scope decision, not a file-extension filter.</li>
+    <li>Token panel shows a real multiplier against whole-app context (3.4× on this CR —
+        18,310 estimated file tokens down to 5,336).</li>
+    <li>Your chosen tier name appears verbatim in the generated <code>tiers.py</code> —
         one recording serves any name.</li>
-    <li>Refresh <strong>:8501/sl_policycore</strong> → the portal now has the coverage-upgrade control.</li>
+    <li>Refresh <strong>:8501/sl_policycore</strong> → the portal now has the plan-tier upgrade control,
+        and the monthly contribution moves with the tier.</li>
     <li>Mutation weakens the same-tier guard <code>&lt;=</code> → <code>&lt;</code>; the suite goes red, then reverts.</li>
   </ul>
 </section>
@@ -388,24 +533,34 @@ listener and you read the wrong process's start time.</p>
 <section class="scenario">
   <div class="scenario-head">
     <span class="num">03</span>
-    <span class="scenario-title">AMS-102 — endorsement priority</span>
+    <span class="scenario-title">AMS-102 — amendment priority</span>
   </div>
   <p class="who"><strong>As:</strong> Ravi Kumar (1001) → hand off to a tester · Same step sequence as Scenario 01</p>
 
-  <div class="callout warn">
-    <span class="label">Do not click Apply in front of an audience</span>
-    <p>The committed CR-042 codegen recording is a <strong>net-deletion recording</strong>: across four files it
-    removes 81 lines and adds 12, stripping roughly six function docstrings from
-    <code>apps/policycore/core/db.py</code> plus many blank lines. The diff a reviewer sees is dominated by deletions
-    unrelated to the CR.</p>
-    <p>Viewing the diff to <em>demonstrate</em> the problem is fine. The fix is a live re-record against
-    <code>s3-endorsement-baseline</code>. The CR-041 and CR-043 recordings are clean.</p>
+  <div class="callout">
+    <span class="label">The docstring problem is fixed — this is now safe to Apply on stage</span>
+    <p>The old warning here said the CR-042 recording stripped roughly six function
+    docstrings from <code>repos/policycore/core/db.py</code>, removing 81 lines to add 12.
+    The 3 August 2026 re-record fixed it. Re-verified by diffing the committed recording
+    against the baseline tree: <strong>docstring counts are identical file for file</strong>
+    (<code>db.py</code> 40 before and after), and the whole four-file diff is
+    <strong>+16 / −32</strong> rather than +12 / −81.</p>
+    <p>What is left is cosmetic and worth naming before a reviewer spots it: the model
+    collapses PEP 8's two blank lines between top-level definitions down to one, and it
+    de-indents the continuation line of two docstrings
+    (<code>core/amendments.py</code>, <code>app.py</code>). Annoying in a diff; not a
+    behaviour change. Model docstring mangling recurs on every re-record — always diff
+    the recording against the baseline after one.</p>
   </div>
 
   <ul class="check">
-    <li>Diff shows only three files with pending changes — the fourth returned byte-identical and was dropped.</li>
-    <li>If applied: <strong>:8501/sl_policycore</strong> endorsement form gains a <em>Priority</em> dropdown
-        (Standard / Urgent, Standard default).</li>
+    <li>All four files show pending changes. (Earlier recordings dropped one as
+        byte-identical; this one does not.)</li>
+    <li><code>models.py</code> gains <code>priority: str = "Standard"</code>,
+        <code>db.py</code> gains the column and the <code>INSERT</code> parameter,
+        <code>amendments.py</code> takes it as a keyword argument.</li>
+    <li>If applied: <strong>:8501/sl_policycore</strong> → <em>Request a Contract Amendment</em>
+        gains a <em>Priority</em> dropdown (Standard / Urgent, Standard default).</li>
   </ul>
 </section>
 
@@ -422,12 +577,13 @@ listener and you read the wrong process's start time.</p>
   <table>
     <tr><th>Action</th><th>Expected</th></tr>
     <tr><td><strong>Show diff</strong> on a file</td><td>Per-file unified diff, collapsible</td></tr>
-    <tr><td><strong>Ask about this file</strong> → <em>"why did you remove the docstring?"</em></td>
-        <td>Answers <strong>from its own diff</strong> — admits the removal instead of denying it</td></tr>
+    <tr><td><strong>Ask about this file</strong> → <em>"why did you delete those blank lines?"</em></td>
+        <td>Answers <strong>from its own diff</strong> — admits the deletion instead of denying it.
+            (On CR-042 that is a real, visible change to point at.)</td></tr>
     <tr><td><strong>Ask</strong> → <em>"rename that variable to X"</em></td>
         <td>Returns a revised file; still staged, still not applied</td></tr>
     <tr><td><strong>Ask</strong> a pure question</td><td>Answers in prose and changes <strong>no</strong> code</td></tr>
-    <tr><td><strong>Add to proposal</strong> → <code>apps/policycore/core/claims.py</code> + an instruction</td>
+    <tr><td><strong>Add to proposal</strong> → <code>repos/policycore/core/claims.py</code> + an instruction</td>
         <td>File joins the same reviewed diff</td></tr>
     <tr><td><strong>Apply</strong> a single file</td><td>Others stay pending; re-applying is a no-op</td></tr>
   </table>
@@ -487,7 +643,7 @@ listener and you read the wrong process's start time.</p>
   </div>
   <p class="who"><strong>Where:</strong> "Quick question" box at the top of the S3 page · any login</p>
 
-  <p>Try: <em>"how long would it take to add a vehicle-swap endorsement?"</em></p>
+  <p>Try: <em>"how long would it take to add a beneficiary-change amendment?"</em></p>
   <ul class="check">
     <li>Asks at most <strong>two</strong> clarifying questions, then must deliver a final answer.</li>
     <li>Final answer carries impact analysis + hour class + P-level + whether a code change is warranted.</li>
@@ -542,7 +698,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
     <span class="scenario-title">Resilience &amp; regression</span>
   </div>
 
-<pre><code>.venv/bin/python -m pytest tests/ -q                    # 239 pass
+<pre><code>.venv/bin/python -m pytest tests/ -q                    # 679 collected
 .venv/bin/ruff check .                                  # clean
 .venv/bin/python tools/verify_s3_live.py --skip-live    # offline architecture gate</code></pre>
 
@@ -551,7 +707,12 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
     <li>A mid-stream provider failure falls back to replay invisibly.</li>
     <li>One recording replays correctly for two different tier names.</li>
     <li>Reset restores baseline in under 10 s.</li>
-    <li>Core recall never drops a required file; decoy subsystems are never selected.</li>
+    <li>Core recall never drops a required file; screened-out subsystems are never selected.</li>
+    <li>The four checked-in regression suites pass on their own:
+        <span class="mono">policycore 20 · policycore_enrolment 19 · claimsportal 5 · enroldirect 24</span>.
+        None of those paths appears in any target's <code>testgen_allowlist</code> or
+        <code>codegen_allowlist</code> — <code>tests/test_s3_testrun.py</code> asserts it,
+        and that assertion is the whole value of the beat.</li>
   </ul>
 
   <div class="callout">
@@ -563,6 +724,42 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   </div>
 </section>
 
+<!-- 11 -->
+<section class="scenario">
+  <div class="scenario-head">
+    <span class="num">11</span>
+    <span class="scenario-title">Onboarding a repo, and the admin panel</span>
+  </div>
+  <p class="who"><strong>As:</strong> Manager (9000) · <strong>Where:</strong> <code>/admin</code> ·
+  <strong>Time:</strong> ~5 min · Answers "what does it take to point this at <em>our</em> repo?"</p>
+
+  <ol>
+    <li>Log in as <strong>Manager</strong> → <code>/admin</code>. An engineer or tester never sees it —
+        every route depends on <code>require_manager</code>, server-side.</li>
+    <li><strong>Target apps</strong> — the four services with their live port state; start or stop one
+        without a terminal.</li>
+    <li><strong>Onboard a repo</strong> — writes a <code>.s3targets.json</code> manifest for a directory
+        under <code>repos/</code>.</li>
+    <li><strong>Reset demo state</strong> — pick a scope, read its preview, then run it.</li>
+  </ol>
+
+  <ul class="check">
+    <li>A source-restoring scope <strong>previews first</strong>: exactly what it restores, what it
+        deletes, and which of those paths are currently dirty. It <strong>409s</strong> rather than
+        overwriting your uncommitted work.</li>
+    <li>There is <strong>no "reset everything"</strong> scope. Seven explicit ones —
+        <code>policycore</code>, <code>claimsportal</code>, <code>enroldirect</code>, <code>tickets</code>,
+        <code>logs</code>, <code>proposals</code>, <code>caches</code> — and you name one.</li>
+    <li>Naming the console as a service is a <strong>400, not an attempt</strong> — it cannot restart the
+        process serving the request.</li>
+    <li>A manifest written here <strong>needs a console restart</strong> before that target registers.
+        Say so rather than clicking twice.</li>
+    <li>Drop a <code>CR-YYYY-NNN.md</code> into <code>crs/</code> and reload the board: the ticket is
+        there, unassigned, keyed off the CR id. That is the whole onboarding story —
+        the four steps are in <code>repos/README.md</code>.</li>
+  </ul>
+</section>
+
 <div class="page-break"></div>
 
 <h2>Known issues</h2>
@@ -571,46 +768,65 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   <tr><th>#</th><th>Issue</th><th>Impact</th><th>Status</th></tr>
   <tr>
     <td class="mono">1</td>
-    <td>CR-2026-042 codegen recording is a net-deletion recording — strips ~6 function docstrings from
-        <code>apps/policycore/core/db.py</code></td>
-    <td>AMS-102 diff is dominated by unrelated deletions</td>
-    <td><strong>Open</strong> — needs a live re-record</td>
+    <td><code>demo/reset_s3.sh</code> and <code>demo/reset_s3_endorsement.sh</code> restore with
+        <code>git checkout HEAD -- repos/…</code>, but HEAD still carries those files under
+        <code>apps/</code> — the move is uncommitted</td>
+    <td>Both PolicyCore resets fail with <em>"pathspec did not match"</em></td>
+    <td><strong>Open</strong> — committing the move fixes it. The admin panel already
+        reports it as a named <code>reset_blocked_reason</code>. ClaimsPortal and
+        EnrolDirect resets copy from <code>.baseline/</code> and are unaffected.</td>
   </tr>
   <tr>
     <td class="mono">2</td>
-    <td>Subsystem screening was hardcoded to <code>apps/policycore/</code>, so the ClaimsPortal target was scored against
-        mockapp's decoy subsystems</td>
+    <td>CR-2026-042 codegen recording stripped ~6 function docstrings from
+        <code>repos/policycore/core/db.py</code></td>
+    <td>AMS-102 diff was dominated by unrelated deletions</td>
+    <td><span class="pass">Fixed</span> — 3 Aug 2026 re-record; docstring counts now
+        identical file for file. Cosmetic blank-line collapsing remains.</td>
+  </tr>
+  <tr>
+    <td class="mono">3</td>
+    <td>Subsystem screening was hardcoded to PolicyCore, so the ClaimsPortal target was scored against
+        PolicyCore's decoy subsystems</td>
     <td>Panel wrongly reported <code>legacy_platform/settlement</code> 0.49 for AMS-103</td>
     <td><span class="pass">Fixed</span> — target-scoped, 2 regression tests</td>
   </tr>
   <tr>
-    <td class="mono">3</td>
-    <td>Post-apply link always pointed at the mockapp portal</td>
+    <td class="mono">4</td>
+    <td>Post-apply link always pointed at the PolicyCore portal</td>
     <td>AMS-103 sent reviewers to the wrong app</td>
     <td><span class="pass">Fixed</span> — per-target app map</td>
   </tr>
   <tr>
-    <td class="mono">4</td>
+    <td class="mono">5</td>
+    <td><code>POST /s3/jira/assign-ticket</code> had no role check at all — assignment was gated only by
+        hiding the button</td>
+    <td>Any logged-in engineer could assign, and assignment was set-once</td>
+    <td><span class="pass">Fixed</span> — <code>require_manager</code> server-side; managers
+        can now reassign and unassign</td>
+  </tr>
+  <tr>
+    <td class="mono">6</td>
     <td>AMS-103's Jira card shows <code>APPLICATION: PolicyCore</code> though it is a ClaimsPortal CR</td>
     <td>Cosmetic inconsistency in seeded data</td>
     <td>Open — low priority</td>
   </tr>
   <tr>
-    <td class="mono">5</td>
+    <td class="mono">7</td>
     <td>Gap gate occasionally asks about a detail the CR already states
         (e.g. the deductible's data type)</td>
     <td>One wasted clarification turn</td>
     <td>Open — prompt tuning</td>
   </tr>
   <tr>
-    <td class="mono">6</td>
+    <td class="mono">8</td>
     <td>After QA hand-off the console silently re-targets another ticket, since the handed-off one
         leaves the developer's filtered board</td>
     <td>Disorienting mid-demo</td>
     <td>Open — low priority</td>
   </tr>
   <tr>
-    <td class="mono">7</td>
+    <td class="mono">9</td>
     <td>ClaimsPortal consoles show no deductible column; <code>payableAmount</code> is not rendered either</td>
     <td>No visual before/after on :8081</td>
     <td>By design — CR forbids HTML changes</td>
@@ -654,6 +870,28 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
     <td>Analysis is slow on first click</td>
     <td>Expected — <code>.cache/llm</code> was cleared by the reset. Run
         <code>demo/warm_s3_cache.sh</code> to pre-warm.</td>
+  </tr>
+  <tr>
+    <td>A PolicyCore reset dies with <code>pathspec 'repos/policycore/app.py' did not match</code></td>
+    <td>Known issue #1 — the <code>apps/</code> → <code>repos/</code> move is uncommitted, so those
+        paths are not in HEAD. Commit the move. Nothing else fixes it.</td>
+  </tr>
+  <tr>
+    <td><code>codegen returned unexpected file set</code></td>
+    <td>A repository under <code>repos/</code> was renamed or moved. The committed recordings contain
+        the exact paths, both as keys and inside the generated code's own imports. Restore the
+        directory name — see <code>repos/README.md</code>.</td>
+  </tr>
+  <tr>
+    <td>A repo you dropped into <code>repos/</code> does not appear</td>
+    <td>Either it has no <code>.s3targets.json</code>, or the console has not restarted since you wrote
+        one. A manifest that exists but cannot be parsed <em>raises at import</em> rather than being
+        skipped, so a silent absence means "no manifest", not "bad manifest".</td>
+  </tr>
+  <tr>
+    <td><code>/admin</code> 403s</td>
+    <td>You are logged in as an engineer or a tester. It is manager-only server-side, not hidden by
+        the UI. Log in as <strong>Manager</strong> (9000).</td>
   </tr>
 </table>
 

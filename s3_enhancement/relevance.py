@@ -1,6 +1,6 @@
 """File-relevance selection for S3's codegen/analysis prompts.
 
-Scopes the LLM's context to a small, CR-relevant subset of `apps/policycore/`
+Scopes the LLM's context to a small, CR-relevant subset of `repos/policycore/`
 instead of concatenating every file's full content into every prompt. This
 is what lets S3 scale to a realistic ~100-file app without token usage
 growing linearly with app size — the concern this module exists to answer.
@@ -8,7 +8,7 @@ growing linearly with app size — the concern this module exists to answer.
 Selection runs in two stages:
 
 1. **Subsystem screening** (`screen_subsystems`): each subsystem under
-   `apps/policycore/systems/` ships a `DESIGN.md` declaring its scope. A subsystem
+   `repos/policycore/systems/` ships a `DESIGN.md` declaring its scope. A subsystem
    scoring below `min_score` against the CR is screened out entirely —
    none of its source files are even opened for stage 2. This is what lets
    the demo say "the AI reads the design docs first" rather than "the AI
@@ -51,18 +51,18 @@ from s3_enhancement import targets
 from s3_enhancement.targets import Target
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MOCKAPP_ROOT = REPO_ROOT / "apps" / "policycore"
+MOCKAPP_ROOT = REPO_ROOT / "repos" / "policycore"
 
 # The files CR-2026-041 actually needs — always included as prompt context
 # regardless of what the relevance scorer says, and always required back in
 # the model's response (see codegen.py's _validate_file_set). This is the
 # safety net that keeps the demo from ever flaking on the real files.
-# apps/policycore/core/coverage.py does not exist until the CR creates it — it's
+# repos/policycore/core/tiers.py does not exist until the CR creates it — it's
 # still a core file, just with empty pre-CR content (mirrors how the
 # original hardcoded-allowlist prompt handled a not-yet-existing file).
 # Bound to the default Target so there's one source of truth across S3's
 # modules (see s3_enhancement/targets.py) — value is unchanged from before.
-CORE_FILES: tuple[str, ...] = targets.MOCKAPP_COVERAGE_UPGRADE.core_files
+CORE_FILES: tuple[str, ...] = targets.MOCKAPP_TIER_UPGRADE.core_files
 
 # Structurally off-limits regardless of relevance score: seed.py constructs
 # Policy(...) with 6 fixed positional args (see codegen.py's
@@ -71,7 +71,7 @@ CORE_FILES: tuple[str, ...] = targets.MOCKAPP_COVERAGE_UPGRADE.core_files
 # the file most densely full of Policy field names). Still counted in
 # discover_mockapp_files() for an honest total-app-size figure — just never
 # eligible to be selected as extra editable context.
-NEVER_EXTRA: frozenset[str] = targets.MOCKAPP_COVERAGE_UPGRADE.never_extra
+NEVER_EXTRA: frozenset[str] = targets.MOCKAPP_TIER_UPGRADE.never_extra
 
 # "target" is Maven's build-output directory (the Spring Boot target's root
 # contains two Maven services) and ".baseline" is that target's pristine
@@ -92,7 +92,7 @@ _SOURCE_GLOBS = ("*.py", "*.java")
 
 @dataclass(frozen=True)
 class SubsystemScreen:
-    """Result of scoring each `apps/policycore/systems/*/DESIGN.md` against the CR,
+    """Result of scoring each `repos/policycore/systems/*/DESIGN.md` against the CR,
     before any individual source file is opened for stage-2 ranking."""
 
     in_scope: tuple[str, ...]
@@ -116,17 +116,17 @@ class SelectionResult:
 
 def discover_mockapp_files(root: Path = MOCKAPP_ROOT) -> dict[str, str]:
     """Read every .py/.java file under `root`, keyed by its path relative to
-    `key_base` (matching CORE_FILES's "apps/policycore/..." convention for the default
+    `key_base` (matching CORE_FILES's "repos/policycore/..." convention for the default
     target — every entry is keyed relative to this repo's root, not to
     `root` itself, since `root` is only the glob directory).
 
     A local glob rather than `s4_knowledge.snapshot_reader.snapshot_files()`
-    because that helper only globs `*.py` — apps/policycore/ now also contains Java
-    decoy files under apps/policycore/systems/, and s4_knowledge's helper stays
+    because that helper only globs `*.py` — repos/policycore/ now also contains Java
+    decoy files under repos/policycore/systems/, and s4_knowledge's helper stays
     Python-only since S4 has no reason to touch Java. Empty __init__.py
     package markers are skipped, same convention as snapshot_reader.
 
-    `root` defaults to `apps/policycore/` (today's one local target); a second local
+    `root` defaults to `repos/policycore/` (today's one local target); a second local
     `Target` would pass its own `root` here via `discover_files_for_target`.
     For a `root` that isn't under this repo (e.g. a synthetic target rooted
     elsewhere on disk, as in tests), keys are relative to `root` itself
@@ -210,7 +210,7 @@ def discover_gitlab_files(
 def discover_files_for_target(target: Target, cr_text: str) -> dict[str, str]:
     """Dispatch discovery to the strategy matching `target.source_kind` — the
     seam that lets a caller (codegen/testgen/analyze) work against any
-    registered target instead of always reading apps/policycore/ directly."""
+    registered target instead of always reading repos/policycore/ directly."""
     if target.source_kind == "local":
         return discover_mockapp_files(target.root)
     return discover_gitlab_files(target.project_id, cr_text, ref=target.ref)
@@ -236,9 +236,9 @@ def discover_subsystem_design_docs(root: Path = MOCKAPP_ROOT) -> dict[str, str]:
     design doc omits that section, since a doc without declared keywords
     should still be considered, not silently skipped.
 
-    `root` defaults to `apps/policycore/` — today's one design-doc-bearing target —
+    `root` defaults to `repos/policycore/` — today's one design-doc-bearing target —
     but MUST be the scoring target's own root whenever there is one (see
-    `select_relevant_files`'s `design_doc_root`). Globbing apps/policycore/
+    `select_relevant_files`'s `design_doc_root`). Globbing repos/policycore/
     unconditionally meant a target rooted anywhere else (the Spring
     ClaimsPortal) got screened against mockapp's decoy subsystems, and the
     UI's "which part of the repo the AI matched this change to" panel then
@@ -246,7 +246,7 @@ def discover_subsystem_design_docs(root: Path = MOCKAPP_ROOT) -> dict[str, str]:
     mockapp. A root with no design docs correctly yields `{}`, which
     `screen_subsystems` turns into an empty screen that excludes nothing.
 
-    Keys are relative to this repo's root, matching the "apps/policycore/..."
+    Keys are relative to this repo's root, matching the "repos/policycore/..."
     convention the rest of this module uses; for a `root` outside the repo
     (a synthetic target rooted elsewhere, as in tests) they're relative to
     `root` itself instead — same fallback as `discover_mockapp_files`.
@@ -270,7 +270,7 @@ def _extract_scope_keywords(design_doc_text: str) -> str:
 
 
 # Empirically measured against this repo's own decoy subsystems: the six
-# apps/policycore/systems/legacy_platform/* DESIGN.md docs top out at 0.336
+# repos/policycore/systems/legacy_platform/* DESIGN.md docs top out at 0.336
 # cosine similarity against the real CR-2026-041 text (settlement, the
 # closest decoy) -- well above where TF-IDF's sparse cosine sits for the same
 # pairs (<= 0.012). 0.45 sits with margin above that decoy ceiling; re-verify
@@ -338,8 +338,8 @@ def screen_subsystems(
         return _screen_subsystems_tfidf(cr_text, design_docs, floor)
 
 
-# Empirically measured: this repo's one non-core, non-decoy apps/policycore/ file
-# (apps/policycore/core/claims.py) scores 0.4501 embedding cosine similarity against
+# Empirically measured: this repo's one non-core, non-decoy repos/policycore/ file
+# (repos/policycore/core/claims.py) scores 0.4501 embedding cosine similarity against
 # CR-2026-041's real text -- domain-adjacent (both insurance/policy vocabulary)
 # but not what the CR is actually about. 0.55 sits above that with margin;
 # re-verify against test_s3_relevance.py's "selects only core files" assertion
@@ -396,7 +396,7 @@ def select_relevant_files(
     design_docs: dict[str, str] | None = None,
     design_doc_root: Path | None = None,
 ) -> SelectionResult:
-    """Screen subsystems by design doc, then rank the surviving apps/policycore/
+    """Screen subsystems by design doc, then rank the surviving repos/policycore/
     files by semantic similarity to the CR text (embeddings by default,
     TF-IDF cosine similarity fallback), returning the core files (always
     included, empty content if the file doesn't exist yet) plus up to
@@ -415,7 +415,7 @@ def select_relevant_files(
 
     `design_doc_root` MUST be the scoring target's own root
     (`Target.root`) whenever the caller has a target in hand; it falls back
-    to `apps/policycore/` only for the target-less callers (tests, tools, the legacy
+    to `repos/policycore/` only for the target-less callers (tests, tools, the legacy
     Streamlit console) that are inherently scoped to mockapp. Screening a
     non-mockapp target against mockapp's subsystem docs is a reporting bug,
     not a no-op — see `discover_subsystem_design_docs`.

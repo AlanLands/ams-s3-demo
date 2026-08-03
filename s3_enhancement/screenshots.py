@@ -1,4 +1,4 @@
-"""Before/after screenshot capture for the S3 endorsement-form demo beat
+"""Before/after screenshot capture for the S3 amendment-form demo beat
 (CR-2026-042) — proves "the app changed" visually, not just via a text diff.
 
 `SCREENSHOT_MODE` mirrors `GITLAB_MODE`/`HARNESS_MODE`/`LLM_MODE`: "live"

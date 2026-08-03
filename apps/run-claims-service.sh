@@ -14,4 +14,4 @@ if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
 echo "  Claims-Service -> http://localhost:${CLAIMS_SERVICE_PORT:-8082}/"
 echo "  validating policies against ${POLICY_SERVICE_URL:-http://localhost:8081}"
-uvicorn apps.claimsportal.claims_service.main:app --port "${CLAIMS_SERVICE_PORT:-8082}"
+uvicorn repos.claimsportal.claims_service.main:app --port "${CLAIMS_SERVICE_PORT:-8082}"
