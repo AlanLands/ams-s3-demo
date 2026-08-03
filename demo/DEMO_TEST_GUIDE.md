@@ -88,8 +88,10 @@ grep -c priority repos/policycore/core/amendments.py
 ls tests/test_s3_amendment_priority.py
 #   ls: tests/test_s3_amendment_priority.py: No such file or directory
 # The "Request a Contract Amendment" form has 5 fields before the CR, 6 after:
+# Anchored on the leading dot, not on `st.`: the contact phone/email pair is
+# laid out in columns, so those two are `col1.text_input` / `col2.text_input`.
 awk '/st.form\("submit_amendment_form"/,/form_submit_button/' repos/policycore/app.py \
-  | grep -cE 'st\.(selectbox|text_area|date_input|text_input)'
+  | grep -cE '\.(selectbox|text_area|date_input|text_input)\('
 #   5        <- baseline (amendment type, requested change, effective date,
 #                contact phone, contact email). 6 after the CR adds Priority.
 

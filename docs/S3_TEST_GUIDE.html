@@ -388,8 +388,12 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
 <p>Run from the repo root after the resets, before you present. Every line must match
 the comment. Re-derived and re-run against the GRS-reskinned tree on 3 August 2026 —
 the old <code>coverage_tier</code> / <code>COVERAGE_TIERS</code> grep now passes
-vacuously, because those symbols no longer exist under any state of the repo.</p>
-<pre><code>grep -c 'plan_tier\|PLAN_TIERS' repos/policycore/app.py     # 0       — no CR-041 yet
+vacuously, because those symbols no longer exist under any state of the repo.
+The CR-041 sentinel is <code>PLAN_TIERS</code> / <code>upgrade_tier</code>, not
+<code>plan_tier</code>: the field exists on <code>Policy</code> before the CR and the
+portal's contract header displays it, so <code>plan_tier</code> alone is a false
+positive. What CR-041 adds is the tier <em>ladder</em> and the upgrade call.</p>
+<pre><code>grep -c 'PLAN_TIERS\|upgrade_tier' repos/policycore/app.py  # 0       — no CR-041 yet
 grep -c 'selectbox("Priority"' repos/policycore/app.py      # 0       — no CR-042 yet
 ls repos/policycore/core/tiers.py                           # absent  — CR-041 creates it
 ls repos/claimsportal/claims_service/claim_rules.py         # absent  — CR-043 creates it
@@ -399,11 +403,14 @@ curl -s localhost:8081/api/policies/MS-1004                 # no "deductible" ke
 curl -s -X POST localhost:8083/api/eligibility/check \
   -H 'Content-Type: application/json' -d '{"applicantId":"AP-4003"}'  # "granted": false
 ls s3_enhancement/out/ | wc -l                              # 0</code></pre>
-<p>Two of those are worth reading rather than glancing at. The
-<code>plan_tier</code> grep must be run against <strong><code>app.py</code>
-only</strong> — <code>core/models.py</code> and <code>core/db.py</code> carry a
-<code>plan_tier</code> column at baseline by design, so a repo-wide grep is not zero and
-is not a failure. And the <code>AP-4003</code> check must come back
+<p>Two of those are worth reading rather than glancing at. The CR-041 grep is scoped to
+<strong><code>app.py</code> only</strong>, and its sentinel is
+<code>PLAN_TIERS</code>/<code>upgrade_tier</code> rather than <code>plan_tier</code>,
+for the same reason: <code>core/models.py</code> and <code>core/db.py</code> carry a
+<code>plan_tier</code> column at baseline by design, so a <code>plan_tier</code> grep is
+not zero and is not a failure. The two ladder symbols appear in no source file at
+baseline — only in <code>AGENTS.md</code>/<code>CLAUDE.md</code>, which the greps do not
+read. And the <code>AP-4003</code> check must come back
 <code>"granted": false</code> with <code>"requiredPreference": null</code>; a prospect
 refused for any <em>other</em> reason means the EnrolDirect reset did not take.</p>
 

@@ -156,6 +156,41 @@ unusual extensions (`.env.example`, `deploy/aws/*.service`) fall out of an
 extension allowlist. Both bit on the first pass. Verify with
 `s3_enhancement/discovery.py`-aware end-to-end run, not with grep alone.
 
+## `repos/policycore/app.py` is mirrored inside two recordings
+
+`app.py` is in the `codegen_allowlist` for **both** PolicyCore targets, and both
+committed recordings return it as a **whole-file replacement**. So the recorded
+copy has to stay equal to the on-disk file plus that CR's delta. Restructure the
+portal without re-authoring the recordings and Apply stages a revert of the
+restructure — mid-demo, with the diff showing the layout being deleted.
+
+The two live recordings are `s3_enhancement/cache/s3_codegen.json` (CR-2026-041,
+`cache_namespace=""`) and `s3_codegen__endorsement_field_add.json` (CR-2026-042).
+Re-author them by applying the CR's delta to the current `app.py` as exact string
+substitutions, not by hand-editing the JSON — then assert the replayed diff is
+purely additive. **No live re-record is needed**, the same way the two target
+moves did not need one. Done once on 2026-08-03 for the sidebar/section
+redesign.
+
+Three things make this safe rather than fragile, all verified:
+- Replay keys off the **cache namespace, not a prompt hash**
+  (`common/llm.py::stream_complete`), so editing `app.py` cannot cause a miss.
+- `relevance.select_relevant_files` **excludes core files from the candidate
+  pool** before scoring, so `app.py`'s content never shifts which extra files
+  are selected — the "unexpected file set" trap does not apply to core files.
+- `_drop_unchanged_files` compares against the repo, so a recorded file that
+  matches disk is dropped and the diff shows only the CR.
+
+The recordings' JSON encoding is not uniform: the **outer** document is
+`ensure_ascii=True`, the **inner** `response` string is `ensure_ascii=False`,
+and there is no trailing newline. Round-trip an untouched copy and assert it is
+byte-identical before writing, or the diff becomes the whole file.
+
+The two `s3_codegen__revise__*.json` recordings that also carry `app.py`
+(`2f4f481…`, `b99921d…`) are **already stale** — they import the pre-reskin
+`core.coverage` / `COVERAGE_TIERS` / `holder_name`, which no longer exist. They
+predate the GRS reskin and were not repaired by the redesign.
+
 ## Release artifacts
 
 `s3_enhancement/release.py` holds the deployment plan and the release record.
