@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from common.roster import ENGINEERS_BY_GROUP
+from common.roster import ENGINEERS_BY_GROUP, is_tester
 from s3_enhancement import targets
 from s3_enhancement.applications import (
     Application,
@@ -97,7 +97,11 @@ class RouteDecision:
         if not self.application:
             return ""
         roster = ENGINEERS_BY_GROUP.get(self.application.component_team, [])
-        return roster[0] if roster else ""
+        # Skip testers: this suggests who *builds* the change, and a group whose
+        # first member tests rather than builds would otherwise hand the work to
+        # someone whose console has no Generate stage.
+        buildable = [name for name in roster if not is_tester(name)]
+        return buildable[0] if buildable else ""
 
 
 def route_ticket(

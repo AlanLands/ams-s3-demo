@@ -9,13 +9,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from pydantic import BaseModel
 
-from apps.console.api.session import SESSION_COOKIE_NAME, create_session, destroy_session, get_session_data
+from apps.console.api.session import (
+    SESSION_COOKIE_NAME,
+    create_session,
+    destroy_session,
+    get_session_data,
+)
 from common.roster import (
     MANAGER_NAME,
     ROSTER,
     Identity,
     authenticate,
     group_for_engineer,
+    role_for,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -47,7 +53,7 @@ def roster() -> list[str]:
 def login(payload: LoginRequest, response: Response) -> IdentityResponse:
     if not authenticate(payload.name, payload.passcode):
         raise HTTPException(status_code=401, detail="Name/passcode didn't match.")
-    role = "manager" if payload.name == MANAGER_NAME else "engineer"
+    role = role_for(payload.name)
     identity = Identity(name=payload.name, role=role, group=group_for_engineer(payload.name))
     session_id = create_session()
     session = get_session_data(session_id)

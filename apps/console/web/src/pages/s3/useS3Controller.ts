@@ -30,6 +30,7 @@ import {
   type TokenPanel as TokenPanelData,
 } from '../../api_s3'
 import type { S3Stage } from './context'
+import { canSeeStage, type S3StageId } from './stageAccess'
 import { downloadBlob, parseDiff } from './utils'
 
 const AI_LABEL = 'AI suggestion — verify with your specialist before applying.'
@@ -69,11 +70,16 @@ const DEFAULT_TARGET_APP = { url: MOCKAPP_URL, label: 'open the policy portal' }
 // live roster since a ticket assignee is illustrative here, not a real Jira
 // user lookup (Jira Cloud needs an accountId, which this fictional roster
 // doesn't have — see common/jira_client.py's assignee note).
-const ASSIGNEE_ROSTER = ['Ravi Kumar', 'Elena Cruz', 'Priya Nair']
+// Developers only. Priya Nair used to appear here too, but she is a tester
+// (common/roster.py's TESTER_NAMES) — offering her as the assignee for build
+// work would hand a ticket to someone whose console has no Generate stage.
+const ASSIGNEE_ROSTER = ['Ravi Kumar', 'Elena Cruz']
 
-// QA hand-off roster — the ClaimsPortal support pair doubles as the test
-// team in this demo. Once a ticket is handed to QA, only the assigned
-// tester (logged in as themselves) can generate/run tests and close out.
+// QA hand-off roster. These two carry the `tester` role server-side
+// (common/roster.py's TESTER_NAMES) — keep the two lists in step, or the
+// console offers a hand-off to someone who logs in without a Tests stage.
+// Once a ticket is handed to QA, only the assigned tester (logged in as
+// themselves) can generate/run tests and close out.
 const TESTER_ROSTER = ['Priya Nair', 'Tom Becker']
 
 // Which CR a given Jira board ticket links to, so clicking it can run impact
@@ -178,6 +184,11 @@ export function useS3Controller() {
   const { identity } = useAuth()
   const isManager = identity?.role === 'manager'
   const isEngineer = identity?.role === 'engineer'
+  const isTester = identity?.role === 'tester'
+  // Engineers and testers both work a queue of tickets assigned to them —
+  // the tester's is the QA hand-off. Only the manager works the whole board
+  // instead of a personal queue.
+  const worksTickets = isEngineer || isTester
 
   const [generated, setGenerated] = useState<GenerateResponse | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -1687,7 +1698,7 @@ export function useS3Controller() {
   // the board changes (e.g. a manager just assigned something) so a ticket
   // reassigned away from this engineer doesn't leave a stale target.
   useEffect(() => {
-    if (!isEngineer || !boardIssues) return
+    if (!worksTickets || !boardIssues) return
     setActiveTicketKey((prev) => {
       if (prev && boardIssues.some((issue) => issue.key === prev && issue.assignee === identity?.name)) {
         return prev
@@ -1700,12 +1711,12 @@ export function useS3Controller() {
       )
       return mine ? mine.key : null
     })
-  }, [isEngineer, boardIssues, identity?.name])
+  }, [worksTickets, boardIssues, identity?.name])
 
   useEffect(() => {
-    if (!isEngineer || !activeTicketKey) return
+    if (!worksTickets || !activeTicketKey) return
     loadDependencies(activeTicketKey)
-  }, [isEngineer, activeTicketKey])
+  }, [worksTickets, activeTicketKey])
 
   // Restore whatever proposal was already generated for this ticket (e.g.
   // after a page reload, or switching back to a ticket worked on earlier) —
@@ -1897,7 +1908,7 @@ export function useS3Controller() {
       statusVariant: (mutationCheck && !mutationCheck.tests_caught_bug) || (testsRun && !testsRun.passed) || (regressionRun && !regressionRun.passed) ? 'error' : 'ok',
     },
     { id: 'release', title: 'Draft release notes', path: '/s3/release', locked: !canDraftNotes, lockedReason: notesLockedReason, done: !!releaseNoteSet, statusLabel: releaseNoteSet ? '✓ Drafted' : null },
-  ]
+  ].filter((stage) => canSeeStage(identity?.role, stage.id as S3StageId))
 
 
 
@@ -1906,6 +1917,8 @@ export function useS3Controller() {
     identity,
     isManager,
     isEngineer,
+    isTester,
+    worksTickets,
     generated,
     setGenerated,
     generating,

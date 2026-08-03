@@ -413,11 +413,21 @@ scheme lives in <code>common/roster.py</code>.</p>
 <tr>
 <td>Priya Nair</td>
 <td>1003</td>
-<td>Engineer — App Support, ClaimsPortal</td>
+<td><strong>Tester</strong> — the QA hand-off receives work here</td>
 </tr>
 <tr>
 <td>Tom Becker</td>
 <td>1004</td>
+<td><strong>Tester</strong> — the second QA login</td>
+</tr>
+<tr>
+<td>Arjun Mehta</td>
+<td>1005</td>
+<td>Engineer — App Support, ClaimsPortal</td>
+</tr>
+<tr>
+<td>Clara Bishop</td>
+<td>1006</td>
 <td>Engineer — App Support, ClaimsPortal</td>
 </tr>
 <tr>
@@ -427,6 +437,36 @@ scheme lives in <code>common/roster.py</code>.</p>
 </tr>
 </tbody>
 </table>
+<p><strong>Each role sees only its own stages.</strong> This is why the same pipeline looks
+different depending on who logs in — it declutters each person's view, and it
+is presentation only (the API does not enforce it; the map is
+<code>apps/console/web/src/pages/s3/stageAccess.ts</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Stages</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Manager</td>
+<td>Board, Draft release notes, <code>/admin</code></td>
+</tr>
+<tr>
+<td>Engineer</td>
+<td>Board, Target selection, Generate the change, Draft design doc</td>
+</tr>
+<tr>
+<td>Tester</td>
+<td>Board (their QA queue), Draft design doc, Generate tests + run</td>
+</tr>
+</tbody>
+</table>
+<p>The tester has no Generate stage on purpose: a tester who can regenerate the
+change under test is not an independent check of it. The manager has no
+Generate or Tests stage for the same reason in reverse — those are the
+engineer's and the tester's evidence, not the approver's.</p>
 <hr />
 <h2>6b. What is on the board when you log in</h2>
 <p>Six tickets. Five are seeded; the sixth opens by itself.</p>

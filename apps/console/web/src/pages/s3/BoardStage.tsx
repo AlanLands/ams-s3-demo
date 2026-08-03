@@ -26,7 +26,7 @@ export default function BoardStage() {
     reassignTicket,
     setReassignTicket,
     assigningBoardTicket,
-    isEngineer,
+    worksTickets,
     identity,
     boardFilter,
     boardStatusFilter,
@@ -299,7 +299,9 @@ export default function BoardStage() {
       </>
       )}
 
-      {isEngineer && (
+      {/* Engineers and testers each see the queue assigned to them; the
+          manager sees the whole board above instead. */}
+      {worksTickets && (
       <>
       {/* Jira board */}
       <div id="board" className="ams-card" style={{ marginBottom: '1.25rem' }}>

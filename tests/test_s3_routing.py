@@ -114,7 +114,10 @@ def test_ci_route_carries_team_project_and_targets():
     assert not decision.needs_ai_fallback
     assert decision.application.jira_project_key == "AMS"
     assert decision.component_team == "App Support — ClaimsPortal"
-    assert decision.suggested_assignee == "Priya Nair"
+    # Not Priya Nair, who is first on this team's roster but carries the
+    # `tester` role — this field suggests who *builds* the change, and a
+    # tester's console has no Generate stage to build it in.
+    assert decision.suggested_assignee == "Arjun Mehta"
     assert decision.candidate_target_ids == (targets.CLAIMSPORTAL_TARGET_ID,)
     assert decision.automation_available
 
@@ -176,7 +179,8 @@ def test_route_endpoint_returns_the_decision():
     assert body["matched_on"] == "Claims Portal"
     assert body["automation_available"] is True
     assert body["application"]["component_team"] == "App Support — ClaimsPortal"
-    assert body["suggested_assignee"] == "Priya Nair"
+    # First non-tester on the owning team — see the note in the CI-route test.
+    assert body["suggested_assignee"] == "Arjun Mehta"
     assert body["candidate_targets"][0]["target_id"] == targets.CLAIMSPORTAL_TARGET_ID
 
 

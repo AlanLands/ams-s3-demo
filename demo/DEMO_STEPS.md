@@ -220,9 +220,27 @@ scheme lives in `common/roster.py`.
 |-------|----------|------|
 | Ravi Kumar | 1001 | Engineer — App Support, PolicyCore |
 | Elena Cruz | 1002 | Engineer — App Support, PolicyCore |
-| Priya Nair | 1003 | Engineer — App Support, ClaimsPortal |
-| Tom Becker | 1004 | Engineer — App Support, ClaimsPortal |
+| Priya Nair | 1003 | **Tester** — the QA hand-off receives work here |
+| Tom Becker | 1004 | **Tester** — the second QA login |
+| Arjun Mehta | 1005 | Engineer — App Support, ClaimsPortal |
+| Clara Bishop | 1006 | Engineer — App Support, ClaimsPortal |
 | Manager | 9000 | Manager view — **the only login that can assign tickets or open `/admin`** |
+
+**Each role sees only its own stages.** This is why the same pipeline looks
+different depending on who logs in — it declutters each person's view, and it
+is presentation only (the API does not enforce it; the map is
+`apps/console/web/src/pages/s3/stageAccess.ts`).
+
+| Role | Stages |
+|------|--------|
+| Manager | Board, Draft release notes, `/admin` |
+| Engineer | Board, Target selection, Generate the change, Draft design doc |
+| Tester | Board (their QA queue), Draft design doc, Generate tests + run |
+
+The tester has no Generate stage on purpose: a tester who can regenerate the
+change under test is not an independent check of it. The manager has no
+Generate or Tests stage for the same reason in reverse — those are the
+engineer's and the tester's evidence, not the approver's.
 
 ---
 
