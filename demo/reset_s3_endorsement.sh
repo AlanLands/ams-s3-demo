@@ -12,9 +12,6 @@
 #
 # ⚠ KNOWN BROKEN as of 2026-08-03, same as demo/reset_s3.sh: the
 # `git checkout HEAD -- repos/policycore/...` below fails with "pathspec did
-# not match" because the apps/ -> repos/ move is uncommitted, and `set -e`
-# stops the script before the reseed and the .cache/llm wipe. Committing the
-# move fixes it. The ClaimsPortal and EnrolDirect resets are unaffected.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate

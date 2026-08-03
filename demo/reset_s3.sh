@@ -3,18 +3,6 @@
 # pre-codegen PolicyCore files from HEAD (not from a tag — see the note above
 # the checkout below), remove generated runtime artifacts, then reseed to
 # restore pristine contract/claim state between rehearsals.
-#
-# ⚠ KNOWN BROKEN as of 2026-08-03. The `git checkout HEAD -- repos/policycore/...`
-# below fails with "pathspec did not match" because the apps/ -> repos/ move is
-# uncommitted: HEAD still carries these files under apps/policycore/. `set -e`
-# then stops the script, so nothing after the checkout runs either — no reseed,
-# no .cache/llm wipe, no ticket-timeline clear, no reset marker.
-#   Committing the repos/ move fixes this; nothing in this script needs changing.
-#   demo/reset_s3_claimsportal.sh and demo/reset_s3_enroldirect.sh are
-#   unaffected (they cp from .baseline/ and never touch git).
-#   The admin panel reports it as `reset_blocked_reason` on GET /api/admin/status.
-# Check read-only with:
-#   git cat-file -e HEAD:repos/policycore/app.py 2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate

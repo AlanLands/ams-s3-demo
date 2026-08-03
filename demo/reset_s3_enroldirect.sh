@@ -39,5 +39,4 @@ rm -f tests/test_s3_prospect_access.py
 
 echo "EnrolDirect source baseline restored; generated files removed."
 echo "Note: staged proposals under s3_enhancement/out/ are shared with the other targets —"
-echo "run demo/reset_s3.sh too for a full between-rehearsals reset (it is currently broken;"
-echo "until the repos/ move is committed, clear them with 'rm -rf s3_enhancement/out/*')."
+echo "run demo/reset_s3.sh too for a full between-rehearsals reset."
