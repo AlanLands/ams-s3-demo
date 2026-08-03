@@ -53,6 +53,14 @@ const TARGET_APPS: Record<string, { url: string; label: string }> = {
     url: import.meta.env.VITE_CLAIMS_SERVICE_URL || 'http://localhost:8082/',
     label: 'open the Claims Team console',
   },
+  // EnrolDirect serves its own console from repos/enroldirect/static
+  // (apps/run-enroldirect.sh :8083). CR-2026-045 changes the enrolment gate,
+  // and that console's Access check is where the prospect decision is visible
+  // — the policy portal has nothing to do with this target.
+  'enroldirect-prospect-access': {
+    url: import.meta.env.VITE_ENROLDIRECT_URL || 'http://localhost:8083/',
+    label: 'open the EnrolDirect console',
+  },
 }
 const DEFAULT_TARGET_APP = { url: MOCKAPP_URL, label: 'open the policy portal' }
 
