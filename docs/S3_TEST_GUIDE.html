@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AMS S3 — Test &amp; Demo Guide</title>
+<title>AMS S3 — Test &amp; Walkthrough Guide</title>
 <style>
   @page { size: A4; margin: 16mm 14mm; }
 
@@ -123,7 +123,7 @@
 <header class="cover">
   <div class="kicker">MapleSure Insurance · AMS Console</div>
   <h1>S3 Enhancement Delivery</h1>
-  <p class="subtitle">Test &amp; demo guide — all scenarios</p>
+  <p class="subtitle">Test &amp; walkthrough guide — all scenarios</p>
   <p class="meta">
     Generated 3 August 2026 · repo <span class="mono">ams-s3-demo</span> ·
     branch <span class="mono">s3-console-stage-routes</span><br>
@@ -135,7 +135,7 @@
 
 <h2>Environment</h2>
 
-<p>Six processes make up the full demo environment. The console and the app a given
+<p>Six processes make up the full environment. The console and the app a given
 CR targets must be running; the rest can stay down if you are not showing that CR.</p>
 
 <table>
@@ -186,7 +186,7 @@ both invoke it by name.</p>
   runs the reset scopes, and onboards a repo by writing its
   <code>.s3targets.json</code>. Service status is a plain TCP connect — no
   <code>ps</code>, no <code>lsof</code> — so it works on a locked-down host.</p>
-  <p>Two limits worth knowing before you rely on it mid-demo. There is
+  <p>Two limits worth knowing before you rely on it mid-run. There is
   <strong>no service id for the console</strong>: it cannot restart the process serving
   your request, and naming it is a 400 rather than an attempt. And a manifest the
   panel just wrote <strong>needs a console restart</strong> before that target
@@ -282,7 +282,7 @@ authority.</p>
 <h3>Reset between runs</h3>
 <p>The pipeline mutates real files. Stop the services first, then run these in <strong>this order</strong> —
 the CR-042 reset must come <em>after</em> <code>reset_s3.sh</code>, because it restores the superset
-PolicyCore state that leaves both AMS-101 and AMS-102 demo-ready.</p>
+PolicyCore state that leaves both AMS-101 and AMS-102 ready to run.</p>
 <pre><code>demo/reset_s3.sh              # CR-041 + shared state: .cache/llm, out/, events, Jira caches
 demo/reset_s3_endorsement.sh  # CR-042 baseline  (MUST run after reset_s3.sh)
 demo/reset_s3_claimsportal.sh # CR-043 target, from repos/claimsportal/.baseline/
@@ -376,7 +376,7 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
 </div>
 
 <div class="callout warn">
-  <span class="label">The easiest way to make a working demo look broken</span>
+  <span class="label">The easiest way to make a working run look broken</span>
   <p>The two PolicyCore scenarios need only a browser refresh — Streamlit re-executes <code>app.py</code> on
   each run. <strong>Scenario 3 does not.</strong> The running processes serve whatever was loaded at
   startup (no <code>--reload</code>), so a just-applied CR is invisible on :8081/:8082 until you restart. Apply
@@ -723,7 +723,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   </ul>
 
   <div class="callout">
-    <span class="label">Demo-day rule</span>
+    <span class="label">Session-day rule</span>
     <p><code>tools/verify_s3_live.py --gate 10</code> runs ten real codegen + testgen + pytest cycles from
     baseline. A cycle passes only if the <strong>live</strong> path succeeded — no silent replay fallback —
     and the generated tests ran green. <strong>Require ≥ 9/10, otherwise present in
@@ -747,7 +747,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
         without a terminal.</li>
     <li><strong>Onboard a repo</strong> — writes a <code>.s3targets.json</code> manifest for a directory
         under <code>repos/</code>.</li>
-    <li><strong>Reset demo state</strong> — pick a scope, read its preview, then run it.</li>
+    <li><strong>Reset environment state</strong> — pick a scope, read its preview, then run it.</li>
   </ol>
 
   <ul class="check">
@@ -830,7 +830,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
     <td class="mono">8</td>
     <td>After QA hand-off the console silently re-targets another ticket, since the handed-off one
         leaves the developer's filtered board</td>
-    <td>Disorienting mid-demo</td>
+    <td>Disorienting mid-run</td>
     <td>Open — low priority</td>
   </tr>
   <tr>
@@ -904,7 +904,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
 </table>
 
 <p class="footer-note">
-  All data in this demo is synthetic and the insurer is fictional. No real client data, client names,
+  All data here is synthetic and the insurer is fictional. No real client data, client names,
   or credentials appear anywhere in this repo — see <span class="mono">CLAUDE.md</span> for the full
   project rules.
 </p>

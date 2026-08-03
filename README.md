@@ -1,11 +1,11 @@
-# AMS S3 Demo
+# AMS S3 — Enhancement Delivery
 
 Standalone build of **S3 (Enhancement Delivery)**, split out of the original
-six-scenario AMS tabletop demo. A small change request on one of "MapleSure
+six-scenario AMS tabletop walkthrough. A small change request on one of "MapleSure
 Insurance"'s group benefits applications moves through one pipeline: AI impact
 analysis → code generation → tests → docs → release notes.
 
-All data in this repo is synthetic. The demo applications belong to a
+All data in this repo is synthetic. The applications belong to a
 fictional insurer, **MapleSure Insurance**, and the domain is group retirement
 and group benefits — a *plan sponsor* holds a group contract, *plan members*
 enrol under it, and a change to an in-force contract is an *amendment*. See
@@ -40,7 +40,7 @@ Open **`http://localhost:5173`** and log in with a name/passcode from
 `common/roster.py` (the scheme is `1001 + roster position`, so the first
 engineer is `1001`).
 
-A manager also gets **`/admin`** — reset demo state, clear logs, start and stop
+A manager also gets **`/admin`** — reset environment state, clear logs, start and stop
 processes 2–5, and onboard a repo, without a terminal. See
 [`apps/README.md`](apps/README.md) for what it can and deliberately cannot do,
 how each application maps to a ServiceNow application, and why the directory
@@ -116,7 +116,7 @@ one process, one port, no separate frontend server.
 > glob like `'s3_enhancement/out/*'` silently matches nothing.) Just run
 > without `--reload`; restart by hand when you change backend source.
 
-### Resetting demo state
+### Resetting environment state
 
 The pipeline mutates real files on disk (application source, a SQLite DB,
 cache files). Restore everything to its pre-CR baseline between runs — **in
@@ -147,7 +147,7 @@ they would overwrite are dirty, and show what they would restore and delete
 first.
 
 `tools/verify_s3_live.py` runs the whole pipeline offline with every live
-provider path deliberately booby-trapped — the pre-demo confidence check.
+provider path deliberately booby-trapped — the pre-session confidence check.
 
 ## Layout
 
@@ -178,7 +178,7 @@ provider path deliberately booby-trapped — the pre-demo confidence check.
   resets, service probes and repo onboarding),
   `applications.py`/`routing.py` (ServiceNow CI → application/team routing),
   `relevance.py` (the file-relevance funnel), `cache/` (committed replay
-  recordings — these make the demo deterministic)
+  recordings — these make the run deterministic)
 - `common/` — LLM provider wrapper (`llm.py`), vector store, Jira/GitLab and
   ServiceNow clients, the login roster (`roster.py`), shared constants,
   telemetry

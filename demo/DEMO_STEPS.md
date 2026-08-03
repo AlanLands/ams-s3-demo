@@ -1,6 +1,6 @@
-# S3 Demo — Run Steps
+# S3 — Run Steps
 
-How to stand this demo up from a clean checkout, in any sandbox. Written for
+How to stand this up from a clean checkout, in any sandbox. Written for
 someone who has never run it before — if you already know the repo, you want
 `demo/DEMO_TEST_GUIDE.md` instead, which is the per-scenario rehearsal script.
 
@@ -105,7 +105,7 @@ CUSTOM_LLM_API_KEY=            # optional — blank is fine if your gateway does
 > wrong URL gives a clean 404 rather than a confusing one. The client requests
 > `<CUSTOM_LLM_BASE_URL>/chat/completions`.
 
-Verify the endpoint is reachable before demo day:
+Verify the endpoint is reachable before the session:
 
 ```bash
 python -c "
@@ -123,24 +123,24 @@ print(complete('Reply with the single word: ready'))
 | Claude via Bedrock | `bedrock` | `AWS_REGION`, `BEDROCK_MODEL` |
 | Ollama (local) | `ollama` | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` |
 
-### Replay mode — why the demo survives a bad network
+### Replay mode — why the run survives a bad network
 
 The default is `LLM_MODE=replay`. The code-generation and test-generation
 beats are served entirely from committed recordings in
 `s3_enhancement/cache/` and never call your model at all. That is what makes
-the demo deterministic.
+the run deterministic.
 
 > ⚠ **Sharp edge — read this one.** The *narrative* beats (impact analysis,
 > effort estimate, release notes, design doc) go through a different cache
 > that does **not** honour `LLM_MODE`. On a cache miss they call your endpoint
 > live, even in replay mode. Always run `demo/warm_s3_cache.sh` before
-> presenting — otherwise a slow or unreachable model stalls a beat mid-demo.
+> presenting — otherwise a slow or unreachable model stalls a beat mid-run.
 
 ---
 
-## 5. Reset before every rehearsal or demo
+## 5. Reset before every rehearsal or session
 
-The demo mutates real source files and the SQLite database. Reset returns
+The pipeline mutates real source files and the SQLite database. Reset returns
 everything to the pre-CR baseline. Run them **in this order** — the amendment
 reset must come after `reset_s3.sh`, because that script reseeds the database
 the amendment baseline then builds on.
@@ -284,7 +284,7 @@ need to reset between the two.
 
 ---
 
-## 8. The demo flow
+## 8. The walkthrough flow
 
 The console is six stages on a left-hand rail — **Board → Target selection →
 Generate the change → Draft design doc (for QA) → Generate tests + run → Draft
@@ -314,7 +314,7 @@ changed is what sits *inside* a stage.
 | 4 | **Review file by file**: Ask, Apply this file, Reject | Developers accept or reject one file at a time; a rejection records a reason to the ticket's audit trail and is excluded from Apply |
 | 5 | Apply, then look at PolicyCore on :8501/sl_policycore | The client's running application changed — on CR-2026-041 the new plan tier is selectable and the monthly contribution recalculates |
 | 5b | **Source control panel**: branch → commit → push | The change lands on a feature branch cut off `main` before anything is written, the commit is gated on the tests passing, and the push hands off to the pipeline — the flow, not a direct edit to main |
-| 6 | **Revert** (per file or all) | Anything applied can be undone without a full demo reset |
+| 6 | **Revert** (per file or all) | Anything applied can be undone without a full reset |
 | 6b | **Design doc: change map + Download PDF** | The hand-off document carries a diagram of what the change touches, and leaves as a real PDF you can attach to the ticket |
 | 7 | **Draft test scenarios**, edit one, approve the plan | QA reviews *what will be checked*, in prose traced to the CR's acceptance criteria, before any test code exists — and can change it |
 | 8 | Generate tests, run them, then the seeded-bug check | The generated tests actually catch a deliberately introduced bug |
@@ -323,10 +323,10 @@ changed is what sits *inside* a stage.
 | 11 | Design-doc drift check | Documentation drift is detected automatically after Apply, not by remembering to press a button |
 | 12 | **Release notes — three audiences** + the derived **deployment & rollback plan** | One note per reader (client / ops / user guide), and a deploy order computed from the change's own service graph |
 | 13 | **Download the release record, attach it to the ticket** | Everything the run proved, in one PDF — including what it could *not* prove |
-| 14 | *(if asked "how do you reset between runs?")* **`/admin`**, as Manager | The demo's own housekeeping is in the product, gated, and honest about what it will not do — see below |
+| 14 | *(if asked "how do you reset between runs?")* **`/admin`**, as Manager | The product's own housekeeping is in the product, gated, and honest about what it will not do — see below |
 
 Beat 14 is the admin panel (`http://localhost:5173/admin`, manager only). Four
-cards: **Reset demo state**, **Target applications**, **Logs**, **Onboard a
+cards: **Reset environment state**, **Target applications**, **Logs**, **Onboard a
 repo**. It is worth showing precisely because of what it refuses to do:
 
 - Source-restoring resets **409 while the tree is dirty**, and preview exactly
@@ -354,7 +354,7 @@ CR-2026-043 the plan puts policy_service before claims_service because
 claims_service calls it, and says why. The release record is assembled from
 what the run actually produced; its "Not evidenced by this release" block is
 the part worth pausing on, because a release document that only lists
-successes is marketing. **Attach to ticket** is honest about the demo default:
+successes is marketing. **Attach to ticket** is honest about the default:
 with `JIRA_MODE=replay` there is no Jira to attach to, so the beat records the
 intent on the ticket timeline and says the upload was simulated. Set
 `JIRA_MODE=live` and it uploads for real.
@@ -383,7 +383,7 @@ costs no LLM call and needs no cache warming. The `NEW` badge comes from git
 (the file is absent from `HEAD`), which is why `claim_rules.py` carries one on
 CR-2026-043 and nothing does on CR-2026-042. The PDF is rendered server-side by
 headless Chromium; if `playwright install chromium` has not been run on the
-demo machine the endpoint answers 503 and the console silently falls back to
+presenter machine the endpoint answers 503 and the console silently falls back to
 the browser's own print-to-PDF, so the button always does something.
 
 Beats 7, 9 and 10 are the QA-facing half of the tests stage. Two things worth
@@ -423,7 +423,7 @@ For the full per-scenario talk track and the fallback ladder, see
 
 ---
 
-## 10. Pre-demo checklist
+## 10. Pre-session checklist
 
 - [ ] `python -m pytest -q` passes (679 tests)
 - [ ] `.env` has your provider block filled in, and the section-4 one-liner returned a reply

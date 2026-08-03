@@ -28,7 +28,7 @@ below; only the middle two depend on each other.
 | 5 | **EnrolDirect** | `apps/run-enroldirect.sh` | 8083 | The online enrolment channel and its access-preference analysis (`repos/enroldirect/`). Target of CR-2026-045. |
 
 Only the console lives here as source. Scripts 2–5 launch code out of `repos/`
-— they are here because starting the demo is a tooling job, not because the
+— they are here because starting the applications is a tooling job, not because the
 apps they start are.
 
 You do **not** need all five for every beat. The PolicyCore CRs (CR-2026-041,
@@ -67,7 +67,7 @@ build time. Its equivalents (`VITE_API_BASE_URL`, `VITE_MOCKAPP_URL`,
 
 `console/api/routers/admin.py` over `s3_enhancement/admin_ops.py`, UI at
 `console/web/src/pages/Admin.tsx`. Four jobs, all of which otherwise need a
-terminal: reset demo state, clear logs, see and control the target apps above,
+terminal: reset environment state, clear logs, see and control the target apps above,
 and onboard a repo by writing its `.s3targets.json`.
 
 Every route depends on `require_manager`, so it is invisible to an engineer or
@@ -102,7 +102,7 @@ keep that check, because the situation recurs on every target move.
 The ClaimsPortal and EnrolDirect resets restore by copying from their
 committed `.baseline/` snapshots, so they never depend on HEAD at all.
 
-## How these map to the demo's story
+## How these map to the walkthrough
 
 The console treats each application as a **ServiceNow application** with an
 owning team, so a ticket carrying a Configuration Item routes to the right
@@ -148,7 +148,7 @@ beat that fails when a presenter clicks it.
   first pass.
 - One directory *inside* a target root was renamed earlier the same way:
   `policycore/systems/legacy_java_platform/` → `legacy_platform/` on
-  2026-07-31, dropping a stack name the demo no longer uses. Those 50 decoy
+  2026-07-31, dropping a stack name this project no longer uses. Those 50 decoy
   files are 50 of PolicyCore's 58-file candidate pool, so it was a real risk,
   not a cosmetic edit. It was safe only because it was verified rather than
   assumed: the candidate pool and the selected file set came back
