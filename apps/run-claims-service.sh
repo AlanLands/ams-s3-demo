@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# App 4 of 4 — Claims-Service (ClaimsPortal's claims side), Python / FastAPI.
+# App 4 of 5 — Claims-Service (ClaimsPortal's claims side), Python / FastAPI.
 #
 # The target of CR-2026-043 (deductible handling). Needs Policy-Service on
 # :8081 already running — see run-policy-service.sh.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# App 3 of 4 — Policy-Service (ClaimsPortal's policy side), Python / FastAPI.
+# App 3 of 5 — Policy-Service (ClaimsPortal's policy side), Python / FastAPI.
 #
 # Serves policy records to Claims-Service. Start this one BEFORE
 # run-claims-service.sh: claims calls policy over HTTP, and a claim filed

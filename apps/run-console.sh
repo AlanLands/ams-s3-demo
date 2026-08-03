@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# App 1 of 4 — the AMS Console (what the presenter drives).
+# App 1 of 5 — the AMS Console (what the presenter drives).
 #
 # Two processes, one script: the FastAPI backend on :8000 and the Vite dev
 # server on :5173. Open :5173 in the browser; it proxies API calls to :8000.

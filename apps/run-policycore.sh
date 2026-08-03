@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# App 2 of 4 — PolicyCore, the MapleSure policy-administration portal.
+# App 2 of 5 — PolicyCore, the MapleSure policy-administration portal.
 #
 # This is the "client's application" window: the one the audience watches
 # change when an S3 code proposal is applied. Python / Streamlit / SQLite.
