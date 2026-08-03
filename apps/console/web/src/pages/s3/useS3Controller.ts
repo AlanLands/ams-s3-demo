@@ -378,6 +378,21 @@ export function useS3Controller() {
   // every board refresh without re-issuing a request per poll.
   const resolveRequested = useRef<Set<string>>(new Set())
 
+  // Tracks unmount, and *only* unmount. The resolve effect below must not
+  // cancel on a dependency change: `resolveRequested` is a ref that outlives
+  // the run that populated it, so a per-run `cancelled` flag strands every
+  // in-flight ticket — the response is discarded while the key stays marked
+  // as already-requested, and the next run skips it forever. Under
+  // StrictMode's mount/unmount/remount that happened on every single dev
+  // load, which is what left "Identifying the repo…" on screen permanently.
+  const resolveMounted = useRef(true)
+  useEffect(() => {
+    resolveMounted.current = true
+    return () => {
+      resolveMounted.current = false
+    }
+  }, [])
+
   // A ticket auto-opened from a dropped CR is not in TICKET_CRS — it only
   // exists on the board, carrying its own `cr_file`. Resolving the seeded
   // table alone leaves such a ticket with no entry in `resolvedTarget`, and
@@ -385,7 +400,6 @@ export function useS3Controller() {
   // sits on "Identifying the repo…" forever rather than for a while. Walk the
   // board too, on the same fallback `crLinkFor` already uses for routing.
   useEffect(() => {
-    let cancelled = false
     const pending = new Map<string, string>()
     for (const [ticketKey, cr] of Object.entries(TICKET_CRS)) {
       if (cr.crFile) pending.set(ticketKey, cr.crFile)
@@ -399,20 +413,19 @@ export function useS3Controller() {
       s3Api
         .resolveTarget(crFile, ticketKey)
         .then((result) => {
-          if (cancelled) return
+          if (!resolveMounted.current) return
           setResolvedTarget((prev) => ({ ...prev, [ticketKey]: result }))
         })
         .catch(() => {
-          if (cancelled) return
-          // Let a later board refresh retry — a null entry clears
-          // `matchPending` and the card reports the failure honestly, but a
-          // one-off network blip should not strand the ticket for the session.
+          // Release the key on failure so a later board refresh retries. A
+          // null entry clears `matchPending` and the card reports the failure
+          // honestly, but a one-off network blip should not strand the ticket
+          // for the session. Released before the mount check: an unmount must
+          // not leave the key claimed for a remount that follows it.
           resolveRequested.current.delete(ticketKey)
+          if (!resolveMounted.current) return
           setResolvedTarget((prev) => ({ ...prev, [ticketKey]: null }))
         })
-    }
-    return () => {
-      cancelled = true
     }
   }, [boardIssues])
 
