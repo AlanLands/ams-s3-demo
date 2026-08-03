@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../api'
 import { useAuth } from '../../AuthContext'
 import {
@@ -366,25 +366,47 @@ export function useS3Controller() {
   // confirm (see targetConfirmed below).
   const [targetConfirmed, setTargetConfirmed] = useState<Record<string, boolean>>({})
 
+  // Tickets already sent to the resolver, so the effect below can re-run on
+  // every board refresh without re-issuing a request per poll.
+  const resolveRequested = useRef<Set<string>>(new Set())
+
+  // A ticket auto-opened from a dropped CR is not in TICKET_CRS — it only
+  // exists on the board, carrying its own `cr_file`. Resolving the seeded
+  // table alone leaves such a ticket with no entry in `resolvedTarget`, and
+  // `matchPending` is defined as "no entry yet" — so the Repo selection card
+  // sits on "Identifying the repo…" forever rather than for a while. Walk the
+  // board too, on the same fallback `crLinkFor` already uses for routing.
   useEffect(() => {
     let cancelled = false
+    const pending = new Map<string, string>()
     for (const [ticketKey, cr] of Object.entries(TICKET_CRS)) {
-      if (!cr.crFile) continue
+      if (cr.crFile) pending.set(ticketKey, cr.crFile)
+    }
+    for (const issue of boardIssues || []) {
+      if (issue.cr_file && !pending.has(issue.key)) pending.set(issue.key, issue.cr_file)
+    }
+    for (const [ticketKey, crFile] of pending) {
+      if (resolveRequested.current.has(ticketKey)) continue
+      resolveRequested.current.add(ticketKey)
       s3Api
-        .resolveTarget(cr.crFile, ticketKey)
+        .resolveTarget(crFile, ticketKey)
         .then((result) => {
           if (cancelled) return
           setResolvedTarget((prev) => ({ ...prev, [ticketKey]: result }))
         })
         .catch(() => {
           if (cancelled) return
+          // Let a later board refresh retry — a null entry clears
+          // `matchPending` and the card reports the failure honestly, but a
+          // one-off network blip should not strand the ticket for the session.
+          resolveRequested.current.delete(ticketKey)
           setResolvedTarget((prev) => ({ ...prev, [ticketKey]: null }))
         })
     }
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [boardIssues])
 
   // TICKET_CRS covers the seeded demo tickets. A CR dropped into `crs/` is
   // opened on the board automatically and is not in that table — the board
@@ -1745,8 +1767,8 @@ export function useS3Controller() {
   const inQa = activeIssue?.status === 'QA' || activeIssue?.status === 'Done'
   const isActiveAssignee = !!identity && activeIssue?.assignee === identity.name
 
-  // The active ticket's repo resolution. `undefined` while the mount-time
-  // resolve call is still in flight, `null` if it failed outright — the card
+  // The active ticket's repo resolution. `undefined` while its resolve call
+  // is still in flight, `null` if it failed outright — the card
   // distinguishes the two, since "still looking" and "couldn't tell" are very
   // different things to show someone.
   const activeMatch = activeTicketKey ? resolvedTarget[activeTicketKey] : undefined
