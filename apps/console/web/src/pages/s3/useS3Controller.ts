@@ -1876,11 +1876,10 @@ export function useS3Controller() {
             : 'Hand the ticket off to QA on the "Draft design doc (for QA)" stage — the assigned tester runs this step.'
           : `With QA — only ${activeIssue?.assignee || 'the assigned tester'} can generate and run tests.`
 
-  // The manager drafts these, and a manager is never a ticket's assignee —
-  // without the isManager arm they would be locked out of their own stage
-  // from the moment the ticket reached QA, which is the only moment the
-  // evidence exists.
-  const canDraftNotes = !!testsRun && (isManager || !inQa || isActiveAssignee)
+  // Drafted by the assigned tester once their run has produced results. The
+  // `!inQa` arm keeps the pre-hand-off path working for a target that never
+  // goes through QA.
+  const canDraftNotes = !!testsRun && (!inQa || isActiveAssignee)
   const notesLockedReason = canDraftNotes
     ? null
     : testsRun

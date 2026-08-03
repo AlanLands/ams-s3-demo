@@ -233,14 +233,16 @@ is presentation only (the API does not enforce it; the map is
 
 | Role | Stages |
 |------|--------|
-| Manager | Board, Draft release notes, `/admin` |
+| Manager | Board, `/admin` |
 | Engineer | Board, Target selection, Generate the change, Draft design doc |
-| Tester | Board (their QA queue), Draft design doc, Generate tests + run |
+| Tester | Board (their QA queue), Draft design doc, Generate tests + run, Draft release notes |
 
 The tester has no Generate stage on purpose: a tester who can regenerate the
-change under test is not an independent check of it. The manager has no
-Generate or Tests stage for the same reason in reverse — those are the
-engineer's and the tester's evidence, not the approver's.
+change under test is not an independent check of it. The manager routes the
+work and stops there — generated code and a test run are the engineer's and the
+tester's evidence, and the release note is written by whoever produced the
+evidence it cites rather than handed back up to be written from a summary. The
+work never returns to the manager.
 
 ---
 

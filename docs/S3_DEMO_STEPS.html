@@ -451,7 +451,7 @@ is presentation only (the API does not enforce it; the map is
 <tbody>
 <tr>
 <td>Manager</td>
-<td>Board, Draft release notes, <code>/admin</code></td>
+<td>Board, <code>/admin</code></td>
 </tr>
 <tr>
 <td>Engineer</td>
@@ -459,14 +459,16 @@ is presentation only (the API does not enforce it; the map is
 </tr>
 <tr>
 <td>Tester</td>
-<td>Board (their QA queue), Draft design doc, Generate tests + run</td>
+<td>Board (their QA queue), Draft design doc, Generate tests + run, Draft release notes</td>
 </tr>
 </tbody>
 </table>
 <p>The tester has no Generate stage on purpose: a tester who can regenerate the
-change under test is not an independent check of it. The manager has no
-Generate or Tests stage for the same reason in reverse — those are the
-engineer's and the tester's evidence, not the approver's.</p>
+change under test is not an independent check of it. The manager routes the
+work and stops there — generated code and a test run are the engineer's and the
+tester's evidence, and the release note is written by whoever produced the
+evidence it cites rather than handed back up to be written from a summary. The
+work never returns to the manager.</p>
 <hr />
 <h2>6b. What is on the board when you log in</h2>
 <p>Six tickets. Five are seeded; the sixth opens by itself.</p>

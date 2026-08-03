@@ -9,7 +9,7 @@ type OpenArtifact = 'notes' | 'plan' | null
 
 export default function ReleaseStage() {
   const {
-    isManager,
+    isTester,
     handleDraftReleaseNotes,
     draftingNotes,
     releaseNoteSet,
@@ -116,9 +116,9 @@ export default function ReleaseStage() {
 
   return (
     <StageFrame stageId="release" title="Draft release notes" activity={activity}>
-      {/* The manager signs the release off; the engineer and tester have
-          already produced the evidence it draws on. */}
-      {isManager ? (
+      {/* The tester drafts this, straight after the run whose results it
+          cites. `canDraftNotes` still requires those results to exist. */}
+      {isTester ? (
     <>
         <div>
           <button className="ams-button" onClick={handleDraftReleaseNotes} disabled={draftingNotes}>

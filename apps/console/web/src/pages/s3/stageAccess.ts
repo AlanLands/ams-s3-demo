@@ -20,18 +20,20 @@ export type S3StageId = 'board' | 'target' | 'generate' | 'design-doc' | 'tests'
 // Board is deliberately in every list: it is the shared surface where the work
 // is routed and handed over, and it is where each role lands.
 export const STAGES_BY_ROLE: Record<ConsoleRole, readonly S3StageId[]> = {
-  // The manager routes the work and signs off the outcome. Generated code and
-  // a test run are the engineer's and the tester's evidence respectively —
-  // showing them here invites approving a diff nobody asked them to read.
-  manager: ['board', 'release'],
+  // The manager routes the work. That is where their involvement ends: the
+  // pipeline runs to completion in the hands of the people doing it, and the
+  // release note is drafted by whoever produced the evidence it cites rather
+  // than handed back up for someone to write from a summary.
+  manager: ['board'],
   // The developer builds and hands over. They draft the design doc because it
   // *is* the hand-off artefact; they do not drive the test bench, which is the
   // independent check on their own change.
   engineer: ['board', 'target', 'generate', 'design-doc'],
-  // The tester reads the hand-off and runs the bench. No Generate stage: a
-  // tester who can regenerate the change under test is not an independent
-  // check of it.
-  tester: ['board', 'design-doc', 'tests'],
+  // The tester reads the hand-off, runs the bench, and writes the release note
+  // off the run they just did — the evidence is in front of them, and routing
+  // it back to the manager only adds a hop. No Generate stage: a tester who can
+  // regenerate the change under test is not an independent check of it.
+  tester: ['board', 'design-doc', 'tests', 'release'],
 }
 
 const DEFAULT_ROLE: ConsoleRole = 'engineer'
