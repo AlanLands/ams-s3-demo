@@ -525,6 +525,7 @@ export default function GenerateStage() {
                     detail={scmDetail}
                     onCommit={handleCommit}
                     onPush={handlePush}
+                    readOnly
                   />
                 )}
                 {applied && !postApplyFailure && (

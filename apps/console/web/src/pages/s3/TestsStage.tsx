@@ -12,6 +12,7 @@ import {
 import { parseDiff } from './utils'
 import TokenPanel from '../../TokenPanel'
 import ScenarioPlan, { TraceabilityMatrix } from '../../TestPlanPanel'
+import { ScmPanel } from '../../ScmPanel'
 import { useS3 } from './context'
 
 // The six beats each produce a body — a scenario table, a diff, three test
@@ -29,6 +30,15 @@ type OpenArtifact =
 
 export default function TestsStage() {
   const {
+    scmState,
+    scmBlockers,
+    scmEvidence,
+    committing,
+    pushing,
+    scmError,
+    scmDetail,
+    handleCommit,
+    handlePush,
     isTester,
     scenarios,
     scenarioDraft,
@@ -457,6 +467,25 @@ export default function TestsStage() {
           >
             <TraceabilityMatrix matrix={traceability} />
           </Modal>
+        )}
+
+        {/* The commit gate is the test run, so the branch closes out here
+            rather than back on the engineer's stage — they see the same panel
+            read-only. Blockers still come from the ticket's event log
+            server-side (scm.commit_blockers), never from anything posted from
+            this page. */}
+        {scmState && (
+          <ScmPanel
+            state={scmState}
+            blockers={scmBlockers}
+            evidence={scmEvidence}
+            committing={committing}
+            pushing={pushing}
+            error={scmError}
+            detail={scmDetail}
+            onCommit={handleCommit}
+            onPush={handlePush}
+          />
         )}
     </>
   ) : (

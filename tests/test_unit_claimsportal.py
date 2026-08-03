@@ -23,10 +23,41 @@ import importlib
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
 from repos.claimsportal.claims_service import policy_client
 from repos.claimsportal.claims_service.claim import Claim
 from repos.claimsportal.policy_service.policy import Policy
+
+# --- building payloads that survive a CR adding a required field -------------
+
+
+def _payload_for(model: type[BaseModel], **overrides: object) -> dict:
+    """A valid payload for `model`, whatever fields it currently declares.
+
+    Hard-coding the baseline field set is what a construction-based test gets
+    wrong: CR-2026-043 adds `deductible` to the contract and `payableAmount` to
+    the claim as *required* fields, and a test that constructs from the
+    pre-CR set then fails on exactly the change it was supposed to be
+    indifferent to. These suites are invariants — they must hold before and
+    after every CR — so the payload is derived from the model rather than
+    frozen, and the test asserts only the fields it actually cares about.
+    """
+    filler: dict[str, object] = {}
+    for name, field in model.model_fields.items():
+        if name in overrides:
+            continue
+        annotation = field.annotation
+        if annotation is float:
+            filler[name] = 0.0
+        elif annotation is int:
+            filler[name] = 0
+        elif annotation is bool:
+            filler[name] = False
+        else:
+            filler[name] = "x"
+    return {**filler, **overrides}
+
 
 # --- the service URL comes from the environment -----------------------------
 
@@ -104,13 +135,9 @@ def test_find_policy_returns_none_for_an_unknown_contract(monkeypatch):
 
 
 def test_find_policy_returns_the_contract_view_when_it_exists(monkeypatch):
-    payload = {
-        "policyNumber": "MS-1001",
-        "holderName": "Northwind Logistics Ltd.",
-        "product": "Health",
-        "status": "ACTIVE",
-        "annualMaximum": 5000.0,
-    }
+    payload = _payload_for(
+        policy_client.PolicyView, policyNumber="MS-1001", annualMaximum=5000.0
+    )
     monkeypatch.setattr(policy_client.httpx, "get", lambda *a, **k: _FakeResponse(200, payload))
 
     view = policy_client.find_policy("MS-1001")
@@ -137,39 +164,27 @@ def test_find_policy_propagates_a_server_error(monkeypatch):
 def test_policy_carries_the_published_contract_fields():
     # These names are a published API contract that CR-2026-043 and the
     # committed recording depend on by exact spelling.
-    policy = Policy(
-        policyNumber="MS-1001",
-        holderName="Northwind Logistics Ltd.",
-        product="Health",
-        status="ACTIVE",
-        annualMaximum=5000.0,
-    )
+    for name in ("policyNumber", "holderName", "product", "status", "annualMaximum"):
+        assert name in Policy.model_fields, f"published field {name} disappeared"
+
+    policy = Policy(**_payload_for(Policy, policyNumber="MS-1001", annualMaximum=5000.0))
     assert policy.policyNumber == "MS-1001"
     assert policy.annualMaximum == 5000.0
 
 
 def test_policy_rejects_a_missing_required_field():
+    payload = _payload_for(Policy)
+    payload.pop("policyNumber")
     with pytest.raises(Exception):  # pydantic ValidationError
-        Policy(  # type: ignore[call-arg]
-            policyNumber="MS-1001",
-            holderName="Northwind Logistics Ltd.",
-            product="Health",
-            status="ACTIVE",
-        )
+        Policy(**payload)
 
 
 def test_claim_carries_the_published_claim_fields():
-    claim = Claim(
-        id=1,
-        policyNumber="MS-1001",
-        holderName="Northwind Logistics Ltd.",
-        memberId="PM-4401",
-        serviceType="Paramedical",
-        amount=240.0,
-        description="Physiotherapy, 2 sessions",
-        status="ACCEPTED",
-        submittedAt="2026-07-01T09:15:00+00:00",
-    )
+    for name in ("id", "policyNumber", "holderName", "memberId", "serviceType",
+                 "amount", "description", "status", "submittedAt"):
+        assert name in Claim.model_fields, f"published field {name} disappeared"
+
+    claim = Claim(**_payload_for(Claim, memberId="PM-4401", status="ACCEPTED"))
     assert claim.memberId == "PM-4401"
     assert claim.status == "ACCEPTED"
 
@@ -177,16 +192,6 @@ def test_claim_carries_the_published_claim_fields():
 def test_claim_amount_accepts_an_integer_as_a_float():
     # Form posts arrive as JSON numbers; an integer amount must not be a
     # validation failure.
-    claim = Claim(
-        id=2,
-        policyNumber="MS-1001",
-        holderName="Northwind Logistics Ltd.",
-        memberId="PM-4401",
-        serviceType="Vision",
-        amount=200,
-        description="Frames",
-        status="SUBMITTED",
-        submittedAt="2026-07-01T09:30:00+00:00",
-    )
+    claim = Claim(**_payload_for(Claim, amount=200))
     assert isinstance(claim.amount, float)
     assert claim.amount == 200.0
