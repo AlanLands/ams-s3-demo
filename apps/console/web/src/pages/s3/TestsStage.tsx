@@ -253,7 +253,7 @@ export default function TestsStage() {
                 <div style={{ marginTop: '0.6rem' }}>
                   <p
                     style={{
-                      fontWeight: 700,
+                      fontWeight: 600,
                       fontSize: 'var(--ams-text-sm)',
                       margin: '0 0 0.2rem',
                       maxWidth: '68ch',
@@ -299,7 +299,7 @@ export default function TestsStage() {
                 {mutationCheck && (
                   <p
                     style={{
-                      fontWeight: 700,
+                      fontWeight: 600,
                       fontSize: 'var(--ams-text-sm)',
                       maxWidth: '68ch',
                       color: mutationCheck.tests_caught_bug
@@ -407,7 +407,7 @@ export default function TestsStage() {
         {openArtifact === 'testrun' && testsRun && (
           <Modal title="Test run results" size="lg" onClose={close}>
             {!testsRun.passed && (
-              <p style={{ color: 'var(--ams-error)', fontWeight: 700, marginTop: 0 }}>
+              <p style={{ color: 'var(--ams-error)', fontWeight: 600, marginTop: 0 }}>
                 Test run exited with code {testsRun.returncode}
               </p>
             )}

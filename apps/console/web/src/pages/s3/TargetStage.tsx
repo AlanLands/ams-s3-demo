@@ -132,7 +132,7 @@ export default function TargetStage() {
                       <span
                         style={{
                           fontSize: 'var(--ams-text-xs)',
-                          fontWeight: 700,
+                          fontWeight: 600,
                           color: isPick ? 'var(--ams-accent)' : 'var(--ams-ink-soft)',
                         }}
                       >
@@ -154,7 +154,7 @@ export default function TargetStage() {
                             <span
                               style={{
                                 color: 'var(--ams-accent)',
-                                fontWeight: 700,
+                                fontWeight: 600,
                                 marginLeft: '0.4rem',
                               }}
                             >

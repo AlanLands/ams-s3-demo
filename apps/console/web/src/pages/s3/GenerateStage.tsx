@@ -472,7 +472,7 @@ export default function GenerateStage() {
                     className="ams-card"
                     style={{ marginTop: '0.75rem', border: '1px solid var(--ams-error)' }}
                   >
-                    <p style={{ color: 'var(--ams-error)', fontWeight: 700, marginTop: 0 }}>
+                    <p style={{ color: 'var(--ams-error)', fontWeight: 600, marginTop: 0 }}>
                       Applied, but the app crashed on migration
                     </p>
                     <p style={{ fontSize: 'var(--ams-text-sm)' }}>

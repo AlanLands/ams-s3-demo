@@ -112,7 +112,7 @@ export default function BoardStage() {
               <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem' }}>
                 <div>
                   <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Effort</div>
-                  <div style={{ fontWeight: 700 }}>
+                  <div style={{ fontWeight: 600 }}>
                     {quickChatResult.effort_estimate.hours_class}
                   </div>
                 </div>
@@ -120,7 +120,7 @@ export default function BoardStage() {
                   <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>
                     Priority-equivalent
                   </div>
-                  <div style={{ fontWeight: 700 }}>
+                  <div style={{ fontWeight: 600 }}>
                     {quickChatResult.effort_estimate.priority_equivalent}
                   </div>
                 </div>
@@ -168,7 +168,7 @@ export default function BoardStage() {
                     }
                   }}
                 >
-                  <span style={{ fontWeight: 700 }}>{issue.key}</span>
+                  <span style={{ fontWeight: 600 }}>{issue.key}</span>
                   <span style={{ color: 'var(--ams-ink-soft)' }}>{issue.summary}</span>
                   <span className="ams-pill ams-pill-general">{issue.status || 'To Do'}</span>
                 </div>
@@ -394,7 +394,7 @@ export default function BoardStage() {
                           flexWrap: 'wrap',
                         }}
                       >
-                        <span style={{ fontWeight: 700, minWidth: 0 }}>{issue.key}</span>
+                        <span style={{ fontWeight: 600, minWidth: 0 }}>{issue.key}</span>
                         {issue.assignee && (
                           <span className="ams-avatar" title={issue.assignee}>
                             {issue.assignee.trim().charAt(0).toUpperCase()}

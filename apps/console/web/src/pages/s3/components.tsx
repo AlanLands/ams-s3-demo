@@ -84,7 +84,7 @@ export function TestCaseTable({ cases }: { cases: TestCaseResult[] }) {
               <td
                 style={{
                   color: color(testCase.status),
-                  fontWeight: 700,
+                  fontWeight: 600,
                   padding: '0.35rem 0.5rem 0.35rem 0.2rem',
                   width: '1.4rem',
                 }}

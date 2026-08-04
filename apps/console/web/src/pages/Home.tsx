@@ -66,7 +66,7 @@ export default function Home() {
                 marginBottom: '0.5rem',
               }}
             >
-              <span style={{ fontWeight: 700, color: 'var(--ams-accent-ink)' }}>
+              <span style={{ fontWeight: 600, color: 'var(--ams-accent-ink)' }}>
                 {scenario.code}
               </span>
               <StatusPill status={scenario.status} />
@@ -75,7 +75,10 @@ export default function Home() {
             <p style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-sm)', minHeight: '3.6em' }}>
               {scenario.description}
             </p>
-            <Link to={scenario.href} className="ams-button" style={{ display: 'inline-block' }}>
+            {/* No display override — `.ams-button` is inline-flex now, and
+                `inline-block` here would win and re-break the arrow's vertical
+                centring. */}
+            <Link to={scenario.href} className="ams-button">
               Open application →
             </Link>
           </div>

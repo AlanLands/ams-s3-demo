@@ -288,20 +288,20 @@ function RoutingPanel({ decision }: { decision: RouteDecision }) {
       <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
         <div>
           <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Component team</div>
-          <div style={{ fontWeight: 700 }}>{app.component_team}</div>
+          <div style={{ fontWeight: 600 }}>{app.component_team}</div>
         </div>
         <div>
           <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Jira project</div>
-          <div style={{ fontWeight: 700 }}>{app.jira_project_key}</div>
+          <div style={{ fontWeight: 600 }}>{app.jira_project_key}</div>
         </div>
         <div>
           <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Tech stack</div>
-          <div style={{ fontWeight: 700 }}>{app.tech_stack}</div>
+          <div style={{ fontWeight: 600 }}>{app.tech_stack}</div>
         </div>
         {decision.suggested_assignee && (
           <div>
             <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>On call</div>
-            <div style={{ fontWeight: 700 }}>{decision.suggested_assignee}</div>
+            <div style={{ fontWeight: 600 }}>{decision.suggested_assignee}</div>
           </div>
         )}
       </div>
@@ -564,7 +564,7 @@ export default function TicketModal({
                             spent — every assumption is asked about first (see
                             /s3/analyze). Say why it wasn't asked, so this doesn't
                             read as the AI choosing to assume. */}
-                        <div style={{ fontSize: 'var(--ams-text-xs)', fontWeight: 700, color: 'var(--ams-accent-ink)' }}>
+                        <div style={{ fontSize: 'var(--ams-text-xs)', fontWeight: 600, color: 'var(--ams-accent-ink)' }}>
                           Still unresolved after the clarification limit — proceeding on these
                           assumptions
                         </div>
@@ -578,13 +578,13 @@ export default function TicketModal({
                     <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
                       <div>
                         <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Effort</div>
-                        <div style={{ fontWeight: 700 }}>{analysisResult.effort_estimate.hours_class}</div>
+                        <div style={{ fontWeight: 600 }}>{analysisResult.effort_estimate.hours_class}</div>
                       </div>
                       <div>
                         <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>
                           Priority-equivalent
                         </div>
-                        <div style={{ fontWeight: 700 }}>
+                        <div style={{ fontWeight: 600 }}>
                           {analysisResult.effort_estimate.priority_equivalent}
                         </div>
                       </div>
@@ -593,7 +593,7 @@ export default function TicketModal({
                           <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>
                             Target repo
                           </div>
-                          <div style={{ fontWeight: 700 }}>
+                          <div style={{ fontWeight: 600 }}>
                             {analysisResult.target_repo.name ?? analysisResult.target_repo.id}
                           </div>
                         </div>

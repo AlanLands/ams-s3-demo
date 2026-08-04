@@ -27,13 +27,13 @@ export default function FileSelectionPanel({ selection }: { selection: FileSelec
       <div style={{ display: 'flex', gap: '2rem' }}>
         <div>
           <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Files in this app</div>
-          <div style={{ fontWeight: 700 }}>{selection.candidate_pool_size}</div>
+          <div style={{ fontWeight: 600 }}>{selection.candidate_pool_size}</div>
         </div>
         <div>
           <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>
             Files used for this change
           </div>
-          <div style={{ fontWeight: 700 }}>{selection.selected_files.length}</div>
+          <div style={{ fontWeight: 600 }}>{selection.selected_files.length}</div>
         </div>
       </div>
 
