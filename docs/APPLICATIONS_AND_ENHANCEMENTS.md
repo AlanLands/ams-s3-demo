@@ -23,10 +23,10 @@ launch scripts: the tooling that *does* the changing.
 | Application | Port | Role |
 |---|---|---|
 | **AMS Console** (`apps/console/`) | 8000 (API) + 5173 (UI) | The console the change is driven from — a developer opens a ticket here, an AI drafts the change, a reviewer approves it file by file, and it's applied to one of the three apps below. Managers also get an `/admin` page for resets, logs, and starting/stopping the apps. |
-| **PolicyCore** (`repos/policycore/`) | 8501 (path `/sl_policycore`) | The plan-administration portal — see below. Target of CR-2026-041 and CR-2026-042. |
+| **PolicyCore** (`repos/policycore/`) | 8501 (path `/sl_policycore`) | The plan-administration portal — see below. Target of US-2026-041 and US-2026-042. |
 | **policy-service** (`repos/claimsportal/`) | 8081 | Half of ClaimsPortal — serves group contract records. |
-| **claims-service** (`repos/claimsportal/`) | 8082 | Half of ClaimsPortal — claims intake. Target of CR-2026-043. |
-| **EnrolDirect** (`repos/enroldirect/`) | 8083 | The online enrolment channel — who may self-serve, and what they can reach. Target of CR-2026-045. |
+| **claims-service** (`repos/claimsportal/`) | 8082 | Half of ClaimsPortal — claims intake. Target of US-2026-043. |
+| **EnrolDirect** (`repos/enroldirect/`) | 8083 | The online enrolment channel — who may self-serve, and what they can reach. Target of US-2026-045. |
 
 **All 6 up looks like this** (health-check pass, in this exact order — start
 policy-service before claims-service, since claims-service calls it):
@@ -78,7 +78,7 @@ manage active group contracts. Three things it already does:
 
 Two small enhancements are being added to it.
 
-### Enhancement 1 — Plan-Tier Upgrade Option (CR-2026-041)
+### Enhancement 1 — Plan-Tier Upgrade Option (US-2026-041)
 
 **The problem**: a plan sponsor who wants to move to a higher plan tier
 (e.g. Standard → Premium → a new top tier) has no self-service way to do it —
@@ -95,10 +95,10 @@ generated multipliers Standard ×1.0, Premium ×1.25, Elite ×1.5:
 
 | Action | Result |
 |---|---|
-| Before the CR | No tier concept exists at all — the contract just has a contribution. |
+| Before the user story | No tier concept exists at all — the contract just has a contribution. |
 | Upgrade to "Premium" (×1.25) | Contribution recalculates to **$6,025.63** |
 | Upgrade "Premium" → "Premium" again (same tier) | Rejected — no same-tier "upgrades" |
-| Downgrade "Premium" → "Standard" | Rejected — this CR is upgrades only |
+| Downgrade "Premium" → "Standard" | Rejected — this user story is upgrades only |
 | Upgrade an unknown contract number | Rejected with a clear "not found" error |
 
 The audience picks the *top* tier's name live, so "Elite" above is whatever
@@ -120,7 +120,7 @@ they choose; Standard and Premium are fixed.
   prove the generated tests would actually catch a real regression, not just
   pass by coincidence — then the bug is reverted.
 
-### Enhancement 2 — Amendment Priority Field (CR-2026-042)
+### Enhancement 2 — Amendment Priority Field (US-2026-042)
 
 **The problem**: support engineers currently have no way to tell which
 submitted amendment requests are time-sensitive versus routine — urgent
@@ -134,7 +134,7 @@ same behavior as before this change.
 **Worked example** — a plan sponsor requests an address change on
 `POL-10001` (Northwind Logistics Ltd.):
 
-| Field | Before the CR | After the CR |
+| Field | Before the user story | After the user story |
 |---|---|---|
 | Amendment type | "Address Change" | "Address Change" |
 | Requested change | "Update mailing address" | "Update mailing address" |
@@ -149,7 +149,7 @@ same behavior as before this change.
 *After — the 6th field, ready to submit as "Urgent." (Pre-reskin screenshot.)*
 
 Submitting the form without touching the new field behaves exactly as it did
-before this CR — that's the acceptance bar, not just "the field works."
+before this user story — that's the acceptance bar, not just "the field works."
 
 **How it's tested**: the same three-part approach as Enhancement 1 —
 generated tests for the new field's behavior (defaults correctly, persists
@@ -173,11 +173,11 @@ proving nothing else broke, and a seeded-bug check (flipping the default to
 ClaimsPortal kept its own vocabulary through the group-retirement reskin, on
 purpose: **claim**, **deductible** and **annual maximum** are already the right
 words for group health, dental and disability benefits. Its API field names
-(`policyNumber`, `holderName`, …) are a published contract that CR-2026-043 and
+(`policyNumber`, `holderName`, …) are a published contract that US-2026-043 and
 the committed AI recording depend on by exact name, so they keep their original
 spelling even where the prose says "group contract" and "plan sponsor".
 
-### Enhancement 3 — Claims Deductible Handling (CR-2026-043)
+### Enhancement 3 — Claims Deductible Handling (US-2026-043)
 
 **The problem**: contracts carry no deductible today, so a claim for less
 than what the plan member would owe out of pocket anyway is accepted and
@@ -193,9 +193,9 @@ this order: non-active policy status first, then over the coverage limit,
 then at-or-below the deductible, otherwise accepted. Every existing flow
 (policy list/detail, claim submission, claim list) keeps working unchanged.
 
-**Worked example** — real values from the demo's seed data:
+**Worked example** — real values from the seeded data:
 
-| Group contract | Annual maximum | Deductible (new) | Claim amount | Before the CR | After the CR |
+| Group contract | Annual maximum | Deductible (new) | Claim amount | Before the user story | After the user story |
 |---|---|---|---|---|---|
 | `MS-1004` (Talus Software Co., Critical Illness) | $10,000 | $100 | **$80** | ACCEPTED | **REJECTED_BELOW_DEDUCTIBLE** |
 | `MS-1001` (Northwind Logistics Ltd., Health) | $25,000 | $500 | **$1,200** | ACCEPTED | ACCEPTED — **payableAmount $700** |
@@ -213,7 +213,7 @@ was never going to pay out.
 ![After: same $80 claim now rejected](screenshots/cr043-after.jpg)
 *After — same claim, now REJECTED_BELOW_DEDUCTIBLE; the $1,200 claim still ACCEPTED, now with payableAmount.*
 
-CR-2026-043 explicitly forbids changing either team's HTML console, so the
+US-2026-043 explicitly forbids changing either team's HTML console, so the
 policy-service UI looks identical before and after — the proof is in the raw
 API response, not the page:
 
@@ -254,7 +254,7 @@ inception: *Online Enrolment — Member* (people already holding an active
 benefit) and *Online Enrolment — Guest* (people with none). EnrolDirect
 enforces them; PolicyCore owns them.
 
-### Enhancement 4 — Prospect Member Eligibility Check (CR-2026-045)
+### Enhancement 4 — Prospect Member Eligibility Check (US-2026-045)
 
 **The problem**: there is a third population neither preference was written
 for. A **prospect** is someone the plan sponsor has already accepted onto the

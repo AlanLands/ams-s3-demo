@@ -4,16 +4,16 @@ Every rehearsal starts from a known-good state, and every beat can be re-run in
 isolation. All scripts `cd` to the repo root themselves and activate `.venv`
 before running anything.
 
-For the full end-to-end walkthrough of the four CR scenarios, see
+For the full end-to-end walkthrough of the four user story scenarios, see
 **`DEMO_TEST_GUIDE.md`**; for standing the whole thing up from a clean
 checkout, `DEMO_STEPS.md`. This file covers the scripts and the tooling around
 them.
 
 > **Where things live.** `repos/` holds the target repositories S3 *changes* —
-> PolicyCore, ClaimsPortal, EnrolDirect. `apps/` holds the tooling that *does*
+> PolicyCore, EnrolDirect, DocumentHub. `apps/` holds the tooling that *does*
 > the changing: the console, and one launch script per running process. The
-> five per-process launchers (`apps/run-console.sh`, `run-policycore.sh`,
-> `run-policy-service.sh`, `run-claims-service.sh`, `run-enroldirect.sh`) are
+> four per-process launchers (`apps/run-console.sh`, `run-policycore.sh`,
+> `run-enroldirect.sh`, `run-documenthub.sh`) are
 > documented in `apps/README.md` — the scripts below are the presenter's
 > reset/seed/warm tooling, not the launchers.
 
@@ -41,8 +41,8 @@ git cat-file -e HEAD:repos/policycore/app.py 2>/dev/null && echo "in HEAD" || ec
 
 Two things worth carrying forward:
 
-- **ClaimsPortal and EnrolDirect resets never depend on git.**
-  `reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` restore by `cp` from
+- **EnrolDirect and DocumentHub resets never depend on git.**
+  `reset_s3_enroldirect.sh` and `reset_s3_documenthub.sh` restore by `cp` from
   the in-repo `.baseline/` snapshots, so a target move cannot break them.
 - The admin panel checks for the condition rather than discovering it halfway.
   `GET /api/admin/status` returns a `reset_blocked_reason` naming any paths
@@ -61,30 +61,31 @@ rather than assuming it worked.
 |---|---|
 | `run_s3.sh` | Streamlit S3 console (the legacy view; the React console at `apps/console/web/` + `api/` is the primary surface). Defaults to `PORT=8501`, which collides with `run_mockapp.sh` — set `PORT` if you want both. |
 | `run_mockapp.sh` | Serves `repos/policycore/app.py` on :8501/sl_policycore — the "client's app" window for the before/after proof. Same job as `apps/run-policycore.sh`. |
-| `run_s3_claimsportal.sh` | Runs the two Python/FastAPI ClaimsPortal services (:8081 contracts, :8082 claims) |
 | `run_s3_harness.sh` | The live agent-harness variant of the codegen beat — see below |
-| `reset_s3.sh` | CR-2026-041 (PolicyCore plan tier) back to pre-CR baseline; also clears shared state. Restores from `HEAD` — see above. |
-| `reset_s3_endorsement.sh` | CR-2026-042 (PolicyCore amendment Priority field) back to baseline, restored from `HEAD` (**not** from the `s3-endorsement-baseline` tag — see the comment in the script). |
-| `reset_s3_claimsportal.sh` | CR-2026-043 (ClaimsPortal) back to baseline, from `repos/claimsportal/.baseline/` |
-| `reset_s3_enroldirect.sh` | CR-2026-045 (EnrolDirect) back to baseline, from `repos/enroldirect/.baseline/` |
+| `reset_s3.sh` | US-2026-041 (PolicyCore plan tier) back to pre-user story baseline; also clears shared state. Restores from `HEAD` — see above. |
+| `reset_s3_endorsement.sh` | US-2026-042 (PolicyCore amendment Priority field) back to baseline, restored from `HEAD` (**not** from the `s3-endorsement-baseline` tag — see the comment in the script). |
+| `reset_s3_enroldirect.sh` | US-2026-045 (EnrolDirect) back to baseline, from `repos/enroldirect/.baseline/` |
+| `reset_s3_documenthub.sh` | US-2026-046 (DocumentHub) back to baseline, from `repos/documenthub/.baseline/` |
 | `warm_s3_cache.sh` | Pre-warms `.cache/llm` for the narrative drafts before presenting |
 | `seed_problem_record_ticket.sh` | Seeds the problem-record intake ticket (needs the API on :8000 already running) |
-| `seed_s3_repo_selection_ticket.sh` | Puts AMS-104 (CR-2026-044, the ticket that names no target system) back on the board. Needs no server; run it *after* `reset_s3.sh`, which restores the committed Jira caches and would otherwise drop it. |
+| `seed_s3_repo_selection_ticket.sh` | Puts AMS-104 (US-2026-044, the ticket that names no target system) back on the board. Needs no server; run it *after* `reset_s3.sh`, which restores the committed Jira caches and would otherwise drop it. |
 
 > `run_mockapp.sh` and `reset_s3_endorsement.sh` were previously named
 > `run_s4_endorsement.sh` / `reset_s4_endorsement.sh`. The "s4" was a leftover
 > from the six-scenario repo — both are S3 beats. Renamed 2026-07-26.
 > `reset_s3_endorsement.sh` kept its filename through the 2026-08-03 GRS
-> reskin — teammates invoke it by name — even though the CR it resets is now
-> "CR-2026-042: Amendment Priority Field". Only its contents changed.
+> reskin — teammates invoke it by name — even though the user story it resets is now
+> "US-2026-042: Amendment Priority Field". Only its contents changed.
 
-### No script for CR-2026-045's ticket
+### No script for US-2026-045's ticket
 
-There is deliberately none. A `.md` dropped into the top-level `crs/` opens a
-board ticket by itself — the key is derived from the CR id (`CR-2026-045` →
-**AMS-1045**), and the ticket lands **unassigned** so the manager routes it.
-`seed_s3_repo_selection_ticket.sh` is the older hand-seeding path and stays
-only because AMS-104 needs a specific pre-set assignee to make its beat work.
+There is deliberately none. A `.md` dropped into the top-level `stories/` opens a
+board ticket by itself — the key is derived from the user story id (`US-2026-045` →
+**AMS-1045**), and the ticket lands in **Ravi Kumar's To Do** column
+(`STORY_DEFAULT_ASSIGNEE`; set it empty to leave the ticket unassigned for a
+manager to route instead). `seed_s3_repo_selection_ticket.sh` is the older
+hand-seeding path and stays only because AMS-104 needs a specific pre-set
+assignee to make its beat work.
 
 `reset_s3.sh` wipes `.cache/llm` on purpose, so the next click after a reset
 pays full LLM latency. Run `warm_s3_cache.sh` as the last step before
@@ -107,11 +108,11 @@ Four cards: **Reset demo state**, **Target applications** (status + start/stop),
 
 Limits worth knowing before you rely on it live:
 
-- Source-restoring scopes (`policycore`, `claimsportal`, `enroldirect`) **409
+- Source-restoring scopes (`policycore`, `enroldirect`, `documenthub`) **409
   while the tree is dirty**, and preview exactly what they would restore or
   delete and which files are currently dirty before you press anything.
 - There is **no "reset everything"** scope. Each is explicit — PolicyCore,
-  ClaimsPortal, EnrolDirect, tickets, logs, proposals, caches.
+  EnrolDirect, DocumentHub, tickets, logs, proposals, caches.
 - **No service id for the console itself**, so it cannot restart the process
   serving your request.
 - Service status is a plain TCP port probe — no `ps`, no `lsof` — so it works

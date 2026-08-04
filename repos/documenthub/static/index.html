@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DocumentHub — enrolment confirmation packs</title>
+<style>
+  /* ------------------------------------------------------------------
+     Design tokens — MapleSure corporate system.
+     Square corners everywhere (radius 0) is the signature trait.
+     Colour is used for meaning only, never decoration.
+     No webfonts are loaded: "Source Sans Pro" is used when the host
+     already has it and falls back to the system UI face otherwise.
+     ------------------------------------------------------------------ */
+  :root {
+    --ink: #36362f;
+    --ink-soft: #525146;
+    --brand: #a20a29;
+    --brand-dark: #7d0820;
+    --link: #007cbf;
+    --gold: #b48825;
+    --green: #32ae88;
+    --green-ink: #186b52;
+
+    --page: #ffffff;
+    --surface: #f7f7f7;
+    --hairline: #d2d2cf;
+
+    --alert-wash: #fdf4f6;
+    --alert-line: #e2b6c0;
+    --mark-wash: #ffe4e8;
+    --ok-wash: #f1faf6;
+    --ok-line: #b9dccd;
+
+    --shell: 1180px;
+    --gutter: 1.5rem;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    font-family: "Source Sans Pro", "Segoe UI", system-ui, -apple-system,
+                 BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--page);
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4 { font-weight: 600; margin: 0; line-height: 1.25; }
+  p { margin: 0; }
+
+  a { color: var(--link); }
+  a:hover { color: var(--brand); }
+
+  :focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+  }
+
+  .shell {
+    max-width: var(--shell);
+    margin: 0 auto;
+    padding: 0 var(--gutter);
+  }
+
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ---------------- masthead ---------------- */
+
+  .topbar { height: 4px; background: var(--brand); }
+
+  .masthead { border-bottom: 1px solid var(--hairline); background: var(--page); }
+  .masthead__inner {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    gap: 0.75rem 1.5rem;
+    padding-top: 1.35rem; padding-bottom: 1.35rem;
+  }
+  .brand { display: flex; align-items: center; gap: 0.6rem; }
+  .brand__mark { width: 20px; height: 20px; background: var(--brand); flex: none; }
+  .brand__name { font-weight: 600; font-size: 1.15rem; letter-spacing: -0.01em; }
+  .brand__sub { color: var(--ink-soft); font-weight: 400; margin-left: 0.35rem; }
+
+  .service {
+    display: flex; align-items: baseline; gap: 0.6rem;
+    padding-left: 1.5rem; border-left: 1px solid var(--hairline);
+  }
+  .service__name { font-weight: 600; font-size: 1.05rem; }
+  .service__desc { color: var(--ink-soft); font-size: 0.9rem; }
+  @media (max-width: 700px) {
+    .service { padding-left: 0; border-left: 0; width: 100%; }
+  }
+
+  .batchline {
+    margin-left: auto; color: var(--ink-soft); font-size: 0.875rem;
+  }
+  @media (max-width: 700px) { .batchline { margin-left: 0; } }
+
+  /* ---------------- section furniture ---------------- */
+
+  section { padding-top: 2.75rem; }
+  section:last-of-type { padding-bottom: 4rem; }
+
+  .section-head { margin-bottom: 1.1rem; }
+  .section-head h2 {
+    font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--ink-soft);
+  }
+  .section-head .rule {
+    height: 2px; background: var(--ink); width: 32px; margin-top: 0.6rem;
+  }
+  .section-head p { color: var(--ink-soft); font-size: 0.9375rem; margin-top: 0.5rem; max-width: 68ch; }
+
+  /* ---------------- the contradiction band ---------------- */
+
+  .band { margin-top: 2.25rem; }
+
+  .alert {
+    background: var(--alert-wash);
+    border: 1px solid var(--alert-line);
+    border-left: 8px solid var(--brand);
+    padding: 1.75rem 1.75rem 1.6rem;
+  }
+  .alert + .alert { margin-top: 1rem; }
+  @media (max-width: 700px) { .alert { padding: 1.25rem 1.15rem; border-left-width: 6px; } }
+
+  .alert__kicker {
+    display: flex; align-items: center; gap: 0.5rem;
+    color: var(--brand); font-weight: 600; font-size: 0.75rem;
+    letter-spacing: 0.11em; text-transform: uppercase;
+  }
+  .alert__kicker svg { flex: none; }
+
+  .alert__headline {
+    font-size: clamp(1.375rem, 1.1rem + 1.1vw, 1.75rem);
+    font-weight: 600; letter-spacing: -0.015em;
+    margin-top: 0.6rem; max-width: 48ch;
+  }
+  .alert__headline .who { color: var(--brand); }
+
+  .facts {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: stretch; gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+  @media (max-width: 780px) {
+    .facts { grid-template-columns: 1fr; gap: 0.5rem; }
+  }
+
+  .fact {
+    background: var(--page);
+    border: 1px solid var(--hairline);
+    padding: 0.95rem 1.05rem;
+  }
+  .fact--claim { border-color: var(--brand); }
+  .fact__src {
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .fact__value {
+    font-size: 1.0625rem; font-weight: 600; margin-top: 0.4rem; line-height: 1.35;
+  }
+  .fact--claim .fact__value { color: var(--brand); }
+  .fact__note { font-size: 0.875rem; color: var(--ink-soft); margin-top: 0.35rem; }
+
+  .facts__vs {
+    display: flex; align-items: center; justify-content: center;
+  }
+  .facts__vs span {
+    background: var(--brand); color: #fff;
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 0.3rem 0.55rem;
+    white-space: nowrap;
+  }
+
+  .alert__label {
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-soft);
+    margin-top: 1.6rem;
+  }
+
+  .quote {
+    margin: 0.55rem 0 0;
+    background: var(--page);
+    border: 1px solid var(--hairline);
+    border-left: 3px solid var(--brand);
+    padding: 1rem 1.1rem;
+    font-size: 1.0625rem; line-height: 1.6;
+    max-width: 74ch;
+  }
+  mark {
+    background: var(--mark-wash);
+    color: var(--ink);
+    box-shadow: inset 0 -2px 0 var(--brand);
+    padding: 0 0.1em;
+  }
+
+  .encl-flag {
+    display: flex; align-items: flex-start; gap: 0.55rem;
+    margin-top: 0.55rem; font-size: 1rem;
+    background: var(--page); border: 1px solid var(--hairline);
+    border-left: 3px solid var(--gold);
+    padding: 0.8rem 1.05rem; max-width: 74ch;
+  }
+  .encl-flag svg { flex: none; margin-top: 0.2rem; }
+  .encl-flag .t { font-weight: 600; }
+  .encl-flag .d { color: var(--ink-soft); font-size: 0.9375rem; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: var(--brand); color: #fff;
+    font: inherit; font-weight: 600; font-size: 0.9375rem;
+    border: 1px solid var(--brand); border-radius: 0;
+    padding: 0.65rem 1.15rem; margin-top: 1.5rem;
+    cursor: pointer; transition: background 180ms ease, border-color 180ms ease;
+  }
+  .btn:hover { background: var(--brand-dark); border-color: var(--brand-dark); }
+
+  /* the calm, post-fix state */
+  .clear {
+    display: flex; align-items: flex-start; gap: 0.75rem;
+    background: var(--ok-wash);
+    border: 1px solid var(--ok-line);
+    border-left: 6px solid var(--green);
+    padding: 1.15rem 1.25rem;
+  }
+  .clear svg { flex: none; margin-top: 0.15rem; }
+  .clear__title { font-weight: 600; }
+  .clear__body { color: var(--ink-soft); font-size: 0.9375rem; margin-top: 0.15rem; max-width: 70ch; }
+
+  /* ---------------- feed ---------------- */
+
+  .layout {
+    display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    gap: 1.5rem; align-items: start;
+  }
+  @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+  .rail {
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+  }
+  .rail__head {
+    padding: 0.7rem 1rem;
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-soft);
+    border-bottom: 1px solid var(--hairline);
+  }
+  ul.records { list-style: none; margin: 0; padding: 0; }
+  ul.records li + li { border-top: 1px solid var(--hairline); }
+  ul.records button {
+    display: block; width: 100%; text-align: left;
+    background: transparent; border: 0; border-left: 4px solid transparent;
+    font: inherit; color: inherit; cursor: pointer;
+    padding: 0.85rem 1rem 0.9rem;
+    transition: background 150ms ease;
+  }
+  ul.records button:hover { background: #eeeeec; }
+  ul.records button[aria-current="true"] {
+    background: var(--page); border-left-color: var(--ink);
+  }
+  ul.records button.is-flagged { border-left-color: var(--brand); background: var(--alert-wash); }
+  ul.records button.is-flagged:hover { background: #fbe9ed; }
+  ul.records button.is-flagged[aria-current="true"] { background: #fbe9ed; }
+  .rec__name { font-weight: 600; display: flex; align-items: center; gap: 0.4rem; }
+  .rec__meta { color: var(--ink-soft); font-size: 0.875rem; margin-top: 0.1rem; }
+  .rec__tags { margin-top: 0.45rem; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+
+  .tag {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.4rem;
+    border: 1px solid var(--hairline); background: var(--page);
+    color: var(--ink-soft); white-space: nowrap;
+  }
+  .tag--flag { border-color: var(--brand); color: var(--brand); background: var(--alert-wash); }
+  .tag--ok { border-color: var(--ok-line); color: var(--green-ink); background: var(--ok-wash); }
+  .tag--audience { border-color: var(--ink-soft); color: var(--ink); }
+
+  /* ---------------- the letter ---------------- */
+
+  .sheet {
+    border: 1px solid var(--hairline);
+    background: var(--page);
+    padding: 2.25rem 2.5rem 2.5rem;
+    min-width: 0;
+  }
+  @media (max-width: 700px) { .sheet { padding: 1.35rem 1.15rem 1.75rem; } }
+  .sheet:focus { outline: none; }
+  .sheet:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+
+  .letterhead {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding-bottom: 0.9rem; border-bottom: 2px solid var(--ink);
+  }
+  .letterhead__mark { width: 14px; height: 14px; background: var(--brand); flex: none; }
+  .letterhead__name { font-weight: 600; letter-spacing: 0.02em; }
+  .letterhead__doc {
+    margin-left: auto; color: var(--ink-soft);
+    font-size: 0.6875rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600;
+  }
+
+  .docmeta {
+    display: flex; flex-wrap: wrap; gap: 0.9rem 2.25rem;
+    padding: 1.1rem 0 1.25rem;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .docmeta > div { min-width: 0; }
+  .docmeta dt {
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .docmeta dd { margin: 0.2rem 0 0; font-weight: 600; }
+
+  .letter { max-width: 66ch; padding-top: 1.6rem; }
+  .para + .para { margin-top: 1.35rem; }
+  .para__label {
+    font-size: 0.625rem; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #6f6e62; display: block; margin-bottom: 0.3rem;
+  }
+  .para__text { font-size: 1.0625rem; line-height: 1.65; }
+  .para--flagged {
+    border-left: 3px solid var(--brand);
+    background: var(--alert-wash);
+    padding: 0.85rem 1.05rem;
+    margin-left: -1.08rem;
+  }
+  .para--flagged .para__label { color: var(--brand); }
+  .para__note {
+    display: flex; align-items: flex-start; gap: 0.4rem;
+    margin-top: 0.6rem; font-size: 0.875rem; font-weight: 600; color: var(--brand);
+  }
+  .para__note svg { flex: none; margin-top: 0.15rem; }
+
+  .encl { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--hairline); }
+  .encl h3 {
+    font-size: 0.6875rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  ul.encl__list { list-style: none; margin: 0.7rem 0 0; padding: 0; max-width: 66ch; }
+  ul.encl__list li {
+    display: flex; align-items: flex-start; gap: 0.6rem;
+    padding: 0.4rem 0;
+  }
+  ul.encl__list li + li { border-top: 1px solid #ebebe8; }
+  .encl__dot { width: 7px; height: 7px; background: var(--ink-soft); flex: none; margin-top: 0.5rem; }
+  ul.encl__list li.is-flagged .encl__dot { background: var(--brand); }
+  ul.encl__list li.is-flagged .encl__title { font-weight: 600; }
+  .encl__why { display: block; color: var(--brand); font-size: 0.875rem; font-weight: 600; margin-top: 0.1rem; }
+
+  .empty { color: var(--ink-soft); }
+
+  /* ---------------- audit ---------------- */
+
+  .breakdown {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .aud {
+    border: 1px solid var(--hairline); background: var(--surface);
+    padding: 1rem 1.15rem;
+  }
+  .aud__top { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  .aud__name { font-weight: 600; letter-spacing: 0.02em; }
+  .aud__count { font-size: 1.5rem; font-weight: 600; line-height: 1; }
+  .aud__desc { color: var(--ink-soft); font-size: 0.875rem; margin-top: 0.45rem; }
+
+  .summary {
+    display: flex; align-items: flex-start; gap: 0.55rem;
+    font-size: 1rem; margin-bottom: 0.9rem; font-weight: 600;
+  }
+  .summary svg { flex: none; margin-top: 0.2rem; }
+  .summary--flag { color: var(--brand); }
+  .summary--ok { color: var(--green-ink); }
+
+  .scroll { overflow-x: auto; border: 1px solid var(--hairline); }
+  table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 0.9375rem; }
+  caption { text-align: left; padding: 0.85rem 1rem; color: var(--ink-soft); font-size: 0.875rem; border-bottom: 1px solid var(--hairline); }
+  th, td { text-align: left; padding: 0.7rem 1rem; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  thead th {
+    background: var(--surface); color: var(--ink-soft);
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr.is-flagged { background: var(--alert-wash); }
+  tbody tr.is-flagged td:first-child { border-left: 4px solid var(--brand); padding-left: calc(1rem - 4px); }
+  tbody tr td:first-child { border-left: 4px solid transparent; padding-left: calc(1rem - 4px); }
+  td.mono { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.who { font-weight: 600; }
+  /* The two cells that disagree with each other, marked in the row itself. */
+  tbody tr.is-flagged td.conflict { color: var(--brand); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar"></div>
+
+<header class="masthead">
+  <div class="shell masthead__inner">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <span class="brand__name">MapleSure<span class="brand__sub">Insurance</span></span>
+    </div>
+    <div class="service">
+      <h1 class="service__name">DocumentHub</h1>
+      <span class="service__desc">Enrolment confirmation packs</span>
+    </div>
+    <div class="batchline" id="batchline"></div>
+  </div>
+</header>
+
+<main class="shell">
+  <div class="band" id="band" aria-live="polite"></div>
+
+  <section id="feed">
+    <div class="section-head">
+      <h2>Today's feed</h2>
+      <div class="rule"></div>
+      <p>Each accepted enrolment receives one whole worded pack — a letter and its physical
+         enclosures. Select a record to read the pack that person would receive.</p>
+    </div>
+    <div class="layout">
+      <div class="rail">
+        <div class="rail__head" id="rail-head">Enrolment records</div>
+        <ul class="records" id="records"></ul>
+      </div>
+      <div class="sheet" id="pack" tabindex="-1" role="region" aria-label="Selected confirmation pack">
+        <p class="empty">Select an enrolment record.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="audit">
+    <div class="section-head">
+      <h2>Selection audit</h2>
+      <div class="rule"></div>
+      <p>Every record in the batch, the pack selected for it, and whether that pack's premise
+         agrees with what the plan sponsor's roster says about the person.</p>
+    </div>
+    <div class="breakdown" id="breakdown"></div>
+    <p class="summary" id="audit-summary"></p>
+    <div class="scroll">
+      <table>
+        <caption id="audit-caption"></caption>
+        <thead>
+          <tr>
+            <th scope="col">Record</th>
+            <th scope="col">Recipient</th>
+            <th scope="col">Plan sponsor</th>
+            <th scope="col">Authorised by</th>
+            <th scope="col">On roster</th>
+            <th scope="col">Pack selected</th>
+            <th scope="col">Pack's premise</th>
+            <th scope="col">Check</th>
+          </tr>
+        </thead>
+        <tbody id="audit-body"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const esc = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (c) => ESCAPES[c]);
+
+/* Inline SVG rather than emoji, so the meaning survives a font that has no
+   colour glyphs and so it can be hidden from assistive tech (every icon here
+   sits beside real text — the contradiction is never signalled by colour or
+   icon alone). */
+const ICON_ALERT =
+  '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+  '<path fill="currentColor" d="M8 0.8 15.6 14.4H0.4L8 0.8Z"/>' +
+  '<rect x="7.15" y="5.4" width="1.7" height="4.6" fill="#fff"/>' +
+  '<rect x="7.15" y="11" width="1.7" height="1.7" fill="#fff"/></svg>';
+const ICON_CHECK =
+  '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+  '<path fill="none" stroke="currentColor" stroke-width="2.2" d="M2.5 8.4 6.3 12.2 13.6 4.2"/></svg>';
+const ICON_ENVELOPE =
+  '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+  '<rect x="0.9" y="2.9" width="14.2" height="10.2" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
+  '<path fill="none" stroke="currentColor" stroke-width="1.6" d="M1.4 3.4 8 8.6l6.6-5.2"/></svg>';
+
+const state = {
+  records: [],
+  recordsById: new Map(),
+  auditById: new Map(),
+  selected: null,
+};
+
+async function json(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(path + " -> " + response.status);
+  return response.json();
+}
+
+const accessLabel = (preference) =>
+  String(preference).replace("Online Enrolment - ", "") + " access";
+
+const plural = (n, one, many) => (n === 1 ? one : many);
+
+/* ------------------------------------------------------------------ *
+ * The contradiction band.
+ *
+ * Nothing below names a record id. The band is built from
+ * `contradictsRoster` in the audit response, so when the selection rule
+ * is fixed and the count falls to zero the page renders the calm
+ * "check passed" state instead — correct and quiet, not broken.
+ * ------------------------------------------------------------------ */
+
+/* Enclosures carried by this audience and not by every audience — i.e. what
+   this pack adds to the envelope that another audience would not have. Derived
+   from /api/audit/audiences rather than matched on a known code. */
+function distinguishingEnclosures(audience, enclosuresByAudience) {
+  const sets = Object.values(enclosuresByAudience || {});
+  const mine = (enclosuresByAudience || {})[audience] || [];
+  if (sets.length < 2) return [];
+  const common = new Set(
+    (sets[0] || [])
+      .map((e) => e.code)
+      .filter((code) => sets.every((set) => set.some((e) => e.code === code)))
+  );
+  return mine.filter((e) => !common.has(e.code));
+}
+
+/* Emphasise the clause that carries the false claim. Purely presentational:
+   if the wording changes and nothing matches, the paragraph still renders. */
+function highlightClaim(escapedText) {
+  return escapedText
+    .replace(/([^.]*\bno member record\b[^.]*\.)/i, "<mark>$1</mark>")
+    .replace(/<mark>(\s+)/, "$1<mark>");
+}
+
+function alertBlock(row, record, pack, extras) {
+  const contract = record ? record.contractNumber : "";
+  const sponsor = row.sponsorName;
+  const wrongSentence = pack ? highlightClaim(esc(pack.relationship)) : "";
+  const extra = extras.length
+    ? `
+      <p class="alert__label">Enclosed with it</p>
+      ${extras
+        .map(
+          (e) => `
+      <div class="encl-flag">
+        ${ICON_ENVELOPE}
+        <span>
+          <span class="t">${esc(e.title)}</span><br />
+          <span class="d">Only the ${esc(row.audience)} encloses this. It asks a person the
+          sponsor has already identified to prove who they are.</span>
+        </span>
+      </div>`
+        )
+        .join("")}`
+    : "";
+
+  return `
+    <div class="alert">
+      <p class="alert__kicker">${ICON_ALERT} Wrong pack selected</p>
+      <h2 class="alert__headline">
+        <span class="who">${esc(row.fullName)}</span> is on the sponsor's roster —
+        the pack selected for ${plural(1, "them", "them")} says MapleSure holds no record of them.
+      </h2>
+
+      <div class="facts">
+        <div class="fact">
+          <p class="fact__src">${esc(sponsor)} says</p>
+          <p class="fact__value">Listed on the roster</p>
+          <p class="fact__note">Group contract ${esc(contract)} · admitted under
+             ${esc(accessLabel(row.authorisingPreference))}</p>
+        </div>
+        <div class="facts__vs"><span>Contradicts</span></div>
+        <div class="fact fact--claim">
+          <p class="fact__src">${esc(row.audience)} says</p>
+          <p class="fact__value">&ldquo;we hold no member record for you&rdquo;</p>
+          <p class="fact__note">Record ${esc(row.recordId)} · this pack is worded for a
+             stranger to the contract</p>
+        </div>
+      </div>
+
+      <p class="alert__label">The sentence that goes out</p>
+      <blockquote class="quote">${wrongSentence}</blockquote>
+      ${extra}
+
+      <button class="btn" type="button" data-open="${esc(row.recordId)}">
+        Read this pack
+      </button>
+    </div>`;
+}
+
+function clearedBlock(total) {
+  return `
+    <div class="clear">
+      ${ICON_CHECK}
+      <div>
+        <p class="clear__title">Selection check passed</p>
+        <p class="clear__body">All ${total} ${plural(total, "pack", "packs")} in today's feed
+           agree with the plan sponsor's roster. No pack tells a person the sponsor lists on
+           its own roster that MapleSure holds no member record for them.</p>
+      </div>
+    </div>`;
+}
+
+async function renderBand(audit, audiences) {
+  const flagged = audit.records.filter((row) => row.contradictsRoster);
+  if (!flagged.length) {
+    $("band").innerHTML = clearedBlock(audit.records.length);
+    return;
+  }
+  const packs = await Promise.all(
+    flagged.map((row) => json(`/api/packs/${encodeURIComponent(row.recordId)}`).catch(() => null))
+  );
+  $("band").innerHTML = flagged
+    .map((row, i) =>
+      alertBlock(
+        row,
+        state.recordsById.get(row.recordId),
+        packs[i],
+        distinguishingEnclosures(row.audience, audiences.enclosuresByAudience)
+      )
+    )
+    .join("");
+  for (const button of $("band").querySelectorAll("[data-open]")) {
+    button.addEventListener("click", () => {
+      showPack(button.dataset.open, { focus: true });
+    });
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Feed
+ * ------------------------------------------------------------------ */
+
+function renderRecords() {
+  $("records").innerHTML = state.records
+    .map((r) => {
+      const row = state.auditById.get(r.recordId);
+      const flagged = Boolean(row && row.contradictsRoster);
+      return `
+    <li>
+      <button type="button" data-id="${esc(r.recordId)}"
+              class="${flagged ? "is-flagged" : ""}"
+              aria-current="${r.recordId === state.selected}">
+        <span class="rec__name">${esc(r.fullName)}</span>
+        <span class="rec__meta">${esc(r.planName)} · ${esc(r.sponsorName)}</span>
+        <span class="rec__tags">
+          <span class="tag">${r.onRoster ? "On roster" : "Not on roster"}</span>
+          <span class="tag">${esc(accessLabel(r.authorisingPreference))}</span>
+          ${flagged ? `<span class="tag tag--flag">${ICON_ALERT} Wrong pack</span>` : ""}
+        </span>
+      </button>
+    </li>`;
+    })
+    .join("");
+  for (const button of $("records").querySelectorAll("button")) {
+    button.addEventListener("click", () => showPack(button.dataset.id));
+  }
+}
+
+/* `note` doubles as the flag: a paragraph is only marked when there is something
+   specific to say about it, so the two flagged paragraphs do not repeat one
+   generic warning. */
+function paragraph(label, text, note) {
+  const flagged = Boolean(note);
+  return `
+    <div class="para ${flagged ? "para--flagged" : ""}">
+      <span class="para__label">${esc(label)}</span>
+      <p class="para__text">${flagged ? highlightClaim(esc(text)) : esc(text)}</p>
+      ${flagged ? `<p class="para__note">${ICON_ALERT} ${esc(note)}</p>` : ""}
+    </div>`;
+}
+
+async function showPack(recordId, options) {
+  state.selected = recordId;
+  for (const button of $("records").querySelectorAll("button")) {
+    button.setAttribute("aria-current", String(button.dataset.id === recordId));
+  }
+  const record = state.recordsById.get(recordId) || {};
+  const row = state.auditById.get(recordId);
+  const flagged = Boolean(row && row.contradictsRoster);
+  const pack = await json(`/api/packs/${encodeURIComponent(recordId)}`);
+  const extras = new Set(
+    distinguishingEnclosures(pack.audience, state.enclosuresByAudience).map((e) => e.code)
+  );
+
+  $("pack").innerHTML = `
+    <div class="letterhead">
+      <span class="letterhead__mark" aria-hidden="true"></span>
+      <span class="letterhead__name">MapleSure Insurance</span>
+      <span class="letterhead__doc">Enrolment confirmation</span>
+    </div>
+
+    <dl class="docmeta">
+      <div><dt>Recipient</dt><dd>${esc(pack.fullName)}</dd></div>
+      <div><dt>Record</dt><dd>${esc(pack.recordId)}</dd></div>
+      <div><dt>Group contract</dt><dd>${esc(record.contractNumber || "—")}</dd></div>
+      <div><dt>Effective</dt><dd>${esc(record.effectiveDate || "—")}</dd></div>
+      <div><dt>Pack selected</dt><dd>
+        <span class="tag ${flagged ? "tag--flag" : "tag--audience"}">${esc(pack.audience)}</span>
+      </dd></div>
+    </dl>
+
+    <div class="letter">
+      ${paragraph("Salutation", pack.salutation, null)}
+      ${paragraph("Opening", pack.opening, null)}
+      ${paragraph(
+        "Relationship",
+        pack.relationship,
+        flagged ? "Contradicts the sponsor's roster — this person is listed on it." : null
+      )}
+      ${paragraph(
+        "Next steps",
+        pack.nextSteps,
+        flagged ? "Acts on that false premise, and asks for proof of identity." : null
+      )}
+      ${paragraph("Closing", pack.closing, null)}
+    </div>
+
+    <div class="encl">
+      <h3>Enclosures in the envelope</h3>
+      <ul class="encl__list">
+        ${pack.enclosures
+          .map((e) => {
+            const bad = flagged && extras.has(e.code);
+            return `
+        <li class="${bad ? "is-flagged" : ""}">
+          <span class="encl__dot" aria-hidden="true"></span>
+          <span>
+            <span class="encl__title">${esc(e.title)}</span>
+            ${bad ? `<span class="encl__why">Sent to someone already on the roster.</span>` : ""}
+          </span>
+        </li>`;
+          })
+          .join("")}
+      </ul>
+    </div>`;
+
+  if (options && options.focus) {
+    $("pack").focus({ preventScroll: true });
+    $("pack").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Audit
+ * ------------------------------------------------------------------ */
+
+function renderBreakdown(audiences) {
+  const counts = audiences.breakdown || {};
+  $("breakdown").innerHTML = (audiences.audiences || [])
+    .map(
+      (a) => `
+    <div class="aud">
+      <div class="aud__top">
+        <span class="aud__name">${esc(a.audience)}</span>
+        <span class="aud__count">${esc(counts[a.audience] != null ? counts[a.audience] : 0)}</span>
+      </div>
+      <p class="aud__desc">${esc(a.description)}</p>
+    </div>`
+    )
+    .join("");
+}
+
+function renderAudit(audit) {
+  const n = audit.contradictionCount;
+  $("audit-summary").className = "summary " + (n ? "summary--flag" : "summary--ok");
+  $("audit-summary").innerHTML = n
+    ? `${ICON_ALERT} <span>${n} of ${audit.records.length}
+       ${plural(audit.records.length, "pack", "packs")}
+       ${plural(n, "tells", "tell")} a person on the plan sponsor's roster that MapleSure
+       holds no member record for them.</span>`
+    : `${ICON_CHECK} <span>Every pack's premise agrees with the plan sponsor's roster.</span>`;
+
+  $("audit-caption").textContent =
+    `${audit.records.length} ${plural(audit.records.length, "record", "records")} in today's feed. ` +
+    `A check fails when the selected pack claims MapleSure holds no member record for someone the sponsor lists on its roster.`;
+
+  $("audit-body").innerHTML = audit.records
+    .map(
+      (row) => `
+    <tr class="${row.contradictsRoster ? "is-flagged" : ""}">
+      <td class="mono">${esc(row.recordId)}</td>
+      <td class="who">${esc(row.fullName)}</td>
+      <td>${esc(row.sponsorName)}</td>
+      <td>${esc(accessLabel(row.authorisingPreference))}</td>
+      <td class="conflict">${row.onRoster ? "Yes" : "No"}</td>
+      <td>${esc(row.audience)}</td>
+      <td class="conflict">${
+        row.packAssumesNoMemberRecord ? "No member record held" : "Member record held"
+      }</td>
+      <td>${
+        row.contradictsRoster
+          ? `<span class="tag tag--flag">${ICON_ALERT} Contradiction</span>`
+          : `<span class="tag tag--ok">${ICON_CHECK} Consistent</span>`
+      }</td>
+    </tr>`
+    )
+    .join("");
+}
+
+/* ------------------------------------------------------------------ */
+
+(async function load() {
+  try {
+    const [records, audit, audiences] = await Promise.all([
+      json("/api/records"),
+      json("/api/audit/selection-inputs"),
+      json("/api/audit/audiences"),
+    ]);
+
+    state.records = records;
+    state.recordsById = new Map(records.map((r) => [r.recordId, r]));
+    state.auditById = new Map(audit.records.map((r) => [r.recordId, r]));
+    state.enclosuresByAudience = audiences.enclosuresByAudience || {};
+
+    const flaggedCount = audit.contradictionCount;
+    $("batchline").textContent =
+      `${records.length} ${plural(records.length, "record", "records")} in today's feed` +
+      (flaggedCount ? ` · ${flaggedCount} flagged` : "");
+    $("rail-head").textContent = `Enrolment records (${records.length})`;
+
+    renderRecords();
+    renderBreakdown(audiences);
+    renderAudit(audit);
+    await renderBand(audit, audiences);
+
+    if (records.length) await showPack(records[0].recordId);
+  } catch (error) {
+    $("band").innerHTML =
+      `<div class="alert"><p class="alert__kicker">${ICON_ALERT} DocumentHub is not responding</p>` +
+      `<h2 class="alert__headline">${esc(error.message)}</h2></div>`;
+  }
+})();
+</script>
+</body>
+</html>

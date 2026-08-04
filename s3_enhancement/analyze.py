@@ -19,14 +19,14 @@ from s3_enhancement.targets import Target
 
 IMPACT_SYSTEM_PROMPT = (
     "You are an AI engineering assistant supporting an application-maintenance "
-    "team for MapleSure Insurance. Given a change request and the current source "
+    "team for MapleSure Insurance. Given a user story and the current source "
     "of a small mock policy/claims app, write a short, practical impact analysis "
-    "for the support engineer who will review the CR before work starts."
+    "for the support engineer who will review the user story before work starts."
 )
 
 EFFORT_SYSTEM_PROMPT = (
     "You are an AI engineering assistant supporting an application-maintenance team "
-    "for MapleSure Insurance. Given a change request, size it before work starts: "
+    "for MapleSure Insurance. Given a user story, size it before work starts: "
     "roughly how many engineer-hours it would take, and an equivalent incident "
     "priority (P1-P4) for scheduling purposes - this is a rough sizing signal for "
     "the support lead deciding when to slot the work in, not a committed estimate."
@@ -54,14 +54,14 @@ CLARITY_SYSTEM_PROMPT = (
 
 GAP_SYSTEM_PROMPT = (
     "You are an AI engineering assistant supporting an application-maintenance "
-    "team for MapleSure Insurance, screening a change request that has already "
+    "team for MapleSure Insurance, screening a user story that has already "
     "passed a general clarity check, for a specific missing detail that would "
     "otherwise force you to silently guess: an unstated numeric threshold, "
     "percentage, or amount; an unstated eligibility/scope criterion (who or "
     "what this applies to); an unstated field name, data type, or default "
     "value; an unstated target system or module. If you find one such gap, ask "
     "ONE short clarifying question about it - naming the specific field or "
-    "value that's missing - instead of proceeding on a guess. Most CRs specify "
+    "value that's missing - instead of proceeding on a guess. Most user stories specify "
     "enough on all of these dimensions - an empty need for clarification is "
     "the normal, correct answer; do not ask about a detail that's genuinely "
     "inferable or conventional (e.g. defaulting a boolean flag to false needs "
@@ -70,13 +70,20 @@ GAP_SYSTEM_PROMPT = (
 
 CROSS_TEAM_SYSTEM_PROMPT = (
     "You are an AI engineering assistant supporting an application-maintenance "
-    "team for MapleSure Insurance. Given a change request and its codebase "
+    "team for MapleSure Insurance. Given a user story and its codebase "
     "context, identify whether any OTHER application team (not the one this "
-    "CR is already filed against) would also need to do work because of this "
-    "change - e.g. a downstream consumer of data this CR changes, a shared "
+    "user story is already filed against) would also need to do work because of this "
+    "change - e.g. a downstream consumer of data this user story changes, a shared "
     "data contract, or a document/notification another system generates. "
-    "Only flag a team if there is a concrete, specific reason; most small CRs "
-    "affect no other team, and an empty list is a normal, correct answer."
+    "Only flag a team if there is a concrete, specific reason; most small user stories "
+    "affect no other team, and an empty list is a normal, correct answer. "
+    "The bar is a CODE CHANGE that team must make, not the fact that they are "
+    "affected. A system that reads a changed value and keeps working - its "
+    "totals move between buckets it already has, its events carry an existing "
+    "field with an existing value - is affected and has nothing to do. Do not "
+    "raise a ticket for it. Every entry you return is a real ticket landing on "
+    "a real team's board, so an entry that turns out to be a no-op costs that "
+    "team a triage conversation and costs you their attention next time."
 )
 
 
@@ -90,8 +97,20 @@ class EffortEstimate:
 @dataclass(frozen=True)
 class CrossTeamImpact:
     app_name: str
+    # One sentence, for the console's impact row — why this app is implicated
+    # at all. Read by the engineer deciding whether to raise the ticket.
     reason: str
     suggested_summary: str
+    # The body of the ticket the other team receives, generated rather than
+    # reused from `reason`. Those two have different readers and different
+    # jobs: `reason` justifies raising the ticket to someone who has the user
+    # story in front of them, while this is read by an engineer on another
+    # team who has neither the user story nor the analysis and needs to know
+    # what changed upstream, what it means for their system, and what "done"
+    # is. Passing the one-line reason as the description — which is what this
+    # console did until now — hands them a ticket they have to come back and
+    # ask about.
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -107,7 +126,7 @@ class ImpactAnalysis:
     # e.g. an unstated field name, an assumed default, an assumed scope
     # boundary. Surfaced separately from `text` so a reviewer sees each
     # assumption as its own falsifiable line item instead of prose it could
-    # read past. Empty when the CR left nothing unspecified. This exists
+    # read past. Empty when the user story left nothing unspecified. This exists
     # because the clarity check (ClarityResult above) only catches a ticket
     # too vague to analyze *at all* — a ticket with some detail but a gap in
     # one dimension sails through (or exhausts the clarification-turn cap)
@@ -115,12 +134,12 @@ class ImpactAnalysis:
     assumptions: list[str]
 
 
-def _read_codebase_context(cr_text: str, *, target: Target | None = None) -> str:
-    """Read the target's source files relevant to this CR, as prompt context."""
+def _read_codebase_context(story_text: str, *, target: Target | None = None) -> str:
+    """Read the target's source files relevant to this user story, as prompt context."""
     target = target or targets.get_target(None)
-    all_files = relevance.discover_files_for_target(target, cr_text)
+    all_files = relevance.discover_files_for_target(target, story_text)
     selection = relevance.select_relevant_files(
-        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+        story_text, all_files, core_files=target.core_files, design_doc_root=target.root
     )
     sections = [
         f"--- {rel_path} ---\n{content}"
@@ -163,31 +182,40 @@ Return structured JSON only, exactly matching:
 }"""
 
 
-def build_impact_prompt(cr_text: str, *, target: Target | None = None) -> str:
-    return f"""Change request:
-{cr_text}
+def build_impact_prompt(story_text: str, *, target: Target | None = None) -> str:
+    return f"""User story:
+{story_text}
 
 Current codebase context:
-{_read_codebase_context(cr_text, target=target)}
+{_read_codebase_context(story_text, target=target)}
 
-Write a short impact analysis (roughly 5-10 lines) covering:
-1. What files/functions need to change to implement this CR.
+Write a short impact analysis (roughly 6-12 lines) covering:
+1. What files/functions need to change to implement this user story.
 2. What risk areas exist (e.g. schema/data migration, contribution calculation
    correctness, effect on existing flows).
 3. What should be tested before this ships.
+4. What this does to any OTHER application downstream of it, and what that
+   team has to do about it. Name the application, say what specifically
+   changes for it, and give the figure if the codebase context computes one -
+   an analysis that reports "downstream systems may be affected" has told the
+   reader nothing they did not already suspect. If the context contains a
+   downstream impact already worked out (counts, consequences, the change
+   required), use those numbers rather than restating the point in general
+   terms. If nothing downstream is affected, say so in one line and move on -
+   most small user stories affect no other team.
 
 Keep it concise and practical - this is read by a support engineer deciding
-whether to approve the CR for build, not a formal spec document.
+whether to approve the user story for build, not a formal spec document.
 
 {_ASSUMPTIONS_INSTRUCTION}"""
 
 
-def build_adhoc_impact_prompt(cr_text: str) -> str:
+def build_adhoc_impact_prompt(story_text: str) -> str:
     """Unlike `build_impact_prompt`, no codebase context — this is for a
     ticket this console has no target/source for (e.g. a cross-team ticket
     raised against another application)."""
     return f"""Ticket:
-{cr_text}
+{story_text}
 
 You have no source access to the application this ticket is against. Write a
 short impact analysis (roughly 5-10 lines) covering:
@@ -213,11 +241,11 @@ def _parse_impact_analysis_response(response: str) -> ImpactAnalysis:
     )
 
 
-def build_effort_prompt(cr_text: str) -> str:
-    return f"""Change request:
-{cr_text}
+def build_effort_prompt(story_text: str) -> str:
+    return f"""User story:
+{story_text}
 
-Size this CR before work starts. Return JSON exactly matching:
+Size this user story before work starts. Return JSON exactly matching:
 {{
   "hours_class": "an approximate hour-class estimate, e.g. '~40h'",
   "priority_equivalent": "P1, P2, P3, or P4 - equivalent scheduling priority",
@@ -225,42 +253,59 @@ Size this CR before work starts. Return JSON exactly matching:
 }}"""
 
 
-def build_cross_team_prompt(cr_text: str, *, target: Target | None = None) -> str:
+def build_cross_team_prompt(story_text: str, *, target: Target | None = None) -> str:
     apps = ", ".join(APPLICATIONS)
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
 Current codebase context:
-{_read_codebase_context(cr_text, target=target)}
+{_read_codebase_context(story_text, target=target)}
 
 The known application landscape (do not invent other app names): {apps}
 
-Identify zero or more OTHER applications (not the one this CR is already
+Identify zero or more OTHER applications (not the one this user story is already
 filed against) that would also need work because of this change. Only
-include an app if there's a concrete, specific reason from the codebase or CR
-text above — most small CRs affect no other team, so an empty list is a
+include an app if there's a concrete, specific reason from the codebase or user story
+text above — most small user stories affect no other team, so an empty list is a
 normal, correct answer.
+
+Include an application only if that team must CHANGE CODE. Being affected is
+not enough. If the system consumes the changed value as data — counting it,
+carrying it on an event, aggregating it into a bucket that already exists —
+it keeps working untouched and must NOT be listed. List it only if it has to
+handle a case it has no handling for today. If the codebase context above
+states, for a given system, that no change is required, trust that and leave
+it out.
 
 Return JSON exactly matching:
 {{
   "impacts": [
     {{
-      "app_name": "<one of the known application names above, never the CR's own app>",
-      "reason": "<one sentence, specific to this CR>",
-      "suggested_summary": "<one-line Jira ticket summary for that team>"
+      "app_name": "<one of the known application names above, never the user story's own app>",
+      "reason": "<one sentence, specific to this user story>",
+      "suggested_summary": "<one-line Jira ticket summary for that team>",
+      "description": "<the ticket body for that team, 4-8 lines of plain prose>"
     }}
   ]
-}}"""
+}}
+
+The description is read by an engineer on that other team who has not seen
+this user story and cannot see this codebase. Write it for them: what is
+changing in the upstream system, what that means for theirs specifically,
+what they need to do, and how they will know it is done. Do not restate the
+reason, do not address the upstream team, and do not assume the reader knows
+what a prospect, a preference or an authorising preference is — say it in
+terms of their own system."""
 
 
 def draft_cross_team_impact(
-    cr_text: str, *, target: Target | None = None, usage_out: dict | None = None
+    story_text: str, *, target: Target | None = None, usage_out: dict | None = None
 ) -> list[CrossTeamImpact]:
     """Identify other application teams that would also need to do work
-    because of this CR, e.g. a downstream consumer or shared data contract."""
+    because of this user story, e.g. a downstream consumer or shared data contract."""
     target = target or targets.get_target(None)
     response = complete(
-        build_cross_team_prompt(cr_text, target=target),
+        build_cross_team_prompt(story_text, target=target),
         system=CROSS_TEAM_SYSTEM_PROMPT,
         json_mode=True,
         cache_key=target.cache_key("cross_team_impact"),
@@ -286,19 +331,24 @@ def draft_cross_team_impact(
                 app_name=app_name,
                 reason=str(item.get("reason", "")),
                 suggested_summary=str(item.get("suggested_summary", "")),
+                # Falls back to the reason rather than to empty: an older
+                # recording predating this field would otherwise create the
+                # other team's ticket with a blank body, which is worse than
+                # the one-liner this replaced.
+                description=str(item.get("description") or item.get("reason", "")),
             )
         )
     return results
 
 
 def draft_impact_analysis(
-    cr_text: str,
+    story_text: str,
     *,
     target: Target | None = None,
     usage_out: dict | None = None,
     pin_cache: bool = True,
 ) -> ImpactAnalysis:
-    """Draft a short impact analysis for the given CR text, plus any
+    """Draft a short impact analysis for the given user story text, plus any
     assumptions the model had to make to write it (see `ImpactAnalysis`).
 
     `pin_cache=False` drops the fixed per-target `cache_key` and lets
@@ -311,7 +361,7 @@ def draft_impact_analysis(
     """
     target = target or targets.get_target(None)
     response = complete(
-        build_impact_prompt(cr_text, target=target),
+        build_impact_prompt(story_text, target=target),
         system=IMPACT_SYSTEM_PROMPT,
         json_mode=True,
         cache_key=target.cache_key("impact_analysis") if pin_cache else None,
@@ -333,17 +383,17 @@ def _parse_effort_estimate_response(response: str) -> EffortEstimate:
 
 
 def draft_effort_estimate(
-    cr_text: str,
+    story_text: str,
     *,
     target: Target | None = None,
     usage_out: dict | None = None,
     pin_cache: bool = True,
 ) -> EffortEstimate:
-    """Draft an effort estimate for the given CR text. See
+    """Draft an effort estimate for the given user story text. See
     `draft_impact_analysis` for when `pin_cache=False` is required."""
     target = target or targets.get_target(None)
     response = complete(
-        build_effort_prompt(cr_text),
+        build_effort_prompt(story_text),
         system=EFFORT_SYSTEM_PROMPT,
         json_mode=True,
         cache_key=target.cache_key("effort_estimate") if pin_cache else None,
@@ -356,7 +406,7 @@ def _clarification_turns_used(history: list[ConversationTurn]) -> int:
     return sum(1 for turn in history if turn.role == "assistant")
 
 
-def build_clarity_prompt(cr_text: str, history: list[ConversationTurn]) -> str:
+def build_clarity_prompt(story_text: str, history: list[ConversationTurn]) -> str:
     cap_note = ""
     if _clarification_turns_used(history) >= MAX_CLARIFICATION_TURNS:
         cap_note = (
@@ -369,7 +419,7 @@ def build_clarity_prompt(cr_text: str, history: list[ConversationTurn]) -> str:
     return f"""Ticket, plus any follow-up exchanged so far:
 {transcript or "(no follow-up yet)"}
 
-Latest ticket text: {cr_text}
+Latest ticket text: {story_text}
 {cap_note}
 
 Return structured JSON only, exactly one of these two shapes:
@@ -377,8 +427,8 @@ Return structured JSON only, exactly one of these two shapes:
 {{"needs_clarification": false}}"""
 
 
-def check_cr_clarity(
-    cr_text: str,
+def check_story_clarity(
+    story_text: str,
     history: list[ConversationTurn] | None = None,
     *,
     usage_out: dict | None = None,
@@ -394,7 +444,7 @@ def check_cr_clarity(
     """
     history = history or []
     response = complete(
-        build_clarity_prompt(cr_text, history),
+        build_clarity_prompt(story_text, history),
         system=CLARITY_SYSTEM_PROMPT,
         json_mode=True,
         usage_out=usage_out,
@@ -414,20 +464,20 @@ def check_cr_clarity(
     return ClarityResult(needs_clarification=False)
 
 
-def build_gap_prompt(cr_text: str, history: list[ConversationTurn]) -> str:
+def build_gap_prompt(story_text: str, history: list[ConversationTurn]) -> str:
     cap_note = ""
     if _clarification_turns_used(history) >= MAX_CLARIFICATION_TURNS:
         cap_note = (
             "\nYou have already asked the maximum allowed number of clarifying "
-            "questions for this CR - you MUST answer needs_clarification: "
+            "questions for this user story - you MUST answer needs_clarification: "
             "false now, even if a gap remains; a human will proceed with the "
             "best available reading, noted as an assumption in the analysis."
         )
     transcript = "\n".join(f"{turn.role}: {turn.text}" for turn in history)
-    return f"""Change request, plus any follow-up exchanged so far:
+    return f"""User story, plus any follow-up exchanged so far:
 {transcript or "(no follow-up yet)"}
 
-Latest CR text: {cr_text}
+Latest user story text: {story_text}
 {cap_note}
 
 Return structured JSON only, exactly one of these two shapes:
@@ -435,28 +485,28 @@ Return structured JSON only, exactly one of these two shapes:
 {{"needs_clarification": false}}"""
 
 
-def check_cr_gaps(
-    cr_text: str,
+def check_story_gaps(
+    story_text: str,
     history: list[ConversationTurn] | None = None,
     *,
     usage_out: dict | None = None,
 ) -> ClarityResult:
-    """Screen a CR that has already passed the overall clarity check (see
-    `check_cr_clarity`) for a specific missing detail — an unstated default,
+    """Screen a user story that has already passed the overall clarity check (see
+    `check_story_clarity`) for a specific missing detail — an unstated default,
     threshold, or scope boundary — that the final analysis would otherwise
     have to silently guess and report back as an assumption (see
     `ImpactAnalysis.assumptions`). Same needs_clarification/cap pattern and
-    turn budget as `check_cr_clarity`; callers run both against the same
+    turn budget as `check_story_clarity`; callers run both against the same
     shared history so the two gates share one conversational budget rather
     than doubling `MAX_CLARIFICATION_TURNS`.
 
-    Runs on CR text alone, no codebase context — the categories of gap this
+    Runs on user story text alone, no codebase context — the categories of gap this
     catches (numeric thresholds, eligibility criteria, field defaults, target
     systems) are business decisions, not something source code would answer.
     """
     history = history or []
     response = complete(
-        build_gap_prompt(cr_text, history),
+        build_gap_prompt(story_text, history),
         system=GAP_SYSTEM_PROMPT,
         json_mode=True,
         usage_out=usage_out,
@@ -481,10 +531,10 @@ def build_assumption_question(assumptions: list[str]) -> str:
     question back to the engineer.
 
     This is the gate that actually closes the "ask, don't assume" loop.
-    `check_cr_gaps` runs *before* the analysis and can only predict what the
-    model might have to guess at — it screens the CR text alone and routinely
-    disagrees with what the draft then assumes (either passing a CR the
-    analysis goes on to guess about, or asking about a detail the CR already
+    `check_story_gaps` runs *before* the analysis and can only predict what the
+    model might have to guess at — it screens the user story text alone and routinely
+    disagrees with what the draft then assumes (either passing a user story the
+    analysis goes on to guess about, or asking about a detail the user story already
     states). This runs on the draft's own declared assumptions, so what gets
     asked is exactly what would otherwise have been guessed.
 
@@ -513,20 +563,20 @@ def build_assumption_question(assumptions: list[str]) -> str:
 
 
 def draft_adhoc_impact_analysis(
-    cr_text: str, *, usage_out: dict | None = None
+    story_text: str, *, usage_out: dict | None = None
 ) -> ImpactAnalysis:
     """Impact analysis for a ticket with no linked target/codebase in this
     console (e.g. a cross-team ticket for another application) — same shape
     as `draft_impact_analysis`, but skips codebase context entirely rather
     than dumping an unrelated target's files into the prompt.
 
-    No fixed `cache_key`, unlike the pinned-CR beats above: there's no single
+    No fixed `cache_key`, unlike the pinned-user story beats above: there's no single
     "the" ad-hoc ticket to pre-record for a demo rehearsal, so this caches by
     content hash instead (`common.llm.complete`'s default when no cache_key is
     given) — safe because it never collides with a differently-worded ticket.
     """
     response = complete(
-        build_adhoc_impact_prompt(cr_text),
+        build_adhoc_impact_prompt(story_text),
         system=ADHOC_IMPACT_SYSTEM_PROMPT,
         json_mode=True,
         usage_out=usage_out,
@@ -534,11 +584,11 @@ def draft_adhoc_impact_analysis(
     return _parse_impact_analysis_response(response)
 
 
-def draft_adhoc_effort_estimate(cr_text: str, *, usage_out: dict | None = None) -> EffortEstimate:
+def draft_adhoc_effort_estimate(story_text: str, *, usage_out: dict | None = None) -> EffortEstimate:
     """Effort estimate for an ad-hoc ticket — see `draft_adhoc_impact_analysis`
     for why no target/cache_key is involved."""
     response = complete(
-        build_effort_prompt(cr_text),
+        build_effort_prompt(story_text),
         system=EFFORT_SYSTEM_PROMPT,
         json_mode=True,
         usage_out=usage_out,

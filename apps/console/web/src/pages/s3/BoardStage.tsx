@@ -26,7 +26,7 @@ export default function BoardStage() {
     reassignTicket,
     setReassignTicket,
     assigningBoardTicket,
-    isEngineer,
+    worksTickets,
     identity,
     boardFilter,
     boardStatusFilter,
@@ -48,7 +48,7 @@ export default function BoardStage() {
       <div id="quick-question" className="ams-card" style={{ marginBottom: '1.25rem' }}>
         <strong>Quick question</strong>
         <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
-          Ask about a hypothetical change before there's a formal CR — e.g. "how much would it
+          Ask about a hypothetical change before there's a formal user story — e.g. "how much would it
           cost if I just changed a text field on the amendment form?" Asks a clarifying
           question or two if it needs more detail, then sizes it.
         </p>
@@ -63,7 +63,7 @@ export default function BoardStage() {
                   fontSize: 'var(--ams-text-sm)',
                   margin: '0.3rem 0',
                   padding: '0.5rem 0.75rem',
-                  borderRadius: 6,
+                  borderRadius: 'var(--ams-radius-md)',
                   maxWidth: '80%',
                   marginLeft: turn.role === 'user' ? 'auto' : 0,
                   background: turn.role === 'user' ? 'var(--ams-accent)' : 'var(--ams-surface)',
@@ -112,7 +112,7 @@ export default function BoardStage() {
               <div style={{ display: 'flex', gap: '2rem', marginTop: '0.75rem' }}>
                 <div>
                   <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Effort</div>
-                  <div style={{ fontWeight: 700 }}>
+                  <div style={{ fontWeight: 600 }}>
                     {quickChatResult.effort_estimate.hours_class}
                   </div>
                 </div>
@@ -120,7 +120,7 @@ export default function BoardStage() {
                   <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>
                     Priority-equivalent
                   </div>
-                  <div style={{ fontWeight: 700 }}>
+                  <div style={{ fontWeight: 600 }}>
                     {quickChatResult.effort_estimate.priority_equivalent}
                   </div>
                 </div>
@@ -132,7 +132,7 @@ export default function BoardStage() {
             {quickChatResult.code_change_warranted && (
               <p style={{ fontSize: 'var(--ams-text-sm)', marginTop: '0.5rem' }}>
                 A concrete code change looks warranted:{' '}
-                <strong>{quickChatResult.suggested_cr_summary}</strong>
+                <strong>{quickChatResult.suggested_story_summary}</strong>
               </p>
             )}
           </div>
@@ -168,7 +168,7 @@ export default function BoardStage() {
                     }
                   }}
                 >
-                  <span style={{ fontWeight: 700 }}>{issue.key}</span>
+                  <span style={{ fontWeight: 600 }}>{issue.key}</span>
                   <span style={{ color: 'var(--ams-ink-soft)' }}>{issue.summary}</span>
                   <span className="ams-pill ams-pill-general">{issue.status || 'To Do'}</span>
                 </div>
@@ -299,7 +299,9 @@ export default function BoardStage() {
       </>
       )}
 
-      {isEngineer && (
+      {/* Engineers and testers each see the queue assigned to them; the
+          manager sees the whole board above instead. */}
+      {worksTickets && (
       <>
       {/* Jira board */}
       <div id="board" className="ams-card" style={{ marginBottom: '1.25rem' }}>
@@ -392,7 +394,7 @@ export default function BoardStage() {
                           flexWrap: 'wrap',
                         }}
                       >
-                        <span style={{ fontWeight: 700, minWidth: 0 }}>{issue.key}</span>
+                        <span style={{ fontWeight: 600, minWidth: 0 }}>{issue.key}</span>
                         {issue.assignee && (
                           <span className="ams-avatar" title={issue.assignee}>
                             {issue.assignee.trim().charAt(0).toUpperCase()}
@@ -425,7 +427,7 @@ export default function BoardStage() {
                 <img
                   src={`data:image/png;base64,${screenshotBefore}`}
                   alt="Amendment form before the change"
-                  style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 4 }}
+                  style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 'var(--ams-radius-sm)' }}
                 />
               </div>
             )}
@@ -435,7 +437,7 @@ export default function BoardStage() {
                 <img
                   src={`data:image/png;base64,${screenshotAfter}`}
                   alt="Amendment form after the change"
-                  style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 4 }}
+                  style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 'var(--ams-radius-sm)' }}
                 />
               </div>
             )}

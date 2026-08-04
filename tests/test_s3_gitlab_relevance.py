@@ -55,11 +55,11 @@ def test_discover_gitlab_files_output_feeds_select_relevant_files_directly():
         "src/unrelated_thing.py": "def totally_unrelated(): pass",
     }
     client = _fake_client(paths, contents)
-    cr_text = "Add a CSV export for billing records"
+    story_text = "Add a CSV export for billing records"
 
     with patch("s3_enhancement.relevance.get_client", return_value=client):
-        gitlab_files = discover_gitlab_files("123", cr_text, max_candidates=10)
+        gitlab_files = discover_gitlab_files("123", story_text, max_candidates=10)
 
-    selection = select_relevant_files(cr_text, gitlab_files, core_files=(), design_docs={})
+    selection = select_relevant_files(story_text, gitlab_files, core_files=(), design_docs={})
     assert selection.core_files == ()
     assert selection.candidate_pool_size == len(gitlab_files)

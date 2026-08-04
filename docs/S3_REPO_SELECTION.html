@@ -117,7 +117,7 @@
   <h1>How the target repository is selected</h1>
   <p class="subtitle">Three selection layers, three different mechanisms — and an
     honest account of which ones are measured.</p>
-  <p class="meta">MapleSure Insurance demo build · Verified against the codebase
+  <p class="meta">MapleSure Insurance · Verified against the codebase
     on 3 August 2026 · Companion to <span class="mono">S3_RANKING_VS_DUO.pdf</span></p>
 </div>
 
@@ -178,19 +178,19 @@ this console — one sitting under <code>repos/</code> with a
 <code>.s3targets.json</code> manifest — is resolved deterministically instead, by
 <code>s3_enhancement/target_match.py</code>, in three tiers cheapest first:</p>
 <ol>
-  <li><strong>The CR identifier.</strong> Every CR opens <code>CR-YYYY-NNN:</code> and
-    every registered target names the CR file it was registered with, so this is an
-    exact structural match. It resolves all four of today's pinned CRs with no
+  <li><strong>The user story identifier.</strong> Every user story opens <code>US-YYYY-NNN:</code> and
+    every registered target names the user story file it was registered with, so this is an
+    exact structural match. It resolves all four of today's pinned user stories with no
     model call.</li>
   <li><strong>The <code>Application:</code> header</strong>, matched against the
     ServiceNow application registry, then narrowed to that application's registered
     targets. An application hosting more than one target (PolicyCore hosts two)
     falls through rather than guessing.</li>
-  <li><strong>The LLM fallback</strong> — layer 1 above — only for a CR that matches
+  <li><strong>The LLM fallback</strong> — layer 1 above — only for a user story that matches
     neither, behind the same confidence gate.</li>
 </ol>
-<p>This is why onboarding is "drop the repo in and add its CRs": a CR file placed
-under <code>crs/</code> opens a board ticket automatically, tier 1 resolves it to the
+<p>This is why onboarding is "drop the repo in and add its user stories": a user story file placed
+under <code>stories/</code> opens a board ticket automatically, tier 1 resolves it to the
 target its manifest declared, and no ticket-key-to-repository table exists anywhere
 to be edited. The manifest contract and the full procedure are in
 <code>repos/README.md</code>.</p>
@@ -199,7 +199,7 @@ to be edited. The manifest contract and the full procedure are in
 <section class="section">
 <h2>Layer 1 in detail — how the repository is chosen</h2>
 
-<p><code>s3_enhancement/repo_match.py::suggest_target_repo</code> sends the CR text
+<p><code>s3_enhancement/repo_match.py::suggest_target_repo</code> sends the user story text
 and a list of the connected GitLab projects to the model, and asks which one the
 change belongs to. The prompt is explicit that only names and descriptions are
 available: <em>"you have not read any source code."</em></p>
@@ -212,7 +212,7 @@ genuinely plausible alternates.</p>
   <div class="fig-title">Figure 2 · The decision path, including both refusals</div>
   <div class="fig-sub">Two guardrails wrap the judgment call. Neither is a score.</div>
   <svg viewBox="0 0 700 236" role="img"
-       aria-label="Flow: CR text plus project list goes to the LLM. If the returned id is outside the candidate list, it raises LLMError. If confidence is not high, it returns needs_clarification and asks the developer, whose confirmation re-enters as confidence confirmed. Only high or confirmed proceeds to file discovery.">
+       aria-label="Flow: user story text plus project list goes to the LLM. If the returned id is outside the candidate list, it raises LLMError. If confidence is not high, it returns needs_clarification and asks the developer, whose confirmation re-enters as confidence confirmed. Only high or confirmed proceeds to file discovery.">
     <defs>
       <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
         <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a8a8a"/>
@@ -220,7 +220,7 @@ genuinely plausible alternates.</p>
     </defs>
 
     <rect x="0" y="26" width="150" height="46" rx="4" fill="#f4f4f2" stroke="#d8d8d8"/>
-    <text x="12" y="45" font-size="9" font-weight="700" fill="#1a1a1a">CR text</text>
+    <text x="12" y="45" font-size="9" font-weight="700" fill="#1a1a1a">user story text</text>
     <text x="12" y="62" font-size="8.5" fill="#5c5c5c">+ project list</text>
 
     <line x1="150" y1="49" x2="188" y2="49" stroke="#8a8a8a" stroke-width="1.2" marker-end="url(#a2)"/>
@@ -263,7 +263,7 @@ genuinely plausible alternates.</p>
   <figcaption><strong>A wrong repo would poison everything downstream</strong> —
     file discovery, codegen and the diff would all be against the wrong codebase.
     That is why this layer stops and asks rather than proceeding on a guess. It is
-    the same reflex as the CR-text clarity gate for vague tickets.</figcaption>
+    the same reflex as the user story-text clarity gate for vague tickets.</figcaption>
 </figure>
 
 <p>A confirmation request is recorded on the ticket timeline as
@@ -274,10 +274,10 @@ next call skips the model entirely and goes straight to scoping.</p>
 <div class="caution">
   <div class="lead">Do not describe this as deterministic</div>
   <p>This call deliberately omits a fixed cache key — its input genuinely varies
-  (the CR text, and whoever's project list). It falls back to the default
-  content-hash cache. Same CR and same project list gives the same answer;
-  a reworded CR may not. That is correct behaviour here, but it means repo
-  matching is <strong>not</strong> pinned the way the demo's narrative beats are.</p>
+  (the user story text, and whoever's project list). It falls back to the default
+  content-hash cache. Same user story and same project list gives the same answer;
+  a reworded user story may not. That is correct behaviour here, but it means repo
+  matching is <strong>not</strong> pinned the way the narrative beats are.</p>
 </div>
 </section>
 
@@ -303,7 +303,7 @@ an honest system ends up sounding overclaimed.</p>
         <strong>stubbed model response</strong>. They prove the plumbing is safe —
         malformed JSON raises, an out-of-list id raises, bad alternates are dropped,
         an empty candidate list raises. <strong>None of them test whether the pick is
-        right.</strong> There is no labelled CR→repo set and no precision figure.</td>
+        right.</strong> There is no labelled user story→repo set and no precision figure.</td>
     </tr>
     <tr>
       <td><strong>2 · Path shortlist</strong><div class="tiny">TF-IDF</div></td>
@@ -325,10 +325,10 @@ an honest system ends up sounding overclaimed.</p>
       <td><span class="chip chip-ok">Measured</span></td>
       <td><code>tools/verify_s3_live.py --gate N</code> runs N full live cycles; a
         cycle counts only if the live path genuinely ran (no silent replay) and the
-        generated tests pass. Demo-day rule: <strong>≥ 9 of 10</strong>.</td>
+        generated tests pass. Session-day rule: <strong>≥ 9 of 10</strong>.</td>
     </tr>
   </table>
-  <figcaption><strong>The measured layers are measured against one pinned CR per
+  <figcaption><strong>The measured layers are measured against one pinned user story per
     target.</strong> That is regression-proofing — it proves the pipeline has not
     drifted. It is not accuracy on unseen input, and it should never be presented
     as such.</figcaption>
@@ -346,7 +346,7 @@ an honest system ends up sounding overclaimed.</p>
 <h3>Why measuring layer 1 is genuinely hard</h3>
 <ul>
   <li><strong>No ground truth exists yet.</strong> Accuracy needs a labelled set
-    of real CRs mapped to their correct repository. Nobody has built one, and it
+    of real user stories mapped to their correct repository. Nobody has built one, and it
     would have to come from the client's own history to mean anything.</li>
   <li><strong>It depends on someone else's metadata.</strong> The model sees only
     names and descriptions. On an estate where repository descriptions are blank or
@@ -369,7 +369,7 @@ on the spot.</p>
   <tr><th style="width:24%">Step</th><th>What it involves</th></tr>
   <tr>
     <td><strong>Build a labelled set</strong></td>
-    <td>50–100 historical CRs from the client's own tracker, each tagged with the
+    <td>50–100 historical user stories from the client's own tracker, each tagged with the
       repository it was actually delivered against. This is the expensive part and
       the only part that cannot be skipped.</td>
   </tr>
@@ -386,7 +386,7 @@ on the spot.</p>
   </tr>
   <tr>
     <td><strong>Measure the escalation rate</strong></td>
-    <td>What share of CRs stop to ask the developer. Too high and the automation
+    <td>What share of user stories stop to ask the developer. Too high and the automation
       is not saving anyone time; too low and the gate is not protecting anything.</td>
   </tr>
   <tr>

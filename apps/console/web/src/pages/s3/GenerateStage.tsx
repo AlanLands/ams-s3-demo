@@ -42,6 +42,8 @@ export default function GenerateStage() {
     setPerFileQuestion,
     handleAskAboutFile,
     applied,
+    applyRestarted,
+    applyRestartDetail,
     handleApplyFile,
     handleApply,
     appliedFiles,
@@ -132,11 +134,11 @@ export default function GenerateStage() {
       <p style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)', marginTop: '1.5rem' }}>
         {activeTicketKey ? (
           <>
-            Generating for <strong>{activeLinked?.crLabel}</strong> ({activeTicketKey}) — click a
+            Generating for <strong>{activeLinked?.storyLabel}</strong> ({activeTicketKey}) — click a
             ticket on the board above to switch.
           </>
         ) : (
-          'No ticket assigned to you with a linked CR yet — once one is, pick it up here.'
+          'No ticket assigned to you with a linked user story yet — once one is, pick it up here.'
         )}
       </p>
 
@@ -167,7 +169,7 @@ export default function GenerateStage() {
                           alignItems: 'center',
                           cursor: 'pointer',
                           ...(collapsed
-                            ? { borderRadius: 6, borderBottom: '1px solid var(--ams-line)' }
+                            ? { borderRadius: 'var(--ams-radius-md)', borderBottom: '1px solid var(--ams-line)' }
                             : {}),
                         }}
                         onClick={() =>
@@ -252,7 +254,7 @@ export default function GenerateStage() {
                                     fontSize: 'var(--ams-text-sm)',
                                     margin: '0.3rem 0',
                                     padding: '0.5rem 0.75rem',
-                                    borderRadius: 6,
+                                    borderRadius: 'var(--ams-radius-md)',
                                     maxWidth: '80%',
                                     // Replies carry deliberate line breaks (e.g. the
                                     // "no code was changed" note) — don't collapse them.
@@ -276,7 +278,7 @@ export default function GenerateStage() {
                                     fontSize: 'var(--ams-text-sm)',
                                     margin: '0.3rem 0',
                                     padding: '0.5rem 0.75rem',
-                                    borderRadius: 6,
+                                    borderRadius: 'var(--ams-radius-md)',
                                     maxWidth: '80%',
                                     background: 'var(--ams-surface)',
                                     border: '1px solid var(--ams-line)',
@@ -470,7 +472,7 @@ export default function GenerateStage() {
                     className="ams-card"
                     style={{ marginTop: '0.75rem', border: '1px solid var(--ams-error)' }}
                   >
-                    <p style={{ color: 'var(--ams-error)', fontWeight: 700, marginTop: 0 }}>
+                    <p style={{ color: 'var(--ams-error)', fontWeight: 600, marginTop: 0 }}>
                       Applied, but the app crashed on migration
                     </p>
                     <p style={{ fontSize: 'var(--ams-text-sm)' }}>
@@ -501,8 +503,8 @@ export default function GenerateStage() {
                         </button>
                       )}
                       <span style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>
-                        Sends the crash back to the model for a revised proposal — or run
-                        demo/reset_s3.sh to roll back.
+                        Sends the crash back to the model for a revised proposal — or use
+                        Admin → Reset to roll back.
                       </span>
                     </div>
                     {fixCrashError && (
@@ -525,16 +527,37 @@ export default function GenerateStage() {
                     detail={scmDetail}
                     onCommit={handleCommit}
                     onPush={handlePush}
+                    readOnly
                   />
                 )}
+                {/* Two different claims, because they are different facts. The
+                    files are written either way; whether the *running* app has
+                    the capability depends on the restart having worked. Saying
+                    "the app now has this capability" when the process is still
+                    serving the old code sends the audience to check and see the
+                    old behaviour. */}
                 {applied && !postApplyFailure && (
-                  <p style={{ color: 'var(--ams-success)', fontSize: 'var(--ams-text-sm)' }}>
-                    Applied. The app now has this capability —{' '}
-                    <a href={targetApp.url} target="_blank" rel="noopener noreferrer">
-                      {targetApp.label}
-                    </a>{' '}
-                    to try it.
-                  </p>
+                  applyRestarted ? (
+                    <p style={{ color: 'var(--ams-success)', fontSize: 'var(--ams-text-sm)' }}>
+                      Applied and {targetApp.label} restarted. The running app now has this
+                      capability —{' '}
+                      <a href={targetApp.url} target="_blank" rel="noopener noreferrer">
+                        open it
+                      </a>{' '}
+                      to try it.
+                    </p>
+                  ) : (
+                    <p style={{ color: 'var(--ams-warning)', fontSize: 'var(--ams-text-sm)' }}>
+                      Applied to the repo, but {targetApp.label} could not be restarted from here,
+                      so it is still serving the previous code. Restart it (Admin → Environment
+                      control) before trying the new behaviour.
+                      {applyRestartDetail && (
+                        <span style={{ display: 'block', color: 'var(--ams-ink-soft)' }}>
+                          {applyRestartDetail}
+                        </span>
+                      )}
+                    </p>
+                  )
                 )}
                 {applied &&
                   designSync?.findings
@@ -552,7 +575,7 @@ export default function GenerateStage() {
                           This change touched <code>{finding.subsystem}</code>, and its design
                           document no longer describes it accurately: {finding.reason} That
                           document&rsquo;s scope keywords decide whether this subsystem is
-                          considered relevant to future change requests, so leaving it stale
+                          considered relevant to future user stories, so leaving it stale
                           causes retrieval mistakes later.
                         </p>
                         {finding.proposal_id ? (
@@ -608,8 +631,8 @@ export default function GenerateStage() {
             ) : (
               <div className="ams-card" style={{ marginTop: '0.75rem' }}>
                 <p style={{ fontSize: 'var(--ams-text-sm)' }}>
-                  No changes to propose — the app already has this feature from an earlier run. Run
-                  demo/reset_s3.sh to regenerate from a clean baseline.
+                  No changes to propose — the app already has this feature from an earlier run.
+                  Use Admin → Reset to regenerate from a clean baseline.
                 </p>
               </div>
             )}

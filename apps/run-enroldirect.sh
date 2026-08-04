@@ -16,7 +16,7 @@ if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
 echo "  EnrolDirect -> http://localhost:${ENROLDIRECT_PORT:-8083}/"
 
-# Applying a CR rewrites this target's .py files on disk, but a plain uvicorn
+# Applying a user story rewrites this target's .py files on disk, but a plain uvicorn
 # serves the code it imported at startup — so the console shows the change
 # applied while :8083 still answers with the baseline, which reads as "the
 # change did nothing". Restarting between Apply and Revert is the default cure.
@@ -36,5 +36,17 @@ if [ "${TARGET_RELOAD:-0}" = "1" ]; then
 fi
 # The ${A[@]+"${A[@]}"} form, not a bare "${A[@]}": macOS ships bash 3.2, where
 # an empty array under `set -u` is an unbound-variable error.
-uvicorn repos.enroldirect.main:app --port "${ENROLDIRECT_PORT:-8083}" \
+
+# Record this shell's PID so the console can restart the app after an Apply.
+# Applying rewrites this target's .py files, but a running uvicorn keeps serving
+# the code it imported at startup — so without a restart the console reports the
+# change applied while the port still answers with the baseline. The console
+# only ever stops a process it holds a PID for (admin_ops.owned_pid), and until
+# this existed a service started here, in a terminal, could never be one of
+# them. `exec` below means this PID *is* uvicorn's, not a parent shell's.
+mkdir -p logs
+echo $$ > "logs/enroldirect.pid"
+trap 'rm -f "logs/enroldirect.pid"' EXIT
+
+exec uvicorn repos.enroldirect.main:app --port "${ENROLDIRECT_PORT:-8083}" \
   ${RELOAD_ARGS[@]+"${RELOAD_ARGS[@]}"}

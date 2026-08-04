@@ -248,7 +248,7 @@ rsync -av --exclude .venv --exclude 'apps/console/web/node_modules' \
 ```
 
 > **Do not exclude `.git`.** `demo/reset_s3.sh` and `demo/reset_s3_endorsement.sh`
-> restore the pre-CR baseline with `git checkout HEAD -- <paths>` (**not** from the
+> restore the pre-user story baseline with `git checkout HEAD -- <paths>` (**not** from the
 > `s3-baseline` / `s3-endorsement-baseline` tags — those predate this layout and
 > restoring from them breaks reseeding with an unrecoverable FOREIGN KEY error).
 > Without a working checkout, reset fails and you cannot re-run the demo a second
@@ -501,7 +501,7 @@ instance and its security group, not the unit file.
 | Process | Port | Unit | Serves |
 |---|---|---|---|
 | FastAPI console | 8000 (localhost) | `ams-s3-console` | `/api/*` and the built React SPA, including `/admin` |
-| Streamlit PolicyCore | 8501 (localhost) | `ams-s3-mockapp` | MapleSure portal — the CR-2026-041/042 target |
+| Streamlit PolicyCore | 8501 (localhost) | `ams-s3-mockapp` | MapleSure portal — the US-2026-041/042 target |
 | nginx | 80 (public) | `nginx` | `/` → console, `/sl_policycore/` → PolicyCore |
 
 **Only two of the five processes are deployed.** ClaimsPortal's two services
@@ -509,7 +509,7 @@ instance and its security group, not the unit file.
 location here** — this folder deploys the console and PolicyCore only. Units
 for the ClaimsPortal pair existed once but were lost on 2026-07-28 while
 uncommitted and are unrecoverable; nothing has been written for EnrolDirect.
-Demoing CR-2026-043 or CR-2026-045 on EC2 means writing three units and three
+Demoing US-2026-043 or US-2026-045 on EC2 means writing three units and three
 `location` blocks first, modelled on the two that are here. Do not assume they
 exist because the app does.
 

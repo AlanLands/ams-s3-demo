@@ -1,8 +1,8 @@
-"""S3 target registry — the seam that lets S3 scale beyond one repo/one CR.
+"""S3 target registry — the seam that lets S3 scale beyond one repo/one user story.
 
-Every S3 module today (`codegen.py`, `testgen.py`, `harness.py`, `cr.py`,
-`analyze.py`, `docgen.py`) is hardcoded to CR-2026-041 against `repos/policycore/`: file
-allowlists, the CR template path, and — critically — LLM cache keys are all
+Every S3 module today (`codegen.py`, `testgen.py`, `harness.py`, `story.py`,
+`analyze.py`, `docgen.py`) is hardcoded to US-2026-041 against `repos/policycore/`: file
+allowlists, the user story template path, and — critically — LLM cache keys are all
 fixed literals. `common/llm.py`'s `complete()`/`stream_complete()` build their
 on-disk cache path from a supplied `cache_key` alone, with no hash of the actual
 prompt content, so two different targets sharing a cache key would silently get
@@ -20,7 +20,7 @@ behavior for the existing demo path, only where the constants live.
 
 What this does NOT solve: the actual codegen/testgen/harness prompts and
 structural validators (exact API names, exact error wording, backward-compat
-checks) are CR-2026-041-specific business logic, not generic. Onboarding a
+checks) are US-2026-041-specific business logic, not generic. Onboarding a
 real second target for live codegen means writing that target's own
 prompt/validator pair, not just registering it here. See
 s3_enhancement/DESIGN_MULTI_REPO.md for the full scope discussion.
@@ -76,7 +76,7 @@ class Mutation:
 
 @dataclass(frozen=True)
 class Target:
-    """One repo/CR pairing S3 can operate against.
+    """One repo/user story pairing S3 can operate against.
 
     `cache_namespace` is the collision-prevention key: `""` is reserved for the
     one legacy default target (see module docstring); every other target must
@@ -90,7 +90,7 @@ class Target:
 
     # Application (ServiceNow CI) this target's code belongs to, as an
     # `applications.Application.app_id`. Several targets can share one
-    # application — a CI identifies the app, and the CR text picks the change
+    # application — a CI identifies the app, and the user story text picks the change
     # within it (see s3_enhancement/applications.py). Empty means the target
     # predates the routing registry and is reachable only by explicit
     # target_id, never by CI.
@@ -98,8 +98,8 @@ class Target:
 
     # "local" source
     root: Path | None = None
-    cr_template_path: Path | None = None
-    cr_placeholder: str = "{{TIER_NAME}}"
+    story_template_path: Path | None = None
+    story_placeholder: str = "{{TIER_NAME}}"
 
     # "gitlab" source — read-only discovery/relevance preview only; live
     # codegen/apply is never run against a GitLab-hosted target (see design doc).
@@ -122,7 +122,7 @@ class Target:
     # Runs after any proposal file under this target's root is applied to the
     # working tree — the migration/refresh step that keeps the running app
     # consistent with just-applied code (e.g. rebuilding the mockapp SQLite
-    # schema so a CR that adds a column doesn't crash the portal). The
+    # schema so a user story that adds a column doesn't crash the portal). The
     # literal "{python}" element is replaced with the current interpreter at
     # run time. Every new local target that owns runtime state MUST declare
     # this — the apply endpoint resolves it by root, so sibling targets on
@@ -135,7 +135,7 @@ class Target:
     test_cwd: Path | None = None
 
     # The target app's checked-in, human-authored regression suite — the tests
-    # that existed *before* this CR and must still pass after it. Deliberately
+    # that existed *before* this user story and must still pass after it. Deliberately
     # separate from testgen_allowlist: nothing in the S3 pipeline may write to
     # these paths, which is what makes "the pre-existing tests still pass" a
     # result rather than a promise. `regression_paths` is the pytest form;
@@ -198,7 +198,7 @@ def register_target(target: Target) -> None:
 
 # The 2026-08-03 GRS reskin renamed PolicyCore's vocabulary (endorsement ->
 # amendment, coverage tier -> plan tier, premium -> contribution) across the
-# source, the CRs and the fields below. `DEFAULT_TARGET_ID`,
+# source, the user stories and the fields below. `DEFAULT_TARGET_ID`,
 # `AMENDMENT_TARGET_ID` and the `cache_namespace`/`_LEGACY_CACHE_KEYS` literals
 # deliberately keep their pre-reskin spellings: cache_namespace *is* the
 # committed recording's filename (s3_{beat}__{cache_namespace}.json) and the
@@ -206,17 +206,17 @@ def register_target(target: Target) -> None:
 # recordings is a replay miss that silently falls through to a live call. They
 # are internal identifiers, not display strings — except target_id, which
 # scm.branch_name_for folds into the branch shown at Step 0. Rename them only
-# together with the recordings (see the ClaimsPortal note below for the shape
-# of that change).
+# together with the recordings: the rename and the recording move are one
+# change, and doing either alone is a replay miss.
 DEFAULT_TARGET_ID = "mockapp-coverage-upgrade"
 
 MOCKAPP_TIER_UPGRADE = Target(
     target_id=DEFAULT_TARGET_ID,
     source_kind="local",
-    display_name="PolicyCore — plan tier upgrade (CR-2026-041)",
+    display_name="PolicyCore — plan tier upgrade (US-2026-041)",
     application_id=applications.POLICY_CORE_ID,
     root=REPO_ROOT / "repos" / "policycore",
-    cr_template_path=REPO_ROOT / "crs" / "CR-2026-041.md",
+    story_template_path=REPO_ROOT / "stories" / "US-2026-041.md",
     core_files=(
         "repos/policycore/core/models.py",
         "repos/policycore/core/db.py",
@@ -268,11 +268,11 @@ AMENDMENT_TARGET_ID = "mockapp-endorsement-field-add"
 MOCKAPP_AMENDMENT_FIELD_ADD = Target(
     target_id=AMENDMENT_TARGET_ID,
     source_kind="local",
-    display_name="PolicyCore — amendment priority field (CR-2026-042)",
+    display_name="PolicyCore — amendment priority field (US-2026-042)",
     application_id=applications.POLICY_CORE_ID,
     root=REPO_ROOT / "repos" / "policycore",
-    cr_template_path=REPO_ROOT / "crs" / "CR-2026-042.md",
-    cr_placeholder="",  # this CR has no audience-picked placeholder token
+    story_template_path=REPO_ROOT / "stories" / "US-2026-042.md",
+    story_placeholder="",  # this user story has no audience-picked placeholder token
     core_files=(
         "repos/policycore/core/models.py",
         "repos/policycore/core/db.py",
@@ -311,68 +311,6 @@ MOCKAPP_AMENDMENT_FIELD_ADD = Target(
 register_target(MOCKAPP_AMENDMENT_FIELD_ADD)
 
 
-CLAIMSPORTAL_TARGET_ID = "claimsportal-claims-deductible"
-
-_CLAIMSPORTAL_ROOT = REPO_ROOT / "repos" / "claimsportal"
-_CLAIMSPORTAL_CLAIMS_SRC = "repos/claimsportal/claims_service"
-_CLAIMSPORTAL_POLICY_SRC = "repos/claimsportal/policy_service"
-
-# target_id and cache_namespace were renamed off their original
-# "spring"/"springdemo" literals once nothing in this target was Spring any
-# more (it has been Python/FastAPI since the 2026-07-30 rewrite). target_id
-# is not purely internal — scm.branch_name_for folds it into the branch the
-# console shows at Step 0 — so a stale name was visible on stage.
-#
-# The rename had to move the committed stream recordings with it:
-# cache_namespace feeds Target.stream_cache_key, which *is* the recording's
-# filename (s3_{beat}__{cache_namespace}.json). Renaming one without the
-# other means a replay miss, which falls through to a live call.
-CLAIMSPORTAL_CLAIMS_DEDUCTIBLE = Target(
-    target_id=CLAIMSPORTAL_TARGET_ID,
-    source_kind="local",
-    display_name="ClaimsPortal — claims deductible handling (CR-2026-043)",
-    application_id=applications.CLAIMS_PORTAL_ID,
-    root=_CLAIMSPORTAL_ROOT,
-    cr_template_path=REPO_ROOT / "crs" / "CR-2026-043.md",
-    cr_placeholder="",  # like CR-2026-042, no audience-picked placeholder token
-    core_files=(
-        f"{_CLAIMSPORTAL_POLICY_SRC}/policy.py",
-        f"{_CLAIMSPORTAL_POLICY_SRC}/main.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/policy_client.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/main.py",
-        # Does not exist until the CR creates it — same idiom as
-        # repos/policycore/core/tiers.py on the default target.
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
-    ),
-    codegen_allowlist=(
-        f"{_CLAIMSPORTAL_POLICY_SRC}/policy.py",
-        f"{_CLAIMSPORTAL_POLICY_SRC}/main.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/policy_client.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/main.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
-    ),
-    testgen_allowlist=("tests/test_s3_claims_deductible.py",),
-    regression_paths=("tests/test_regression_claimsportal.py",),
-    harness_expected_files=(),
-    mutations=(
-        Mutation(
-            rel_path=f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
-            old_snippet="if amount <= deductible:",
-            new_snippet="if amount < deductible:",
-            description=(
-                "Weakened the deductible boundary check from `<=` to `<` — "
-                "a claim for exactly the deductible amount is now accepted "
-                "instead of rejected below-deductible."
-            ),
-        ),
-    ),
-    cache_namespace="claimsportal_claims_deductible",
-)
-register_target(CLAIMSPORTAL_CLAIMS_DEDUCTIBLE)
-
-
 ENROLDIRECT_TARGET_ID = "enroldirect-prospect-access"
 
 _ENROLDIRECT_ROOT = REPO_ROOT / "repos" / "enroldirect"
@@ -381,24 +319,24 @@ _ENROLDIRECT_SRC = "repos/enroldirect"
 # EnrolDirect's third target-shaped property is that its baseline is a
 # *removal*: the checked-in source is the state after the impact analysis and
 # before the gate was changed, so a prospect resolves to no preference and is
-# refused. The CR settles the classification. `.baseline/` holds the pristine
+# refused. The user story settles the classification. `.baseline/` holds the pristine
 # copy and is excluded from the codegen corpus by relevance._EXCLUDED_DIR_NAMES
 # — the only way a `.py` snapshot can sit inside a target root without joining
 # the candidate pool.
 #
 # `impact.py` is a core file but deliberately NOT in the codegen allowlist. It
-# is the analysis this CR acts on, not part of the change: it has to keep
+# is the analysis this user story acts on, not part of the change: it has to keep
 # sizing both options after one is adopted, and it is the input the model needs
-# to read to understand what the CR means. Core-file recall gets it into the
+# to read to understand what the user story means. Core-file recall gets it into the
 # prompt; the allowlist keeps it out of the diff.
 ENROLDIRECT_PROSPECT_ACCESS = Target(
     target_id=ENROLDIRECT_TARGET_ID,
     source_kind="local",
-    display_name="EnrolDirect — prospect access at the enrolment gate (CR-2026-045)",
+    display_name="EnrolDirect — prospect access at the enrolment gate (US-2026-045)",
     application_id=applications.ENROL_DIRECT_ID,
     root=_ENROLDIRECT_ROOT,
-    cr_template_path=REPO_ROOT / "crs" / "CR-2026-045.md",
-    cr_placeholder="",  # no audience-picked placeholder token
+    story_template_path=REPO_ROOT / "stories" / "US-2026-045.md",
+    story_placeholder="",  # no audience-picked placeholder token
     core_files=(
         f"{_ENROLDIRECT_SRC}/applicants.py",
         f"{_ENROLDIRECT_SRC}/eligibility.py",
@@ -424,7 +362,7 @@ ENROLDIRECT_PROSPECT_ACCESS = Target(
             description=(
                 "Redirected the prospect branch to match guests instead — "
                 "prospects fall through to no preference and are refused "
-                "again, silently reverting the CR at the gate."
+                "again, silently reverting the user story at the gate."
             ),
         ),
     ),
@@ -435,7 +373,7 @@ register_target(ENROLDIRECT_PROSPECT_ACCESS)
 
 # Anything dropped into `repos/` with a `.s3targets.json` manifest registers
 # itself here, after the three built-ins. This is what makes the onboarding
-# claim ("drop the repo in, add its CRs") literally true rather than a
+# claim ("drop the repo in, add its user stories") literally true rather than a
 # description of work someone still has to do in this file. Built-ins win on
 # an id clash — they carry bespoke codegen validators a manifest cannot
 # express — but two dropped repos colliding still raises, loudly, at import.
@@ -456,7 +394,7 @@ def get_target(target_id: str | None) -> Target:
 def all_targets() -> tuple[Target, ...]:
     """Every registered target — used by the apply endpoint to resolve which
     target's post_apply_command a just-applied file set belongs to, keyed by
-    root, so the migration step runs for any current or future CR without
+    root, so the migration step runs for any current or future user story without
     the API needing to be told the target explicitly."""
     return tuple(_REGISTRY.values())
 
@@ -475,7 +413,7 @@ def post_apply_commands_for(applied_files: list[str], repo_root: Path) -> list[t
     Matched by target root (not target id): a proposal's files identify which
     local app they belong to, and every registered target rooted there
     contributes its declared post_apply_command. Sibling targets sharing a
-    root therefore inherit each other's migration step — a new mockapp CR is
+    root therefore inherit each other's migration step — a new mockapp user story is
     covered even before its author thinks about schema drift.
     """
     commands: list[tuple[str, ...]] = []

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AMS S3 — CR-2026-045 Live Test Record</title>
+<title>AMS S3 — US-2026-045 Live Test Record</title>
 <style>
   @page { size: A4; margin: 16mm 14mm; }
 
@@ -104,11 +104,11 @@
 
 <header class="cover">
   <div class="kicker">MapleSure Insurance · AMS Console · S3</div>
-  <h1>CR-2026-045 — Live Test Record</h1>
+  <h1>US-2026-045 — Live Test Record</h1>
   <p class="subtitle">Prospect member eligibility at the online enrolment gate — executed before/after evidence</p>
   <p class="meta">
     Executed 3 August 2026, 15:00–15:06 IST · repo <span class="mono">ams-s3-demo</span> ·
-    branch <span class="mono">s3-resolve-dropped-cr-targets</span> at <span class="mono">3a5bd59</span><br>
+    branch <span class="mono">s3-resolve-dropped-story-targets</span> at <span class="mono">3a5bd59</span><br>
     Target <span class="mono">enroldirect-prospect-access</span> ·
     ticket <span class="mono nowrap">AMS-1045</span> ·
     Python 3.12.13 · uvicorn 0.51.0<br>
@@ -127,7 +127,7 @@
 
 <h2>Why the change looked invisible</h2>
 
-<p>The starting complaint was that applying CR-2026-045 in the console produced no
+<p>The starting complaint was that applying US-2026-045 in the console produced no
 visible difference in the app. Two independent causes, both confirmed:</p>
 
 <table>
@@ -139,7 +139,7 @@ visible difference in the app. Two independent causes, both confirmed:</p>
       for ClaimsPortal only; every other target fell through to
       <span class="mono">DEFAULT_TARGET_APP</span>, the PolicyCore portal.
       <div class="tiny">Fixed — an <span class="mono">enroldirect-prospect-access</span> entry now points at :8083.</div></td>
-    <td>"Applied — open the policy portal" sent the presenter to an app CR-2026-045
+    <td>"Applied — open the policy portal" sent the presenter to an app US-2026-045
       does not touch. Nothing there changes, because nothing there was changed.</td>
   </tr>
   <tr>
@@ -158,7 +158,7 @@ visible difference in the app. Two independent causes, both confirmed:</p>
   <span class="mono">14:53:06</span> and the EnrolDirect process had been running since
   <span class="mono">14:36</span>. The change only became visible because the process
   happened to be restarted at <span class="mono">14:54:46</span>. Had it not been, the
-  demo would have shown an applied diff and an unchanged app.</p>
+  run would have shown an applied diff and an unchanged app.</p>
 </div>
 
 <h2>Test subject</h2>
@@ -166,7 +166,7 @@ visible difference in the app. Two independent causes, both confirmed:</p>
 <p>One applicant carries the whole scenario. <strong>Devon Achebe</strong>
 (<span class="mono">AP-4003</span>) is on contract <span class="mono">MS-2001</span>'s roster
 holding no active benefit — the PROSPECT population neither access preference was
-written for. Two controls run alongside to prove the CR changed nothing else:</p>
+written for. Two controls run alongside to prove the user story changed nothing else:</p>
 
 <table>
   <tr><th class="mono">Applicant</th><th>Name</th><th>Category</th><th>Role in the test</th></tr>
@@ -181,14 +181,14 @@ written for. Two controls run alongside to prove the CR changed nothing else:</p
 
 <div class="step">
   <div class="step-head"><span class="num">0</span><span class="step-title">Preserve the applied state</span></div>
-  <p>The CR was already applied in the working tree and uncommitted. Reverting to
+  <p>The user story was already applied in the working tree and uncommitted. Reverting to
   capture a "before" would have destroyed it, so it was snapshotted first and
   verified byte-identical on restore at the end.</p>
-<pre><code>git diff HEAD -- repos/enroldirect &gt; scratch/CR-2026-045.patch   # 254 lines
+<pre><code>git diff HEAD -- repos/enroldirect &gt; scratch/US-2026-045.patch   # 254 lines
 cp repos/enroldirect/{applicants,eligibility,enrolments,main}.py scratch/applied/</code></pre>
   <p class="tiny">Confirmed beforehand that <span class="mono">HEAD</span> holds the clean baseline for this
   target on this branch — <span class="mono">git diff main -- repos/enroldirect</span> and
-  <span class="mono">git diff HEAD -- repos/enroldirect</span> were identical, so no committed CR
+  <span class="mono">git diff HEAD -- repos/enroldirect</span> were identical, so no committed user story
   could be silently restored as "baseline".</p>
 </div>
 
@@ -197,7 +197,7 @@ cp repos/enroldirect/{applicants,eligibility,enrolments,main}.py scratch/applied
 <pre><code>pkill -f "repos.enroldirect.main"
 git checkout HEAD -- repos/enroldirect
 PYTHONPATH=$PWD .venv/bin/uvicorn repos.enroldirect.main:app --port 8083</code></pre>
-  <p>Baseline confirmed structurally, not just by file state — the pre-CR module has
+  <p>Baseline confirmed structurally, not just by file state — the pre-user story module has
   no prospect policy at all:</p>
 <pre class="out"><code>$ grep -c "PROSPECT_POLICY" repos/enroldirect/applicants.py
 0
@@ -221,7 +221,7 @@ $ curl -s localhost:8083/health
      and cannot be granted access."
   ]
 }</code></pre>
-  <p>This is the refusal the CR describes as "not a decision anyone took" — the
+  <p>This is the refusal the user story describes as "not a decision anyone took" — the
   narrower option in force by omission. Note <span class="mono">requiredPreference</span> is
   <span class="mono">null</span>: there is no preference to check against, so the second gate
   cannot pass.</p>
@@ -259,11 +259,11 @@ $ curl -s localhost:8083/health
            -> "Requires existing coverage under the contract."</code></pre>
   <div class="callout">
     <span class="label">The subtlest before/after on the page</span>
-    <p>Pre-CR the catalogue offers this applicant two plans as
+    <p>Pre-user story the catalogue offers this applicant two plans as
     <span class="mono">available: true</span> while the gate refuses them outright, and
     <span class="mono">effectiveCategory</span> is <span class="mono">null</span>. The catalogue and the gate
     are describing the same person differently. That is precisely the inconsistency
-    the CR's last acceptance bullet closes — and it is visible without changing a
+    the user story's last acceptance bullet closes — and it is visible without changing a
     single line of the console UI.</p>
   </div>
 </div>
@@ -292,7 +292,7 @@ INFO:     Started reloader process [35986] using WatchFiles</code></pre>
           'repos/enroldirect/main.py'. Reloading...
 INFO:     Started server process [36051]</code></pre>
   <p>The service picked the change up on its own. This is the step that removes
-  cause #2 from the demo.</p>
+  cause #2 from the walkthrough.</p>
 </div>
 
 <div class="step">
@@ -307,11 +307,11 @@ INFO:     Started server process [36051]</code></pre>
   "prospectPolicyApplied": "GUEST",
   "reasons": ["Granted under 'Online Enrolment - Guest'."]
 }</code></pre>
-  <p>Three fields carry the CR's intent, not just the boolean:
+  <p>Three fields carry the user story's intent, not just the boolean:
   <span class="mono">category</span> still reports what the applicant <em>is</em> (PROSPECT),
   <span class="mono">authorisingPreference</span> reports what actually opened the gate
   (Guest), and <span class="mono">prospectPolicyApplied</span> records <em>why</em> those differ.
-  A prospect admitted as a guest is recorded as such — which is what the CR
+  A prospect admitted as a guest is recorded as such — which is what the user story
   requires for DocumentHub and NightlyBatch downstream.</p>
 </div>
 
@@ -332,8 +332,8 @@ INFO:     Started server process [36051]</code></pre>
              the contract and is open to members only.",
             "This applicant is categorised GUEST."]</code></pre>
   <div class="callout">
-    <span class="label">This is the demo's strongest single frame</span>
-    <p>The CR states the classification "decides two things, not one, and both are in
+    <span class="label">This is the walkthrough's strongest single frame</span>
+    <p>The user story states the classification "decides two things, not one, and both are in
     scope… the two effects run in opposite directions". Here they are in one screen:
     the Guest policy <em>admits</em> Devon at the gate and <em>narrows</em> what Devon can
     reach past it. The refusal code moving from
@@ -349,7 +349,7 @@ INFO:     Started server process [36051]</code></pre>
   <tr>
     <th>Observation</th>
     <th class="statecol">Before (baseline)</th>
-    <th class="statecol">After (CR applied)</th>
+    <th class="statecol">After (user story applied)</th>
   </tr>
   <tr>
     <td>Gate decision, <span class="mono nowrap">AP-4003</span></td>
@@ -395,18 +395,18 @@ INFO:     Started server process [36051]</code></pre>
 
 <p>Both controls are byte-identical across the change except for the new
 <span class="mono">prospectPolicyApplied</span> field, which is <span class="mono">null</span> for them —
-exactly as the CR specifies ("populated for prospects and null for everyone else").</p>
+exactly as the user story specifies ("populated for prospects and null for everyone else").</p>
 
 <h2>Independent regression evidence</h2>
 
 <p><span class="mono">tests/test_regression_enroldirect.py</span> is the human-authored suite the
 pipeline is forbidden to write to. It is an invariant check, so it must pass on
-both sides of the CR — and did:</p>
+both sides of the user story — and did:</p>
 
 <table>
   <tr><th>State</th><th>Command</th><th>Result</th></tr>
   <tr><td>Baseline</td><td class="mono">pytest tests/test_regression_enroldirect.py -q</td><td class="pass">24 passed in 0.21s</td></tr>
-  <tr><td>CR applied</td><td class="mono">pytest tests/test_regression_enroldirect.py -q</td><td class="pass">24 passed in 0.22s</td></tr>
+  <tr><td>user story applied</td><td class="mono">pytest tests/test_regression_enroldirect.py -q</td><td class="pass">24 passed in 0.22s</td></tr>
 </table>
 
 <div class="callout warn">
@@ -437,12 +437,12 @@ both sides of the CR — and did:</p>
 <ol>
   <li>EnrolDirect at <span class="mono">localhost:8083</span> → <strong>Access check</strong> → Devon Achebe.
     Read the refusal aloud: <em>"PROSPECT has no online enrolment preference."</em></li>
-  <li>Console → Apply CR-2026-045.</li>
+  <li>Console → Apply US-2026-045.</li>
   <li>Back to <strong>Access check</strong> → same applicant → <em>granted</em>, under
     <em>Online Enrolment - Guest</em>, with the policy named on the decision.</li>
   <li><strong>Enrol in a benefit</strong> → Devon → catalogue now resolves them as GUEST;
     enrol in Extended Health Care (succeeds), then Health Care Spending Top-Up
-    (refused, and for a different reason). That contrast is the point of the CR.</li>
+    (refused, and for a different reason). That contrast is the point of the user story.</li>
 </ol>
 
 <div class="callout">
@@ -454,7 +454,7 @@ both sides of the CR — and did:</p>
 </div>
 
 <p class="footer-note">
-  Executed and recorded 3 August 2026 on <span class="mono">s3-resolve-dropped-cr-targets</span>
+  Executed and recorded 3 August 2026 on <span class="mono">s3-resolve-dropped-story-targets</span>
   at <span class="mono">3a5bd59</span>. Every output block is live capture from
   <span class="mono">localhost:8083</span>; the applied working-tree state was restored and
   verified identical to its pre-test snapshot.

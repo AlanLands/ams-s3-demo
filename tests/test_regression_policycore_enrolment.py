@@ -2,10 +2,10 @@
 
 Lives in tests/ rather than under repos/policycore/ for the reason CLAUDE.md
 gives: anything ending .py under a target root joins the codegen candidate
-pool, and a test file in there would be scored against every CR.
+pool, and a test file in there would be scored against every user story.
 
-These are invariants, not assertions about any CR under test — they must
-pass identically before and after CR-2026-041 and CR-2026-042, neither of
+These are invariants, not assertions about any user story under test — they must
+pass identically before and after US-2026-041 and US-2026-042, neither of
 which touches this subsystem.
 """
 

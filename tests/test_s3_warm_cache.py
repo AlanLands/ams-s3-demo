@@ -21,15 +21,15 @@ def test_warm_covers_every_registered_target():
         patch("s3_enhancement.warm_cache.draft_release_notes") as mock_release_notes,
         patch("s3_enhancement.warm_cache.draft_release_note_set"),
         patch("s3_enhancement.warm_cache.draft_scenarios"),
-        patch("s3_enhancement.warm_cache.resolve_target_for_cr") as mock_resolve,
+        patch("s3_enhancement.warm_cache.resolve_target_for_story") as mock_resolve,
     ):
         warm()
 
-    warmable_ids = {t.target_id for t in targets.all_targets() if t.cr_template_path is not None}
+    warmable_ids = {t.target_id for t in targets.all_targets() if t.story_template_path is not None}
     assert {
         targets.DEFAULT_TARGET_ID,
         targets.AMENDMENT_TARGET_ID,
-        targets.CLAIMSPORTAL_TARGET_ID,
+        "documenthub-rostered-guest-wording",
     } <= warmable_ids
 
     for mock in (mock_effort, mock_impact, mock_design_doc, mock_release_notes):
@@ -37,13 +37,13 @@ def test_warm_covers_every_registered_target():
         warmed_target_ids = {call.kwargs["target"].target_id for call in mock.call_args_list}
         assert warmed_target_ids == warmable_ids
 
-    # Target resolution is warmed for every CR under crs/, not just the ones
+    # Target resolution is warmed for every user story under stories/, not just the ones
     # that back a registered target. The one that resolves through the AI
-    # tier is precisely the CR that names no target, so it has no target to
+    # tier is precisely the user story that names no target, so it has no target to
     # be reached by the loop above -- and its entry lives in .cache/llm,
     # which every reset wipes. Left cold it fails quietly: _match_by_ai turns
     # an LLMError into an "unresolved" match, which the console shows as
     # "couldn't identify the repo" rather than an error.
-    crs = sorted(p.name for p in (targets.REPO_ROOT / "crs").glob("*.md"))
-    assert crs, "no CRs found to warm resolution for"
-    assert mock_resolve.call_count == len(crs)
+    stories = sorted(p.name for p in (targets.REPO_ROOT / "stories").glob("*.md"))
+    assert stories, "no user stories found to warm resolution for"
+    assert mock_resolve.call_count == len(stories)

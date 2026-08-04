@@ -9,9 +9,9 @@ import type {
 const KINDS: TestScenario['kind'][] = ['positive', 'negative', 'boundary', 'regression']
 
 const KIND_HINT: Record<TestScenario['kind'], string> = {
-  positive: 'Happy path — the change doing what the CR asked for.',
+  positive: 'Happy path — the change doing what the user story asked for.',
   negative: 'Invalid, missing or out-of-range input.',
-  boundary: 'Values at, just below and just above a threshold the CR names.',
+  boundary: 'Values at, just below and just above a threshold the story names.',
   regression: 'Existing behaviour that must survive the change.',
 }
 
@@ -373,7 +373,7 @@ export function TraceabilityMatrix({ matrix }: { matrix: TraceabilityResponse })
         </tbody>
       </table>
       <p className="ams-trace-footnote">
-        Criteria and their wording come from the CR; the scenario column is the approved plan;
+        Criteria and their wording come from the user story; the scenario column is the approved plan;
         results come from the runs above. Only the scenario-to-test link is inferred, and only
         claimed when one test is a clear match — an unmatched row means “not proven here”, not
         “not tested”.

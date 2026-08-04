@@ -1,13 +1,13 @@
 """Acceptance criterion -> scenario -> automated test -> result.
 
 The matrix a QA lead asks for and this pipeline could not previously produce.
-Each row is one acceptance criterion, in the CR's own words and order, with
+Each row is one acceptance criterion, in the user story's own words and order, with
 the planned scenarios that cite it, the executed tests that appear to
 implement those scenarios, and the result of actually running them.
 
 ## Why the scenario -> test link is matched, not asserted
 
-Three of the four columns are exact. The criteria come from the CR text
+Three of the four columns are exact. The criteria come from the user story text
 (`acceptance.py`), the scenario -> criterion citations are validated model
 output (`scenarios.py`), and the pass/fail comes from parsed JUnit XML
 (`testrun.py`). Only "which test implements which scenario" has no ground
@@ -26,7 +26,7 @@ tells a room full of auditors that a requirement is tested when it isn't.
 
 A criterion asserting existing behaviour is unaffected (`Criterion.
 is_regression`) is answered by the app's checked-in regression suite, not by
-anything generated for this CR. Those rows are matched against the regression
+anything generated for this user story. Those rows are matched against the regression
 run instead, which is why both runs are passed in separately.
 """
 

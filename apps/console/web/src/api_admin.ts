@@ -23,7 +23,7 @@ export interface AdminTarget {
   target_id: string
   display_name: string
   repo: string
-  cr: string
+  story: string
   discovered: boolean
   has_recording: boolean
 }
@@ -51,7 +51,7 @@ export interface AdminStatus {
 // No "everything" scope by design — each reset is an explicit act.
 export type ResetScope =
   | 'policycore'
-  | 'claimsportal'
+  | 'documenthub'
   | 'enroldirect'
   | 'tickets'
   | 'logs'
@@ -91,7 +91,7 @@ export interface OnboardRequest {
   display_name: string
   target_id: string
   cache_namespace: string
-  cr: string
+  story: string
   core_files: string[]
   codegen_allowlist: string[]
   testgen_allowlist: string[]

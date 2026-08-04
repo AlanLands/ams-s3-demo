@@ -1,12 +1,12 @@
 # S3 - Enhancement Delivery
 
-Demo beat: a change request lands, the audience chooses a top plan tier
+Demo beat: a user story lands, the audience chooses a top plan tier
 name, and the AMS console generates a real policy-portal enhancement plus tests.
 
 ## Scripted Demo Order
 
-1. **CR text** (`crs/CR-2026-041.md`) - rendered by
-   `s3_enhancement.cr.render_cr(tier_name)` with the chosen tier name.
+1. **user story text** (`stories/US-2026-041.md`) - rendered by
+   `s3_enhancement.story.render_story(tier_name)` with the chosen tier name.
 2. **AI impact analysis and effort estimate** (`s3_enhancement/analyze.py`) -
    short `complete()` calls using the generic `.cache/llm` store.
 3. **AI code generation** (`s3_enhancement/codegen.py`) - streamed full-file JSON
@@ -33,8 +33,8 @@ drafts and do not modify files.
 
 ## Multi-repo support (`targets.py`, `discovery.py`)
 
-Everything above assumes one repo, one CR. `s3_enhancement/targets.py`
-generalizes this: a frozen `Target` (repo root or GitLab `project_id`, CR
+Everything above assumes one repo, one user story. `s3_enhancement/targets.py`
+generalizes this: a frozen `Target` (repo root or GitLab `project_id`, user story
 template, file allowlists, cache namespace) that every module above accepts
 as an optional `target=` param, defaulting to today's one target
 (`MOCKAPP_TIER_UPGRADE`) with byte-identical cache keys — no behavior
@@ -42,8 +42,8 @@ change for the demo path. `register_target()` makes cache-key collisions
 between targets unrepresentable, not just unlikely.
 
 Four targets are registered today: two against `repos/policycore/`
-(CR-2026-041, CR-2026-042), one against `repos/claimsportal/` (CR-2026-043)
-and one against `repos/enroldirect/` (CR-2026-045).
+(US-2026-041, US-2026-042), one against `repos/claimsportal/` (US-2026-043)
+and one against `repos/enroldirect/` (US-2026-045).
 
 `discovery.py` removes the code edit. A directory under `repos/` carrying a
 `.s3targets.json` manifest is registered at import, so onboarding a repo is a
@@ -54,18 +54,20 @@ contract and the onboarding steps live in
 purpose. The four built-in targets stay declared by hand because they carry
 bespoke codegen file-set validators a manifest cannot express — which is the
 one thing that still doesn't generalize. Codegen/testgen's prompts and
-validators are per-CR business logic, not automatic.
+validators are per-user story business logic, not automatic.
 
-## CR intake (`cr_intake.py`)
+## user story intake (`story_intake.py`)
 
-A `.md` file dropped into the top-level `crs/` becomes a board row without
-anyone seeding a Jira ticket for it. The key is a pure function of the CR
-identifier (`CR-2026-045` → `AMS-1045`), so it survives restarts, resets and
+A `.md` file dropped into the top-level `stories/` becomes a board row without
+anyone seeding a Jira ticket for it. The key is a pure function of the user story
+identifier (`US-2026-045` → `AMS-1045`), so it survives restarts, resets and
 processes — a key that changed between two board loads would strand every
 event recorded against the old one. Derived keys start at AMS-1000 because the
 seeded demo tickets and `jira_client`'s synthetic replay keys both live in
-AMS-100..999. The ticket lands **unassigned**, which routes it to a manager to
-assign; nothing here calls an LLM, touches Jira, or writes anything.
+AMS-100..999. The ticket lands in the default engineer's **To Do** column
+(`s3.py::_story_default_assignee` — `STORY_DEFAULT_ASSIGNEE`, empty to leave it
+unassigned for a manager instead); a manager can reassign it either way.
+Nothing here calls an LLM, touches Jira, or writes anything.
 
 ## GitLab beat (`relevance.discover_gitlab_files`, `repo_match.py`)
 
@@ -78,7 +80,7 @@ ever writing generated code back.
 - `POST /gitlab/projects/{id}/scope` - manual pick: discover + relevance-score
   files in that one repo.
 - `POST /gitlab/scope-auto` - automatic pick: `repo_match.suggest_target_repo`
-  asks the LLM to match the CR against every connected repo's
+  asks the LLM to match the user story against every connected repo's
   name/description and return its best guess (+ reasoning + alternates), then
   runs the same discovery/scoping as the manual endpoint. Always labeled as
   an AI suggestion - a human still confirms the pick.
@@ -87,4 +89,4 @@ Both paths only ever fetch a shortlist of file contents (TF-IDF pre-rank over
 paths first), so cost stays flat regardless of repo count or size. Neither
 path applies anything back to GitLab. See
 [`../docs/design/S3_DESIGN.md`](../docs/design/S3_DESIGN.md) for the
-end-to-end "a CR lands, then what" walkthrough.
+end-to-end "a user story lands, then what" walkthrough.

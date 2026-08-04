@@ -10,21 +10,35 @@ function stageState(stage: S3Stage, pathname: string) {
 
 export default function StageRail({
   activeTicketKey,
-  crLabel,
+  storyLabel,
   stages,
 }: {
   activeTicketKey: string | null
-  crLabel: string | null
+  storyLabel: string | null
   stages: S3Stage[]
 }) {
   const { pathname } = useLocation()
+
+  // Only the FIRST locked stage explains itself. Every locked stage used to
+  // render its full `lockedReason`, and those paragraphs are the whole reason
+  // the rail outgrew the viewport: a hint-bearing item measures ~130px against
+  // ~67px without one, so four locked stages overflowed a 264px rail and hid
+  // the back half of the pipeline behind an internal scroll. Wayfinding is the
+  // rail's job — you cannot see where the flow goes if you cannot see the flow.
+  //
+  // Suppressing the rest loses nothing: the later reasons are all downstream of
+  // this one ("apply the change first" cannot be acted on before "run the
+  // analysis first"), so only the first is ever the actual next move, and each
+  // becomes the first in turn as the run progresses. The stages stay listed,
+  // numbered and marked Locked — it is the redundant prose that goes.
+  const firstLockedIndex = stages.findIndex((stage) => stage.locked)
 
   return (
     <nav className="ams-stage-rail" aria-label="Pipeline stages">
       <div className="ams-stage-rail-context">
         <span className="ams-eyebrow">Active work</span>
         <strong>{activeTicketKey ?? 'No ticket selected'}</strong>
-        <span>{crLabel ?? 'Pick a ticket to resolve the CR context.'}</span>
+        <span>{storyLabel ?? 'Pick a ticket to resolve the user story context.'}</span>
       </div>
       <ol className="ams-stepper ams-stepper-rail">
         {stages.map((stage, index) => {
@@ -52,7 +66,7 @@ export default function StageRail({
                   {state === 'current' ? 'Current' : state === 'done' ? 'Done' : state === 'locked' ? 'Locked' : 'Available'}
                 </span>
                 {stage.statusLabel && <span className="ams-stage-rail-status">{stage.statusLabel}</span>}
-                {state === 'locked' && stage.lockedReason && (
+                {state === 'locked' && stage.lockedReason && index === firstLockedIndex && (
                   <span className="ams-stage-rail-hint">{stage.lockedReason}</span>
                 )}
               </span>

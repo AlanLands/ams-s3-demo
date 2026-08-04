@@ -12,6 +12,7 @@ import {
 import { parseDiff } from './utils'
 import TokenPanel from '../../TokenPanel'
 import ScenarioPlan, { TraceabilityMatrix } from '../../TestPlanPanel'
+import { ScmPanel } from '../../ScmPanel'
 import { useS3 } from './context'
 
 // The six beats each produce a body — a scenario table, a diff, three test
@@ -29,7 +30,16 @@ type OpenArtifact =
 
 export default function TestsStage() {
   const {
-    isEngineer,
+    scmState,
+    scmBlockers,
+    scmEvidence,
+    committing,
+    pushing,
+    scmError,
+    scmDetail,
+    handleCommit,
+    handlePush,
+    isTester,
     scenarios,
     scenarioDraft,
     handleDraftScenarios,
@@ -70,7 +80,10 @@ export default function TestsStage() {
 
   return (
     <StageFrame stageId="tests" title="Generate tests + run" activity={activity}>
-      {isEngineer ? (
+      {/* The tester runs this stage. `canTest` additionally requires the
+          ticket to be in QA and this person to be its assignee, so a
+          second tester sees the stage but not the controls. */}
+      {isTester ? (
     <>
         {/* Beat 1 — the test plan, in prose, before any test code exists. The
             tester edits it; what they approve is what gets generated. The
@@ -79,7 +92,7 @@ export default function TestsStage() {
         <div className="ams-card">
           <strong style={{ fontSize: 'var(--ams-text-sm)' }}>Test plan — scenarios first</strong>
           <p className="ams-stage-note">
-            What will be checked, traced to the CR's acceptance criteria, before a line of test
+            What will be checked, traced to the user story's acceptance criteria, before a line of test
             code is written. Edit, delete or add scenarios — the approved list is what the
             generated suite is written against.
           </p>
@@ -199,7 +212,7 @@ export default function TestsStage() {
 
             {/* Beat 4 — the other half of "did it work": the app's own
                 checked-in suite, which the AI never wrote and cannot edit.
-                New tests passing says the CR did what it claimed; these
+                New tests passing says the user story did what it claimed; these
                 passing says it cost nothing that already worked.
 
                 Deliberately not gated on the generated run: this suite
@@ -208,8 +221,8 @@ export default function TestsStage() {
             <div className="ams-card" style={{ marginTop: '0.75rem' }}>
               <strong style={{ fontSize: 'var(--ams-text-sm)' }}>Regression — the pre-existing suite</strong>
               <p className="ams-stage-note">
-                Checked into the repo before this change request, authored by a human, and named
-                by no allowlist the pipeline can write to. Every CR here ends with “existing
+                Checked into the repo before this change, authored by a human, and named
+                by no allowlist the pipeline can write to. Every user story here ends with “existing
                 flows are unaffected” — this is the part that checks it.
               </p>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -240,7 +253,7 @@ export default function TestsStage() {
                 <div style={{ marginTop: '0.6rem' }}>
                   <p
                     style={{
-                      fontWeight: 700,
+                      fontWeight: 600,
                       fontSize: 'var(--ams-text-sm)',
                       margin: '0 0 0.2rem',
                       maxWidth: '68ch',
@@ -286,7 +299,7 @@ export default function TestsStage() {
                 {mutationCheck && (
                   <p
                     style={{
-                      fontWeight: 700,
+                      fontWeight: 600,
                       fontSize: 'var(--ams-text-sm)',
                       maxWidth: '68ch',
                       color: mutationCheck.tests_caught_bug
@@ -315,7 +328,7 @@ export default function TestsStage() {
           <div className="ams-card" style={{ marginTop: '0.75rem' }}>
             <strong style={{ fontSize: 'var(--ams-text-sm)' }}>Traceability — criteria to evidence</strong>
             <p className="ams-stage-note">
-              One row per acceptance criterion in the CR, joined to the approved scenarios and to
+              One row per acceptance criterion in the user story, joined to the approved scenarios and to
               the tests that actually ran. This is the artifact an auditor asks for.
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -394,7 +407,7 @@ export default function TestsStage() {
         {openArtifact === 'testrun' && testsRun && (
           <Modal title="Test run results" size="lg" onClose={close}>
             {!testsRun.passed && (
-              <p style={{ color: 'var(--ams-error)', fontWeight: 700, marginTop: 0 }}>
+              <p style={{ color: 'var(--ams-error)', fontWeight: 600, marginTop: 0 }}>
                 Test run exited with code {testsRun.returncode}
               </p>
             )}
@@ -454,6 +467,25 @@ export default function TestsStage() {
           >
             <TraceabilityMatrix matrix={traceability} />
           </Modal>
+        )}
+
+        {/* The commit gate is the test run, so the branch closes out here
+            rather than back on the engineer's stage — they see the same panel
+            read-only. Blockers still come from the ticket's event log
+            server-side (scm.commit_blockers), never from anything posted from
+            this page. */}
+        {scmState && (
+          <ScmPanel
+            state={scmState}
+            blockers={scmBlockers}
+            evidence={scmEvidence}
+            committing={committing}
+            pushing={pushing}
+            error={scmError}
+            detail={scmDetail}
+            onCommit={handleCommit}
+            onPush={handlePush}
+          />
         )}
     </>
   ) : (

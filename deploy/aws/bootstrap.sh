@@ -27,7 +27,7 @@ fi
 echo "==> system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-# git: the S3 pipeline shells out to it for diffs against the pre-CR baseline.
+# git: the S3 pipeline shells out to it for diffs against the pre-user story baseline.
 # nginx: single public entry point in front of the two app processes.
 apt-get install -y -qq python3.12 python3.12-venv python3-pip git nginx curl
 

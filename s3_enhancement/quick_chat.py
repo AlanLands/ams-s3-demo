@@ -1,5 +1,5 @@
 """S3 quick-impact chat — a free-text "how much would this cost me" entry
-point, separate from the fixed CR-2026-041/042 flow.
+point, separate from the fixed US-2026-041/042 flow.
 
 Asks at most `MAX_CLARIFICATION_TURNS` clarifying questions when it needs
 more detail, then returns an impact analysis and effort/priority estimate
@@ -29,7 +29,7 @@ SYSTEM_PROMPT = (
     "You are an AI engineering assistant supporting an application-maintenance "
     "team for MapleSure Insurance. A support engineer or manager is asking a "
     "free-text question about a hypothetical change to a small mock "
-    "policy/claims app, before any formal change request exists. If you "
+    "policy/claims app, before any formal user story exists. If you "
     "genuinely need more detail to size the change, ask ONE short clarifying "
     "question. Otherwise, give a final answer: a short impact analysis, an "
     "effort/priority estimate, and whether a concrete code change is "
@@ -44,7 +44,7 @@ class QuickChatResult:
     impact_analysis: str = ""
     effort_estimate: EffortEstimate | None = None
     code_change_warranted: bool = False
-    suggested_cr_summary: str = ""
+    suggested_story_summary: str = ""
 
 
 def _clarification_turns_used(history: list[QuickChatTurn]) -> int:
@@ -53,7 +53,7 @@ def _clarification_turns_used(history: list[QuickChatTurn]) -> int:
 
 def _read_codebase_context(message: str, *, target: Target) -> str:
     """Scoped codebase context — same discovery/selection path analyze.py's
-    fixed-CR impact analysis uses, never a raw whole-repo dump."""
+    fixed-user story impact analysis uses, never a raw whole-repo dump."""
     all_files = relevance.discover_files_for_target(target, message)
     selection = relevance.select_relevant_files(
         message, all_files, core_files=target.core_files, design_doc_root=target.root
@@ -85,7 +85,7 @@ Otherwise, your final answer:
   "priority_equivalent": "P1, P2, P3, or P4",
   "reasoning": "one or two sentences explaining the estimate",
   "code_change_warranted": true or false,
-  "suggested_cr_summary": "<one line summarizing this as a CR, or empty>"
+  "suggested_story_summary": "<one line summarizing this as a user story, or empty>"
 }"""
 
     return f"""Conversation so far:
@@ -159,5 +159,5 @@ def continue_session(
             reasoning=str(data.get("reasoning", "")),
         ),
         code_change_warranted=bool(data.get("code_change_warranted", False)),
-        suggested_cr_summary=str(data.get("suggested_cr_summary", "")),
+        suggested_story_summary=str(data.get("suggested_story_summary", "")),
     )

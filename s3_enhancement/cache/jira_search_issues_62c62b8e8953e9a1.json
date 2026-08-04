@@ -8,7 +8,7 @@
       "key": "AMS-101",
       "id": "10101",
       "self": null,
-      "summary": "CR-2026-041: Plan Tier Upgrade Option",
+      "summary": "US-2026-041: Plan Tier Upgrade Option",
       "status": "QA",
       "issue_type": "Task",
       "assignee": "Priya Nair"
@@ -17,17 +17,8 @@
       "key": "AMS-102",
       "id": "10102",
       "self": null,
-      "summary": "CR-2026-042: Amendment Priority Field",
+      "summary": "US-2026-042: Amendment Priority Field",
       "status": "In Progress",
-      "issue_type": "Task",
-      "assignee": "Ravi Kumar"
-    },
-    {
-      "key": "AMS-103",
-      "id": "10103",
-      "self": null,
-      "summary": "CR-2026-043: Claims Deductible Handling (ClaimsPortal)",
-      "status": "To Do",
       "issue_type": "Task",
       "assignee": "Ravi Kumar"
     },
@@ -46,7 +37,7 @@
       "status": "To Do",
       "assignee": "Ravi Kumar",
       "issue_type": "Task",
-      "description": "Raised on the support floor, not through the change-request desk. Names the application (PolicyCore) but no target system, so the repo has to be identified before any work starts. See CR-2026-044."
+      "description": "Raised on the support floor, not through the change-request desk. Names the application (PolicyCore) but no target system, so the repo has to be identified before any work starts. See US-2026-044."
     }
   ]
 }

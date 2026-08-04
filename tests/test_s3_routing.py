@@ -30,12 +30,12 @@ def _client() -> TestClient:
 
 @pytest.mark.parametrize(
     "ci",
-    ["ClaimsPortal", "Claims Portal", "claims portal", "claims-portal", "CLAIMSPORTAL"],
+    ["DocumentHub", "Document Hub", "document hub", "document-hub", "DOCUMENTHUB"],
 )
 def test_ci_spellings_all_resolve_to_one_application(ci):
     """Real CMDBs are inconsistent about case and spacing; none of that
     variation should push a ticket onto the LLM fallback tier."""
-    assert applications.route_by_ci(ci) is applications.CLAIMS_PORTAL
+    assert applications.route_by_ci(ci) is applications.DOCUMENT_HUB
 
 
 def test_unknown_and_absent_ci_are_both_unroutable():
@@ -45,8 +45,8 @@ def test_unknown_and_absent_ci_are_both_unroutable():
 
 
 def test_business_service_resolves_when_unambiguous():
-    assert applications.route_by_business_service("Claims Management") is (
-        applications.CLAIMS_PORTAL
+    assert applications.route_by_business_service("Document Management") is (
+        applications.DOCUMENT_HUB
     )
     assert applications.route_by_business_service("Not A Service") is None
     assert applications.route_by_business_service(None) is None
@@ -68,7 +68,7 @@ def test_business_service_declines_to_guess_when_ambiguous(monkeypatch):
             tech_stack=app.tech_stack,
             repo_path=app.repo_path,
         )
-        for app in (applications.POLICY_CORE, applications.CLAIMS_PORTAL)
+        for app in (applications.POLICY_CORE, applications.DOCUMENT_HUB)
     }
     monkeypatch.setattr(applications, "_REGISTRY", twins)
     assert applications.route_by_business_service(shared) is None
@@ -96,7 +96,7 @@ def test_duplicate_ci_name_is_rejected():
                 app_id="impostor",
                 display_name="Impostor",
                 business_service="Impostor Service",
-                ci_names=("Claims Portal",),
+                ci_names=("Document Hub",),
                 jira_project_key="AMS",
                 component_team="Batch Ops",
                 tech_stack="Go",
@@ -108,19 +108,46 @@ def test_duplicate_ci_name_is_rejected():
 
 
 def test_ci_route_carries_team_project_and_targets():
-    decision = routing.route_ticket(ci="Claims Portal")
+    decision = routing.route_ticket(ci="Document Hub")
     assert decision.method == "ci"
     assert decision.routed
     assert not decision.needs_ai_fallback
     assert decision.application.jira_project_key == "AMS"
-    assert decision.component_team == "App Support — ClaimsPortal"
-    assert decision.suggested_assignee == "Priya Nair"
-    assert decision.candidate_target_ids == (targets.CLAIMSPORTAL_TARGET_ID,)
+    assert decision.component_team == "App Support — DocumentHub"
+    # First on this team's roster. The tester-skipping half of this field is
+    # covered on its own in test_suggested_assignee_skips_testers — no real
+    # group's roster starts with a tester any more, so asserting it here would
+    # prove nothing.
+    assert decision.suggested_assignee == "Noah Bennett"
+    assert decision.candidate_target_ids == ("documenthub-rostered-guest-wording",)
     assert decision.automation_available
 
 
+def test_suggested_assignee_skips_testers():
+    """The suggestion names who *builds* the change, never who tests it.
+
+    A tester's console has no Generate stage, so suggesting one hands the work
+    to somebody who cannot do it. Exercised against a patched roster rather
+    than a real group: since the ClaimsPortal removal merged the testers into
+    App Support — PolicyCore behind two engineers, no real group's roster
+    starts with a tester, and a test that relied on one would silently stop
+    proving anything the next time the roster is reordered.
+    """
+    decision = routing.route_ticket(ci="Document Hub")
+    tester_first = {
+        "App Support — DocumentHub": ["Priya Nair", "Tom Becker", "Noah Bennett"],
+    }
+    with patch.object(routing, "ENGINEERS_BY_GROUP", tester_first):
+        assert decision.suggested_assignee == "Noah Bennett"
+
+    # A team of nothing but testers suggests nobody, rather than falling back
+    # to the first name and quietly ignoring the rule.
+    with patch.object(routing, "ENGINEERS_BY_GROUP", {"App Support — DocumentHub": ["Priya Nair"]}):
+        assert decision.suggested_assignee == ""
+
+
 def test_one_ci_can_offer_several_candidate_changes():
-    """A CI identifies an application, not a change — mockapp hosts two CRs."""
+    """A CI identifies an application, not a change — mockapp hosts two user stories."""
     decision = routing.route_ticket(ci="PolicyCore")
     assert set(decision.candidate_target_ids) == {
         targets.DEFAULT_TARGET_ID,
@@ -150,16 +177,16 @@ def test_unrouted_decision_asks_for_the_ai_fallback():
 
 def test_ci_wins_over_business_service():
     decision = routing.route_ticket(
-        ci="ClaimsPortal", business_service="Policy Administration"
+        ci="DocumentHub", business_service="Policy Administration"
     )
-    assert decision.application is applications.CLAIMS_PORTAL
+    assert decision.application is applications.DOCUMENT_HUB
     assert decision.method == "ci"
 
 
 def test_business_service_used_only_when_ci_absent():
-    decision = routing.route_ticket(business_service="Claims Management")
+    decision = routing.route_ticket(business_service="Document Management")
     assert decision.method == "business_service"
-    assert decision.application is applications.CLAIMS_PORTAL
+    assert decision.application is applications.DOCUMENT_HUB
 
 
 # --- the endpoints ------------------------------------------------------
@@ -170,14 +197,15 @@ def test_route_endpoint_401s_without_login():
 
 
 def test_route_endpoint_returns_the_decision():
-    body = _client().post("/api/s3/route", json={"ci": "Claims Portal"}).json()
+    body = _client().post("/api/s3/route", json={"ci": "Document Hub"}).json()
     assert body["method"] == "ci"
     assert body["routed"] is True
-    assert body["matched_on"] == "Claims Portal"
+    assert body["matched_on"] == "Document Hub"
     assert body["automation_available"] is True
-    assert body["application"]["component_team"] == "App Support — ClaimsPortal"
-    assert body["suggested_assignee"] == "Priya Nair"
-    assert body["candidate_targets"][0]["target_id"] == targets.CLAIMSPORTAL_TARGET_ID
+    assert body["application"]["component_team"] == "App Support — DocumentHub"
+    # First on the owning team — see the note in the CI-route test.
+    assert body["suggested_assignee"] == "Noah Bennett"
+    assert body["candidate_targets"][0]["target_id"] == "documenthub-rostered-guest-wording"
 
 
 def test_route_endpoint_answers_unroutable_rather_than_erroring():
@@ -203,8 +231,8 @@ def test_problem_record_ci_survives_the_round_trip_to_the_board(tmp_path, monkey
         json={
             "summary": "Claim payout ignores the deductible",
             "problem_id": "PRB0012345",
-            "ci": "Claims Portal",
-            "business_service": "Claims Management",
+            "ci": "Document Hub",
+            "business_service": "Document Management",
         },
     )
     assert created.status_code == 200
@@ -212,13 +240,13 @@ def test_problem_record_ci_survives_the_round_trip_to_the_board(tmp_path, monkey
     new_key = body["issue"]["key"]
 
     assert body["routing"]["method"] == "ci"
-    assert body["routing"]["application"]["display_name"] == "ClaimsPortal"
+    assert body["routing"]["application"]["display_name"] == "DocumentHub"
     assert body["issue"]["problem_id"] == "PRB0012345"
-    assert body["issue"]["ci"] == "Claims Portal"
-    assert body["issue"]["business_service"] == "Claims Management"
+    assert body["issue"]["ci"] == "Document Hub"
+    assert body["issue"]["business_service"] == "Document Management"
 
     issues = {i["key"]: i for i in client.get("/api/s3/jira/board").json()["issues"]}
-    assert issues[new_key]["ci"] == "Claims Portal"
+    assert issues[new_key]["ci"] == "Document Hub"
     assert issues[new_key]["problem_id"] == "PRB0012345"
 
     events = client.get(f"/api/s3/ticket-events?ticket_number={new_key}").json()
@@ -267,16 +295,16 @@ def test_ci_route_skips_the_llm_repo_match_entirely(tmp_path, monkeypatch):
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={
-                "cr_text": "Claim payout ignores the deductible.",
+                "story_text": "Claim payout ignores the deductible.",
                 "ticket_number": "AMS-140",
-                "ci": "ClaimsPortal",
+                "ci": "DocumentHub",
             },
         )
 
     assert response.status_code == 200
     body = response.json()
     assert body["routing"]["method"] == "ci"
-    assert body["routing"]["application"]["display_name"] == "ClaimsPortal"
+    assert body["routing"]["application"]["display_name"] == "DocumentHub"
     gitlab.assert_not_called()
     suggest.assert_not_called()
 
@@ -297,7 +325,7 @@ def test_missing_ci_still_reaches_the_llm_repo_match(tmp_path, monkeypatch):
             suggest.return_value = None
             response = client.post(
                 "/api/s3/analyze-adhoc",
-                json={"cr_text": "Something about claims.", "ticket_number": "AMS-141"},
+                json={"story_text": "Something about claims.", "ticket_number": "AMS-141"},
             )
 
     assert response.status_code == 200
@@ -306,9 +334,23 @@ def test_missing_ci_still_reaches_the_llm_repo_match(tmp_path, monkeypatch):
 
 
 def test_applications_endpoint_flags_which_are_automatable():
+    """Routable and automatable are separate questions, and the endpoint says so.
+
+    BillingGateway is the standing example of the difference: a real routing
+    destination with a real owning team and no registered target, so a ticket
+    reaches the right people without the console offering to generate code for
+    a repo it does not have.
+
+    DocumentHub was that example too until US-2026-046 — it is asserted as
+    `True` here rather than dropped from the test, because "an application
+    became automatable once its repo was dropped into `repos/`" is the claim
+    the drop folder makes, and this is the only place it is checked end to end
+    through the API.
+    """
     body = _client().get("/api/s3/applications").json()
     by_name = {a["display_name"]: a for a in body["applications"]}
-    assert by_name["ClaimsPortal"]["automation_available"] is True
+    assert by_name["DocumentHub"]["automation_available"] is True
     assert by_name["PolicyCore"]["automation_available"] is True
+    assert by_name["EnrolDirect"]["automation_available"] is True
+    assert by_name["DocumentHub"]["automation_available"] is True
     assert by_name["BillingGateway"]["automation_available"] is False
-    assert by_name["DocumentHub"]["automation_available"] is False

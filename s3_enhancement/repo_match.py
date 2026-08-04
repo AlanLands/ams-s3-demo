@@ -1,13 +1,13 @@
 """AI-assisted repo matching for S3's GitLab beat.
 
-When a CR arrives without a pre-selected target repo, this asks the LLM to
+When a user story arrives without a pre-selected target repo, this asks the LLM to
 pick the most likely repo from the caller's connected GitLab projects, by
-matching the CR text against each project's name/description — the automatic
+matching the user story text against each project's name/description — the automatic
 alternative to manually choosing a `project_id` (see
 api/routers/s3.py's `/gitlab/projects/{id}/scope`).
 
 Unlike S3's demo-pinned narrative calls (analyze.py, docgen.py), this call's
-input genuinely varies every time (the CR text and the caller's actual
+input genuinely varies every time (the user story text and the caller's actual
 project list), so it deliberately omits a fixed `cache_key` — `complete()`
 then falls back to `common/llm.py`'s default content-hash cache, which is the
 correct behavior for input that isn't the same every run (see
@@ -23,7 +23,7 @@ from common.llm import LLMError, complete, parse_json_response
 
 SYSTEM_PROMPT = (
     "You are an AI engineering assistant helping an application-maintenance team "
-    "figure out which of their repositories a change request applies to, given only "
+    "figure out which of their repositories a user story applies to, given only "
     "each repository's name and description — you have not read any source code."
 )
 
@@ -47,15 +47,15 @@ def _describe(project: dict) -> str:
     return f"id={project.get('id')}: {name} — {description}"
 
 
-def build_prompt(cr_text: str, projects: list[dict]) -> str:
+def build_prompt(story_text: str, projects: list[dict]) -> str:
     listing = "\n".join(_describe(project) for project in projects)
-    return f"""Change request:
-{cr_text}
+    return f"""User story:
+{story_text}
 
 Candidate repositories:
 {listing}
 
-Which repository is this change request most likely for? Base this only on the
+Which repository is this user story most likely for? Base this only on the
 repository names and descriptions above — you have not read any of their source code.
 
 Return JSON exactly matching:
@@ -77,7 +77,7 @@ def needs_confirmation(match: RepoMatch) -> bool:
 
     Only 'high' confidence is trusted outright — a wrong guess here would
     scope file discovery/codegen against the wrong repo, the same class of
-    risk `analyze.py`'s CR-text clarity gate guards against for vague
+    risk `analyze.py`'s story-text clarity gate guards against for vague
     tickets (see CLAUDE.md's requirement-clarity-gate rule).
     """
     return match.confidence != "high"
@@ -85,7 +85,7 @@ def needs_confirmation(match: RepoMatch) -> bool:
 
 def build_confirmation_question(suggestion: RepoSuggestion, projects: list[dict]) -> str:
     """A short question for the developer to confirm (or override) an
-    uncertain repo-match — the repo-identity analogue of the CR text
+    uncertain repo-match — the repo-identity analogue of the user story text
     clarity-gate question."""
     projects_by_id = {str(project.get("id")): project for project in projects}
 
@@ -95,7 +95,7 @@ def build_confirmation_question(suggestion: RepoSuggestion, projects: list[dict]
 
     best = suggestion.best_match
     question = (
-        f"I'm only {best.confidence}-confidence this CR is for "
+        f"I'm only {best.confidence}-confidence this user story is for "
         f"'{_name(best.project_id)}' ({best.reasoning}). Is that the right repo?"
     )
     if suggestion.alternates:
@@ -104,8 +104,8 @@ def build_confirmation_question(suggestion: RepoSuggestion, projects: list[dict]
     return question
 
 
-def suggest_target_repo(cr_text: str, projects: list[dict]) -> RepoSuggestion:
-    """Ask the LLM to pick the most likely repo for this CR from `projects`.
+def suggest_target_repo(story_text: str, projects: list[dict]) -> RepoSuggestion:
+    """Ask the LLM to pick the most likely repo for this user story from `projects`.
 
     Raises `LLMError` if there are no candidates, the response is malformed,
     or the model picks an id outside the candidate list.
@@ -114,7 +114,7 @@ def suggest_target_repo(cr_text: str, projects: list[dict]) -> RepoSuggestion:
         raise LLMError("no candidate repositories to match against")
 
     response = complete(
-        build_prompt(cr_text, projects),
+        build_prompt(story_text, projects),
         system=SYSTEM_PROMPT,
         json_mode=True,
     )

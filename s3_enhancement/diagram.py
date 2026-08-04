@@ -1,7 +1,7 @@
 """The change-map diagram for the QA design document.
 
 A picture of what this change touches: which service, which architectural
-layer, which files, and — where the CR crosses a service boundary — the call
+layer, which files, and — where the user story crosses a service boundary — the call
 that crosses it. Handed to QA alongside the design doc so "affected areas" is
 something you can look at rather than a paragraph you have to hold in your
 head.
@@ -58,7 +58,18 @@ LAYER_ORDER = ("Interface", "Logic", "Data", "Other")
 # A record/dataclass carrying only fields is the data shape for its service,
 # not logic — but it has no suffix that says so. These are the demo estate's
 # record types; anything else falls through to the rules above.
-_DATA_RECORDS = ("policy.py", "claim.py")
+#
+# Was ("policy.py", "claim.py") until ClaimsPortal was removed on 2026-08-04,
+# at which point both named files that no longer existed. Retargeted to the
+# surviving estate rather than deleted, because the rule the list encodes is
+# still true — a module of field-only dataclasses is that service's data shape
+# whatever it is called.
+#
+# Neither name is in any target's `codegen_allowlist` today (both are
+# read-but-don't-edit files), so this list currently changes no diagram the
+# demo draws. That is fine: it is here so the layer is right when one of them
+# does get changed, not to make a picture look better now.
+_DATA_RECORDS = ("feed.py", "directory.py")
 
 _BOX_W = 190
 _BOX_H = 46
@@ -164,7 +175,7 @@ def build_change_map(
     """Assemble the diagram's facts for `target`.
 
     `changed_files` defaults to the target's codegen allowlist — the files the
-    CR is contracted to touch — so the map is available before, during and
+    user story is contracted to touch — so the map is available before, during and
     after apply, and does not depend on a proposal still being in memory.
     """
     # `is None`, not falsiness: an explicitly empty list means "this change

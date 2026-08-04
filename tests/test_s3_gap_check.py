@@ -4,11 +4,11 @@ from unittest.mock import patch
 import pytest
 
 from common.llm import LLMError
-from s3_enhancement.analyze import MAX_CLARIFICATION_TURNS, check_cr_gaps
+from s3_enhancement.analyze import MAX_CLARIFICATION_TURNS, check_story_gaps
 from s3_enhancement.conversation import ConversationTurn
 
 
-def test_check_cr_gaps_asks_about_an_unstated_default():
+def test_check_story_gaps_asks_about_an_unstated_default():
     canned = json.dumps(
         {
             "needs_clarification": True,
@@ -16,7 +16,7 @@ def test_check_cr_gaps_asks_about_an_unstated_default():
         }
     )
     with patch("s3_enhancement.analyze.complete", return_value=canned) as mock_complete:
-        result = check_cr_gaps(
+        result = check_story_gaps(
             "Add a 'priority' field (Standard/Urgent) to the amendment request form."
         )
 
@@ -25,10 +25,10 @@ def test_check_cr_gaps_asks_about_an_unstated_default():
     assert "default" in result.question.lower()
 
 
-def test_check_cr_gaps_passes_through_a_fully_specified_cr():
+def test_check_story_gaps_passes_through_a_fully_specified_story():
     canned = json.dumps({"needs_clarification": False})
     with patch("s3_enhancement.analyze.complete", return_value=canned):
-        result = check_cr_gaps(
+        result = check_story_gaps(
             "Add a 'priority' field (Standard/Urgent) to the amendment request form, "
             "defaulting to Standard."
         )
@@ -37,7 +37,7 @@ def test_check_cr_gaps_passes_through_a_fully_specified_cr():
     assert result.question == ""
 
 
-def test_check_cr_gaps_enforces_the_turn_cap():
+def test_check_story_gaps_enforces_the_turn_cap():
     history = [
         ConversationTurn(role="user", text=""),
         ConversationTurn(role="assistant", text="What should the default be?"),
@@ -49,11 +49,11 @@ def test_check_cr_gaps_enforces_the_turn_cap():
     canned = json.dumps({"needs_clarification": True, "question": "One more thing?"})
     with patch("s3_enhancement.analyze.complete", return_value=canned):
         with pytest.raises(LLMError):
-            check_cr_gaps("still has a gap", history)
+            check_story_gaps("still has a gap", history)
 
 
-def test_check_cr_gaps_rejects_empty_question():
+def test_check_story_gaps_rejects_empty_question():
     canned = json.dumps({"needs_clarification": True, "question": ""})
     with patch("s3_enhancement.analyze.complete", return_value=canned):
         with pytest.raises(LLMError):
-            check_cr_gaps("Add a 'priority' field.")
+            check_story_gaps("Add a 'priority' field.")

@@ -1,9 +1,9 @@
-"""Verifies s3_enhancement/acceptance.py -- deterministic extraction of a CR's
+"""Verifies s3_enhancement/acceptance.py -- deterministic extraction of a user story's
 acceptance criteria, and s3_enhancement/traceability.py's matrix assembly."""
 
 from __future__ import annotations
 
-from s3_enhancement import cr, targets
+from s3_enhancement import story, targets
 from s3_enhancement.acceptance import Criterion, parse_acceptance_criteria
 from s3_enhancement.scenarios import Scenario
 
@@ -12,7 +12,7 @@ from s3_enhancement.scenarios import Scenario
 from s3_enhancement.testrun import TestCase as _TestCase
 from s3_enhancement.traceability import build_matrix, match_scenario
 
-SIMPLE_CR = """CR-2026-999: Something
+SIMPLE_CR = """US-2026-999: Something
 
 Requested by: Someone
 
@@ -56,8 +56,8 @@ def test_unwraps_hard_wrapped_criterion():
 
 
 def test_stops_at_the_end_of_the_criteria_section():
-    """CR-2026-041 follows its criteria with an explicitly out-of-scope list;
-    pulling those in would invent requirements the CR disclaims."""
+    """US-2026-041 follows its criteria with an explicitly out-of-scope list;
+    pulling those in would invent requirements the user story disclaims."""
     criteria = parse_acceptance_criteria(SIMPLE_CR)
     assert all("different section" not in c.text for c in criteria)
 
@@ -71,16 +71,17 @@ def test_returns_empty_for_a_ticket_with_no_criteria():
     assert parse_acceptance_criteria("Just some free text about a problem.") == []
 
 
-def test_every_demo_cr_states_criteria_including_a_regression_one():
+def test_every_demo_story_states_criteria_including_a_regression_one():
     for target in (
         targets.MOCKAPP_TIER_UPGRADE,
         targets.MOCKAPP_AMENDMENT_FIELD_ADD,
-        targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
+        targets.ENROLDIRECT_PROSPECT_ACCESS,
+        targets.get_target("documenthub-rostered-guest-wording"),
     ):
-        criteria = parse_acceptance_criteria(cr.render_cr("Elite", target=target))
-        assert criteria, f"{target.target_id} CR has no acceptance criteria"
+        criteria = parse_acceptance_criteria(story.render_story("Elite", target=target))
+        assert criteria, f"{target.target_id} user story has no acceptance criteria"
         assert any(c.is_regression for c in criteria), (
-            f"{target.target_id} CR states no regression criterion"
+            f"{target.target_id} user story states no regression criterion"
         )
 
 

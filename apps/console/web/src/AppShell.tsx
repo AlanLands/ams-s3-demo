@@ -137,7 +137,7 @@ export default function AppShell() {
                   </span>
                   <span>
                     Admin
-                    <span className="ams-sidebar-link-desc">Demo control</span>
+                    <span className="ams-sidebar-link-desc">Environment control</span>
                   </span>
                 </NavLink>
               </nav>

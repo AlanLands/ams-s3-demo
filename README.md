@@ -1,11 +1,11 @@
-# AMS S3 Demo
+# AMS S3 — Enhancement Delivery
 
 Standalone build of **S3 (Enhancement Delivery)**, split out of the original
-six-scenario AMS tabletop demo. A small change request on one of "MapleSure
+six-scenario AMS tabletop walkthrough. A small user story on one of "MapleSure
 Insurance"'s group benefits applications moves through one pipeline: AI impact
 analysis → code generation → tests → docs → release notes.
 
-All data in this repo is synthetic. The demo applications belong to a
+All data in this repo is synthetic. The applications belong to a
 fictional insurer, **MapleSure Insurance**, and the domain is group retirement
 and group benefits — a *plan sponsor* holds a group contract, *plan members*
 enrol under it, and a change to an in-force contract is an *amendment*. See
@@ -25,23 +25,26 @@ directory dropped into `repos/` with a `.s3targets.json` manifest registers
 itself as an S3 target at next start, with no code edit; see
 [`repos/README.md`](repos/README.md) for the contract.
 
-Five processes, one launch script each. You do not need all five for every
+Four processes, one launch script each. You do not need all four for every
 beat.
 
 | # | Process | Start | Port | Needed for |
 |---|-------------|-------|------|------------|
 | 1 | **Console** — FastAPI + React. The screen you present from. | `apps/run-console.sh` | 8000 + **5173** | every beat |
-| 2 | **PolicyCore** — the client's plan-administration portal (Streamlit) | `apps/run-policycore.sh` | 8501 (open `/sl_policycore`) | CR-2026-041, CR-2026-042 |
-| 3 | **Policy-Service** — ClaimsPortal contracts side (Python/FastAPI) | `apps/run-policy-service.sh` | 8081 | CR-2026-043 |
-| 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI) | `apps/run-claims-service.sh` | 8082 | CR-2026-043 |
-| 5 | **EnrolDirect** — the online enrolment channel (Python/FastAPI) | `apps/run-enroldirect.sh` | 8083 | CR-2026-045 |
+| 2 | **PolicyCore** — the client's plan-administration portal (Streamlit) | `apps/run-policycore.sh` | 8501 (open `/sl_policycore`) | US-2026-041, US-2026-042 |
+| 3 | **EnrolDirect** — the online enrolment channel (Python/FastAPI) | `apps/run-enroldirect.sh` | 8083 | US-2026-045 |
+| 4 | **DocumentHub** — the enrolment document service (Python/FastAPI) | `apps/run-documenthub.sh` | 8084 | US-2026-046 |
+
+ClaimsPortal (US-2026-043, :8081/:8082) was retired on 2026-08-04; its two
+launch scripts went with it, which is why the numbering skips nothing but the
+port block 8081–8082 is now free.
 
 Open **`http://localhost:5173`** and log in with a name/passcode from
 `common/roster.py` (the scheme is `1001 + roster position`, so the first
 engineer is `1001`).
 
-A manager also gets **`/admin`** — reset demo state, clear logs, start and stop
-processes 2–5, and onboard a repo, without a terminal. See
+A manager also gets **`/admin`** — reset environment state, clear logs, start and stop
+processes 2–4, and onboard a repo, without a terminal. See
 [`apps/README.md`](apps/README.md) for what it can and deliberately cannot do,
 how each application maps to a ServiceNow application, and why the directory
 names must not change.
@@ -64,7 +67,7 @@ pip install -r requirements.txt
 cp .env.example .env                              # then configure a provider
 cd apps/console/web && npm install && cd ../../..
 python -m repos.policycore.core.seed
-python -m pytest -q                               # expect: 679 passed
+python -m pytest -q                               # expect: 728 passed
 ```
 
 ### Pointing it at your own LLM
@@ -85,7 +88,7 @@ miss even in replay mode — run `demo/warm_s3_cache.sh` before presenting.
 
 ## Running
 
-Use the five scripts above. To run the console manually instead:
+Use the four scripts above. To run the console manually instead:
 
 ```bash
 uvicorn apps.console.api.main:app --port 8000     # see the --reload caveat below
@@ -116,18 +119,18 @@ one process, one port, no separate frontend server.
 > glob like `'s3_enhancement/out/*'` silently matches nothing.) Just run
 > without `--reload`; restart by hand when you change backend source.
 
-### Resetting demo state
+### Resetting environment state
 
 The pipeline mutates real files on disk (application source, a SQLite DB,
-cache files). Restore everything to its pre-CR baseline between runs — **in
+cache files). Restore everything to its pre-change baseline between runs — **in
 this order**, because the amendment baseline builds on the database
 `reset_s3.sh` reseeds:
 
 ```bash
-demo/reset_s3.sh               # CR-2026-041 (PolicyCore plan tier) + shared state
-demo/reset_s3_endorsement.sh   # CR-2026-042 (PolicyCore amendment priority)
-demo/reset_s3_claimsportal.sh    # CR-2026-043 (ClaimsPortal)
-demo/reset_s3_enroldirect.sh   # CR-2026-045 (EnrolDirect prospect access)
+demo/reset_s3.sh               # US-2026-041 (PolicyCore plan tier) + shared state
+demo/reset_s3_endorsement.sh   # US-2026-042 (PolicyCore amendment priority)
+demo/reset_s3_enroldirect.sh   # US-2026-045 (EnrolDirect prospect access)
+demo/reset_s3_documenthub.sh   # US-2026-046 (DocumentHub pack wording)
 demo/warm_s3_cache.sh          # ALWAYS last — reset_s3.sh wipes .cache/llm
 ```
 
@@ -138,7 +141,7 @@ demo/warm_s3_cache.sh          # ALWAYS last — reset_s3.sh wipes .cache/llm
 > uncommitted; committing it was the whole fix.) The admin panel checks the
 > same condition up front and reports it as `reset_blocked_reason` rather than
 > running a script that would fail halfway.
-> `reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` restore by copying
+> `reset_s3_enroldirect.sh` and `reset_s3_documenthub.sh` restore by copying
 > from their committed `.baseline/` snapshots, so they never depend on HEAD.
 
 A manager can run the same resets from the console's `/admin` panel, one
@@ -147,24 +150,25 @@ they would overwrite are dirty, and show what they would restore and delete
 first.
 
 `tools/verify_s3_live.py` runs the whole pipeline offline with every live
-provider path deliberately booby-trapped — the pre-demo confidence check.
+provider path deliberately booby-trapped — the pre-session confidence check.
 
 ## Layout
 
 - `repos/` — the target repositories S3 operates on, and the drop folder for
   new ones (see [`repos/README.md`](repos/README.md))
   - `repos/policycore/` — the MapleSure plan-administration portal; S3's first
-    target (CR-2026-041, CR-2026-042). Imported as `repos.policycore.*`
+    target (US-2026-041, US-2026-042). Imported as `repos.policycore.*`
   - `repos/claimsportal/` — S3's second target, "ClaimsPortal" (Python/FastAPI,
-    CR-2026-043). One folder, two services: the CR edits both, so S3
+    US-2026-043). One folder, two services: the story edits both, so S3
     treats it as a single target root
   - `repos/enroldirect/` — S3's third target, "EnrolDirect" (Python/FastAPI,
-    CR-2026-045). Its checked-in state is the pre-CR baseline, which is a
+    US-2026-045). Its checked-in state is the pre-change baseline, which is a
     *removal*: the impact analysis is done and the gate has not yet been
     changed to act on it
-- `crs/` — the change requests. A `.md` dropped in here opens a board ticket
-  automatically, keyed off the CR id (`CR-2026-045` → `AMS-1045`), and lands
-  unassigned so a manager routes it
+- `stories/` — the user stories. A `.md` dropped in here opens a board ticket
+  automatically, keyed off the user story id (`US-2026-045` → `AMS-1045`), and lands
+  in the default engineer's To Do column (`STORY_DEFAULT_ASSIGNEE`; empty
+  leaves it unassigned for a manager to route)
 - `apps/` — the tooling that drives all of the above (see the table and
   `apps/README.md`): `apps/console/api/` + `apps/console/web/` (FastAPI
   backend + React console, including the `/admin` panel) and the launch
@@ -173,12 +177,12 @@ provider path deliberately booby-trapped — the pre-demo confidence check.
   `codegen.py` (code generation, per-file apply/reject/revert),
   `testgen.py`/`testrun.py` (test generation, execution, mutation proof),
   `docgen.py` (design doc + release notes), `targets.py` (the multi-repo /
-  multi-CR registry) with `discovery.py` (manifest auto-registration) and
-  `cr_intake.py` (CR → board ticket), `admin_ops.py` (the admin panel's
+  multi-user story registry) with `discovery.py` (manifest auto-registration) and
+  `story_intake.py` (user story → board ticket), `admin_ops.py` (the admin panel's
   resets, service probes and repo onboarding),
   `applications.py`/`routing.py` (ServiceNow CI → application/team routing),
   `relevance.py` (the file-relevance funnel), `cache/` (committed replay
-  recordings — these make the demo deterministic)
+  recordings — these make the run deterministic)
 - `common/` — LLM provider wrapper (`llm.py`), vector store, Jira/GitLab and
   ServiceNow clients, the login roster (`roster.py`), shared constants,
   telemetry
@@ -191,7 +195,7 @@ provider path deliberately booby-trapped — the pre-demo confidence check.
   human-authored regression suite. The regression suites live here, outside
   every target root, on purpose: anything ending `.py` under a target root
   joins the codegen candidate pool, and the pipeline must never be able to
-  write to the one independent check that a CR broke nothing
+  write to the one independent check that a story broke nothing
 - `docs/` — `design/` (current design notes), `history/` (original
   six-scenario planning docs, background only), plus generated PDFs
 

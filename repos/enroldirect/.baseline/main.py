@@ -237,7 +237,7 @@ def reset_enrolments() -> dict[str, object]:
 
 
 @app.get("/api/analysis/consumers")
-def analysis_consumers() -> list[dict[str, str]]:
+def analysis_consumers() -> list[dict[str, object]]:
     return impact.consumers()
 
 

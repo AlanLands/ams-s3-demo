@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-725"
+  },
+  "response": {
+    "key": "AMS-725",
+    "status": "To Do",
+    "summary": "Update DocumentHub wording for enrolment confirmation packs when prospects are classified as guests",
+    "issue_type": "Task",
+    "assignee": "Ravi Kumar",
+    "description": "DocumentHub uses the authorising preference to word confirmation packs, and the new guest classification for prospects may change the wording."
+  }
+}

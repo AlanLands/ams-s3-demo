@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CR-2026-042 ("Amendment Priority Field") mutates PolicyCore source files.
+# US-2026-042 ("Amendment Priority Field") mutates PolicyCore source files.
 # Restore the pre-codegen PolicyCore files from HEAD (not from the tag — see
 # the note above the checkout below), remove the generated test file, then
 # reseed to restore pristine contract/claim/amendment state.
@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 source .venv/bin/activate
 
 # Step 0 (SCM_MODE=live) can leave the repo on a branch this demo cut for a
-# previous rehearsal's CR (`feature/AMS-nnn-<target>`, see
+# previous rehearsal's user story (`feature/AMS-nnn-<target>`, see
 # scm.branch_name_for). Those never diverge from main — this pass never
 # commits, see s3_enhancement/scm_live.py — so returning to main is safe.
 #
@@ -54,4 +54,4 @@ git checkout HEAD -- \
 rm -f tests/test_s3_amendment_priority.py
 python -m repos.policycore.core.seed
 rm -rf .cache/llm
-echo "CR-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared."
+echo "US-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared."

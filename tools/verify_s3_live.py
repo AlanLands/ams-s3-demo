@@ -5,7 +5,7 @@ Two layers of checks:
 1. **Architecture checks** (no live model needed, run with `--skip-live` too):
    the replay safety net works fully offline, a mid-stream provider failure
    falls back to replay invisibly, one recording replays correctly for any
-   audience-chosen tier name, and `demo/reset_s3.sh` restores the pre-CR
+   audience-chosen tier name, and `demo/reset_s3.sh` restores the pre-user story
    baseline in <10s.
 2. **Live checks**: the narrative drafts (effort estimate / impact analysis /
    release notes) run 5x against the real provider and must be structurally
@@ -18,7 +18,7 @@ replay fallback) and the generated tests run green. The demo-day rule from the
 S3 build plan: codegen must pass live >= 9/10 consecutive runs before demo
 day, otherwise present in LLM_MODE=replay without hesitation.
 
-All tree-mutating checks restore the committed post-CR state before exiting.
+All tree-mutating checks restore the committed post-user story state before exiting.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ from common.llm import LLMError  # noqa: E402
 from s3_enhancement import relevance  # noqa: E402
 from s3_enhancement.analyze import draft_effort_estimate, draft_impact_analysis  # noqa: E402
 from s3_enhancement.codegen import generate_change  # noqa: E402
-from s3_enhancement.cr import render_cr  # noqa: E402
+from s3_enhancement.story import render_story  # noqa: E402
 from s3_enhancement.docgen import draft_release_notes  # noqa: E402
 from s3_enhancement.harness import HarnessError, run_harness  # noqa: E402
 from s3_enhancement.testgen import generate_tests  # noqa: E402
@@ -64,7 +64,7 @@ _MIN_LENGTH = 40
 
 @dataclass
 class VerificationState:
-    cr_text: str = render_cr("Elite")
+    story_text: str = render_story("Elite")
 
 
 # --- helpers for the architecture checks -------------------------------------
@@ -82,7 +82,7 @@ def _git_show(ref_path: str, target: Path) -> None:
 
 
 def _restore_baseline() -> None:
-    """Put mockapp back in the pre-CR state (same file set as demo/reset_s3.sh),
+    """Put mockapp back in the pre-user story state (same file set as demo/reset_s3.sh),
     without wiping the shared LLM cache the way the reset script does."""
     for rel in _BASELINE_FILES:
         _git_show(f"s3-baseline:{rel}", REPO_ROOT / rel)
@@ -176,9 +176,9 @@ def _env(name: str, value: str) -> Iterator[None]:
 def _run_full_generation(tier_name: str) -> tuple[bool, bool]:
     """Run codegen + testgen for `tier_name` against the current LLM_MODE.
     Returns (codegen_used_replay, testgen_used_replay); raises on hard failure."""
-    cr_text = render_cr(tier_name)
-    change = generate_change(tier_name, cr_text)
-    tests = generate_tests(tier_name, cr_text)
+    story_text = render_story(tier_name)
+    change = generate_change(tier_name, story_text)
+    tests = generate_tests(tier_name, story_text)
     return change.used_replay, tests.used_replay
 
 
@@ -243,7 +243,7 @@ def check_two_tier_names_replay(state: VerificationState) -> str:
 
 
 def check_reset_speed(state: VerificationState) -> str:
-    """Acceptance check #4: reset_s3.sh restores the pre-CR app in <10s."""
+    """Acceptance check #4: reset_s3.sh restores the pre-user story app in <10s."""
     t0 = time.monotonic()
     result = subprocess.run(
         ["bash", "demo/reset_s3.sh"], cwd=REPO_ROOT, capture_output=True, text=True
@@ -264,35 +264,35 @@ def check_reset_speed(state: VerificationState) -> str:
 def check_core_recall_never_drops(state: VerificationState) -> str:
     all_files = relevance.discover_mockapp_files()
     for tier in ("Elite", "Titanium", "Aurora"):
-        selection = relevance.select_relevant_files(render_cr(tier), all_files)
+        selection = relevance.select_relevant_files(render_story(tier), all_files)
         if not set(relevance.CORE_FILES) <= set(selection.selected):
             missing = set(relevance.CORE_FILES) - set(selection.selected)
             raise AssertionError(f"{tier}: selected scope dropped core files {sorted(missing)}")
-    return "core S3 files retained across Elite, Titanium, and Aurora CR variants"
+    return "core S3 files retained across Elite, Titanium, and Aurora user story variants"
 
 
 def check_decoys_never_selected(state: VerificationState) -> str:
-    selection = relevance.select_relevant_files(state.cr_text, relevance.discover_mockapp_files())
+    selection = relevance.select_relevant_files(state.story_text, relevance.discover_mockapp_files())
     selected_decoys = [
         path
         for path in (*selection.selected, *selection.extra_files)
         if path.startswith("repos/policycore/systems/")
     ]
     if selected_decoys:
-        raise AssertionError(f"decoy files selected for canonical CR: {selected_decoys}")
-    return "canonical CR selected no repos/policycore/systems decoys"
+        raise AssertionError(f"decoy files selected for canonical user story: {selected_decoys}")
+    return "canonical user story selected no repos/policycore/systems decoys"
 
 
 def check_design_doc_gate_screens_all_legacy_subsystems(state: VerificationState) -> str:
     """The demo claims the AI reads subsystem design docs first, before ever
     opening a Java file — this proves that gate actually screens out every
-    legacy subsystem for the canonical CR across all three tier-name variants,
+    legacy subsystem for the canonical user story across all three tier-name variants,
     not just that individual files end up unselected downstream."""
     docs = relevance.discover_subsystem_design_docs()
     if not docs:
         raise AssertionError("no repos/policycore/systems/*/DESIGN.md docs found")
     for tier in ("Elite", "Titanium", "Aurora"):
-        screen = relevance.screen_subsystems(render_cr(tier), docs)
+        screen = relevance.screen_subsystems(render_story(tier), docs)
         if screen.in_scope:
             raise AssertionError(f"{tier}: design-doc gate let subsystems through: "
                                   f"{screen.in_scope}")
@@ -385,7 +385,7 @@ def _has_two_distinguishable_parts(text: str) -> bool:
 def check_effort_estimate(state: VerificationState) -> str:
     def trial_fn() -> None:
         try:
-            estimate = draft_effort_estimate(state.cr_text)
+            estimate = draft_effort_estimate(state.story_text)
         except LLMError as exc:
             raise AssertionError(f"effort estimate: LLMError: {exc}") from exc
         if not estimate.hours_class.strip():
@@ -405,7 +405,7 @@ def check_effort_estimate(state: VerificationState) -> str:
 def check_impact_analysis(state: VerificationState) -> str:
     def trial_fn() -> None:
         try:
-            text = draft_impact_analysis(state.cr_text)
+            text = draft_impact_analysis(state.story_text)
         except LLMError as exc:
             raise AssertionError(f"impact analysis: LLMError: {exc}") from exc
         _assert_structurally_sound(text, "impact analysis")
@@ -419,7 +419,7 @@ def check_impact_analysis(state: VerificationState) -> str:
 def check_release_notes(state: VerificationState) -> str:
     def trial_fn() -> None:
         try:
-            text = draft_release_notes(state.cr_text)
+            text = draft_release_notes(state.story_text)
         except LLMError as exc:
             raise AssertionError(f"release notes: LLMError: {exc}") from exc
         _assert_structurally_sound(text, "release notes")
@@ -438,16 +438,16 @@ def check_release_notes(state: VerificationState) -> str:
 def check_cache_hit_on_rerun(state: VerificationState) -> str:
     before_first = snapshot_cache()
     first_start = time.monotonic()
-    draft_effort_estimate(state.cr_text)
-    draft_impact_analysis(state.cr_text)
-    draft_release_notes(state.cr_text)
+    draft_effort_estimate(state.story_text)
+    draft_impact_analysis(state.story_text)
+    draft_release_notes(state.story_text)
     first_elapsed = time.monotonic() - first_start
     after_first = snapshot_cache()
 
     second_start = time.monotonic()
-    draft_effort_estimate(state.cr_text)
-    draft_impact_analysis(state.cr_text)
-    draft_release_notes(state.cr_text)
+    draft_effort_estimate(state.story_text)
+    draft_impact_analysis(state.story_text)
+    draft_release_notes(state.story_text)
     second_elapsed = time.monotonic() - second_start
     after_second = snapshot_cache()
 

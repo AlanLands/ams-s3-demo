@@ -50,8 +50,8 @@ CHROME_CANDIDATES = [
 
 COVER = """<header class="cover">
   <div class="kicker">MapleSure Insurance · AMS Console</div>
-  <h1>S3 Demo — Run Steps</h1>
-  <p class="subtitle">Standing the demo up from a clean checkout, in any sandbox</p>
+  <h1>S3 — Run Steps</h1>
+  <p class="subtitle">Standing the applications up from a clean checkout, in any sandbox</p>
   <p class="meta">
     Generated from <span class="mono">demo/DEMO_STEPS.md</span> ·
     repo <span class="mono">ams-s3-demo</span><br>
@@ -124,7 +124,7 @@ def style_checklist(html: str) -> str:
     if "[ ]" not in html:
         return html
     html = html.replace("<li>[ ] ", "<li>")
-    # Only the pre-demo checklist uses task syntax, so tag the list that
+    # Only the pre-session checklist uses task syntax, so tag the list that
     # contained it rather than every <ul> on the page.
     return re.sub(
         r"<ul>(\s*<li>(?:(?!</ul>).)*?You have walked beats.*?)</ul>",
@@ -151,7 +151,7 @@ def main() -> int:
 
     html = (
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
-        "<title>AMS S3 — Demo Run Steps</title>\n"
+        "<title>AMS S3 — Run Steps</title>\n"
         f"{read_stylesheet()}\n</head>\n<body>\n\n{COVER}\n{body}\n</body>\n</html>\n"
     )
     OUT_HTML.write_text(html, encoding="utf-8")

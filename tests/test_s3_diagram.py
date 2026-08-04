@@ -22,8 +22,13 @@ from s3_enhancement.diagram import (
     caption_for,
     render_svg,
 )
+from tests.multiservice_fixture import TWO_SERVICE
 
-SPRING = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
+
+# Was the ClaimsPortal target until it was removed on 2026-08-04; now a
+# synthetic stand-in so the multi-service behaviour stays covered.
+# See tests/multiservice_fixture.py.
+SPRING = TWO_SERVICE
 POLICYCORE = targets.MOCKAPP_AMENDMENT_FIELD_ADD
 
 
@@ -37,15 +42,19 @@ def test_layers_files_by_convention():
 
 
 def test_python_records_land_in_the_data_layer():
-    """policy.py and claim.py are field-only pydantic models with no suffix
-    that says "data" — without the explicit list they would fall through to
-    Logic."""
-    change_map = build_change_map(SPRING)
-    by_path = {node.rel_path: node.layer for node in change_map.nodes}
-    assert by_path["repos/claimsportal/policy_service/policy.py"] == "Data"
-    assert by_path["repos/claimsportal/claims_service/claim.py"] == "Data"
-    assert by_path["repos/claimsportal/claims_service/main.py"] == "Interface"
-    assert by_path["repos/claimsportal/claims_service/claim_rules.py"] == "Logic"
+    """A module of field-only dataclasses is its service's data shape.
+
+    It has no suffix saying so — `feed.py` and `directory.py` would both fall
+    through to Logic on the `.py` rule — which is what `_DATA_RECORDS` exists
+    to correct. Asserted against real estate paths rather than the synthetic
+    fixture, because the list names real files and a test that supplied its own
+    names would pass no matter how stale the list got.
+    """
+    assert diagram._layer_for("repos/documenthub/feed.py") == "Data"
+    assert diagram._layer_for("repos/enroldirect/directory.py") == "Data"
+    # The rules the explicit list has to override, still working.
+    assert diagram._layer_for("repos/documenthub/main.py") == "Interface"
+    assert diagram._layer_for("repos/documenthub/wording.py") == "Logic"
 
 
 def test_single_service_target_is_one_column():
@@ -53,15 +62,15 @@ def test_single_service_target_is_one_column():
 
 
 def test_two_service_target_splits_by_python_package():
-    """repos/claimsportal is one target root holding two deployables; the
-    diagram has to show them apart or the change looks like one service."""
-    assert set(build_change_map(SPRING).services) == {"claims_service", "policy_service"}
+    """One target root holding two deployables; the diagram has to show them
+    apart or the change looks like one service."""
+    assert set(build_change_map(SPRING).services) == {"orders_service", "ledger_service"}
 
 
 def test_cross_service_call_points_from_caller_to_callee():
-    """policy_client.py in claims_service calls policy_service. Drawn
+    """ledger_client.py in orders_service calls ledger_service. Drawn
     backwards it would tell QA to test the dependency the wrong way round."""
-    assert build_change_map(SPRING).crossings == [("claims_service", "policy_service")]
+    assert build_change_map(SPRING).crossings == [("orders_service", "ledger_service")]
 
 
 def test_no_crossing_claimed_for_a_single_service():
@@ -69,19 +78,22 @@ def test_no_crossing_claimed_for_a_single_service():
 
 
 def test_new_files_are_badged_and_existing_ones_are_not():
-    """claim_rules.py does not exist until CR-2026-043 creates it. Fakes git
-    so the assertion doesn't depend on whether this checkout has committed
-    the rewritten target's baseline files yet."""
+    """A path in the allowlist that HEAD has never seen is badged as new.
+
+    Fakes git rather than touching the filesystem, so the assertion does not
+    depend on what this checkout happens to have committed — which is the
+    whole point, since the fixture's paths describe a repository that does not
+    exist at all."""
 
     def fake_run(cmd, **kwargs):
         rel_path = cmd[-1].split(":", 1)[1]
-        return SimpleNamespace(returncode=1 if rel_path.endswith("claim_rules.py") else 0)
+        return SimpleNamespace(returncode=1 if rel_path.endswith("order_rules.py") else 0)
 
     with patch.object(diagram.subprocess, "run", side_effect=fake_run):
         change_map = build_change_map(SPRING)
     by_path = {node.rel_path: node.is_new for node in change_map.nodes}
-    assert by_path["repos/claimsportal/claims_service/claim_rules.py"] is True
-    assert by_path["repos/claimsportal/claims_service/main.py"] is False
+    assert by_path["repos/twoservice/orders_service/order_rules.py"] is True
+    assert by_path["repos/twoservice/orders_service/main.py"] is False
 
 
 def test_new_file_detection_degrades_to_modified_without_git():
@@ -145,10 +157,10 @@ def test_parses_the_shapes_the_model_actually_emits():
 
 def test_document_html_carries_letterhead_and_metadata():
     html = render_document_html(
-        SAMPLE_DOC, cr_label="CR-2026-042", ticket_key="AMS-102", today=date(2026, 7, 29)
+        SAMPLE_DOC, story_label="US-2026-042", ticket_key="AMS-102", today=date(2026, 7, 29)
     )
     assert "MapleSure Insurance" in html
-    assert "CR-2026-042" in html and "AMS-102" in html
+    assert "US-2026-042" in html and "AMS-102" in html
     assert "29 July 2026" in html
     assert "<strong>Backward compatibility</strong>" in html
 
@@ -159,7 +171,7 @@ def test_document_html_embeds_the_diagram_with_its_provenance():
     svg, change_map = build_svg(POLICYCORE)
     html = render_document_html(
         SAMPLE_DOC,
-        cr_label="CR",
+        story_label="user story",
         ticket_key="AMS-102",
         diagram_svg=svg,
         diagram_caption=caption_for(change_map),
@@ -180,13 +192,13 @@ def test_caption_only_claims_what_the_diagram_shows():
 
 
 def test_document_html_omits_the_figure_when_no_diagram_is_given():
-    html = render_document_html(SAMPLE_DOC, cr_label="CR", ticket_key="AMS-102")
+    html = render_document_html(SAMPLE_DOC, story_label="user story", ticket_key="AMS-102")
     assert "<figure>" not in html
 
 
 def test_document_html_escapes_the_model_text():
     html = render_document_html(
-        "<script>alert(1)</script>", cr_label="CR", ticket_key="AMS-102"
+        "<script>alert(1)</script>", story_label="user story", ticket_key="AMS-102"
     )
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html

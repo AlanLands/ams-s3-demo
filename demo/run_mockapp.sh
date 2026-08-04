@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Serves the MapleSure PolicyCore portal itself — the "client's app" window
-# for both PolicyCore CR beats: CR-2026-041 "Plan Tier Upgrade Option" and
-# CR-2026-042 "Amendment Priority Field" (the "Request a Contract Amendment"
+# for both PolicyCore user story beats: US-2026-041 "Plan Tier Upgrade Option" and
+# US-2026-042 "Amendment Priority Field" (the "Request a Contract Amendment"
 # form the AI adds a 6th field, Priority, to; it has 5 at baseline).
 #
 # Same job as apps/run-policycore.sh — either launcher works. Formerly

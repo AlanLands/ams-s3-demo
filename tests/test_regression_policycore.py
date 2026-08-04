@@ -2,7 +2,7 @@
 
 This file is **not** generated. It is checked in, it predates every S3 change
 request, and no target's `testgen_allowlist` names it — the AI can neither
-write it nor overwrite it. That is the entire point: every CR in this console
+write it nor overwrite it. That is the entire point: every user story in this console
 ends with an acceptance criterion of the form
 
     "Existing contract list, contract detail, plan-member roster, claim
@@ -14,9 +14,9 @@ survived it.
 
 Two rules for anything added here:
 
-1. **It must pass before and after every CR.** These are invariants, not
+1. **It must pass before and after every user story.** These are invariants, not
    assertions about the change under test. A test that only passes on the
-   pre-CR baseline is a broken regression test, not a caught regression.
+   pre-user story baseline is a broken regression test, not a caught regression.
 2. **It must not live under a target root.** `relevance.py::discover_mockapp_files`
    rglobs `*.py`/`*.java` under each target's root, so a file placed under
    `repos/policycore/` would join the codegen candidate pool, reshuffle the
@@ -24,7 +24,7 @@ Two rules for anything added here:
    `tests/` is outside every target root — keep it that way.
 
 Deliberately excluded: anything touching `plan_tier` upgrades
-(CR-2026-041) or amendment `priority` (CR-2026-042). Those are the changes
+(US-2026-041) or amendment `priority` (US-2026-042). Those are the changes
 under test, and they belong in the generated suites.
 """
 
@@ -178,9 +178,9 @@ def test_claim_list_totals_match_the_seed() -> None:
 
 
 def test_amendment_submission_with_the_original_field_set_still_succeeds() -> None:
-    """CR-2026-042 adds a sixth form field with a default. This call uses the
-    pre-CR argument list verbatim and must keep working untouched — it is the
-    executable form of that CR's "submitting without changing the priority
+    """US-2026-042 adds a sixth form field with a default. This call uses the
+    pre-user story argument list verbatim and must keep working untouched — it is the
+    executable form of that user story's "submitting without changing the priority
     still succeeds exactly as before" criterion."""
     amendment = submit_amendment(
         KNOWN_POLICY,

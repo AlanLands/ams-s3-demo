@@ -11,7 +11,7 @@ import type { ScmResponse, ScmState } from './api_s3'
  * contacts nothing, and every state carries `simulated: true`. That is a
  * deliberate constraint, not an unfinished feature: the target apps live inside
  * this repo and the demo reset scripts restore their baseline from HEAD, so a
- * real commit would make the resets start restoring the CR instead. The banner
+ * real commit would make the resets start restoring the user story instead. The banner
  * below says so on screen, and the release record repeats it under "Not
  * evidenced by this release". See s3_enhancement/scm.py.
  */
@@ -85,6 +85,7 @@ export function ScmPanel({
   detail,
   onCommit,
   onPush,
+  readOnly = false,
 }: {
   state: ScmState
   blockers: string[]
@@ -95,6 +96,12 @@ export function ScmPanel({
   detail: string | null
   onCommit: () => void
   onPush: () => void
+  // The engineer sees this panel on their own stage so the branch they cut
+  // and the files they applied are visible, but commit is gated on a test
+  // run they do not perform — the action belongs to whoever can open that
+  // gate. Read-only shows the same flow without offering a button that
+  // cannot be unblocked from here.
+  readOnly?: boolean
 }) {
   const gateOpen = blockers.length === 0
   const canCommit = state.commit === null && state.staged_files.length > 0 && !state.abandoned_at
@@ -158,8 +165,15 @@ export function ScmPanel({
         </p>
       )}
 
+      {readOnly && (canCommit || canPush) && (
+        <p className="ams-scm-detail">
+          Commit and push sit with QA — the gate is the test run, so it opens on
+          the tester's stage.
+        </p>
+      )}
+
       <div className="ams-scm-actions">
-        {canCommit && (
+        {!readOnly && canCommit && (
           <button
             className="ams-button"
             onClick={onCommit}
@@ -169,7 +183,7 @@ export function ScmPanel({
             {committing ? 'Committing…' : 'Commit to branch'}
           </button>
         )}
-        {canPush && (
+        {!readOnly && canPush && (
           <button className="ams-button" onClick={onPush} disabled={pushing}>
             {pushing ? 'Pushing…' : 'Push and trigger pipeline'}
           </button>

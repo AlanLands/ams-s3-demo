@@ -15,13 +15,13 @@ BILLING = "repos/policycore/systems/legacy_platform/billing"
 
 
 def test_demo_crs_touch_no_documented_subsystem() -> None:
-    """The load-bearing safety property: all three demo CRs change files that
+    """The load-bearing safety property: all three demo user stories change files that
     live outside every DESIGN.md-bearing directory, so the feature is a silent
     no-op on stage and never makes a provider call during a demo."""
     for applied in (
         ["repos/policycore/core/models.py", "repos/policycore/core/db.py", "repos/policycore/core/tiers.py"],
         ["repos/policycore/app.py", "repos/policycore/core/amendments.py"],
-        ["repos/claimsportal/claims-service/src/main/java/com/maplesure/claims/ClaimRules.java"],
+        ["repos/documenthub/wording.py"],
     ):
         assert design_sync.find_affected_subsystems(applied) == ()
 

@@ -8,18 +8,18 @@ below for what shipped and what deliberately did not.
 ## The gap
 
 Stage-1 subsystem screening (`s3_enhancement/relevance.py::screen_subsystems`)
-scores each subsystem's `DESIGN.md` "## Scope keywords" section against the CR
+scores each subsystem's `DESIGN.md` "## Scope keywords" section against the user story
 text. Those docs decide which subsystems are even *opened*.
 
 **Nothing in the codebase ever writes a `DESIGN.md`.** Verified 2026-07-27:
 every reference is a read (`rglob`, `read_text`,
 `discover_subsystem_design_docs`). `apply` writes only the proposal's own
-files. The `/s3/design-doc` beat drafts a *design document for the CR* as a
+files. The `/s3/design-doc` beat drafts a *design document for the user story* as a
 downloadable deliverable — it does not update the subsystem docs that drive
 screening.
 
-So: code changes on every CR, the docs that gate retrieval never do. Over many
-CRs the declared scope drifts from what the subsystem actually contains, and
+So: code changes on every user story, the docs that gate retrieval never do. Over many
+user stories the declared scope drifts from what the subsystem actually contains, and
 the gate quietly decays.
 
 ## Why it matters more than it looks
@@ -37,7 +37,7 @@ There is currently no recall check at the subsystem level at all.
 ## Scope note — why this is not a demo problem
 
 In today's corpus, `DESIGN.md` files exist **only** for the six decoy
-`repos/policycore/systems/legacy_platform/*` subsystems. All three demo CRs change
+`repos/policycore/systems/legacy_platform/*` subsystems. All three demo user stories change
 code in `repos/policycore/core/` and `repos/claimsportal/`, neither of which sits under
 a documented subsystem. Nothing would need updating on stage. The gap is real
 in production, moot in the demo.
@@ -54,7 +54,7 @@ Add a step that treats the design doc as part of the change surface:
    or rejects it like any other file.
 3. Minimum viable version if step 2 is too much: surface a staleness warning
    when an applied change touches files under a subsystem whose `DESIGN.md`
-   has not been modified in N CRs.
+   has not been modified in N user stories.
 
 ## As built
 
@@ -75,7 +75,7 @@ mechanism exists.
 arithmetic — no file reads, no provider call — and returns empty unless an
 applied file sits under a `DESIGN.md`-bearing directory. Only then does
 `review_design_doc()` ask the model whether the doc survived the change. A
-test asserts all three demo CRs produce zero impacts, so the feature makes no
+test asserts all three demo user stories produce zero impacts, so the feature makes no
 provider call at all during a demo.
 
 **Fails soft, by requirement.** It runs straight after Apply, the most
@@ -98,7 +98,7 @@ forever.
 
 - **No committed replay recording.** This beat has never been recorded, so the
   first live invocation makes a real provider call. Harmless today because no
-  demo CR reaches it — but it means the feature is **unexercised on stage** and
+  demo user story reaches it — but it means the feature is **unexercised on stage** and
   should not be demoed without recording it first.
 - **No staleness-warning fallback** (step 3 of the original sketch). The full
   review supersedes it; revisit only if provider cost becomes a concern.
@@ -109,7 +109,7 @@ forever.
 ### Worth knowing before extending it
 
 The UI path is genuinely untested against a real end-to-end run, because no
-current CR touches a documented subsystem. To exercise it you would need a CR
+current user story touches a documented subsystem. To exercise it you would need a user story
 that changes a file under `repos/policycore/systems/legacy_platform/*` — all of
 which are decoys today.
 

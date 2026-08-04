@@ -17,8 +17,8 @@ from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError
 from common.llm import LLMError
 from common.roster import PASSCODE_BY_NAME
-from common.ticket_events import record_event
-from s3_enhancement import cr_intake, scm
+from common.ticket_events import events_for, record_event
+from s3_enhancement import story_intake, scm
 from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS
 from s3_enhancement.target_match import TargetMatch
 
@@ -48,9 +48,9 @@ def _client() -> TestClient:
     return client
 
 
-def test_cr_401s_without_login():
+def test_story_401s_without_login():
     client = TestClient(app)
-    assert client.get("/api/s3/cr").status_code == 401
+    assert client.get("/api/s3/story").status_code == 401
 
 
 def test_reset_marker_401s_without_login():
@@ -79,7 +79,7 @@ def test_analyze_401s_without_login():
 
 def test_analyze_adhoc_401s_without_login():
     client = TestClient(app)
-    response = client.post("/api/s3/analyze-adhoc", json={"cr_text": "Some ticket text"})
+    response = client.post("/api/s3/analyze-adhoc", json={"story_text": "Some ticket text"})
     assert response.status_code == 401
 
 
@@ -140,68 +140,68 @@ def test_gitlab_scope_401s_without_login():
 
 def test_target_resolve_401s_without_login():
     client = TestClient(app)
-    response = client.post("/api/s3/target/resolve", json={"cr_text": "some CR text"})
+    response = client.post("/api/s3/target/resolve", json={"story_text": "some user story text"})
     assert response.status_code == 401
 
 
-def test_target_resolve_rejects_empty_cr_text():
+def test_target_resolve_rejects_empty_story_text():
     client = _client()
-    response = client.post("/api/s3/target/resolve", json={"cr_text": "   "})
+    response = client.post("/api/s3/target/resolve", json={"story_text": "   "})
     assert response.status_code == 422
 
 
-def test_target_resolve_matches_pinned_cr_by_id_with_no_target_id_needed():
-    """The whole point: the caller sends the CR text of an already-registered
+def test_target_resolve_matches_pinned_story_by_id_with_no_target_id_needed():
+    """The whole point: the caller sends the user story text of an already-registered
     target and gets its target_id back -- no ticket-key table involved."""
     from s3_enhancement import targets
 
-    target = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
-    cr_text = target.cr_template_path.read_text(encoding="utf-8")
+    target = targets.ENROLDIRECT_PROSPECT_ACCESS
+    story_text = target.story_template_path.read_text(encoding="utf-8")
 
     client = _client()
-    response = client.post("/api/s3/target/resolve", json={"cr_text": cr_text})
+    response = client.post("/api/s3/target/resolve", json={"story_text": story_text})
     assert response.status_code == 200
     body = response.json()
-    assert body["method"] == "cr_id"
+    assert body["method"] == "story_id"
     assert body["resolved"] is True
     assert body["target_id"] == target.target_id
     assert body["needs_confirmation"] is False
 
 
-def test_target_resolve_by_cr_file_reads_from_crs_directory():
+def test_target_resolve_by_story_file_reads_from_crs_directory():
     client = _client()
-    response = client.post("/api/s3/target/resolve", json={"cr_file": "CR-2026-041.md"})
+    response = client.post("/api/s3/target/resolve", json={"story_file": "US-2026-041.md"})
     assert response.status_code == 200
     body = response.json()
-    assert body["method"] == "cr_id"
+    assert body["method"] == "story_id"
     assert body["target_id"] == "mockapp-coverage-upgrade"
 
 
-def test_target_resolve_rejects_both_cr_file_and_cr_text():
+def test_target_resolve_rejects_both_story_file_and_story_text():
     client = _client()
     response = client.post(
-        "/api/s3/target/resolve", json={"cr_file": "CR-2026-041.md", "cr_text": "x"}
+        "/api/s3/target/resolve", json={"story_file": "US-2026-041.md", "story_text": "x"}
     )
     assert response.status_code == 422
 
 
-def test_target_resolve_rejects_neither_cr_file_nor_cr_text():
+def test_target_resolve_rejects_neither_story_file_nor_story_text():
     client = _client()
     response = client.post("/api/s3/target/resolve", json={})
     assert response.status_code == 422
 
 
-def test_target_resolve_rejects_cr_file_with_path_components():
+def test_target_resolve_rejects_story_file_with_path_components():
     client = _client()
     response = client.post(
-        "/api/s3/target/resolve", json={"cr_file": "../CLAUDE.md"}
+        "/api/s3/target/resolve", json={"story_file": "../CLAUDE.md"}
     )
     assert response.status_code == 422
 
 
-def test_target_resolve_404s_on_unknown_cr_file():
+def test_target_resolve_404s_on_unknown_story_file():
     client = _client()
-    response = client.post("/api/s3/target/resolve", json={"cr_file": "CR-2026-000.md"})
+    response = client.post("/api/s3/target/resolve", json={"story_file": "US-2026-000.md"})
     assert response.status_code == 404
 
 
@@ -209,13 +209,13 @@ def test_target_resolve_records_ticket_event_when_ticket_number_given():
     from s3_enhancement import targets
 
     target = targets.MOCKAPP_AMENDMENT_FIELD_ADD
-    cr_text = target.cr_template_path.read_text(encoding="utf-8")
+    story_text = target.story_template_path.read_text(encoding="utf-8")
 
     client = _client()
     with patch("apps.console.api.routers.s3.record_event") as record:
         response = client.post(
             "/api/s3/target/resolve",
-            json={"cr_text": cr_text, "ticket_number": "AMS-102"},
+            json={"story_text": story_text, "ticket_number": "AMS-102"},
         )
     assert response.status_code == 200
     record.assert_called_once()
@@ -229,21 +229,21 @@ def test_gitlab_scope_auto_401s_without_login():
     assert response.status_code == 401
 
 
-def test_cr_valid_tier_returns_rendered_change_request():
+def test_story_valid_tier_returns_rendered_change_request():
     client = _client()
 
-    response = client.get("/api/s3/cr", params={"tier_name": "Elite"})
+    response = client.get("/api/s3/story", params={"tier_name": "Elite"})
 
     assert response.status_code == 200
     body = response.json()
     assert body["tier_name"] == "Elite"
-    assert "Elite" in body["cr_text"]
+    assert "Elite" in body["story_text"]
 
 
-def test_cr_invalid_tier_returns_422():
+def test_story_invalid_tier_returns_422():
     client = _client()
 
-    response = client.get("/api/s3/cr", params={"tier_name": "client/tier"})
+    response = client.get("/api/s3/story", params={"tier_name": "client/tier"})
 
     assert response.status_code == 422
 
@@ -265,6 +265,12 @@ def test_analyze_returns_impact_effort_and_file_selection():
                     "reasoning": "Small scoped change across policy and UI files.",
                 }
             )
+        # /analyze now also runs the cross-team check itself rather than
+        # leaving it behind a button (2026-08-03 walkthrough), so its prompt
+        # arrives here too. Answer it with "nobody else affected" — this test
+        # is about the analysis payload, and the cross-team list has its own.
+        if "suggested_summary" in prompt or "other application teams" in prompt.lower():
+            return json.dumps({"impacts": []})
         assert "impact analysis" in prompt.lower()
         # No assumptions: a draft that declares one is withheld and asked
         # about instead of returned (test_analyze_asks_about_the_drafts_own_
@@ -404,7 +410,7 @@ def _analyze_stub(assumptions: list[str]):
 
 def test_analyze_asks_about_the_drafts_own_assumptions():
     """The gap check runs before the analysis and can only guess at what the
-    model will have to assume; it regularly passes a CR the draft then makes
+    model will have to assume; it regularly passes a user story the draft then makes
     an assumption about anyway. When that happens the draft is withheld and
     the assumption asked about, rather than shipped in an "assumptions the AI
     made" box the engineer never got a say in."""
@@ -514,7 +520,7 @@ def test_analyze_adhoc_asks_about_the_drafts_own_assumptions():
     ):
         response = client.post(
             "/api/s3/analyze-adhoc",
-            json={"cr_text": "BillingGateway needs to handle recalculated contributions."},
+            json={"story_text": "BillingGateway needs to handle recalculated contributions."},
         )
 
     body = response.json()
@@ -594,7 +600,7 @@ def test_analyze_adhoc_returns_impact_and_effort_without_file_selection(tmp_path
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={
-                "cr_text": "BillingGateway needs to handle recalculated contributions.",
+                "story_text": "BillingGateway needs to handle recalculated contributions.",
                 "ticket_number": "AMS-132",
             },
         )
@@ -612,7 +618,7 @@ def test_analyze_adhoc_returns_impact_and_effort_without_file_selection(tmp_path
 def test_analyze_adhoc_empty_text_returns_422():
     client = _client()
 
-    response = client.post("/api/s3/analyze-adhoc", json={"cr_text": "   "})
+    response = client.post("/api/s3/analyze-adhoc", json={"story_text": "   "})
 
     assert response.status_code == 422
 
@@ -621,7 +627,7 @@ def test_analyze_adhoc_llm_error_returns_502():
     client = _client()
 
     with patch("s3_enhancement.analyze.complete", side_effect=LLMError("boom")):
-        response = client.post("/api/s3/analyze-adhoc", json={"cr_text": "Some ticket text"})
+        response = client.post("/api/s3/analyze-adhoc", json={"story_text": "Some ticket text"})
 
     assert response.status_code == 502
     assert response.json()["detail"] == "boom"
@@ -632,7 +638,7 @@ def test_analyze_adhoc_asks_a_clarifying_question_for_a_vague_ticket():
     canned = json.dumps({"needs_clarification": True, "question": "Which app is this for?"})
 
     with patch("s3_enhancement.analyze.complete", return_value=canned):
-        response = client.post("/api/s3/analyze-adhoc", json={"cr_text": "fix the thing"})
+        response = client.post("/api/s3/analyze-adhoc", json={"story_text": "fix the thing"})
 
     assert response.status_code == 200
     body = response.json()
@@ -642,7 +648,7 @@ def test_analyze_adhoc_asks_a_clarifying_question_for_a_vague_ticket():
 
 
 def test_analyze_adhoc_asks_about_a_gap_once_text_clarity_passes():
-    """check_cr_clarity (overall vagueness) and check_cr_gaps (a specific
+    """check_story_clarity (overall vagueness) and check_story_gaps (a specific
     missing detail) are two independent gates sharing one history/turn
     budget — a ticket specific enough to pass the first can still trigger
     the second."""
@@ -662,7 +668,7 @@ def test_analyze_adhoc_asks_about_a_gap_once_text_clarity_passes():
     with patch("s3_enhancement.analyze.complete", side_effect=complete_side_effect):
         response = client.post(
             "/api/s3/analyze-adhoc",
-            json={"cr_text": "Apply a loyalty discount to renewal contributions."},
+            json={"story_text": "Apply a loyalty discount to renewal contributions."},
         )
 
     assert response.status_code == 200
@@ -672,7 +678,7 @@ def test_analyze_adhoc_asks_about_a_gap_once_text_clarity_passes():
 
 
 def test_analyze_adhoc_second_call_answers_the_clarifying_question():
-    """The follow-up call's `cr_text` carries the engineer's answer, not the
+    """The follow-up call's `story_text` carries the engineer's answer, not the
     original ticket text again — same "latest message" semantics as
     /chat/quick-impact — and the accumulated transcript is kept server-side
     in the login session, not resent by the client."""
@@ -680,13 +686,13 @@ def test_analyze_adhoc_second_call_answers_the_clarifying_question():
     vague = json.dumps({"needs_clarification": True, "question": "Which app is this for?"})
 
     with patch("s3_enhancement.analyze.complete", return_value=vague):
-        first = client.post("/api/s3/analyze-adhoc", json={"cr_text": "fix the thing"})
+        first = client.post("/api/s3/analyze-adhoc", json={"story_text": "fix the thing"})
     assert first.json()["needs_clarification"] is True
 
     with patch(
         "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
     ) as mock_complete:
-        second = client.post("/api/s3/analyze-adhoc", json={"cr_text": "the billing gateway"})
+        second = client.post("/api/s3/analyze-adhoc", json={"story_text": "the billing gateway"})
 
     assert second.status_code == 200
     assert second.json()["needs_clarification"] is False
@@ -700,7 +706,7 @@ def test_analyze_adhoc_reset_clarification_clears_history():
     vague = json.dumps({"needs_clarification": True, "question": "Which app is this for?"})
 
     with patch("s3_enhancement.analyze.complete", return_value=vague):
-        client.post("/api/s3/analyze-adhoc", json={"cr_text": "fix the thing"})
+        client.post("/api/s3/analyze-adhoc", json={"story_text": "fix the thing"})
 
     with patch(
         "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
@@ -708,7 +714,7 @@ def test_analyze_adhoc_reset_clarification_clears_history():
         response = client.post(
             "/api/s3/analyze-adhoc",
             json={
-                "cr_text": "BillingGateway needs to handle recalculated contributions.",
+                "story_text": "BillingGateway needs to handle recalculated contributions.",
                 "reset_clarification": True,
             },
         )
@@ -728,13 +734,13 @@ def test_analyze_adhoc_final_analysis_uses_full_accumulated_text():
     vague = json.dumps({"needs_clarification": True, "question": "Which app is this for?"})
 
     with patch("s3_enhancement.analyze.complete", return_value=vague):
-        client.post("/api/s3/analyze-adhoc", json={"cr_text": "fix the thing"})
+        client.post("/api/s3/analyze-adhoc", json={"story_text": "fix the thing"})
 
     with patch(
         "s3_enhancement.analyze.complete", side_effect=_adhoc_complete_side_effect
     ) as mock_complete:
         response = client.post(
-            "/api/s3/analyze-adhoc", json={"cr_text": "the billing gateway"}
+            "/api/s3/analyze-adhoc", json={"story_text": "the billing gateway"}
         )
 
     assert response.status_code == 200
@@ -764,7 +770,7 @@ def test_analyze_adhoc_asks_repo_confirmation_after_text_clarity_passes():
     ), patch("apps.console.api.routers.s3.suggest_target_repo", return_value=suggestion):
         response = client.post(
             "/api/s3/analyze-adhoc",
-            json={"cr_text": "Update the coverage limit calculation"},
+            json={"story_text": "Update the coverage limit calculation"},
         )
 
     assert response.status_code == 200
@@ -795,7 +801,7 @@ def test_analyze_adhoc_includes_high_confidence_target_repo_in_final_result(tmp_
     ):
         response = client.post(
             "/api/s3/analyze-adhoc",
-            json={"cr_text": "BillingGateway needs to handle recalculated contributions."},
+            json={"story_text": "BillingGateway needs to handle recalculated contributions."},
         )
 
     assert response.status_code == 200
@@ -813,7 +819,7 @@ def test_analyze_adhoc_skips_repo_check_when_gitlab_unavailable():
     ), patch("apps.console.api.routers.s3.get_client", side_effect=GitLabError("no token")) as mock_get_client:
         response = client.post(
             "/api/s3/analyze-adhoc",
-            json={"cr_text": "BillingGateway needs to handle recalculated contributions."},
+            json={"story_text": "BillingGateway needs to handle recalculated contributions."},
         )
 
     assert response.status_code == 200
@@ -874,7 +880,7 @@ def test_problem_record_ticket_401s_without_login():
 def test_problem_record_ticket_appears_on_board_tagged_by_origin(tmp_path, monkeypatch):
     """S3's second intake flavor: a ticket derived from a problem record
     (repeated incidents -> permanent-fix problem record -> this ticket)
-    rather than a direct business CR. Both origins must converge on the same
+    rather than a direct business user story. Both origins must converge on the same
     board/downstream flow, distinguished only by the origin tag."""
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
     client = _client()
@@ -901,16 +907,16 @@ def test_problem_record_ticket_appears_on_board_tagged_by_origin(tmp_path, monke
     assert issues[new_key]["problem_id"] == "PRB0012345"
 
     # A ticket with no problem-record-ticket-created event (the fixed demo
-    # CR tickets, and plain cross-team tickets) defaults to business_cr.
+    # user story tickets, and plain cross-team tickets) defaults to business_story.
     other_keys = [key for key in issues if key != new_key]
     assert other_keys, "expected at least one other seeded ticket on the board"
-    assert issues[other_keys[0]]["origin"] == "business_cr"
+    assert issues[other_keys[0]]["origin"] == "business_story"
     assert "problem_id" not in issues[other_keys[0]]
 
 
-def _write_scratch_cr(crs_root, name: str, title: str) -> None:
-    crs_root.mkdir(parents=True, exist_ok=True)
-    (crs_root / name).write_text(
+def _write_scratch_story(stories_root, name: str, title: str) -> None:
+    stories_root.mkdir(parents=True, exist_ok=True)
+    (stories_root / name).write_text(
         f"{title}\n\n"
         "Requested by: MapleSure Product Team\n"
         "Application: PolicyCore (group benefits plan administration portal)\n"
@@ -920,79 +926,104 @@ def _write_scratch_cr(crs_root, name: str, title: str) -> None:
     )
 
 
-def test_board_opens_a_ticket_for_a_cr_with_none(tmp_path, monkeypatch):
-    """The board's third intake source: a CR dropped into crs/ shows up as a
-    ticket without anyone seeding one, unassigned so it lands in the
-    manager's queue."""
+def test_board_opens_a_ticket_for_a_story_with_none(tmp_path, monkeypatch):
+    """The board's third intake source: a user story dropped into stories/ shows up as a
+    ticket without anyone seeding one, in the default engineer's To Do
+    column."""
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
-    monkeypatch.setattr(cr_intake, "CRS_ROOT", tmp_path / "crs")
-    _write_scratch_cr(tmp_path / "crs", "CR-2027-007.md", "CR-2027-007: Renewal Notice Channel")
-    monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+    monkeypatch.setattr(story_intake, "STORIES_ROOT", tmp_path / "stories")
+    _write_scratch_story(tmp_path / "stories", "US-2027-007.md", "US-2027-007: Renewal Notice Channel")
+    monkeypatch.setattr(s3_router, "_STORY_TARGET_MEMO", {})
     client = _client()
 
     # The resolver is stubbed rather than run: its third tier is a live LLM
-    # call, and a scratch CR that matches no registered target lands exactly
+    # call, and a scratch user story that matches no registered target lands exactly
     # there.
     match = TargetMatch(
         target=SimpleNamespace(target_id="policycore-demo", display_name="PolicyCore demo"),
         method="application_header",
     )
-    with patch.object(s3_router, "resolve_target_for_cr", return_value=match):
+    with patch.object(s3_router, "resolve_target_for_story", return_value=match):
         board = client.get("/api/s3/jira/board")
 
     assert board.status_code == 200
     issues = {issue["key"]: issue for issue in board.json()["issues"]}
     assert "AMS-1007" in issues
     auto = issues["AMS-1007"]
-    assert auto["summary"] == "CR-2027-007: Renewal Notice Channel"
-    # Unassigned is the whole routing mechanism: the manager's dashboard is
-    # what shows unassigned tickets with an Assign control.
-    assert auto["assignee"] is None
-    assert auto["cr_file"] == "CR-2027-007.md"
+    # Title only — the board card reads as a user story; the identifier is in
+    # the description, which is what dedup reads back.
+    assert auto["summary"] == "Renewal Notice Channel"
+    assert "US-2027-007" in auto["description"]
+    # Lands on the default engineer, in To Do — a dropped-in user story is
+    # work someone already has, not a routing decision waiting on the manager.
+    assert auto["assignee"] == s3_router.DEFAULT_STORY_ASSIGNEE
+    assert auto["status"] == "To Do"
+    assert auto["story_file"] == "US-2027-007.md"
     assert auto["target_id"] == "policycore-demo"
+    # …and the timeline says how they came to hold it, rather than showing a
+    # ticket with an assignee nobody assigned.
+    events = [
+        (event["actor"], event["action"], event["detail"])
+        for event in events_for("AMS-1007")
+    ]
+    assert ("system", "ticket_assigned", s3_router.DEFAULT_STORY_ASSIGNEE) in events
 
 
-def test_board_does_not_duplicate_or_renumber_the_seeded_cr_tickets(tmp_path, monkeypatch):
-    """The four demo CRs already have hand-seeded tickets (AMS-101..104).
-    Auto-intake must recognise them from the CR identifier in their own
+def test_story_default_assignee_falls_back_to_unassigned_when_off_the_roster(monkeypatch):
+    """A misspelled or retired name would put the ticket on nobody's board —
+    the console filters by exact display name — so it lands unassigned in the
+    manager's queue instead, which is at least somewhere a human looks."""
+    monkeypatch.setenv("STORY_DEFAULT_ASSIGNEE", "Ravi Kumr")
+    assert s3_router._story_default_assignee() is None
+
+    monkeypatch.setenv("STORY_DEFAULT_ASSIGNEE", "")
+    assert s3_router._story_default_assignee() is None
+
+    monkeypatch.setenv("STORY_DEFAULT_ASSIGNEE", "Elena Cruz")
+    assert s3_router._story_default_assignee() == "Elena Cruz"
+
+
+def test_board_does_not_duplicate_or_renumber_the_seeded_story_tickets(tmp_path, monkeypatch):
+    """The four demo user stories already have hand-seeded tickets (AMS-101..104).
+    Auto-intake must recognise them from the user story identifier in their own
     summary/description and leave them exactly as they are."""
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
-    monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+    monkeypatch.setattr(s3_router, "_STORY_TARGET_MEMO", {})
     client = _client()
 
     with patch.object(
-        s3_router, "resolve_target_for_cr", side_effect=AssertionError("resolved a seeded CR")
+        s3_router, "resolve_target_for_story", side_effect=AssertionError("resolved a seeded user story")
     ):
         board = client.get("/api/s3/jira/board")
 
     keys = [issue["key"] for issue in board.json()["issues"]]
-    assert {"AMS-101", "AMS-102", "AMS-103", "AMS-104", "AMS-098"} <= set(keys)
+    assert {"AMS-101", "AMS-102", "AMS-104", "AMS-098"} <= set(keys)
     assert len(keys) == len(set(keys))
-    # The seeded CRs are covered, so none of their derived keys is opened.
-    for cr_id in ("CR-2026-041", "CR-2026-042", "CR-2026-043", "CR-2026-044"):
-        assert cr_intake.ticket_key_for(cr_id) not in keys
+    # The seeded user stories are covered, so none of their derived keys is opened.
+    for story_id in ("US-2026-041", "US-2026-042", "US-2026-044"):
+        assert story_intake.ticket_key_for(story_id) not in keys
 
 
-def test_board_resolves_a_cr_target_once_not_per_request(tmp_path, monkeypatch):
-    """resolve_target_for_cr's third tier is an LLM call and the board is
+def test_board_resolves_a_story_target_once_not_per_request(tmp_path, monkeypatch):
+    """resolve_target_for_story's third tier is an LLM call and the board is
     polled — the resolution has to be a once-ever cost, read back out of the
     ticket-events log on every load after the first."""
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
-    monkeypatch.setattr(cr_intake, "CRS_ROOT", tmp_path / "crs")
-    _write_scratch_cr(tmp_path / "crs", "CR-2027-008.md", "CR-2027-008: Something New")
-    monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+    monkeypatch.setattr(story_intake, "STORIES_ROOT", tmp_path / "stories")
+    _write_scratch_story(tmp_path / "stories", "US-2027-008.md", "US-2027-008: Something New")
+    monkeypatch.setattr(s3_router, "_STORY_TARGET_MEMO", {})
     client = _client()
 
     match = TargetMatch(
         target=SimpleNamespace(target_id="policycore-demo", display_name="PolicyCore demo"),
         method="ai",
     )
-    with patch.object(s3_router, "resolve_target_for_cr", return_value=match) as resolver:
+    with patch.object(s3_router, "resolve_target_for_story", return_value=match) as resolver:
         client.get("/api/s3/jira/board")
         assert resolver.call_count == 1
         # A fresh process would have an empty memo; only the events log can
         # carry the answer across, so clear it and prove the log is enough.
-        monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+        monkeypatch.setattr(s3_router, "_STORY_TARGET_MEMO", {})
         second = client.get("/api/s3/jira/board")
         assert resolver.call_count == 1
 
@@ -1001,23 +1032,23 @@ def test_board_resolves_a_cr_target_once_not_per_request(tmp_path, monkeypatch):
     assert issues["AMS-1008"]["target_method"] == "ai"
 
 
-def test_board_shows_an_unresolved_cr_without_a_target(tmp_path, monkeypatch):
+def test_board_shows_an_unresolved_story_without_a_target(tmp_path, monkeypatch):
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
-    monkeypatch.setattr(cr_intake, "CRS_ROOT", tmp_path / "crs")
-    _write_scratch_cr(tmp_path / "crs", "CR-2027-009.md", "CR-2027-009: Unrecognised Work")
-    monkeypatch.setattr(s3_router, "_CR_TARGET_MEMO", {})
+    monkeypatch.setattr(story_intake, "STORIES_ROOT", tmp_path / "stories")
+    _write_scratch_story(tmp_path / "stories", "US-2027-009.md", "US-2027-009: Unrecognised Work")
+    monkeypatch.setattr(s3_router, "_STORY_TARGET_MEMO", {})
     client = _client()
 
     with patch.object(
         s3_router,
-        "resolve_target_for_cr",
+        "resolve_target_for_story",
         return_value=TargetMatch(target=None, method="unresolved"),
     ):
         board = client.get("/api/s3/jira/board")
 
     issues = {issue["key"]: issue for issue in board.json()["issues"]}
     assert "AMS-1009" in issues
-    assert issues["AMS-1009"]["cr_file"] == "CR-2027-009.md"
+    assert issues["AMS-1009"]["story_file"] == "US-2027-009.md"
     # Absent, not blank: "not resolved" is not "resolved to nothing".
     assert "target_id" not in issues["AMS-1009"]
 
@@ -1126,12 +1157,12 @@ def test_board_prefers_an_explicitly_cleared_assignee_over_the_seeded_search(tmp
     special case for `assignee`, the recording's stale name would win and the
     ticket would look assigned again on the next load."""
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
-    monkeypatch.setattr(cr_intake, "CRS_ROOT", tmp_path / "crs")
+    monkeypatch.setattr(story_intake, "STORIES_ROOT", tmp_path / "stories")
     client = _client()
 
     jira = MagicMock()
     jira.search_issues.return_value = [
-        {"key": "AMS-102", "summary": "CR-2026-042: Amendment Priority Field",
+        {"key": "AMS-102", "summary": "US-2026-042: Amendment Priority Field",
          "status": "In Progress", "issue_type": "Task", "assignee": "Ravi Kumar"}
     ]
     jira.get_issue.return_value = {"key": "AMS-102", "assignee": None}
@@ -1421,6 +1452,12 @@ def test_apply_calls_apply_change_with_file_path():
         # reads them to sync its per-file Rejected/Revert state after an apply.
         "rejected_files": {},
         "revertable_files": [],
+        # Apply restarts the target app so the running process serves the code
+        # it just wrote. `conftest._no_real_process_control` stubs that out, so
+        # the honest answer here is "nothing was restarted" — which is exactly
+        # what the console must not report as success.
+        "restarted": False,
+        "restarts": [],
     }
     # Apply opens the change's feature branch before writing, and reports it —
     # see s3_enhancement/scm.py for why the branch is modelled, not real.
@@ -1431,7 +1468,7 @@ def test_apply_calls_apply_change_with_file_path():
 
 def test_apply_mockapp_files_runs_post_apply_migration():
     """Applying files under repos/policycore/ must rebuild the SQLite schema in a
-    subprocess (the applied CR may have added a column the existing DB
+    subprocess (the applied user story may have added a column the existing DB
     predates) — the crash-after-apply regression."""
     client = _client()
 
@@ -1455,7 +1492,7 @@ def test_apply_mockapp_files_runs_post_apply_migration():
 
 
 def test_apply_post_apply_failure_carried_in_response(tmp_path, monkeypatch):
-    """A migration crash after apply — the applied CR broke the app — must
+    """A migration crash after apply — the applied user story broke the app — must
     reach the caller with its traceback and land on the ticket timeline,
     not vanish into a discarded subprocess result."""
     events_path = tmp_path / "ticket_events.jsonl"
@@ -1487,7 +1524,7 @@ def test_apply_post_apply_failure_carried_in_response(tmp_path, monkeypatch):
     assert "KeyError: 'deductible'" in failed[0]["detail"]
 
 
-def _apply(client: TestClient, ticket: str = "AMS-103", files: list[str] | None = None) -> None:
+def _apply(client: TestClient, ticket: str = "AMS-1045", files: list[str] | None = None) -> None:
     with patch(
         "apps.console.api.routers.s3.apply_change", return_value=files or ["a.py"]
     ):
@@ -1496,7 +1533,7 @@ def _apply(client: TestClient, ticket: str = "AMS-103", files: list[str] | None 
             json={
                 "proposal_id": "prop-1",
                 "ticket_number": ticket,
-                "target_id": "claimsportal-claims-deductible",
+                "target_id": "enroldirect-prospect-access",
             },
         )
     assert response.status_code == 200
@@ -1522,7 +1559,7 @@ def test_apply_opens_the_branch_before_writing(tmp_path, monkeypatch):
     ):
         response = client.post(
             "/api/s3/apply",
-            json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+            json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
         )
 
     assert response.status_code == 200
@@ -1539,7 +1576,7 @@ def test_apply_records_the_branch_on_the_ticket_timeline(tmp_path, monkeypatch):
     opened = [e for e in events if e["action"] == "branch_opened"]
     assert len(opened) == 1
     assert "simulated" in opened[0]["detail"]
-    assert "feature/AMS-103-claimsportal-claims-deductible" in opened[0]["detail"]
+    assert "feature/AMS-1045-enroldirect-prospect-access" in opened[0]["detail"]
 
 
 def test_checkout_is_simulated_by_default(tmp_path, monkeypatch):
@@ -1559,12 +1596,12 @@ def test_checkout_is_simulated_by_default(tmp_path, monkeypatch):
 
     response = client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
+        json={"ticket_number": "AMS-1045", "target_id": "enroldirect-prospect-access"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["mode"] == "simulated"
-    assert body["branch"] == "feature/AMS-103-claimsportal-claims-deductible"
+    assert body["branch"] == "feature/AMS-1045-enroldirect-prospect-access"
     assert body["sha"] is None
     assert body["detail"] is None
 
@@ -1577,7 +1614,7 @@ def test_checkout_records_a_ticket_event(tmp_path, monkeypatch):
 
     client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
+        json={"ticket_number": "AMS-1045", "target_id": "enroldirect-prospect-access"},
     )
 
     events = [json.loads(line) for line in events_path.read_text().splitlines()]
@@ -1587,7 +1624,7 @@ def test_checkout_records_a_ticket_event(tmp_path, monkeypatch):
     # surfaces in the ticket's Activity tab, so it is deliberately free of
     # "simulated"/"live" commentary -- see test_checkout_is_simulated_by_default
     # on where the source-control honesty actually lives.
-    assert checked_out[0]["detail"] == "feature/AMS-103-claimsportal-claims-deductible"
+    assert checked_out[0]["detail"] == "feature/AMS-1045-enroldirect-prospect-access"
 
 
 def test_checkout_runs_a_real_local_branch_under_scm_mode_live(tmp_path, monkeypatch):
@@ -1608,12 +1645,12 @@ def test_checkout_runs_a_real_local_branch_under_scm_mode_live(tmp_path, monkeyp
 
     response = client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
+        json={"ticket_number": "AMS-1045", "target_id": "enroldirect-prospect-access"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["mode"] == "live"
-    assert body["branch"] == "feature/AMS-103-claimsportal-claims-deductible"
+    assert body["branch"] == "feature/AMS-1045-enroldirect-prospect-access"
     assert body["created"] is True
     assert body["sha"] is not None
 
@@ -1637,7 +1674,7 @@ def test_checkout_409s_under_scm_mode_live_without_a_target_root(tmp_path, monke
 
     response = client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
+        json={"ticket_number": "AMS-1045", "target_id": "enroldirect-prospect-access"},
     )
     assert response.status_code == 409
     assert "SCM_LIVE_TARGET_ROOT" in response.json()["detail"]
@@ -1658,7 +1695,7 @@ def test_commit_is_blocked_until_the_tests_have_run(tmp_path, monkeypatch):
 
     response = client.post(
         "/api/s3/scm/commit",
-        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
     )
     assert response.status_code == 409
     assert "has not been run" in response.json()["detail"]
@@ -1673,15 +1710,15 @@ def test_commit_is_blocked_by_a_failing_suite_even_if_the_client_says_otherwise(
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
     client = _client()
     _apply(client)
-    record_event("AMS-103", "ai", "tests_failed", detail="3/12 passed")
+    record_event("AMS-1045", "ai", "tests_failed", detail="3/12 passed")
 
     response = client.post(
         "/api/s3/scm/commit",
         json={
             "proposal_id": "prop-1",
-            "ticket_number": "AMS-103",
+            "ticket_number": "AMS-1045",
             "tests_passed": True,
-            "message": "AMS-103: ship it anyway",
+            "message": "AMS-1045: ship it anyway",
         },
     )
     assert response.status_code == 409
@@ -1693,14 +1730,14 @@ def test_commit_then_push_walks_the_flow(tmp_path, monkeypatch):
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
     client = _client()
     _apply(client)
-    record_event("AMS-103", "ai", "tests_passed", detail="12/12 passed")
+    record_event("AMS-1045", "ai", "tests_passed", detail="12/12 passed")
 
     committed = client.post(
         "/api/s3/scm/commit",
         json={
             "proposal_id": "prop-1",
-            "ticket_number": "AMS-103",
-            "target_id": "claimsportal-claims-deductible",
+            "ticket_number": "AMS-1045",
+            "target_id": "enroldirect-prospect-access",
         },
     )
     assert committed.status_code == 200
@@ -1711,7 +1748,7 @@ def test_commit_then_push_walks_the_flow(tmp_path, monkeypatch):
 
     pushed = client.post(
         "/api/s3/scm/push",
-        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
     )
     assert pushed.status_code == 200
     assert pushed.json()["scm"]["status"] == "pushed"
@@ -1740,7 +1777,7 @@ def test_push_without_a_commit_is_409(tmp_path, monkeypatch):
 
     response = client.post(
         "/api/s3/scm/push",
-        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
     )
     assert response.status_code == 409
     assert "commit the applied files first" in response.json()["detail"]
@@ -1762,7 +1799,7 @@ def test_reverting_everything_abandons_the_branch(tmp_path, monkeypatch):
     with patch("apps.console.api.routers.s3.revert_change", return_value=["a.py"]):
         response = client.post(
             "/api/s3/revert",
-            json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+            json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
         )
 
     assert response.status_code == 200
@@ -1971,7 +2008,7 @@ def test_gitlab_scope_auto_confirmed_project_id_skips_match_and_scopes():
     mock_suggest.assert_not_called()
 
 
-def test_gitlab_scope_auto_accepts_free_text_cr_for_adhoc_tickets():
+def test_gitlab_scope_auto_accepts_free_text_story_for_adhoc_tickets():
     client = _client()
     gitlab = MagicMock()
     gitlab.list_projects.return_value = [
@@ -1991,7 +2028,7 @@ def test_gitlab_scope_auto_accepts_free_text_cr_for_adhoc_tickets():
     ), patch("apps.console.api.routers.s3.select_relevant_files", return_value=selection):
         response = client.post(
             "/api/s3/gitlab/scope-auto",
-            json={"cr_text": "Coverage limit is wrong for renewal policies"},
+            json={"story_text": "Coverage limit is wrong for renewal policies"},
         )
 
     assert response.status_code == 200
@@ -2002,7 +2039,7 @@ def test_gitlab_scope_auto_accepts_free_text_cr_for_adhoc_tickets():
     assert mock_suggest.call_args.args[0] == "Coverage limit is wrong for renewal policies"
 
 
-def test_gitlab_scope_auto_422s_without_tier_name_or_cr_text():
+def test_gitlab_scope_auto_422s_without_tier_name_or_story_text():
     client = _client()
     response = client.post("/api/s3/gitlab/scope-auto", json={})
     assert response.status_code == 422
@@ -2144,7 +2181,7 @@ def test_tests_scenarios_returns_plan_and_criteria():
 
 def test_tests_scenarios_approve_rejects_an_untraceable_edit():
     """A tester edit goes through the same validator the draft did, so an
-    edited plan cannot smuggle in a scenario citing a criterion the CR lacks."""
+    edited plan cannot smuggle in a scenario citing a criterion the user story lacks."""
     client = _client()
     response = client.post(
         "/api/s3/tests/scenarios/approve",
@@ -2189,7 +2226,7 @@ def test_tests_scenarios_approve_reports_uncovered_criteria():
         },
     )
     assert response.status_code == 200
-    # CR-2026-042 states four criteria; a one-scenario plan covers one of them.
+    # US-2026-042 states four criteria; a one-scenario plan covers one of them.
     assert response.json()["uncovered_criteria"] == ["AC-2", "AC-3", "AC-4"]
 
 
@@ -2277,13 +2314,13 @@ def test_design_doc_includes_the_derived_change_map():
     with patch("apps.console.api.routers.s3.draft_design_doc", return_value="1. Summary\nx"):
         response = client.post(
             "/api/s3/design-doc",
-            json={"tier_name": "Elite", "target_id": "claimsportal-claims-deductible"},
+            json={"tier_name": "Elite", "target_id": "enroldirect-prospect-access"},
         )
 
     assert response.status_code == 200
     body = response.json()
     assert body["diagram_svg"].startswith("<svg")
-    assert "claim_rules.py" in body["diagram_svg"]
+    assert "eligibility.py" in body["diagram_svg"]
     assert "not generated by a model" in body["diagram_caption"]
 
 
@@ -2316,7 +2353,7 @@ def test_design_doc_document_returns_html():
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "CR-2026-042-design-doc.html" in response.headers["content-disposition"]
+    assert "US-2026-042-design-doc.html" in response.headers["content-disposition"]
     assert "MapleSure Insurance" in response.text
 
 
@@ -2374,15 +2411,18 @@ def test_release_notes_returns_three_audiences_and_the_plan():
     with patch("apps.console.api.routers.s3.draft_release_note_set", return_value=_note_set()):
         response = client.post(
             "/api/s3/release/notes",
-            json={"tier_name": "Elite", "target_id": "claimsportal-claims-deductible"},
+            json={"tier_name": "Elite", "target_id": "enroldirect-prospect-access"},
         )
 
     assert response.status_code == 200
     body = response.json()
     assert set(body["notes"]) == {"changelog", "ops_note", "whats_new"}
-    # The plan rides along because it costs no model call.
-    assert body["plan"]["service_order"] == ["policy_service", "claims_service"]
-    assert "policy_service first" in body["plan"]["order_reason"]
+    # The plan rides along because it costs no model call. EnrolDirect is a
+    # single-service target, so it claims no ordering constraint — the
+    # callee-before-caller path is covered in test_s3_release.py against the
+    # multi-service fixture.
+    assert body["plan"]["service_order"] == ["enroldirect"]
+    assert body["plan"]["order_reason"] == ""
 
 
 def test_release_record_returns_a_pdf():
@@ -2402,7 +2442,7 @@ def test_release_record_returns_a_pdf():
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
-    assert "CR-2026-042-release-record.pdf" in response.headers["content-disposition"]
+    assert "US-2026-042-release-record.pdf" in response.headers["content-disposition"]
 
 
 def test_release_record_reads_approvals_from_the_server_log_not_the_client():

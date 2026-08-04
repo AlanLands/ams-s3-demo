@@ -5,6 +5,6 @@
     "status": "To Do",
     "assignee": "Ravi Kumar",
     "issue_type": "Task",
-    "description": "Raised on the support floor, not through the change-request desk. Names the application (PolicyCore) but no target system, so the repo has to be identified before any work starts. See CR-2026-044."
+    "description": "Raised on the support floor, not through the change-request desk. Names the application (PolicyCore) but no target system, so the repo has to be identified before any work starts. See US-2026-044."
   }
 }

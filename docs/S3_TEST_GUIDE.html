@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AMS S3 — Test &amp; Demo Guide</title>
+<title>AMS S3 — Test &amp; Walkthrough Guide</title>
 <style>
   @page { size: A4; margin: 16mm 14mm; }
 
@@ -58,7 +58,7 @@
   /* Match the body line-height so a mono cell's first line sits on the same
      baseline as the prose cell beside it, rather than riding high. */
   td.mono, th.mono { font-family: var(--mono); font-size: 9pt; line-height: 1.5; }
-  /* Ticket and CR keys are identifiers — breaking "AMS-1045" across two lines
+  /* Ticket and user story keys are identifiers — breaking "AMS-1045" across two lines
      makes them unreadable at a glance. Opt-in, not a blanket rule on .mono:
      the file-path cells elsewhere must stay wrappable. */
   .nowrap { white-space: nowrap; }
@@ -123,7 +123,7 @@
 <header class="cover">
   <div class="kicker">MapleSure Insurance · AMS Console</div>
   <h1>S3 Enhancement Delivery</h1>
-  <p class="subtitle">Test &amp; demo guide — all scenarios</p>
+  <p class="subtitle">Test &amp; walkthrough guide — all scenarios</p>
   <p class="meta">
     Generated 3 August 2026 · repo <span class="mono">ams-s3-demo</span> ·
     branch <span class="mono">s3-console-stage-routes</span><br>
@@ -135,8 +135,8 @@
 
 <h2>Environment</h2>
 
-<p>Six processes make up the full demo environment. The console and the app a given
-CR targets must be running; the rest can stay down if you are not showing that CR.</p>
+<p>Six processes make up the full environment. The console and the app a given
+user story targets must be running; the rest can stay down if you are not showing that user story.</p>
 
 <table>
   <tr><th class="mono">Port</th><th>Service</th><th class="mono">URL</th><th>Start command (terminal by terminal)</th></tr>
@@ -151,22 +151,22 @@ CR targets must be running; the rest can stay down if you are not showing that C
     <td class="mono">apps/run-console.sh</td>
   </tr>
   <tr>
-    <td class="mono">8501</td><td>PolicyCore portal (CR-041 / CR-042 target)<div class="tiny">"the client's app"</div></td>
+    <td class="mono">8501</td><td>PolicyCore portal (user story-041 / user story-042 target)<div class="tiny">"the client's app"</div></td>
     <td class="mono">localhost:8501/sl_policycore<div class="tiny">base path — the bare root 404s</div></td>
     <td class="mono">apps/run-policycore.sh</td>
   </tr>
   <tr>
-    <td class="mono">8081</td><td>ClaimsPortal Contracts Team console (CR-043)</td>
+    <td class="mono">8081</td><td>ClaimsPortal Contracts Team console (user story-043)</td>
     <td class="mono">localhost:8081</td>
     <td class="mono">apps/run-policy-service.sh</td>
   </tr>
   <tr>
-    <td class="mono">8082</td><td>ClaimsPortal Claims Team console (CR-043)</td>
+    <td class="mono">8082</td><td>ClaimsPortal Claims Team console (user story-043)</td>
     <td class="mono">localhost:8082</td>
     <td class="mono">apps/run-claims-service.sh</td>
   </tr>
   <tr>
-    <td class="mono">8083</td><td>EnrolDirect (CR-045 target)<div class="tiny">online enrolment channel</div></td>
+    <td class="mono">8083</td><td>EnrolDirect (user story-045 target)<div class="tiny">online enrolment channel</div></td>
     <td class="mono">localhost:8083</td>
     <td class="mono">apps/run-enroldirect.sh</td>
   </tr>
@@ -186,7 +186,7 @@ both invoke it by name.</p>
   runs the reset scopes, and onboards a repo by writing its
   <code>.s3targets.json</code>. Service status is a plain TCP connect — no
   <code>ps</code>, no <code>lsof</code> — so it works on a locked-down host.</p>
-  <p>Two limits worth knowing before you rely on it mid-demo. There is
+  <p>Two limits worth knowing before you rely on it mid-run. There is
   <strong>no service id for the console</strong>: it cannot restart the process serving
   your request, and naming it is a 400 rather than an attempt. And a manifest the
   panel just wrote <strong>needs a console restart</strong> before that target
@@ -199,8 +199,8 @@ target repositories — <code>policycore</code>, <code>claimsportal</code>,
 <code>enroldirect</code> — which are what S3 <em>changes</em>. <code>apps/</code> holds
 the console and the launch scripts, which are what does the changing. Dropping a
 directory into <code>repos/</code> with a <code>.s3targets.json</code> manifest registers
-it as a target at next start, with no edit to any registry file; putting its CR
-under <code>crs/</code> opens the board ticket. See <code>repos/README.md</code> for the
+it as a target at next start, with no edit to any registry file; putting its user story
+under <code>stories/</code> opens the board ticket. See <code>repos/README.md</code> for the
 manifest contract and the four onboarding steps — it is short, and it is the
 authority.</p>
 
@@ -211,7 +211,7 @@ authority.</p>
   <tr><td class="mono">localhost:8081/api/policies</td><td>All ClaimsPortal policies as JSON</td></tr>
   <tr><td class="mono">localhost:8081/api/policies/MS-1004</td><td>One policy — the clearest place to show <code>deductible</code> appearing</td></tr>
   <tr><td class="mono">localhost:8082/api/claims</td><td>Submitted claims with decision and <code>payableAmount</code></td></tr>
-  <tr><td class="mono">localhost:8083/api/analysis/prospect-impact</td><td>EnrolDirect's both-policies comparison — the analysis CR-045 acts on</td></tr>
+  <tr><td class="mono">localhost:8083/api/analysis/prospect-impact</td><td>EnrolDirect's both-policies comparison — the analysis user story-045 acts on</td></tr>
 </table>
 
 <div class="callout warn">
@@ -222,7 +222,7 @@ authority.</p>
   <p><strong>The ClaimsPortal processes serve whatever was last running.</strong> There's no build step
   (plain Python), but <code>uvicorn</code> is deliberately started without <code>--reload</code>, so an Apply
   changing the source does not take effect until you restart both services. A process already running
-  survives the reset entirely: it keeps serving the <em>post-CR</em> app while the source sits at baseline,
+  survives the reset entirely: it keeps serving the <em>post-user story</em> app while the source sits at baseline,
   and both ports answer 200 the whole time. Port-is-up is not process-is-current — check the process
   start time against your reset time.</p>
   <p><strong>Start the portal via a launch script, never <code>streamlit run</code> by hand.</strong>
@@ -251,22 +251,22 @@ authority.</p>
 <p>Verified against a live <code>GET /api/s3/jira/board</code> on 3 August 2026.</p>
 <table>
   <tr>
-    <th class="nowrap" style="width:11%">Ticket</th><th class="nowrap" style="width:14%">CR</th>
+    <th class="nowrap" style="width:11%">Ticket</th><th class="nowrap" style="width:14%">user story</th>
     <th style="width:11%">Status</th><th style="width:14%">Assignee</th>
     <th style="width:32%">Target</th><th style="width:18%">Origin</th>
   </tr>
-  <tr><td class="mono nowrap">AMS-101</td><td class="mono nowrap">CR-2026-041</td><td>QA</td><td>Priya Nair</td><td>policycore — plan tier upgrade</td><td>seeded</td></tr>
-  <tr><td class="mono nowrap">AMS-102</td><td class="mono nowrap">CR-2026-042</td><td>In Progress</td><td>Ravi Kumar</td><td>policycore — amendment priority</td><td>seeded</td></tr>
-  <tr><td class="mono nowrap">AMS-103</td><td class="mono nowrap">CR-2026-043</td><td>To Do</td><td>Ravi Kumar</td><td>claimsportal — claims deductible</td><td>seeded</td></tr>
-  <tr><td class="mono nowrap">AMS-104</td><td class="mono nowrap">CR-2026-044</td><td>To Do</td><td>Ravi Kumar</td><td>policycore — flag urgent amendments</td><td>seeded</td></tr>
+  <tr><td class="mono nowrap">AMS-101</td><td class="mono nowrap">US-2026-041</td><td>QA</td><td>Priya Nair</td><td>policycore — plan tier upgrade</td><td>seeded</td></tr>
+  <tr><td class="mono nowrap">AMS-102</td><td class="mono nowrap">US-2026-042</td><td>In Progress</td><td>Ravi Kumar</td><td>policycore — amendment priority</td><td>seeded</td></tr>
+  <tr><td class="mono nowrap">AMS-103</td><td class="mono nowrap">US-2026-043</td><td>To Do</td><td>Ravi Kumar</td><td>claimsportal — claims deductible</td><td>seeded</td></tr>
+  <tr><td class="mono nowrap">AMS-104</td><td class="mono nowrap">US-2026-044</td><td>To Do</td><td>Ravi Kumar</td><td>policycore — flag urgent amendments</td><td>seeded</td></tr>
   <tr><td class="mono nowrap">AMS-098</td><td>—</td><td>Done</td><td>Elena Cruz</td><td>none (ad-hoc path)</td><td>seeded</td></tr>
-  <tr><td class="mono nowrap">AMS-1045</td><td class="mono nowrap">CR-2026-045</td><td>To Do</td><td><em>unassigned</em></td><td>enroldirect — prospect access</td><td><strong>picked up from <code>crs/</code></strong></td></tr>
+  <tr><td class="mono nowrap">AMS-1045</td><td class="mono nowrap">US-2026-045</td><td>To Do</td><td><em>unassigned</em></td><td>enroldirect — prospect access</td><td><strong>picked up from <code>stories/</code></strong></td></tr>
 </table>
 
 <div class="callout">
   <span class="label">AMS-1045 is not seeded — it is derived, and that is a beat</span>
-  <p>A <code>.md</code> file dropped into <code>crs/</code> opens a board ticket on its own.
-  The key is a pure function of the CR identifier (<code>CR-2026-045</code> →
+  <p>A <code>.md</code> file dropped into <code>stories/</code> opens a board ticket on its own.
+  The key is a pure function of the user story identifier (<code>US-2026-045</code> →
   <strong>AMS-1045</strong>), so it survives restarts and resets with nothing to persist,
   and it sits in a band the hand-seeded tickets cannot reach. It lands
   <strong>unassigned</strong> on purpose — that is what puts it in front of the manager,
@@ -281,12 +281,12 @@ authority.</p>
 
 <h3>Reset between runs</h3>
 <p>The pipeline mutates real files. Stop the services first, then run these in <strong>this order</strong> —
-the CR-042 reset must come <em>after</em> <code>reset_s3.sh</code>, because it restores the superset
-PolicyCore state that leaves both AMS-101 and AMS-102 demo-ready.</p>
-<pre><code>demo/reset_s3.sh              # CR-041 + shared state: .cache/llm, out/, events, Jira caches
-demo/reset_s3_endorsement.sh  # CR-042 baseline  (MUST run after reset_s3.sh)
-demo/reset_s3_claimsportal.sh # CR-043 target, from repos/claimsportal/.baseline/
-demo/reset_s3_enroldirect.sh  # CR-045 target, from repos/enroldirect/.baseline/</code></pre>
+the user story-042 reset must come <em>after</em> <code>reset_s3.sh</code>, because it restores the superset
+PolicyCore state that leaves both AMS-101 and AMS-102 ready to run.</p>
+<pre><code>demo/reset_s3.sh              # user story-041 + shared state: .cache/llm, out/, events, Jira caches
+demo/reset_s3_endorsement.sh  # user story-042 baseline  (MUST run after reset_s3.sh)
+demo/reset_s3_claimsportal.sh # user story-043 target, from repos/claimsportal/.baseline/
+demo/reset_s3_enroldirect.sh  # user story-045 target, from repos/enroldirect/.baseline/</code></pre>
 <p><code>reset_s3_endorsement.sh</code> keeps its pre-reskin filename deliberately —
 teammates invoke it by name, and only its contents changed. The same reset scopes are
 on the manager's <code>/admin</code> panel if you would rather not leave the browser;
@@ -310,8 +310,8 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
 <div class="callout">
   <span class="label">Expected after a reset</span>
   <p><code>git status</code> shows <code>repos/policycore/{app,core/db,core/amendments,core/models}.py</code> as
-  modified. That is <strong>correct</strong> — repo HEAD is committed in a post-CR-2026-042 state, so the
-  pre-CR baseline necessarily differs from it.</p>
+  modified. That is <strong>correct</strong> — repo HEAD is committed in a post-US-2026-042 state, so the
+  pre-user story baseline necessarily differs from it.</p>
   <p>Resets also clear <code>.cache/llm</code>, so impact analysis, design doc and release notes make live
   provider calls again (~10–20 s each on first click). Codegen and testgen always replay — instant and
   free. Run <code>demo/warm_s3_cache.sh</code> if you want the narrative beats instant too.</p>
@@ -330,28 +330,28 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
     <th style="width:12%">To see it</th>
   </tr>
   <tr>
-    <td class="mono">AMS-101<div class="tiny">CR-2026-041</div></td>
+    <td class="mono">AMS-101<div class="tiny">US-2026-041</div></td>
     <td>Portal :8501/sl_policycore<div class="tiny">Policy Detail</div></td>
     <td class="before">No plan tier anywhere in the app.</td>
     <td class="after">Tier per contract (Standard / Premium / <em>the name the audience picked</em>), upgrade control on the detail view, monthly contribution recalculates and persists.</td>
     <td>Browser refresh</td>
   </tr>
   <tr>
-    <td class="mono">AMS-102<div class="tiny">CR-2026-042</div></td>
+    <td class="mono">AMS-102<div class="tiny">US-2026-042</div></td>
     <td>Portal :8501/sl_policycore<div class="tiny">Request a Contract Amendment</div></td>
     <td class="before">Exactly 5 fields — amendment type, describe the requested change, effective date, contact phone, contact email.</td>
     <td class="after">A 6th field, <strong>Priority</strong> (Standard / Urgent, defaults Standard). Existing submit flow unchanged.</td>
     <td>Browser refresh</td>
   </tr>
   <tr>
-    <td class="mono">AMS-103<div class="tiny">CR-2026-043</div></td>
+    <td class="mono">AMS-103<div class="tiny">US-2026-043</div></td>
     <td>Claims :8082<div class="tiny">and Policy :8081</div></td>
     <td class="before">Policies carry no deductible. An <strong>$80 claim on MS-1004 → ACCEPTED</strong>.</td>
     <td class="after">Policies gain a deductible (MS-1001 500, MS-1002 1000, MS-1003 500, MS-1004 100). The same <strong>$80 claim on MS-1004 → REJECTED_BELOW_DEDUCTIBLE</strong>. A <strong>$1,200 claim on MS-1001 → ACCEPTED, <code>payableAmount</code> 700</strong>.</td>
     <td><strong>Restart both services</strong></td>
   </tr>
   <tr>
-    <td class="mono">AMS-1045<div class="tiny">CR-2026-045</div></td>
+    <td class="mono">AMS-1045<div class="tiny">US-2026-045</div></td>
     <td>EnrolDirect :8083<div class="tiny">Access check</div></td>
     <td class="before">A prospect is refused, and the refusal is an omission rather than a rule: <code>"category PROSPECT has no online enrolment preference"</code>, <code>requiredPreference: null</code>. <strong>0 of 6 prospects admitted.</strong></td>
     <td class="after">A prospect resolves through the configured policy to the <strong>Guest</strong> preference. AP-4003 and AP-4008 are admitted with <code>authorisingPreference: "Online Enrolment - Guest"</code>; the other four are still refused, each for its own named reason (member-only sponsor, no preferences, lapsed contract). <strong>2 of 6 admitted.</strong></td>
@@ -360,10 +360,10 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
 </table>
 
 <div class="callout">
-  <span class="label">Why CR-045 is the different one</span>
-  <p>The other three CRs add something. <strong>CR-2026-045's baseline is a
+  <span class="label">Why user story-045 is the different one</span>
+  <p>The other three user stories add something. <strong>US-2026-045's baseline is a
   removal</strong> — the checked-in source is the state after the impact analysis and
-  before anyone acted on it, so the "before" is a refusal nobody chose. The CR settles
+  before anyone acted on it, so the "before" is a refusal nobody chose. The user story settles
   a classification rather than building a feature, which is why the honest before/after
   is a decision changing, not a control appearing.</p>
   <p>Second thing worth saying out loud: <code>repos/enroldirect/impact.py</code> is in
@@ -376,10 +376,10 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
 </div>
 
 <div class="callout warn">
-  <span class="label">The easiest way to make a working demo look broken</span>
+  <span class="label">The easiest way to make a working run look broken</span>
   <p>The two PolicyCore scenarios need only a browser refresh — Streamlit re-executes <code>app.py</code> on
   each run. <strong>Scenario 3 does not.</strong> The running processes serve whatever was loaded at
-  startup (no <code>--reload</code>), so a just-applied CR is invisible on :8081/:8082 until you restart. Apply
+  startup (no <code>--reload</code>), so a just-applied user story is invisible on :8081/:8082 until you restart. Apply
   the change, switch to :8082, and nothing has changed. Ctrl-C both terminals, then
   <code>demo/run_s3_claimsportal.sh</code>.</p>
 </div>
@@ -389,21 +389,21 @@ the console caches per-ticket state in <code>localStorage</code> and drops it wh
 the comment. Re-derived and re-run against the GRS-reskinned tree on 3 August 2026 —
 the old <code>coverage_tier</code> / <code>COVERAGE_TIERS</code> grep now passes
 vacuously, because those symbols no longer exist under any state of the repo.
-The CR-041 sentinel is <code>PLAN_TIERS</code> / <code>upgrade_tier</code>, not
-<code>plan_tier</code>: the field exists on <code>Policy</code> before the CR and the
+The user story-041 sentinel is <code>PLAN_TIERS</code> / <code>upgrade_tier</code>, not
+<code>plan_tier</code>: the field exists on <code>Policy</code> before the user story and the
 portal's contract header displays it, so <code>plan_tier</code> alone is a false
-positive. What CR-041 adds is the tier <em>ladder</em> and the upgrade call.</p>
-<pre><code>grep -c 'PLAN_TIERS\|upgrade_tier' repos/policycore/app.py  # 0       — no CR-041 yet
-grep -c 'selectbox("Priority"' repos/policycore/app.py      # 0       — no CR-042 yet
-ls repos/policycore/core/tiers.py                           # absent  — CR-041 creates it
-ls repos/claimsportal/claims_service/claim_rules.py         # absent  — CR-043 creates it
-ls repos/policycore/core/amendments.py                      # PRESENT — CR-042's "before" needs it
-grep -c 'DEFAULT_PROSPECT_POLICY' repos/enroldirect/applicants.py   # 0 — no CR-045 yet
+positive. What user story-041 adds is the tier <em>ladder</em> and the upgrade call.</p>
+<pre><code>grep -c 'PLAN_TIERS\|upgrade_tier' repos/policycore/app.py  # 0       — no user story-041 yet
+grep -c 'selectbox("Priority"' repos/policycore/app.py      # 0       — no user story-042 yet
+ls repos/policycore/core/tiers.py                           # absent  — user story-041 creates it
+ls repos/claimsportal/claims_service/claim_rules.py         # absent  — user story-043 creates it
+ls repos/policycore/core/amendments.py                      # PRESENT — user story-042's "before" needs it
+grep -c 'DEFAULT_PROSPECT_POLICY' repos/enroldirect/applicants.py   # 0 — no user story-045 yet
 curl -s localhost:8081/api/policies/MS-1004                 # no "deductible" key
 curl -s -X POST localhost:8083/api/eligibility/check \
   -H 'Content-Type: application/json' -d '{"applicantId":"AP-4003"}'  # "granted": false
 ls s3_enhancement/out/ | wc -l                              # 0</code></pre>
-<p>Two of those are worth reading rather than glancing at. The CR-041 grep is scoped to
+<p>Two of those are worth reading rather than glancing at. The user story-041 grep is scoped to
 <strong><code>app.py</code> only</strong>, and its sentinel is
 <code>PLAN_TIERS</code>/<code>upgrade_tier</code> rather than <code>plan_tier</code>,
 for the same reason: <code>core/models.py</code> and <code>core/db.py</code> carry a
@@ -483,16 +483,16 @@ catch.</p>
 
   <div class="callout warn">
     <span class="label">:8081 will not change — by design</span>
-    <p>CR-2026-043 line 50 states <em>"Both team consoles must keep rendering without changes to their
+    <p>US-2026-043 line 50 states <em>"Both team consoles must keep rendering without changes to their
     HTML"</em>, and no <code>.html</code> is in the target's codegen allowlist. The policy console's table has
-    no Deductible column, so it looks identical after the CR. The change <em>is</em> there —
+    no Deductible column, so it looks identical after the user story. The change <em>is</em> there —
     <code>GET :8081/api/policies</code> now returns <code>"deductible":500</code>.</p>
     <p><strong>The visible proof is on :8082.</strong> Restart the services, then submit a claim against
     MS-1001 (limit 25 000, deductible 500):</p>
   </div>
 
   <table>
-    <tr><th>Claim amount</th><th>Before the CR</th><th>After the CR</th></tr>
+    <tr><th>Claim amount</th><th>Before the user story</th><th>After the user story</th></tr>
     <tr><td class="mono">400</td><td>ACCEPTED</td><td class="pass">REJECTED_BELOW_DEDUCTIBLE</td></tr>
     <tr><td class="mono">500 — exactly the deductible</td><td>ACCEPTED</td><td class="pass">REJECTED_BELOW_DEDUCTIBLE</td></tr>
     <tr><td class="mono">1 200</td><td>ACCEPTED</td><td>ACCEPTED — payable 700 now recorded</td></tr>
@@ -526,7 +526,7 @@ catch.</p>
         <strong>52 files never opened</strong> — the 50 Java decoys plus the two Python
         modules of PolicyCore's own <em>enrolment</em> subsystem, which is the better
         line: screening is a scope decision, not a file-extension filter.</li>
-    <li>Token panel shows a real multiplier against whole-app context (3.4× on this CR —
+    <li>Token panel shows a real multiplier against whole-app context (3.4× on this user story —
         18,310 estimated file tokens down to 5,336).</li>
     <li>Your chosen tier name appears verbatim in the generated <code>tiers.py</code> —
         one recording serves any name.</li>
@@ -546,7 +546,7 @@ catch.</p>
 
   <div class="callout">
     <span class="label">The docstring problem is fixed — this is now safe to Apply on stage</span>
-    <p>The old warning here said the CR-042 recording stripped roughly six function
+    <p>The old warning here said the user story-042 recording stripped roughly six function
     docstrings from <code>repos/policycore/core/db.py</code>, removing 81 lines to add 12.
     The 3 August 2026 re-record fixed it. Re-verified by diffing the committed recording
     against the baseline tree: <strong>docstring counts are identical file for file</strong>
@@ -586,7 +586,7 @@ catch.</p>
     <tr><td><strong>Show diff</strong> on a file</td><td>Per-file unified diff, collapsible</td></tr>
     <tr><td><strong>Ask about this file</strong> → <em>"why did you delete those blank lines?"</em></td>
         <td>Answers <strong>from its own diff</strong> — admits the deletion instead of denying it.
-            (On CR-042 that is a real, visible change to point at.)</td></tr>
+            (On user story-042 that is a real, visible change to point at.)</td></tr>
     <tr><td><strong>Ask</strong> → <em>"rename that variable to X"</em></td>
         <td>Returns a revised file; still staged, still not applied</td></tr>
     <tr><td><strong>Ask</strong> a pure question</td><td>Answers in prose and changes <strong>no</strong> code</td></tr>
@@ -629,7 +629,7 @@ catch.</p>
     <span class="num">06</span>
     <span class="scenario-title">Ad-hoc ticket &amp; the clarity gate</span>
   </div>
-  <p class="who"><strong>As:</strong> Elena Cruz (1002) · <strong>Ticket:</strong> AMS-098 — no linked CR,
+  <p class="who"><strong>As:</strong> Elena Cruz (1002) · <strong>Ticket:</strong> AMS-098 — no linked user story,
   so it routes to the ad-hoc path</p>
 
   <ul class="check">
@@ -662,7 +662,7 @@ catch.</p>
 <section class="scenario">
   <div class="scenario-head">
     <span class="num">08</span>
-    <span class="scenario-title">Problem-record intake — the second CR flavour</span>
+    <span class="scenario-title">Problem-record intake — the second user story flavour</span>
   </div>
   <p class="who"><strong>Run:</strong> <code>demo/seed_problem_record_ticket.sh</code> (API must be running)</p>
 
@@ -670,7 +670,7 @@ catch.</p>
     <li>A new ticket appears on the board tagged <strong>origin: problem record</strong> with its
         <code>PRB…</code> id.</li>
     <li>It runs the identical downstream flow — only the origin tag differs, which is the point:
-        repeated incidents → problem record → CR converges on the same pipeline.</li>
+        repeated incidents → problem record → user story converges on the same pipeline.</li>
   </ul>
 </section>
 
@@ -723,7 +723,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   </ul>
 
   <div class="callout">
-    <span class="label">Demo-day rule</span>
+    <span class="label">Session-day rule</span>
     <p><code>tools/verify_s3_live.py --gate 10</code> runs ten real codegen + testgen + pytest cycles from
     baseline. A cycle passes only if the <strong>live</strong> path succeeded — no silent replay fallback —
     and the generated tests ran green. <strong>Require ≥ 9/10, otherwise present in
@@ -747,7 +747,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
         without a terminal.</li>
     <li><strong>Onboard a repo</strong> — writes a <code>.s3targets.json</code> manifest for a directory
         under <code>repos/</code>.</li>
-    <li><strong>Reset demo state</strong> — pick a scope, read its preview, then run it.</li>
+    <li><strong>Reset environment state</strong> — pick a scope, read its preview, then run it.</li>
   </ol>
 
   <ul class="check">
@@ -761,8 +761,8 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
         process serving the request.</li>
     <li>A manifest written here <strong>needs a console restart</strong> before that target registers.
         Say so rather than clicking twice.</li>
-    <li>Drop a <code>CR-YYYY-NNN.md</code> into <code>crs/</code> and reload the board: the ticket is
-        there, unassigned, keyed off the CR id. That is the whole onboarding story —
+    <li>Drop a <code>US-YYYY-NNN.md</code> into <code>stories/</code> and reload the board: the ticket is
+        there, unassigned, keyed off the user story id. That is the whole onboarding story —
         the four steps are in <code>repos/README.md</code>.</li>
   </ul>
 </section>
@@ -786,7 +786,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   </tr>
   <tr>
     <td class="mono">2</td>
-    <td>CR-2026-042 codegen recording stripped ~6 function docstrings from
+    <td>US-2026-042 codegen recording stripped ~6 function docstrings from
         <code>repos/policycore/core/db.py</code></td>
     <td>AMS-102 diff was dominated by unrelated deletions</td>
     <td><span class="pass">Fixed</span> — 3 Aug 2026 re-record; docstring counts now
@@ -815,13 +815,13 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
   </tr>
   <tr>
     <td class="mono">6</td>
-    <td>AMS-103's Jira card shows <code>APPLICATION: PolicyCore</code> though it is a ClaimsPortal CR</td>
+    <td>AMS-103's Jira card shows <code>APPLICATION: PolicyCore</code> though it is a ClaimsPortal user story</td>
     <td>Cosmetic inconsistency in seeded data</td>
     <td>Open — low priority</td>
   </tr>
   <tr>
     <td class="mono">7</td>
-    <td>Gap gate occasionally asks about a detail the CR already states
+    <td>Gap gate occasionally asks about a detail the user story already states
         (e.g. the deductible's data type)</td>
     <td>One wasted clarification turn</td>
     <td>Open — prompt tuning</td>
@@ -830,14 +830,14 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
     <td class="mono">8</td>
     <td>After QA hand-off the console silently re-targets another ticket, since the handed-off one
         leaves the developer's filtered board</td>
-    <td>Disorienting mid-demo</td>
+    <td>Disorienting mid-run</td>
     <td>Open — low priority</td>
   </tr>
   <tr>
     <td class="mono">9</td>
     <td>ClaimsPortal consoles show no deductible column; <code>payableAmount</code> is not rendered either</td>
     <td>No visual before/after on :8081</td>
-    <td>By design — CR forbids HTML changes</td>
+    <td>By design — user story forbids HTML changes</td>
   </tr>
 </table>
 
@@ -856,7 +856,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
         <code>apps/run-claims-service.sh</code> (or <code>demo/run_s3_claimsportal.sh</code> for both).</td>
   </tr>
   <tr>
-    <td>Applied a CR but the ClaimsPortal console is unchanged</td>
+    <td>Applied a user story but the ClaimsPortal console is unchanged</td>
     <td>Stale process — uvicorn runs without <code>--reload</code> here, so it's still serving the pre-apply
         code. Ctrl-C and relaunch both services.</td>
   </tr>
@@ -904,7 +904,7 @@ curl -s -b $C -X POST localhost:8000/api/s3/gitlab/scope-auto \
 </table>
 
 <p class="footer-note">
-  All data in this demo is synthetic and the insurer is fictional. No real client data, client names,
+  All data here is synthetic and the insurer is fictional. No real client data, client names,
   or credentials appear anywhere in this repo — see <span class="mono">CLAUDE.md</span> for the full
   project rules.
 </p>

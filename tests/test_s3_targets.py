@@ -1,5 +1,5 @@
 """Tests for s3_enhancement/targets.py's collision-prevention and per-target
-discovery — the seam that lets S3 scale from one repo/CR to many without
+discovery — the seam that lets S3 scale from one repo/user story to many without
 different targets silently sharing cached LLM output."""
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def test_register_target_rejects_duplicate_cache_namespace():
 
 
 def test_post_apply_commands_matched_by_root_not_target_id():
-    """The regression this guards: an applied CR that changes a schema (e.g.
+    """The regression this guards: an applied user story that changes a schema (e.g.
     adds a column) must always trigger that app's migration/reseed step — for
     every mockapp target, current or future, without the API being told the
     target id. Matching is by root, so sibling targets inherit the step."""
@@ -106,7 +106,7 @@ def test_post_apply_commands_empty_for_non_stateful_targets():
 
 
 def test_every_mockapp_rooted_target_declares_post_apply():
-    """A new mockapp CR target registered without the reseed step would
+    """A new mockapp user story target registered without the reseed step would
     reintroduce the applied-schema crash — fail here instead of in a demo."""
     for target in targets.all_targets():
         if target.root is not None and target.root.name == "policycore":
@@ -129,7 +129,7 @@ def test_discover_files_for_target_scopes_to_local_target_root(tmp_path):
         cache_namespace="synthetic-discovery-target",
     )
 
-    files = relevance.discover_files_for_target(second, cr_text="add a feature")
+    files = relevance.discover_files_for_target(second, story_text="add a feature")
 
     assert set(files) == {"app.py", "helper.py"}
     assert "hello from synthetic repo" in files["app.py"]

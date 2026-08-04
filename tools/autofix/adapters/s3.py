@@ -17,7 +17,7 @@ import s3_enhancement.analyze as analyze_module
 import s3_enhancement.docgen as docgen_module
 from common.llm import LLMError
 from s3_enhancement.analyze import draft_effort_estimate, draft_impact_analysis
-from s3_enhancement.cr import render_cr
+from s3_enhancement.story import render_story
 from s3_enhancement.docgen import draft_release_notes
 from tools.autofix.loop import LiveCheckSpec, ScenarioAdapter
 from tools.autofix.splice import read_target
@@ -25,7 +25,7 @@ from tools.autofix.targets import REGISTRY
 
 _REFUSAL_MARKERS = ("as an ai", "i cannot", "i'm sorry, but", "i am unable to")
 _MIN_LENGTH = 40
-_CR_TEXT = render_cr("Elite")
+_CR_TEXT = render_story("Elite")
 
 
 def _assert_structurally_sound(text: str, label: str) -> None:

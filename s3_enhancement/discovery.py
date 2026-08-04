@@ -1,12 +1,12 @@
 """Auto-registration of S3 targets from the `repos/` drop folder.
 
-The onboarding story S3 claims is "drop the repo in and add its CRs". This
+The onboarding story S3 claims is "drop the repo in and add its user stories". This
 module is what makes that literally true: `repos/<name>/.s3targets.json`
 declares the target(s) that repo contributes, and `targets.py` registers every
 one it finds at import time. No code edit, no redeploy.
 
 **Why a manifest and not pure convention.** Most of a `Target` cannot be
-inferred from a directory. `codegen_allowlist` is the blast radius a CR is
+inferred from a directory. `codegen_allowlist` is the blast radius a user story is
 permitted to touch; `core_files` is what relevance must always recall;
 `regression_paths` names the human-authored suite the pipeline is forbidden to
 write to; `mutations` quote generated code verbatim. Guessing any of those
@@ -15,13 +15,13 @@ the independent check" claim untrue. The manifest is the smallest honest
 contract — everything it declares is a decision a human has to make anyway.
 
 **What a dropped repo does and does not get.** Discovery gives it relevance
-scoping, the CR/target routing, the apply/revert cycle and the regression beat.
+scoping, the user story/target routing, the apply/revert cycle and the regression beat.
 It does not give it a committed replay recording — there is nothing to record
-against until the CR is run once — so its first codegen run is a live call that
+against until the user story is run once — so its first codegen run is a live call that
 records itself (`common/llm.py::stream_complete` degrades replay->record on a
 miss). Nor does it get a bespoke structural validator: the three built-in
 targets carry hand-written file-set validators in `codegen.py` keyed to their
-own CR's shape, and a discovered target falls through to the generic
+own user story's shape, and a discovered target falls through to the generic
 `_validate_file_set`. Both are honest defaults, not gaps to paper over.
 
 The three built-in targets stay declared in `targets.py` rather than moving to
@@ -74,10 +74,10 @@ def _build_target(entry: dict[str, Any], repo_dir: Path, manifest: Path):
         # target taking it would collide on every cache key.
         raise ManifestError(f"{manifest}: cache_namespace must be non-empty")
 
-    cr = entry.get("cr")
-    cr_path = (REPO_ROOT / cr) if cr else None
-    if cr_path is not None and not cr_path.is_file():
-        raise ManifestError(f"{manifest}: cr {cr!r} does not exist")
+    story = entry.get("story")
+    story_path = (REPO_ROOT / story) if story else None
+    if story_path is not None and not story_path.is_file():
+        raise ManifestError(f"{manifest}: story {story!r} does not exist")
 
     mutations = tuple(
         Mutation(
@@ -97,8 +97,8 @@ def _build_target(entry: dict[str, Any], repo_dir: Path, manifest: Path):
         display_name=entry.get("display_name", target_id),
         application_id=entry.get("application_id", ""),
         root=repo_dir,
-        cr_template_path=cr_path,
-        cr_placeholder=entry.get("cr_placeholder", ""),
+        story_template_path=story_path,
+        story_placeholder=entry.get("story_placeholder", ""),
         core_files=_tuple(entry, "core_files"),
         never_extra=frozenset(entry.get("never_extra", [])),
         codegen_allowlist=_tuple(entry, "codegen_allowlist"),

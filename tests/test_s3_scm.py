@@ -6,7 +6,7 @@ The last one is the point of the module and is asserted structurally, not by
 convention, the same way tests/test_autofix_no_git_writes.py protects the
 autofix loop: the target apps live inside this repo, and demo/reset_s3*.sh
 restores their baseline with `git checkout HEAD -- <paths>`. A real commit here
-would make HEAD carry the CR, and the reset scripts would start silently
+would make HEAD carry the user story, and the reset scripts would start silently
 restoring the change instead of the baseline.
 """
 
@@ -286,7 +286,7 @@ def test_gate_reads_the_latest_run_not_any_run():
 
 
 def test_gate_blocks_a_failing_regression_suite():
-    """The CR broke something that already worked — the one result the whole
+    """The user story broke something that already worked — the one result the whole
     regression beat exists to catch."""
     blockers = scm.commit_blockers(
         [
@@ -372,10 +372,10 @@ def test_commit_message_is_assembled_not_drafted():
     nothing to be confidently wrong about on stage, the same reasoning as
     diagram.py and acceptance.py."""
     assert (
-        scm.commit_message_for("AMS-103", "CR-2026-043", "claims deductible handling")
-        == "AMS-103: claims deductible handling (CR-2026-043)"
+        scm.commit_message_for("AMS-103", "US-2026-043", "claims deductible handling")
+        == "AMS-103: claims deductible handling (US-2026-043)"
     )
-    assert scm.commit_message_for("AMS-103", "CR-2026-043") == "AMS-103: CR-2026-043"
+    assert scm.commit_message_for("AMS-103", "US-2026-043") == "AMS-103: US-2026-043"
     assert scm.commit_message_for("", "") == "apply reviewed AI change"
 
 
@@ -383,33 +383,33 @@ def test_commit_summary_comes_from_the_target_display_name():
     """The only human description of the change S3 has without asking a model."""
     assert (
         scm.summary_from_display_name(
-            "ClaimsPortal — claims deductible handling (CR-2026-043)"
+            "ClaimsPortal — claims deductible handling (US-2026-043)"
         )
         == "claims deductible handling"
     )
     assert (
-        scm.summary_from_display_name("MapleSure mockapp — amendment priority field (CR-2026-042)")
+        scm.summary_from_display_name("MapleSure mockapp — amendment priority field (US-2026-042)")
         == "amendment priority field"
     )
 
 
 def test_unrecognised_display_name_yields_no_summary():
-    """Better an empty summary (the subject falls back to the CR label) than a
-    whole display name, app and CR number included, in the subject line."""
+    """Better an empty summary (the subject falls back to the user story label) than a
+    whole display name, app and user story number included, in the subject line."""
     assert scm.summary_from_display_name("Some target with no dash") == ""
 
 
 def test_real_targets_all_produce_a_readable_commit_subject():
     """Guards the parse against a display name being reworded later — a silent
-    fallback here would show `AMS-103: CR-2026-043` on stage."""
+    fallback here would show `AMS-1046: US-2026-046` on stage."""
     from s3_enhancement import targets
 
     for target in (
-        targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
+        targets.get_target("documenthub-rostered-guest-wording"),
         targets.MOCKAPP_AMENDMENT_FIELD_ADD,
         targets.MOCKAPP_TIER_UPGRADE,
     ):
         summary = scm.summary_from_display_name(target.display_name)
         assert summary, f"{target.target_id} produced no commit summary"
-        assert "CR-" not in summary, f"{target.target_id} leaked the CR label into the summary"
+        assert "US-" not in summary, f"{target.target_id} leaked the story id into the summary"
         assert "(" not in summary and ")" not in summary

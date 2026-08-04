@@ -8,7 +8,7 @@ The split is the point, and it is load-bearing:
 
 | | Holds | S3's relationship to it |
 |---|---|---|
-| `repos/` | The target repositories — PolicyCore, ClaimsPortal, EnrolDirect | Something S3 **changes** |
+| `repos/` | The target repositories — PolicyCore, ClaimsPortal, EnrolDirect, DocumentHub | Something S3 **changes** |
 | `apps/` | The console, and the launch scripts | Something that **does the changing** |
 
 See [`../repos/README.md`](../repos/README.md) for the target repositories and
@@ -16,26 +16,33 @@ how to onboard a new one. The rest of the tooling sits at the root:
 `s3_enhancement/` is the AI pipeline, `common/` the shared clients, `demo/` the
 presenter scripts.
 
-Each process starts with one script and owns one port. Start them in the order
-below; only the middle two depend on each other.
+Each process starts with one script and owns one port. They are independent —
+start only the ones the beat you are rehearsing needs.
 
 | # | Process | Start with | Port | What it is |
 |---|---|---|---|---|
 | 1 | **Console** | `apps/run-console.sh` | 8000 + **5173** | The AMS console the presenter drives. FastAPI backend + React UI, both from this folder (`console/`). Open **:5173**. |
 | 2 | **PolicyCore** | `apps/run-policycore.sh` | 8501 | The client's plan-administration portal (`repos/policycore/`, Python/Streamlit/SQLite). The window the audience watches change. Open **:8501/sl_policycore** — see below. |
-| 3 | **Policy-Service** | `apps/run-policy-service.sh` | 8081 | ClaimsPortal's contracts side (`repos/claimsportal/policy_service/`). Start before Claims-Service. |
-| 4 | **Claims-Service** | `apps/run-claims-service.sh` | 8082 | ClaimsPortal's claims side (`repos/claimsportal/claims_service/`). Target of CR-2026-043. |
-| 5 | **EnrolDirect** | `apps/run-enroldirect.sh` | 8083 | The online enrolment channel and its access-preference analysis (`repos/enroldirect/`). Target of CR-2026-045. |
+| 3 | **EnrolDirect** | `apps/run-enroldirect.sh` | 8083 | The online enrolment channel and its access-preference analysis (`repos/enroldirect/`). Target of US-2026-045. |
+| 4 | **DocumentHub** | `apps/run-documenthub.sh` | 8084 | The enrolment document service (`repos/documenthub/`). Target of US-2026-046 — the cross-team ticket US-2026-045 raises. |
 
-Only the console lives here as source. Scripts 2–5 launch code out of `repos/`
-— they are here because starting the demo is a tooling job, not because the
+ClaimsPortal (:8081/:8082, US-2026-043) was retired on 2026-08-04; its two
+launchers went with it and those ports are now free.
+
+Only the console lives here as source. Scripts 2–4 launch code out of `repos/`
+— they are here because starting the applications is a tooling job, not because the
 apps they start are.
 
-You do **not** need all five for every beat. The PolicyCore CRs (CR-2026-041,
-CR-2026-042) need 1 and 2. CR-2026-043 needs 1, 3 and 4. CR-2026-045 needs 1
-and 5, and EnrolDirect runs on nothing but the venv.
+You do **not** need all six for every beat. The PolicyCore user stories (US-2026-041,
+US-2026-042) need 1 and 2. US-2026-043 needs 1, 3 and 4. US-2026-045 needs 1
+and 5. US-2026-046 needs 1 and 6. EnrolDirect and DocumentHub both run on
+nothing but the venv.
 
-A manager can also see and control 2–5 from the console's **admin panel**
+Running 5 and 6 together is worth it once: US-2026-045 changes who EnrolDirect
+admits, and US-2026-046 fixes the document DocumentHub then produces for them.
+The two beats are the same change seen from either side of a team boundary.
+
+A manager can also see and control 2–6 from the console's **admin panel**
 (`/admin`, see below) without a terminal. The console is deliberately not on
 that list — it cannot restart the process serving the request.
 
@@ -48,10 +55,8 @@ before, so a plain `localhost` run needs nothing set:
 | Variable | Used by | Default |
 |---|---|---|
 | `STREAMLIT_BASE_URL_PATH` | PolicyCore (also `demo/run_mockapp.sh`) | `sl_policycore` |
-| `POLICY_SERVICE_PORT` | Policy-Service | `8081` |
-| `CLAIMS_SERVICE_PORT` | Claims-Service | `8082` |
-| `POLICY_SERVICE_URL` | Claims-Service → Policy-Service lookups | `http://localhost:8081` |
 | `ENROLDIRECT_PORT` | EnrolDirect | `8083` |
+| `DOCUMENTHUB_PORT` | DocumentHub | `8084` |
 
 **PolicyCore serves under a base path**, at
 `http://localhost:8501/sl_policycore` rather than the bare port root, so all
@@ -67,7 +72,7 @@ build time. Its equivalents (`VITE_API_BASE_URL`, `VITE_MOCKAPP_URL`,
 
 `console/api/routers/admin.py` over `s3_enhancement/admin_ops.py`, UI at
 `console/web/src/pages/Admin.tsx`. Four jobs, all of which otherwise need a
-terminal: reset demo state, clear logs, see and control the target apps above,
+terminal: reset environment state, clear logs, see and control the target apps above,
 and onboard a repo by writing its `.s3targets.json`.
 
 Every route depends on `require_manager`, so it is invisible to an engineer or
@@ -99,10 +104,10 @@ front (`admin_ops.head_missing_paths`) and reports a named
 `reset_blocked_reason` rather than surfacing a raw git error out of a button —
 keep that check, because the situation recurs on every target move.
 
-The ClaimsPortal and EnrolDirect resets restore by copying from their
-committed `.baseline/` snapshots, so they never depend on HEAD at all.
+The ClaimsPortal, EnrolDirect and DocumentHub resets restore by copying from
+their committed `.baseline/` snapshots, so they never depend on HEAD at all.
 
-## How these map to the demo's story
+## How these map to the walkthrough
 
 The console treats each application as a **ServiceNow application** with an
 owning team, so a ticket carrying a Configuration Item routes to the right
@@ -110,17 +115,24 @@ place before any AI step runs (`s3_enhancement/applications.py`):
 
 | Repo | CI / application name | Owning team | Automatable |
 |---|---|---|---|
-| `repos/policycore/` | PolicyCore | App Support — PolicyCore | yes (CR-2026-041, CR-2026-042) |
-| `repos/claimsportal/` | ClaimsPortal | App Support — ClaimsPortal | yes (CR-2026-043) |
-| `repos/enroldirect/` | EnrolDirect | App Support — PolicyCore | yes (CR-2026-045) |
+| `repos/policycore/` | PolicyCore | App Support — PolicyCore | yes (US-2026-041, US-2026-042) |
+| `repos/claimsportal/` | ClaimsPortal | App Support — ClaimsPortal | yes (US-2026-043) |
+| `repos/enroldirect/` | EnrolDirect | App Support — PolicyCore | yes (US-2026-045) |
+| `repos/documenthub/` | DocumentHub | App Support — DocumentHub | yes (US-2026-046) |
 | — | BillingGateway | App Support — BillingGateway | no — routes only, no repo here |
-| — | DocumentHub | App Support — DocumentHub | no — routes only, no repo here |
 
-The last two exist on purpose: they show a ticket reaching the correct team
+BillingGateway exists on purpose: it shows a ticket reaching the correct team
 for an application this console has no code for, instead of the console
 pretending it can generate a fix.
 
-EnrolDirect was a third kind of row until CR-2026-045: the console had its code
+DocumentHub was that kind of row until US-2026-046, and how it stopped being
+one is the demo's own claim tested on itself. The cross-team check on
+US-2026-045 named DocumentHub as the one other team owed work; its repo was
+then dropped into `repos/` with a `.s3targets.json` manifest and became
+automatable **with no edit to `s3_enhancement/targets.py`**. It is the first
+target registered that way rather than declared by hand.
+
+EnrolDirect was a third kind of row until US-2026-045: the console had its code
 but no registered target, so it carried an empty `repo_path` and reported
 `automation_available=False`. Both halves exist now. The property still answers
 "can we act on this ticket" rather than "is the source on disk", and
@@ -148,11 +160,11 @@ beat that fails when a presenter clicks it.
   first pass.
 - One directory *inside* a target root was renamed earlier the same way:
   `policycore/systems/legacy_java_platform/` → `legacy_platform/` on
-  2026-07-31, dropping a stack name the demo no longer uses. Those 50 decoy
+  2026-07-31, dropping a stack name this project no longer uses. Those 50 decoy
   files are 50 of PolicyCore's 58-file candidate pool, so it was a real risk,
   not a cosmetic edit. It was safe only because it was verified rather than
   assumed: the candidate pool and the selected file set came back
-  byte-identical for both PolicyCore CRs, and codegen/testgen still replayed
+  byte-identical for both PolicyCore user stories, and codegen/testgen still replayed
   from cache. `.cache/vectordb` had to be deleted first — the embedding index
   is keyed by path and `demo/reset_s3.sh` clears only `.cache/llm`, so a stale
   index would have hidden any drift. Verify the same way, or don't do it.

@@ -48,7 +48,7 @@ from datetime import datetime
 from pathlib import Path
 
 from s3_enhancement import targets
-from s3_enhancement.cr import render_cr, sanitize_tier_name
+from s3_enhancement.story import render_story, sanitize_tier_name
 from s3_enhancement.targets import Target
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -97,9 +97,9 @@ class HarnessResult:
 # --- prompt / command construction -------------------------------------------
 
 
-def build_prompt(tier_name: str, cr_text: str) -> str:
-    return f"""Change request:
-{cr_text}
+def build_prompt(tier_name: str, story_text: str) -> str:
+    return f"""User story:
+{story_text}
 
 Audience-selected top tier name: {tier_name}
 
@@ -136,9 +136,9 @@ def _resolve_harness() -> str:
     return harness
 
 
-def build_command(tier_name: str, cr_text: str) -> tuple[str, list[str]]:
+def build_command(tier_name: str, story_text: str) -> tuple[str, list[str]]:
     harness = _resolve_harness()
-    prompt = build_prompt(tier_name, cr_text)
+    prompt = build_prompt(tier_name, story_text)
     return harness, _BUILDERS[harness](prompt)
 
 
@@ -336,8 +336,8 @@ def _validate_models_backward_compatible() -> None:
 
 
 def _run_live(tier_name: str, target: Target) -> HarnessResult:
-    cr_text = render_cr(tier_name, target=target)
-    harness, argv = build_command(tier_name, cr_text)
+    story_text = render_story(tier_name, target=target)
+    harness, argv = build_command(tier_name, story_text)
     expected_files = target.harness_expected_files
 
     before_untracked = _untracked_paths()

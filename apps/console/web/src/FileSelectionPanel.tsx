@@ -7,7 +7,7 @@ import type { FileSelection } from './api_s3'
 // places instead of only ever showing up in one of them.
 //
 // repos/policycore/systems/*/DESIGN.md is a bank of decoy subsystems (several of them
-// Java) this demo's screening step is meant to rule out — for CRs whose real
+// Java) this demo's screening step is meant to rule out — for user stories whose real
 // core files aren't behind their own design doc, in_scope ends up empty and
 // screened_out is the whole decoy bank. Screened-out entries must never look
 // like part of the change (hence collapsed, unlabeled-as-used, by default) —
@@ -27,13 +27,13 @@ export default function FileSelectionPanel({ selection }: { selection: FileSelec
       <div style={{ display: 'flex', gap: '2rem' }}>
         <div>
           <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>Files in this app</div>
-          <div style={{ fontWeight: 700 }}>{selection.candidate_pool_size}</div>
+          <div style={{ fontWeight: 600 }}>{selection.candidate_pool_size}</div>
         </div>
         <div>
           <div style={{ color: 'var(--ams-ink-soft)', fontSize: 'var(--ams-text-xs)' }}>
             Files used for this change
           </div>
-          <div style={{ fontWeight: 700 }}>{selection.selected_files.length}</div>
+          <div style={{ fontWeight: 600 }}>{selection.selected_files.length}</div>
         </div>
       </div>
 
@@ -49,7 +49,7 @@ export default function FileSelectionPanel({ selection }: { selection: FileSelec
           </div>
         ) : (
           <p style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)', margin: 0 }}>
-            No subsystem doc matched closely enough — this change used the CR's fixed core file
+            No subsystem doc matched closely enough — this change used the story's fixed core file
             list directly (see "Selected source files" below), not a subsystem guess.
           </p>
         )}
@@ -95,7 +95,7 @@ function SubsystemRow({ name, score, inScope }: { name: string; score: number; i
         style={{
           flex: 1,
           height: 6,
-          borderRadius: 3,
+          borderRadius: 'var(--ams-radius-sm)',
           background: 'var(--ams-line)',
           overflow: 'hidden',
           maxWidth: 160,

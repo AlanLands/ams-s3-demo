@@ -75,6 +75,17 @@ class Consumer:
     direction is what turns a list of application names into a dependency map:
     a downstream consumer cannot be consulted about a change, only notified of
     one, and those need different conversations.
+
+    `changeRequired` is a second, independent axis and the more useful one:
+    being affected is not the same as having work to do. A system that reads
+    the authorising preference as a *value* keeps working unchanged when a
+    population is reclassified — its numbers move between buckets it already
+    has. A system that has to *author behaviour* per preference has a case it
+    has never handled, and that is a code change someone must make.
+
+    Collapsing the two is how a one-repo change turns into a five-team
+    programme on a slide. `changeRationale` carries the reason either way, so a
+    "no" is auditable rather than an omission.
     """
 
     application: str
@@ -82,6 +93,8 @@ class Consumer:
     owningTeam: str
     purpose: str
     accessBehaviour: str
+    changeRequired: bool
+    changeRationale: str
 
 
 # The estate as it consumes these preferences. Declared rather than
@@ -99,6 +112,13 @@ CONSUMERS: tuple[Consumer, ...] = (
             "Plan administrators set the preferences per contract at inception "
             "and on amendment. Source of truth; changes here propagate."
         ),
+        changeRequired=False,
+        changeRationale=(
+            "Upstream of the decision. The two preferences keep their present "
+            "meaning and no new one is stored, so nothing it holds changes. "
+            "Adding a per-sponsor prospect policy later would change that, "
+            "which is why the user story rules that out explicitly."
+        ),
     ),
     Consumer(
         application="EnrolDirect",
@@ -109,6 +129,11 @@ CONSUMERS: tuple[Consumer, ...] = (
             "Reads the contract's enabled preferences and grants or denies each "
             "enrolment attempt. The only system that turns a preference into an "
             "access outcome."
+        ),
+        changeRequired=True,
+        changeRationale=(
+            "This system. The change under analysis is its own — it is listed "
+            "for completeness of the map, not as another team's work."
         ),
     ),
     Consumer(
@@ -121,6 +146,15 @@ CONSUMERS: tuple[Consumer, ...] = (
             "authorised the enrolment, so a prospect admitted as a guest "
             "receives guest wording."
         ),
+        changeRequired=True,
+        changeRationale=(
+            "The one consumer that has to author behaviour rather than carry a "
+            "value. Its wording is written per authorising preference, and a "
+            "prospect admitted under guest access is a recipient neither of "
+            "the existing packs was written for: the guest pack addresses "
+            "someone with no place on the roster, which a prospect has. That "
+            "is a new case, and a new case is a code change."
+        ),
     ),
     Consumer(
         application="NightlyBatch",
@@ -132,6 +166,14 @@ CONSUMERS: tuple[Consumer, ...] = (
             "population moves volume between its member and guest totals "
             "without changing the overall figure."
         ),
+        changeRequired=False,
+        changeRationale=(
+            "Affected, but with nothing to change. It aggregates by whatever "
+            "preference the record carries, and both buckets already exist. "
+            "Its member and guest totals move; the reconciliation it performs "
+            "and the overall figure it reconciles to do not. Worth a heads-up "
+            "to Batch Ops before the first run, not a ticket."
+        ),
     ),
     Consumer(
         application="IntegrationBridge",
@@ -142,6 +184,14 @@ CONSUMERS: tuple[Consumer, ...] = (
             "Carries the authorising preference on each event. Subscribers "
             "filtering on it will see a reclassified population appear on a "
             "different stream than before."
+        ),
+        changeRequired=False,
+        changeRationale=(
+            "Affected, but with nothing to change. It passes the authorising "
+            "preference through as data on an existing field; no new value "
+            "appears and no schema moves. The risk it carries is a "
+            "subscriber's, and subscribers are the declared-list gap named in "
+            "`UNQUANTIFIED_CONSEQUENCES` — not work for this team."
         ),
     ),
 )
@@ -291,6 +341,88 @@ def catalogue_reach() -> dict[str, object]:
     return per_option
 
 
+def document_impact() -> dict[str, object]:
+    """What each option does to the confirmation pack a prospect receives.
+
+    The third place the classification bites, and the first one that lands on
+    another team. The gate decides who gets in; the catalogue decides what they
+    can reach; this decides what MapleSure then says to them in writing.
+
+    It is computable from data already on hand, which is why it is here rather
+    than in the model's prose. DocumentHub words a pack from the *authorising
+    preference*, and a prospect is by definition on the sponsor's roster
+    (`applicants.CATEGORY_DESCRIPTION[PROSPECT]`). So every prospect admitted
+    under the Guest preference is a rostered person carrying guest
+    authorisation — a combination DocumentHub has never received, because the
+    gate refuses prospects today and the two facts have therefore always moved
+    together. Counting the admissions counts the packs.
+
+    What that produces is not an error: DocumentHub selects the guest pack,
+    which states that MapleSure holds no member record for the recipient and
+    encloses an identity confirmation form. Sent to someone the sponsor lists
+    on its own roster, both are false, and withdrawing the request costs plan
+    administration a telephone call each.
+
+    Treating prospects as members has the mirror problem and it is reported
+    too: the member pack refers to existing coverage, and a prospect holds
+    none. Reporting only the recommended option's cost would be advocacy — see
+    this module's docstring.
+
+    Nothing here reaches DocumentHub to check. `wordedFor` is what this
+    analysis asserts a pack would be selected on, from a documented
+    integration contract, and it is named as an assumption rather than as a
+    finding.
+    """
+    per_option: dict[str, dict[str, object]] = {}
+    for option in PROSPECT_OPTIONS:
+        admitted = sum(1 for granted in _decide_all(option).values() if granted)
+        if option == TREAT_AS_GUEST:
+            consequence = (
+                "The guest pack states that no member record is held and "
+                "encloses an identity confirmation form. Every recipient is on "
+                "the sponsor's roster, so both are false and the form has to be "
+                "withdrawn by hand."
+            )
+        else:
+            consequence = (
+                "The member pack refers to coverage the recipient already "
+                "holds under the contract. A prospect holds none, so the "
+                "paragraph describes benefits that do not exist."
+            )
+        per_option[option] = {
+            "packsRequiringNewWording": admitted,
+            "wordedFor": required_preference_for(option),
+            "consequenceIfUnchanged": consequence,
+        }
+
+    return {
+        "consumer": "DocumentHub",
+        "owningTeam": "App Support — DocumentHub",
+        "whyAffected": (
+            "It selects confirmation-pack wording from the authorising "
+            "preference alone. Prospects are on the roster, so admitting them "
+            "under either preference produces a recipient neither existing "
+            "pack was written for."
+        ),
+        "perOption": per_option,
+        "recommendedOption": RECOMMENDED_OPTION,
+        "packsUnderRecommendedOption": per_option[RECOMMENDED_OPTION][
+            "packsRequiringNewWording"
+        ],
+        "changeRequiredOf": (
+            "A third worded pack and enclosure set for a rostered applicant "
+            "admitted under guest access. It is DocumentHub's change to make, "
+            "not this app's — nothing here can word a document."
+        ),
+        "assumption": (
+            "That DocumentHub still selects wording on the authorising "
+            "preference alone. This app has no visibility into its code; the "
+            "rule is taken from the integration contract, and it is the one "
+            "thing here that could be out of date without anyone noticing."
+        ),
+    }
+
+
 def prospect_impact() -> dict[str, object]:
     """Compare treating prospects as members against treating them as guests.
 
@@ -355,6 +487,10 @@ def prospect_impact() -> dict[str, object]:
         "disagreements": disagreements,
         "disagreementCount": len(disagreements),
         "catalogueReach": catalogue_reach(),
+        # Folded into the main analysis rather than served on its own endpoint:
+        # a downstream consequence reported separately is a consequence a
+        # reader can finish the analysis without having seen.
+        "documentImpact": document_impact(),
         "recommendation": _recommendation(member_grants, guest_grants, disagreements),
         "notEvidencedByThisAnalysis": list(UNQUANTIFIED_CONSEQUENCES),
         "standingRisks": list(STANDING_RISKS),
@@ -401,7 +537,7 @@ def _recommendation(
     }
 
 
-def consumers() -> list[dict[str, str]]:
+def consumers() -> list[dict[str, object]]:
     """The declared application inventory, as plain dicts for the API."""
     return [
         {
@@ -410,6 +546,27 @@ def consumers() -> list[dict[str, str]]:
             "owningTeam": c.owningTeam,
             "purpose": c.purpose,
             "accessBehaviour": c.accessBehaviour,
+            "changeRequired": c.changeRequired,
+            "changeRationale": c.changeRationale,
         }
         for c in CONSUMERS
+    ]
+
+
+def other_teams_requiring_change() -> list[dict[str, object]]:
+    """The consumers that owe someone else work, which is a shorter list.
+
+    The cross-team check reads this rather than `consumers()`. The distinction
+    it draws is the whole point (see `Consumer.changeRequired`): every entry
+    here is a ticket another team has to accept, so an entry added carelessly
+    costs a real conversation with a real team.
+
+    EnrolDirect is excluded because it is the system the change is *in* — a
+    change cannot be cross-team with itself, and including it would put the
+    story's own work on another team's board.
+    """
+    return [
+        entry
+        for entry in consumers()
+        if entry["changeRequired"] and entry["application"] != "EnrolDirect"
     ]

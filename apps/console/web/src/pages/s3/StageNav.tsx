@@ -9,14 +9,23 @@ export default function StageNav({ stageId }: { stageId: S3Stage['id'] }) {
 
   return (
     <nav className="ams-stage-nav" aria-label="Stage navigation">
-      {previous && !previous.locked ? (
+      {/* Three cases, not two. A previous stage that exists but is locked stays
+          on screen as a disabled control, because its presence is information —
+          the step is there, you just cannot go back to it yet. On the first
+          stage there is no previous stage at all, and rendering a dead
+          "← Previous" invents a step that does not exist; the empty <span>
+          holds the flex row so "Next" stays right-aligned instead of jumping to
+          the left edge on stage one. */}
+      {!previous ? (
+        <span />
+      ) : previous.locked ? (
+        <span className="ams-button-secondary ams-stage-nav-disabled" aria-disabled="true">
+          ← {previous.title}
+        </span>
+      ) : (
         <Link className="ams-button-secondary" to={previous.path}>
           ← {previous.title}
         </Link>
-      ) : (
-        <span className="ams-button-secondary ams-stage-nav-disabled" aria-disabled="true">
-          ← {previous?.title ?? 'Previous'}
-        </span>
       )}
       {next && !next.locked ? (
         <Link className="ams-button" to={next.path}>

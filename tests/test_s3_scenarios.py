@@ -51,7 +51,7 @@ def test_rejects_an_empty_plan():
 
 
 def test_rejects_a_scenario_citing_an_unknown_criterion():
-    """The whole point of the plan is traceability; a citation the CR does not
+    """The whole point of the plan is traceability; a citation the user story does not
     contain is worse than no citation, because the matrix would render it."""
     scenario = scenario_from_dict(_raw(acceptance_criteria=["AC-9"]))
     with pytest.raises(LLMError, match="unknown acceptance criterion"):
@@ -65,7 +65,7 @@ def test_rejects_a_scenario_citing_nothing():
 
 
 def test_allows_an_untraced_scenario_when_the_ticket_has_no_criteria():
-    """An ad-hoc ticket has no CR to trace to; a plan is still better than none."""
+    """An ad-hoc ticket has no user story to trace to; a plan is still better than none."""
     validate_scenarios([scenario_from_dict(_raw(acceptance_criteria=[]))], [])
 
 
@@ -133,20 +133,20 @@ def test_draft_scenarios_strips_markdown_fences():
 
 def test_draft_scenarios_reports_uncovered_criteria():
     payload = {"scenarios": [_raw(acceptance_criteria=["AC-1"])]}
-    cr_text = (
+    story_text = (
         "Acceptance criteria:\n"
         "- The form has a Priority field.\n"
         "- Existing flows are unaffected.\n"
     )
     with patch.object(scenarios_mod, "complete", return_value=json.dumps(payload)):
-        draft = draft_scenarios(cr_text)
+        draft = draft_scenarios(story_text)
     assert draft.uncovered_criteria == ["AC-2"]
 
 
 def test_prompt_carries_the_criteria_ids_verbatim():
     from s3_enhancement.scenarios import build_prompt
 
-    prompt = build_prompt("some cr", CRITERIA, target=MOCKAPP_AMENDMENT_FIELD_ADD)
+    prompt = build_prompt("some story", CRITERIA, target=MOCKAPP_AMENDMENT_FIELD_ADD)
     assert "AC-1: The form has a Priority field." in prompt
     assert "AC-2: Existing flows are unaffected." in prompt
 
@@ -161,7 +161,7 @@ def test_every_demo_target_has_a_distinct_scenario_cache_key():
         for target in (
             targets.MOCKAPP_TIER_UPGRADE,
             targets.MOCKAPP_AMENDMENT_FIELD_ADD,
-            targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
+            targets.get_target("documenthub-rostered-guest-wording"),
         )
     ]
     assert len(set(keys)) == len(keys)

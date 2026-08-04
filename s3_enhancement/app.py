@@ -17,7 +17,7 @@ from common.ui_theme import page_header
 from s3_enhancement import relevance
 from s3_enhancement.analyze import draft_effort_estimate, draft_impact_analysis
 from s3_enhancement.codegen import CodegenResult, generate_change
-from s3_enhancement.cr import render_cr, sanitize_tier_name
+from s3_enhancement.story import render_story, sanitize_tier_name
 from s3_enhancement.docgen import draft_release_notes
 from s3_enhancement.harness import latest_harness_run
 from s3_enhancement.testgen import generate_tests
@@ -27,7 +27,7 @@ def render() -> None:
     page_header(
         "S3",
         "Enhancement Delivery",
-        "Live CR intake, AI-assisted code generation, generated tests, and release notes.",
+        "Live user story intake, AI-assisted code generation, generated tests, and release notes.",
     )
 
     if "s3_tier_name" not in st.session_state:
@@ -41,9 +41,9 @@ def render() -> None:
         st.warning(validation_error)
         return
     st.session_state.s3_tier_name = tier_name
-    cr_text = render_cr(tier_name)
+    story_text = render_story(tier_name)
 
-    st.text_area("CR-2026-041", cr_text, height=240, disabled=True)
+    st.text_area("US-2026-041", story_text, height=240, disabled=True)
 
     if st.button("Run AI impact analysis"):
         try:
@@ -51,10 +51,10 @@ def render() -> None:
                 impact_usage: dict = {}
                 effort_usage: dict = {}
                 st.session_state.s3_impact = draft_impact_analysis(
-                    cr_text, usage_out=impact_usage
+                    story_text, usage_out=impact_usage
                 )
                 st.session_state.s3_effort = draft_effort_estimate(
-                    cr_text, usage_out=effort_usage
+                    story_text, usage_out=effort_usage
                 )
             st.session_state.s3_beat_tokens["analysis"] = (
                 impact_usage.get("input_tokens", 0)
@@ -79,7 +79,7 @@ def render() -> None:
         cols[2].write(estimate.reasoning)
     if "s3_impact" in st.session_state or "s3_effort" in st.session_state:
         impact_selection = relevance.select_relevant_files(
-            cr_text, relevance.discover_mockapp_files()
+            story_text, relevance.discover_mockapp_files()
         )
         _render_file_selection_panel(impact_selection)
         previous_result = st.session_state.get("s3_codegen_result")
@@ -90,7 +90,7 @@ def render() -> None:
     if st.button("Generate the change"):
         try:
             with st.spinner("Generating and applying source changes..."):
-                result = generate_change(tier_name, cr_text)
+                result = generate_change(tier_name, story_text)
             st.session_state.s3_codegen_result = result
             st.session_state.s3_beat_tokens["generate"] = (
                 (result.scoped_input_tokens or 0) + (result.scoped_output_tokens or 0)
@@ -118,7 +118,7 @@ def render() -> None:
                 "run. Run `demo/reset_s3.sh` to regenerate from a clean baseline."
             )
         codegen_selection = relevance.select_relevant_files(
-            cr_text, relevance.discover_mockapp_files()
+            story_text, relevance.discover_mockapp_files()
         )
         _render_file_selection_panel(codegen_selection)
         _render_token_panel(result)
@@ -128,7 +128,7 @@ def render() -> None:
     if st.button("Generate tests + run"):
         try:
             with st.spinner("Generating tests..."):
-                test_result = generate_tests(tier_name, cr_text)
+                test_result = generate_tests(tier_name, story_text)
             st.session_state.s3_testgen_result = test_result
             st.session_state.s3_beat_tokens["test"] = (
                 (test_result.scoped_input_tokens or 0)
@@ -187,7 +187,7 @@ def render() -> None:
             with st.spinner("Drafting release notes..."):
                 usage: dict = {}
                 st.session_state.s3_release_notes = draft_release_notes(
-                    cr_text, usage_out=usage
+                    story_text, usage_out=usage
                 )
             st.session_state.s3_beat_tokens["document"] = (
                 usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
@@ -202,7 +202,7 @@ def render() -> None:
         st.markdown(f"**{AI_SUGGESTION_LABEL}**")
         st.text_area("Release notes", st.session_state.s3_release_notes, height=180)
 
-    _render_gitlab_panel(cr_text)
+    _render_gitlab_panel(story_text)
 
     st.divider()
     st.subheader("API usage by beat")
@@ -280,7 +280,7 @@ def _render_token_panel(result: CodegenResult | None) -> None:
         )
 
 
-def _render_gitlab_panel(cr_text: str) -> None:
+def _render_gitlab_panel(story_text: str) -> None:
     st.divider()
     st.subheader("Connect your GitLab")
     st.caption(
@@ -317,16 +317,16 @@ def _render_gitlab_panel(cr_text: str) -> None:
         f'{project.get("name_with_namespace", project.get("name"))} (#{project.get("id")})'
         for project in projects
     ]
-    chosen_label = st.selectbox("Target repo for this CR", labels)
+    chosen_label = st.selectbox("Target repo for this user story", labels)
     chosen = projects[labels.index(chosen_label)]
 
     if st.button("Scope files for this repo"):
         try:
             with st.spinner("Listing repo files and scoping the relevant ones..."):
                 repo_size = len(get_client().list_repo_paths(chosen["id"]))
-                gitlab_files = relevance.discover_gitlab_files(chosen["id"], cr_text)
+                gitlab_files = relevance.discover_gitlab_files(chosen["id"], story_text)
                 selection = relevance.select_relevant_files(
-                    cr_text, gitlab_files, core_files=(), design_docs={}
+                    story_text, gitlab_files, core_files=(), design_docs={}
                 )
             st.session_state.s3_gitlab_repo_size = repo_size
             st.session_state.s3_gitlab_selection = selection

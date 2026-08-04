@@ -24,19 +24,28 @@ from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError, get_client
 from common.jira_client import JiraError, get_jira_client
 from common.llm import LLMError
-from common.roster import Identity
+from common.roster import ROSTER, Identity
 from common.ticket_events import (
     distinct_tickets_with_action,
     events_for,
     events_log_marker,
     record_event,
 )
-from s3_enhancement import applications, cr_intake, routing, scm, scm_live, targets, testrun
+from s3_enhancement import (
+    admin_ops,
+    applications,
+    routing,
+    scm,
+    scm_live,
+    story_intake,
+    targets,
+    testrun,
+)
 from s3_enhancement.acceptance import parse_acceptance_criteria
 from s3_enhancement.analyze import (
     build_assumption_question,
-    check_cr_clarity,
-    check_cr_gaps,
+    check_story_clarity,
+    check_story_gaps,
     draft_adhoc_effort_estimate,
     draft_adhoc_impact_analysis,
     draft_cross_team_impact,
@@ -55,7 +64,7 @@ from s3_enhancement.codegen import (
     revise_change,
 )
 from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS, clarification_turns_used
-from s3_enhancement.cr import render_cr, sanitize_tier_name
+from s3_enhancement.story import render_story, sanitize_tier_name
 from s3_enhancement.design_sync import review_after_apply
 from s3_enhancement.designdoc import (
     PdfUnavailableError,
@@ -98,7 +107,7 @@ from s3_enhancement.scenarios import (
     validate_scenarios,
 )
 from s3_enhancement.screenshots import ScreenshotError, capture_form_screenshot
-from s3_enhancement.target_match import TargetMatch, resolve_target_for_cr
+from s3_enhancement.target_match import TargetMatch, resolve_target_for_story
 from s3_enhancement.targets import Target
 from s3_enhancement.testgen import generate_tests
 from s3_enhancement.traceability import build_matrix
@@ -165,7 +174,7 @@ class ScenarioApprovalRequest(TierRequest):
 
 class TestsGenerateRequest(TierRequest):
     # Optional: the approved plan to generate against. Absent means "generate
-    # from the CR alone", which is what the pre-scenario flow did.
+    # from the user story alone", which is what the pre-scenario flow did.
     scenarios: list[dict] | None = None
 
 
@@ -185,12 +194,12 @@ class TraceabilityRequest(TierRequest):
 
 class AdhocAnalyzeRequest(BaseModel):
     # Free-text ticket content — unlike TierRequest, there's no tier_name/
-    # target_id because this is for a ticket with no CR/target registered in
+    # target_id because this is for a ticket with no user story/target registered in
     # this console (e.g. a cross-team ticket raised against another app).
     # On a follow-up call after `needs_clarification: true` came back, this
     # field carries the engineer's answer, not the original ticket text again
     # — same "latest message" semantics as QuickChatRequest.message.
-    cr_text: str
+    story_text: str
     ticket_number: str | None = None
     reset_clarification: bool = False
     # ServiceNow application context, when the ticket carries it. Present ->
@@ -199,12 +208,12 @@ class AdhocAnalyzeRequest(BaseModel):
     business_service: str | None = None
 
 
-def _cr_text_or_400(tier_name: str, *, target: Target | None = None) -> str:
+def _story_text_or_400(tier_name: str, *, target: Target | None = None) -> str:
     clean, error = sanitize_tier_name(tier_name)
     if error:
         raise HTTPException(status_code=422, detail=error)
     assert clean is not None
-    return render_cr(clean, target=target)
+    return render_story(clean, target=target)
 
 
 def _run_suite_or_502(target: Target) -> testrun.SuiteRun:
@@ -222,10 +231,10 @@ _MISSING_FEATURE_ERRORS = ("AttributeError", "TypeError", "NameError", "ImportEr
 
 
 def _unapplied_change_hint(run: testrun.SuiteRun) -> str | None:
-    """Set when a failing run looks like the CR was never applied.
+    """Set when a failing run looks like the user story was never applied.
 
-    The generated suite is written against the *post*-CR code. Run it against
-    the baseline and every test dies on the attribute or keyword the CR was
+    The generated suite is written against the *post*-user story code. Run it against
+    the baseline and every test dies on the attribute or keyword the user story was
     supposed to add — which on screen reads as "the AI wrote broken tests",
     the single most damaging way this beat can fail in front of an audience.
     The failures are indistinguishable from a genuine bug unless something
@@ -362,7 +371,7 @@ def _ask_clarifying_question(
     ticket_number: str | None,
 ) -> dict:
     """Record a clarifying question as the next turn in a shared
-    conversation history (whatever its source — CR-text vagueness, a
+    conversation history (whatever its source — story-text vagueness, a
     specific missing detail, or repo identity — they all share one
     `needs_clarification`/`question` contract and one turn budget) and
     return the response shape the frontend's single answer box expects."""
@@ -376,12 +385,12 @@ def _ask_clarifying_question(
     return {"label": AI_SUGGESTION_LABEL, "needs_clarification": True, "question": question}
 
 
-def _full_cr_text(latest: str, history: list[QuickChatTurn]) -> str:
+def _full_story_text(latest: str, history: list[QuickChatTurn]) -> str:
     """Reconstruct the ticket's full text from the clarification transcript.
 
     Once any clarification round has happened, `latest` alone is only the
     newest fragment — the engineer's answer to the last question, not the
-    original ticket text (see AdhocAnalyzeRequest.cr_text's "latest message"
+    original ticket text (see AdhocAnalyzeRequest.story_text's "latest message"
     semantics). The final impact analysis and any repo-match both need the
     whole picture, not just the last reply.
     """
@@ -409,7 +418,7 @@ def _origin_fields(key: str) -> dict:
     """A ticket's intake origin — "problem_record" (created by
     /jira/problem-record-ticket, tagged with the problem_id it was derived
     from, and with the ServiceNow application context that came with it) or
-    "business_cr" (everything else: the fixed CR demo tickets and
+    "business_story" (everything else: the fixed user story demo tickets and
     human-confirmed cross-team tickets). Both origins converge on the
     identical downstream flow; this is presentational only, read from the
     same ticket-events log every other workflow milestone already uses.
@@ -428,7 +437,7 @@ def _origin_fields(key: str) -> dict:
         if event.get("action") == "problem_record_ticket_created":
             latest = _parse_detail_fields(event.get("detail", ""))
     if latest is None:
-        return {"origin": "business_cr"}
+        return {"origin": "business_story"}
     return {
         "origin": "problem_record",
         "problem_id": latest.get("problem_id", ""),
@@ -437,26 +446,26 @@ def _origin_fields(key: str) -> dict:
     }
 
 
-def _cr_link_fields(key: str) -> dict:
-    """Which CR file a ticket was auto-opened from, and the target that CR
-    resolved to — `{}` for every ticket that wasn't (the seeded demo CRs,
+def _story_link_fields(key: str) -> dict:
+    """Which user story file a ticket was auto-opened from, and the target that user story
+    resolved to — `{}` for every ticket that wasn't (the seeded demo user stories,
     cross-team, problem-record).
 
     Derived fresh from the ticket-events log every call, exactly like
     `_origin_fields`, so nothing has to be stored on the issue itself. This
-    is also what keeps `resolve_target_for_cr` off the board's hot path: the
-    resolution is done once, when the CR is first seen, and read back from
-    here on every board load afterwards (see `_cr_board_rows`).
+    is also what keeps `resolve_target_for_story` off the board's hot path: the
+    resolution is done once, when the user story is first seen, and read back from
+    here on every board load afterwards (see `_story_board_rows`).
     """
     latest: dict[str, str] | None = None
     for event in events_for(key):
-        if event.get("action") == cr_intake.TICKET_CREATED_ACTION:
+        if event.get("action") == story_intake.TICKET_CREATED_ACTION:
             latest = _parse_detail_fields(event.get("detail", ""))
     if latest is None:
         return {}
-    fields = {"cr_file": latest.get("cr_file", "")}
-    # Absent, not empty, when the CR resolved to no registered target — an
-    # unresolved CR is a perfectly valid ticket (the console's own
+    fields = {"story_file": latest.get("story_file", "")}
+    # Absent, not empty, when the user story resolved to no registered target — an
+    # unresolved user story is a perfectly valid ticket (the console's own
     # /target/resolve is still there to try again), and a blank target_id
     # would read as "resolved to nothing" rather than "not resolved".
     if latest.get("target_id"):
@@ -504,49 +513,49 @@ def route(payload: RouteRequest, identity: Identity = Depends(require_identity))
     return _route_dict(decision)
 
 
-_CRS_ROOT = targets.REPO_ROOT / "crs"
+_CRS_ROOT = targets.REPO_ROOT / "stories"
 
 
 class TargetResolveRequest(BaseModel):
-    # Exactly one of these two. cr_file is the common case: the console
-    # already knows which CR a ticket links to (see S3.tsx's TICKET_CRS) but
+    # Exactly one of these two. story_file is the common case: the console
+    # already knows which user story a ticket links to (see S3.tsx's TICKET_CRS) but
     # not which target it resolves to — that's the whole point of this
-    # endpoint — so it names the file under crs/ and the server reads it,
-    # rather than the client fetching and re-posting the CR's own text.
-    # cr_text remains for the ad-hoc/cross-team case where there's no
-    # committed CR file at all.
-    cr_file: str | None = None
-    cr_text: str | None = None
+    # endpoint — so it names the file under stories/ and the server reads it,
+    # rather than the client fetching and re-posting the user story's own text.
+    # story_text remains for the ad-hoc/cross-team case where there's no
+    # committed user story file at all.
+    story_file: str | None = None
+    story_text: str | None = None
     ticket_number: str | None = None
 
 
-def _read_cr_file_or_4xx(cr_file: str) -> str:
-    """Read a CR by bare filename from `crs/`.
+def _read_story_file_or_4xx(story_file: str) -> str:
+    """Read a user story by bare filename from `stories/`.
 
-    Filename only, no path components — the client names *which* CR, never
-    *where* to read from, so this can never escape crs/.
+    Filename only, no path components — the client names *which* user story, never
+    *where* to read from, so this can never escape stories/.
     """
-    if "/" in cr_file or "\\" in cr_file or not cr_file.endswith(".md"):
-        raise HTTPException(status_code=422, detail="cr_file must be a bare *.md filename")
-    cr_path = _CRS_ROOT / cr_file
-    if not cr_path.is_file():
-        raise HTTPException(status_code=404, detail=f"no such CR file: {cr_file}")
-    return cr_path.read_text(encoding="utf-8").strip()
+    if "/" in story_file or "\\" in story_file or not story_file.endswith(".md"):
+        raise HTTPException(status_code=422, detail="story_file must be a bare *.md filename")
+    story_path = _CRS_ROOT / story_file
+    if not story_path.is_file():
+        raise HTTPException(status_code=404, detail=f"no such user story file: {story_file}")
+    return story_path.read_text(encoding="utf-8").strip()
 
 
-@router.get("/cr/file")
-def cr_file(cr_file: str, identity: Identity = Depends(require_identity)) -> dict:
-    """A CR's own text, by filename, with no target involved.
+@router.get("/story/file")
+def story_file(story_file: str, identity: Identity = Depends(require_identity)) -> dict:
+    """A user story's own text, by filename, with no target involved.
 
-    `/s3/cr` renders a *target's* registered CR template, which presupposes
+    `/s3/story` renders a *target's* registered user story template, which presupposes
     the target is already known. This endpoint exists for the case where it
-    isn't yet: a CR that names no target system has to be read and analyzed
+    isn't yet: a user story that names no target system has to be read and analyzed
     before anything can resolve it to a repo (see the console's ad-hoc
     analysis path). Serving the file verbatim keeps that flow reading the
-    same CR the resolver reads, rather than a second copy of the request
+    same user story the resolver reads, rather than a second copy of the request
     pasted into a ticket description.
     """
-    return {"cr_file": cr_file, "cr_text": _read_cr_file_or_4xx(cr_file)}
+    return {"story_file": story_file, "story_text": _read_story_file_or_4xx(story_file)}
 
 
 def _target_match_dict(match: TargetMatch) -> dict:
@@ -576,37 +585,37 @@ def _target_match_dict(match: TargetMatch) -> dict:
 def resolve_target(
     payload: TargetResolveRequest, identity: Identity = Depends(require_identity)
 ) -> dict:
-    """Resolve a CR's text to one of this console's registered targets.
+    """Resolve a user story's text to one of this console's registered targets.
 
-    Cheapest tier first (see s3_enhancement/target_match.py): the CR's own
-    `CR-YYYY-NNN:` identifier against every registered target's
-    `cr_template_path`, then its `Application:` header against the
+    Cheapest tier first (see s3_enhancement/target_match.py): the user story's own
+    `US-YYYY-NNN:` identifier against every registered target's
+    `story_template_path`, then its `Application:` header against the
     applications registry, and only then an LLM guess across the registered
     targets. This is what lets onboarding a new repo mean "register a Target
-    and drop its CR under crs/" instead of also editing a ticket-key lookup
+    and drop its user story under stories/" instead of also editing a ticket-key lookup
     table in the console.
     """
-    if payload.cr_file and payload.cr_text:
+    if payload.story_file and payload.story_text:
         raise HTTPException(
-            status_code=422, detail="pass exactly one of cr_file or cr_text, not both"
+            status_code=422, detail="pass exactly one of story_file or story_text, not both"
         )
-    if payload.cr_file:
-        cr_text = _read_cr_file_or_4xx(payload.cr_file)
-    elif payload.cr_text:
-        cr_text = payload.cr_text.strip()
+    if payload.story_file:
+        story_text = _read_story_file_or_4xx(payload.story_file)
+    elif payload.story_text:
+        story_text = payload.story_text.strip()
     else:
-        raise HTTPException(status_code=422, detail="cr_file or cr_text is required")
+        raise HTTPException(status_code=422, detail="story_file or story_text is required")
 
-    if not cr_text:
-        raise HTTPException(status_code=422, detail="cr_text must not be empty")
+    if not story_text:
+        raise HTTPException(status_code=422, detail="story_text must not be empty")
 
-    match = resolve_target_for_cr(cr_text)
+    match = resolve_target_for_story(story_text)
 
     if payload.ticket_number:
         detail = (
             f"{match.target.display_name} via {match.method}"
             if match.resolved
-            else "no target match — CR text didn't resolve to a registered target"
+            else "no target match — user story text didn't resolve to a registered target"
         )
         record_event(payload.ticket_number, "system", "target_resolved", detail=detail)
 
@@ -648,8 +657,8 @@ def reset_marker(identity: Identity = Depends(require_identity)) -> dict:
     return {"marker": events_log_marker()}
 
 
-@router.get("/cr")
-def cr(
+@router.get("/story")
+def story(
     tier_name: str = "Elite",
     target_id: str | None = None,
     identity: Identity = Depends(require_identity),
@@ -659,14 +668,14 @@ def cr(
         raise HTTPException(status_code=422, detail=error)
     assert clean is not None
     target = targets.get_target(target_id)
-    return {"tier_name": clean, "cr_text": render_cr(clean, target=target)}
+    return {"tier_name": clean, "story_text": render_story(clean, target=target)}
 
 
 class AnalyzeRequest(TierRequest):
     # Set only when responding to a prior needs_clarification: true for this
-    # same CR — carries the engineer's answer to the outstanding question.
-    # Unlike AdhocAnalyzeRequest.cr_text, tier_name/target_id here always
-    # render the same fixed CR text (see _cr_text_or_400), so there's no
+    # same user story — carries the engineer's answer to the outstanding question.
+    # Unlike AdhocAnalyzeRequest.story_text, tier_name/target_id here always
+    # render the same fixed user story text (see _story_text_or_400), so there's no
     # "latest message" ambiguity on tier_name itself to resolve.
     clarification_answer: str | None = None
     reset_clarification: bool = False
@@ -682,30 +691,30 @@ def analyze(
     session_id: str = Depends(require_session_id),
     identity: Identity = Depends(require_identity),
 ) -> dict:
-    """Impact analysis for one of the console's pinned CR templates.
+    """Impact analysis for one of the console's pinned user story templates.
 
     Two gates run before an analysis is returned, sharing one budget of at
     most `MAX_CLARIFICATION_TURNS` questions (not one each):
 
-    1. Before drafting, `analyze.check_cr_gaps` screens the CR text for a
+    1. Before drafting, `analyze.check_story_gaps` screens the user story text for a
        specific missing detail (an unstated default, threshold, or scope
        boundary) the analysis would otherwise have to guess at.
     2. After drafting, any assumption the draft itself declared is asked
        about via `analyze.build_assumption_question`, and the draft is
        withheld until it's answered. Gate 1 predicts what the model might
-       guess at from the CR text alone and is regularly wrong in both
+       guess at from the user story text alone and is regularly wrong in both
        directions; this one reads what the model actually did guess, so the
        "assumptions the AI made" box can only ever appear once the turn
        budget is spent — never as the first thing the engineer sees.
 
     Both use the same needs_clarification/question contract and per-login-
     session history as /analyze-adhoc's gates. Answers, once given, are
-    folded into the CR text handed to the analysis/effort calls, which then
+    folded into the user story text handed to the analysis/effort calls, which then
     re-draft off the fold-in rather than the pinned demo recording (see
     `draft_impact_analysis`'s `pin_cache`).
     """
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
 
     session = get_session_data(session_id)
     assert session is not None
@@ -715,7 +724,7 @@ def analyze(
     history: list[QuickChatTurn] = session.get(session_key, [])
 
     try:
-        gaps = check_cr_gaps(cr_text, history)
+        gaps = check_story_gaps(story_text, history)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -732,16 +741,16 @@ def analyze(
     answers = [turn.text for turn in history if turn.role == "user" and turn.text]
     if payload.clarification_answer:
         answers.append(payload.clarification_answer)
-    effective_cr_text = cr_text
+    effective_story_text = story_text
     if answers:
-        effective_cr_text = f"{cr_text}\n\nAdditional detail from the engineer:\n" + "\n".join(
+        effective_story_text = f"{story_text}\n\nAdditional detail from the engineer:\n" + "\n".join(
             answers
         )
 
     usage: dict = {}
     try:
         impact = draft_impact_analysis(
-            effective_cr_text, target=target, usage_out=usage, pin_cache=not answers
+            effective_story_text, target=target, usage_out=usage, pin_cache=not answers
         )
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -757,14 +766,38 @@ def analyze(
 
     session.pop(session_key, None)
     try:
-        effort = draft_effort_estimate(effective_cr_text, target=target, pin_cache=not answers)
+        effort = draft_effort_estimate(effective_story_text, target=target, pin_cache=not answers)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    all_files = discover_files_for_target(target, cr_text)
+    all_files = discover_files_for_target(target, story_text)
     selection = select_relevant_files(
-        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+        story_text, all_files, core_files=target.core_files, design_doc_root=target.root
     )
+    # Part of the analysis, not a button next to it. Asked for on the 2026-08-03
+    # walkthrough: "why do we have to prompt it — it should come automatically
+    # in the main analysis itself. If somebody forgets to click the button then
+    # we lose that impact analysis for the other teams."
+    #
+    # Deliberately a *second* call rather than one merged prompt: the two beats
+    # have separate cache keys, and folding them into one prompt would strand
+    # both recordings. A failure here degrades to "not checked" rather than
+    # taking the whole analysis down with it — the analysis is the beat, the
+    # cross-team list is an addition to it.
+    cross_team: list[dict] | None = None
+    try:
+        cross_team = [
+            {
+                "app_name": item.app_name,
+                "reason": item.reason,
+                "suggested_summary": item.suggested_summary,
+                "description": item.description,
+            }
+            for item in draft_cross_team_impact(story_text, target=target, usage_out=usage)
+        ]
+    except LLMError:
+        cross_team = None
+
     if payload.ticket_number:
         record_event(
             payload.ticket_number,
@@ -772,6 +805,13 @@ def analyze(
             "impact_analysis_drafted",
             detail=f"{effort.hours_class} / {effort.priority_equivalent}",
         )
+        if cross_team is not None:
+            record_event(
+                payload.ticket_number,
+                "ai",
+                "cross_team_impact_checked",
+                detail=", ".join(item["app_name"] for item in cross_team) or "none found",
+            )
     return {
         "label": AI_SUGGESTION_LABEL,
         "needs_clarification": False,
@@ -782,6 +822,7 @@ def analyze(
             "priority_equivalent": effort.priority_equivalent,
             "reasoning": effort.reasoning,
         },
+        "cross_team_impacts": cross_team,
         "file_selection": _selection_dict(selection),
         "token_panel": _token_panel(usage, all_files, selection.selected),
     }
@@ -793,15 +834,15 @@ def analyze_adhoc(
     session_id: str = Depends(require_session_id),
     identity: Identity = Depends(require_identity),
 ) -> dict:
-    """Impact analysis for a ticket with no linked CR/target in this console
+    """Impact analysis for a ticket with no linked user story/target in this console
     (e.g. a cross-team ticket for another application) — runs directly off
-    the ticket's own text instead of one of the two pinned CR templates, so
+    the ticket's own text instead of one of the two pinned user story templates, so
     there's no codebase/file_selection to report.
 
     Three clarification gates run before an analysis is produced, sharing
     one conversational budget of at most `MAX_CLARIFICATION_TURNS` follow-up
-    questions total (not each): `analyze.check_cr_clarity` for overall
-    CR-text vagueness, then `analyze.check_cr_gaps` for a specific missing
+    questions total (not each): `analyze.check_story_clarity` for overall
+    story-text vagueness, then `analyze.check_story_gaps` for a specific missing
     detail (an unstated default/threshold/scope boundary that would
     otherwise be silently guessed and reported as an assumption instead of
     asked about), then — once the text itself is clear enough, and only if a
@@ -813,11 +854,11 @@ def analyze_adhoc(
     server-side in the caller's own login session, same mechanism
     /chat/quick-impact uses.
     """
-    cr_text = payload.cr_text.strip()
-    if not cr_text:
-        raise HTTPException(status_code=422, detail="cr_text must not be empty")
-    if len(cr_text) > 4000:
-        raise HTTPException(status_code=422, detail="cr_text is too long (max 4000 characters)")
+    story_text = payload.story_text.strip()
+    if not story_text:
+        raise HTTPException(status_code=422, detail="story_text must not be empty")
+    if len(story_text) > 4000:
+        raise HTTPException(status_code=422, detail="story_text is too long (max 4000 characters)")
 
     session = get_session_data(session_id)
     assert session is not None
@@ -826,28 +867,28 @@ def analyze_adhoc(
     history: list[QuickChatTurn] = session.get(_ADHOC_CLARITY_SESSION_KEY, [])
 
     try:
-        clarity = check_cr_clarity(cr_text, history)
+        clarity = check_story_clarity(story_text, history)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if clarity.needs_clarification:
         return _ask_clarifying_question(
-            session, _ADHOC_CLARITY_SESSION_KEY, history, cr_text, clarity.question,
+            session, _ADHOC_CLARITY_SESSION_KEY, history, story_text, clarity.question,
             payload.ticket_number,
         )
 
     try:
-        gaps = check_cr_gaps(cr_text, history)
+        gaps = check_story_gaps(story_text, history)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if gaps.needs_clarification:
         return _ask_clarifying_question(
-            session, _ADHOC_CLARITY_SESSION_KEY, history, cr_text, gaps.question,
+            session, _ADHOC_CLARITY_SESSION_KEY, history, story_text, gaps.question,
             payload.ticket_number,
         )
 
-    full_cr_text = _full_cr_text(cr_text, history)
+    full_story_text = _full_story_text(story_text, history)
 
     # Deterministic routing first. When the ticket names a CI the registry
     # knows, the answer is already settled: no model call, no confirmation
@@ -867,7 +908,7 @@ def analyze_adhoc(
 
     if projects:
         try:
-            suggestion = suggest_target_repo(full_cr_text, projects)
+            suggestion = suggest_target_repo(full_story_text, projects)
         except LLMError:
             # Repo identity is a bonus signal on top of the analysis, not a
             # dependency of it — an LLM hiccup here shouldn't block the
@@ -880,13 +921,13 @@ def analyze_adhoc(
             ):
                 question = build_confirmation_question(suggestion, projects)
                 return _ask_clarifying_question(
-                    session, _ADHOC_CLARITY_SESSION_KEY, history, cr_text, question,
+                    session, _ADHOC_CLARITY_SESSION_KEY, history, story_text, question,
                     payload.ticket_number,
                 )
             target_repo = _describe_repo_match(suggestion.best_match, projects)
 
     try:
-        impact = draft_adhoc_impact_analysis(full_cr_text)
+        impact = draft_adhoc_impact_analysis(full_story_text)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -895,13 +936,13 @@ def analyze_adhoc(
     # pre-draft prediction of them, are what's worth asking about.
     if impact.assumptions and clarification_turns_used(history) < MAX_CLARIFICATION_TURNS:
         return _ask_clarifying_question(
-            session, _ADHOC_CLARITY_SESSION_KEY, history, cr_text,
+            session, _ADHOC_CLARITY_SESSION_KEY, history, story_text,
             build_assumption_question(impact.assumptions), payload.ticket_number,
         )
 
     session.pop(_ADHOC_CLARITY_SESSION_KEY, None)
     try:
-        effort = draft_adhoc_effort_estimate(full_cr_text)
+        effort = draft_adhoc_effort_estimate(full_story_text)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -929,20 +970,20 @@ def analyze_adhoc(
 
 @router.post("/impact/cross-team")
 def cross_team_impact(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
-    """AI-suggested list of other application teams this CR would also
+    """AI-suggested list of other application teams this user story would also
     require work from — a human confirms each one via /jira/cross-team-ticket
     before any ticket is actually created."""
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
     usage: dict = {}
     try:
-        impacts = draft_cross_team_impact(cr_text, target=target, usage_out=usage)
+        impacts = draft_cross_team_impact(story_text, target=target, usage_out=usage)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    all_files = discover_files_for_target(target, cr_text)
+    all_files = discover_files_for_target(target, story_text)
     selection = select_relevant_files(
-        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+        story_text, all_files, core_files=target.core_files, design_doc_root=target.root
     )
     if payload.ticket_number:
         record_event(
@@ -958,6 +999,7 @@ def cross_team_impact(payload: TierRequest, identity: Identity = Depends(require
                 "app_name": impact.app_name,
                 "reason": impact.reason,
                 "suggested_summary": impact.suggested_summary,
+                "description": impact.description,
             }
             for impact in impacts
         ],
@@ -1027,8 +1069,8 @@ def create_problem_record_ticket(
     payload: ProblemRecordTicketRequest, identity: Identity = Depends(require_identity)
 ) -> dict:
     """Create a ticket tagged as originating from a problem record (repeated
-    incidents -> a permanent-fix problem record -> this CR) rather than a
-    direct business change request — the second of S3's two intake flavors.
+    incidents -> a permanent-fix problem record -> this user story) rather than a
+    direct business user story — the second of S3's two intake flavors.
     Runs through the exact same downstream flow as any other ticket
     (clarity-gated ad-hoc analyze, codegen, tests, docs); only the origin tag
     and problem_id differ, both purely presentational.
@@ -1144,7 +1186,7 @@ def set_ticket_status(
     payload: TicketStatusRequest, identity: Identity = Depends(require_identity)
 ) -> dict:
     """Mark a ticket's status — e.g. the assigned team logs in, does their
-    part, and marks their cross-team ticket Done so the original CR's
+    part, and marks their cross-team ticket Done so the original user story's
     engineer sees the dependency clear."""
     try:
         issue = get_jira_client().set_issue_status(payload.key, payload.status)
@@ -1159,7 +1201,7 @@ def set_ticket_status(
 def jira_dependencies(
     primary_ticket_key: str, identity: Identity = Depends(require_identity)
 ) -> dict:
-    """Cross-team tickets linked to a primary CR ticket, with their current
+    """Cross-team tickets linked to a primary user story ticket, with their current
     status — derived from the append-only ticket-events log (not client
     state), so an engineer's screen can see a dependency clear even after
     another team, logged in separately, marks their ticket Done."""
@@ -1229,15 +1271,15 @@ def generate(payload: TierRequest, identity: Identity = Depends(require_identity
     on disk.
     """
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
     try:
-        result = propose_change(payload.tier_name, cr_text, target=target)
+        result = propose_change(payload.tier_name, story_text, target=target)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    all_files = discover_files_for_target(target, cr_text)
+    all_files = discover_files_for_target(target, story_text)
     selection = select_relevant_files(
-        cr_text, all_files, core_files=target.core_files, design_doc_root=target.root
+        story_text, all_files, core_files=target.core_files, design_doc_root=target.root
     )
     if payload.ticket_number:
         record_event(
@@ -1292,14 +1334,14 @@ _POST_APPLY_OUTPUT_TAIL = 4000
 def _run_post_apply(applied_files: list[str], ticket_number: str | None) -> dict:
     """Run every registered target's post-apply migration owed for this file
     set (see targets.post_apply_commands_for) — e.g. rebuilding the mockapp
-    SQLite schema so a CR that adds a column doesn't crash the running
+    SQLite schema so a user story that adds a column doesn't crash the running
     portal. Subprocesses, not in-process imports, so each step runs against
     the newly written module files rather than whatever this API process
     imported at startup. This is target-registry-driven on purpose: any new
-    CR against a registered root inherits its migration step automatically.
+    user story against a registered root inherits its migration step automatically.
 
     Returns {"ok": bool, "steps": [...]} so a migration crash — the applied
-    CR broke the app — reaches the caller with its traceback instead of
+    user story broke the app — reaches the caller with its traceback instead of
     dying silently in a discarded subprocess result.
     """
     # Anchored on the target registry rather than counted parent hops: this
@@ -1380,6 +1422,30 @@ def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity))
             "code_change_applied",
             detail=payload.file_path or payload.proposal_id,
         )
+
+    # Applying wrote the files; the target process is still serving the old code
+    # from memory until it is restarted. Without this the console's "the app now
+    # has this capability — open the console to try it" is false at the exact
+    # moment the audience goes and checks, which is the worst possible time for
+    # it to be false. Restart is part of Apply rather than a button next to it
+    # for the same reason the cross-team check is (see /s3/analyze).
+    restarts: list[dict] = []
+    if target.application_id:
+        try:
+            restarts = admin_ops.restart_application(target.application_id)
+        except Exception:  # noqa: BLE001 - reported below, never fatal
+            restarts = []
+    # A failed or impossible restart must not read as success: the UI keys off
+    # this to say "restart it yourself" instead of inviting a click-through to
+    # behaviour that has not changed yet.
+    restarted = bool(restarts) and all(item.get("ok") for item in restarts)
+    if payload.ticket_number and restarts:
+        record_event(
+            payload.ticket_number,
+            "system",
+            "target_app_restarted" if restarted else "target_app_restart_failed",
+            detail=", ".join(f"{item.get('id')}: {item.get('detail', '')}" for item in restarts),
+        )
     return {
         "proposal_id": payload.proposal_id,
         "applied_files": applied_files,
@@ -1387,6 +1453,8 @@ def apply(payload: ApplyRequest, identity: Identity = Depends(require_identity))
         "rejected_files": rejected_files(payload.proposal_id),
         "revertable_files": revertable_files(payload.proposal_id),
         "scm": branch.to_dict(),
+        "restarted": restarted,
+        "restarts": restarts,
     }
 
 
@@ -1518,7 +1586,7 @@ class ScmCheckoutRequest(BaseModel):
 def scm_checkout(
     payload: ScmCheckoutRequest, identity: Identity = Depends(require_identity)
 ) -> dict:
-    """Step 0, "Check out the repo": cut (or switch to) this CR's feature
+    """Step 0, "Check out the repo": cut (or switch to) this user story's feature
     branch before anything is generated.
 
     Simulated by default — same convention `/s3/release/attach` uses under
@@ -1569,7 +1637,7 @@ class ScmRequest(BaseModel):
 
 class ScmCommitRequest(ScmRequest):
     # Optional override for the generated subject line. The default is assembled
-    # from the ticket and CR label (scm.commit_message_for) rather than drafted
+    # from the ticket and user story label (scm.commit_message_for) rather than drafted
     # by the model — no cache key, nothing to be confidently wrong about.
     message: str | None = None
 
@@ -1621,7 +1689,7 @@ def scm_commit(
     target = targets.get_target(payload.target_id)
     message = payload.message or scm.commit_message_for(
         payload.ticket_number,
-        _cr_label_for(target),
+        _story_label_for(target),
         scm.summary_from_display_name(target.display_name),
     )
     try:
@@ -1783,28 +1851,28 @@ def screenshot(
     }
 
 
-# Resolutions already computed in this process, keyed by CR identifier and a
-# digest of the CR's text so editing a CR re-resolves it. Belt to the
+# Resolutions already computed in this process, keyed by user story identifier and a
+# digest of the user story's text so editing a user story re-resolves it. Belt to the
 # ticket-events log's braces: the log makes the resolve a once-ever cost, and
 # this makes it a once-ever cost even for the burst of board polls that can
 # arrive before the first record lands.
-_CR_TARGET_MEMO: dict[str, TargetMatch] = {}
+_STORY_TARGET_MEMO: dict[str, TargetMatch] = {}
 
 
-def _cr_target_match(ticket: cr_intake.CrTicket) -> TargetMatch:
-    """Resolve one CR to a registered target, at most once per CR revision.
+def _story_target_match(ticket: story_intake.StoryTicket) -> TargetMatch:
+    """Resolve one user story to a registered target, at most once per user story revision.
 
-    `resolve_target_for_cr`'s third tier is an LLM call (CR-2026-044 is the
-    CR that lands there), and the board is polled — so this must never run
-    per request. Only ever called on a CR's *first* sighting; every board
+    `resolve_target_for_story`'s third tier is an LLM call (US-2026-044 is the
+    user story that lands there), and the board is polled — so this must never run
+    per request. Only ever called on a user story's *first* sighting; every board
     load after that reads the answer back out of the ticket-events log via
-    `_cr_link_fields`.
+    `_story_link_fields`.
     """
-    memo_key = f"{ticket.cr_id}:{hashlib.sha256(ticket.text.encode('utf-8')).hexdigest()[:16]}"
-    match = _CR_TARGET_MEMO.get(memo_key)
+    memo_key = f"{ticket.story_id}:{hashlib.sha256(ticket.text.encode('utf-8')).hexdigest()[:16]}"
+    match = _STORY_TARGET_MEMO.get(memo_key)
     if match is None:
-        match = resolve_target_for_cr(ticket.text)
-        _CR_TARGET_MEMO[memo_key] = match
+        match = resolve_target_for_story(ticket.text)
+        _STORY_TARGET_MEMO[memo_key] = match
     return match
 
 
@@ -1814,21 +1882,28 @@ def _detail_value(value: str) -> str:
     return value.replace(";", ",").replace("=", "-")
 
 
-def _record_cr_ticket(ticket: cr_intake.CrTicket) -> None:
-    """First sighting of a CR file: resolve its target once and write the
+def _record_story_ticket(ticket: story_intake.StoryTicket) -> None:
+    """First sighting of a user story file: resolve its target once and write the
     ticket into the same append-only log the cross-team and problem-record
     tickets use. `record_event` is idempotent per (key, actor, action,
-    detail), so this is safe to reach twice; the `_cr_link_fields` guard
+    detail), so this is safe to reach twice; the `_story_link_fields` guard
     above it is what stops the *resolve* from running twice."""
-    match = _cr_target_match(ticket)
-    detail = f"cr_file={_detail_value(ticket.cr_file)}"
+    match = _story_target_match(ticket)
+    detail = f"story_file={_detail_value(ticket.story_file)}"
     if match.resolved and match.target is not None:
         detail += (
             f";target_id={_detail_value(match.target.target_id)}"
             f";target_display_name={_detail_value(match.target.display_name)}"
             f";target_method={_detail_value(match.method)}"
         )
-    record_event(ticket.key, "system", cr_intake.TICKET_CREATED_ACTION, detail=detail)
+    record_event(ticket.key, "system", story_intake.TICKET_CREATED_ACTION, detail=detail)
+    default_assignee = _story_default_assignee()
+    if default_assignee is not None:
+        # The board row carries this assignee on every load; without an event
+        # for it the timeline would show a ticket someone is holding with no
+        # record of how they came to hold it. Actor "system", not "human" —
+        # nobody made this decision, a default did.
+        record_event(ticket.key, "system", "ticket_assigned", detail=default_assignee)
     if match.resolved and match.target is not None:
         record_event(
             ticket.key,
@@ -1838,18 +1913,43 @@ def _record_cr_ticket(ticket: cr_intake.CrTicket) -> None:
         )
 
 
-def _cr_board_rows(issues: list[dict], project_key: str) -> list[dict]:
-    """Board rows for every CR under `crs/` that no existing ticket covers.
+# The engineer an auto-opened user-story ticket lands on. Ravi Kumar is the
+# first name on the App Support — PolicyCore roster, which owns every target
+# S3 currently generates against, and the account the demo drives the pipeline
+# from (passcode 1001).
+DEFAULT_STORY_ASSIGNEE = "Ravi Kumar"
+
+
+def _story_default_assignee() -> str | None:
+    """Who an auto-opened user-story ticket lands on.
+
+    A derived row has no Jira assignee of its own, so this is the only thing
+    deciding whether dropping a user story in puts it on an engineer's board or
+    in the manager's unassigned queue. It defaults to the first engineer on the
+    PolicyCore roster (`STORY_DEFAULT_ASSIGNEE` overrides it; empty means land
+    unassigned, which is what this did before 2026-08-04).
+
+    Validated against the roster because the console's board filters by exact
+    display name (`BoardStage.tsx`: `issue.assignee === identity.name`) — a
+    misspelled default would put the ticket on nobody's board at all, which is
+    strictly worse than leaving it unassigned, so that is where it falls back.
+    """
+    name = os.environ.get("STORY_DEFAULT_ASSIGNEE", DEFAULT_STORY_ASSIGNEE).strip()
+    return name if name in ROSTER else None
+
+
+def _story_board_rows(issues: list[dict], project_key: str) -> list[dict]:
+    """Board rows for every user story under `stories/` that no existing ticket covers.
 
     The third intake source, alongside the recorded Jira search and the
     ticket-events log. "Covered" is read out of the tickets already on the
-    board — a CR identifier in their summary or description (see
-    `cr_intake.cr_ids_on_issue`) — so the four seeded demo CRs keep their
+    board — a user story identifier in their summary or description (see
+    `story_intake.story_ids_on_issue`) — so the four seeded demo user stories keep their
     hand-seeded keys (AMS-101..104) and are never duplicated, and nothing
     here renumbers or disturbs them.
 
     The row is derived rather than created through `JiraClient.create_issue`,
-    for two reasons. The key stays a pure function of the CR identifier in
+    for two reasons. The key stays a pure function of the user story identifier in
     every mode (create_issue mints its own key, in the AMS-100..999 band the
     seeded tickets already occupy), and a GET that a polling board issues
     every few seconds does not write to the Jira store. Everything that makes
@@ -1859,18 +1959,18 @@ def _cr_board_rows(issues: list[dict], project_key: str) -> list[dict]:
     """
     covered_ids: set[str] = set()
     for issue in issues:
-        covered_ids |= cr_intake.cr_ids_on_issue(issue)
+        covered_ids |= story_intake.story_ids_on_issue(issue)
     existing_keys = {issue.get("key") for issue in issues}
 
     rows: list[dict] = []
-    for ticket in cr_intake.all_cr_tickets(project_key):
-        if ticket.cr_id in covered_ids or ticket.key in existing_keys:
+    for ticket in story_intake.all_story_tickets(project_key):
+        if ticket.story_id in covered_ids or ticket.key in existing_keys:
             continue
-        if not _cr_link_fields(ticket.key):
+        if not _story_link_fields(ticket.key):
             try:
-                _record_cr_ticket(ticket)
+                _record_story_ticket(ticket)
             except Exception:  # noqa: BLE001 - see below
-                # A CR that cannot be resolved (or recorded) still belongs on
+                # A user story that cannot be resolved (or recorded) still belongs on
                 # the board — the manager assigning it is the recovery path,
                 # and a resolver that throws must not take the whole board
                 # down with it. `_match_by_ai` already degrades an LLMError to
@@ -1884,12 +1984,20 @@ def _cr_board_rows(issues: list[dict], project_key: str) -> list[dict]:
                 "self": None,
                 "summary": ticket.summary,
                 "status": "To Do",
-                "issue_type": "Task",
-                # Unassigned on purpose: an unassigned ticket is what puts the
-                # CR in front of the manager, who already sees exactly those
-                # on the dashboard with an Assign control. Nothing here picks
-                # an engineer.
-                "assignee": None,
+                # "Story", not "Task": the intake artifact these rows are built
+                # from is a user story (business objective, target population,
+                # Given/When/Then acceptance criteria), and the board is the
+                # first thing the demo audience reads. The *release* document at
+                # the end is the user story — see release.py.
+                "issue_type": "Story",
+                # Lands in the default engineer's To Do column rather than the
+                # manager's unassigned queue — see `_story_default_assignee`.
+                # Not a decision this row gets to keep: the moment anyone
+                # assigns or unassigns the ticket, `assign_issue` writes a
+                # per-issue cache entry and the overlay in `jira_board` wins
+                # over this value, including an explicit unassign back to the
+                # manager's queue.
+                "assignee": _story_default_assignee(),
                 "description": ticket.description,
             }
         )
@@ -1907,9 +2015,9 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
     `cross_team_ticket_created` or `problem_record_ticket_created` event on
     the new key), so this merges that list in — this is how an assignee
     logging in separately actually sees their new ticket on the shared board,
-    not just via the dependency lookup. Third, every CR file under `crs/`
-    that no ticket covers yet gets one opened for it (see `_cr_board_rows`),
-    so onboarding a change means dropping its CR in, not seeding a ticket by
+    not just via the dependency lookup. Third, every user story file under `stories/`
+    that no ticket covers yet gets one opened for it (see `_story_board_rows`),
+    so onboarding a change means dropping its user story in, not seeding a ticket by
     hand as well.
     """
     project_key = os.environ.get("JIRA_PROJECT_KEY", "AMS")
@@ -1929,14 +2037,14 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
         except JiraError:
             continue
 
-    issues.extend(_cr_board_rows(issues, project_key))
+    issues.extend(_story_board_rows(issues, project_key))
 
     # Overlay each issue's current status/assignee from the per-issue cache:
     # the seeded search recording is static, but assign/status changes made
     # during a session (analysis started -> In Progress, QA handoff) update
     # the get_issue cache — without this merge the board would show stale
     # columns after any workflow transition. Origin/problem_id (see
-    # _origin_fields) and the CR link (see _cr_link_fields) are likewise
+    # _origin_fields) and the user story link (see _story_link_fields) are likewise
     # derived fresh every call, not stored on the issue itself, so they stay
     # correct even for a ticket created in an earlier session.
     merged = []
@@ -1945,7 +2053,7 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
         try:
             fresh = client.get_issue(str(key))
         except JiraError:
-            merged.append({**issue, **_origin_fields(str(key)), **_cr_link_fields(str(key))})
+            merged.append({**issue, **_origin_fields(str(key)), **_story_link_fields(str(key))})
             continue
         overlay = {k: v for k, v in fresh.items() if v is not None}
         # An explicitly null assignee is a real value, not a missing one:
@@ -1959,7 +2067,7 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
                 **issue,
                 **overlay,
                 **_origin_fields(str(key)),
-                **_cr_link_fields(str(key)),
+                **_story_link_fields(str(key)),
             }
         )
 
@@ -1968,12 +2076,12 @@ def jira_board(identity: Identity = Depends(require_identity)) -> dict:
 
 @router.post("/tests/scenarios")
 def tests_scenarios(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
-    """Draft the test plan — scenarios traced to the CR's acceptance criteria,
+    """Draft the test plan — scenarios traced to the user story's acceptance criteria,
     before any test code exists. Produces a document, never a file on disk."""
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
     try:
-        draft = draft_scenarios(cr_text, target=target)
+        draft = draft_scenarios(story_text, target=target)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -2012,8 +2120,8 @@ def tests_scenarios_approve(
     means an edit can't smuggle in an untraceable scenario.
     """
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
-    criteria = parse_acceptance_criteria(cr_text)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
+    criteria = parse_acceptance_criteria(story_text)
     scenarios = resolve_criteria_refs(
         [scenario_from_dict(raw) for raw in payload.scenarios], criteria
     )
@@ -2044,15 +2152,15 @@ def tests_generate(
 
     `scenarios` carries the tester-approved plan into the prompt so the
     generated suite is written against the reviewed list rather than against
-    the CR alone. In replay mode the recorded suite is served regardless (as
+    the user story alone. In replay mode the recorded suite is served regardless (as
     with every other AI beat here) — the console says so rather than implying
     an edit re-drove the generation.
     """
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
     try:
         result = generate_tests(
-            payload.tier_name, cr_text, target=target, scenarios=payload.scenarios or None
+            payload.tier_name, story_text, target=target, scenarios=payload.scenarios or None
         )
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -2115,18 +2223,18 @@ def tests_traceability(
 ) -> dict:
     """Acceptance criterion -> scenario -> automated test -> result.
 
-    The criteria come from the CR, the citations from the approved plan, and
+    The criteria come from the user story, the citations from the approved plan, and
     the results from the two runs. Only the scenario-to-test link is inferred,
     conservatively — see s3_enhancement/traceability.py on why an unmatched
     row is the safe answer and a wrongly matched one is not.
     """
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
-    criteria = parse_acceptance_criteria(cr_text)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
+    criteria = parse_acceptance_criteria(story_text)
     if not criteria:
         raise HTTPException(
             status_code=409,
-            detail="This CR states no acceptance criteria, so there is nothing to trace to.",
+            detail="This user story states no acceptance criteria, so there is nothing to trace to.",
         )
 
     matrix = build_matrix(
@@ -2156,7 +2264,7 @@ def tests_regression(payload: TierRequest, identity: Identity = Depends(require_
     """Run the target app's checked-in, pre-existing regression suite.
 
     Separate endpoint, separate result, deliberately: the generated suite
-    proves the CR does what it said, and this proves it didn't cost anything
+    proves the user story does what it said, and this proves it didn't cost anything
     that already worked. Runnable at any point — it needs neither generated
     code nor generated tests — so a presenter can take a green baseline
     before Apply and re-run it after.
@@ -2224,9 +2332,9 @@ def tests(payload: TierRequest, identity: Identity = Depends(require_identity)) 
     rehearsal notes). The console now drives the split /tests/generate ->
     /tests/run flow instead."""
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
     try:
-        result = generate_tests(payload.tier_name, cr_text, target=target)
+        result = generate_tests(payload.tier_name, story_text, target=target)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -2248,12 +2356,12 @@ def tests(payload: TierRequest, identity: Identity = Depends(require_identity)) 
     }
 
 
-def _cr_label_for(target: Target) -> str:
-    """The CR's identifier as the document should title it. Read off the
+def _story_label_for(target: Target) -> str:
+    """The user story's identifier as the document should title it. Read off the
     template filename so the server never depends on the console telling it
-    which CR it is currently showing."""
-    if target.cr_template_path is not None:
-        return target.cr_template_path.stem
+    which user story it is currently showing."""
+    if target.story_template_path is not None:
+        return target.story_template_path.stem
     return target.display_name
 
 
@@ -2270,9 +2378,9 @@ def design_doc(
     hidden behind another button.
     """
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
     try:
-        text = draft_design_doc(cr_text, target=target)
+        text = draft_design_doc(story_text, target=target)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -2301,17 +2409,17 @@ def design_doc_document(
     handed arbitrary markup to render.
     """
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
     try:
-        text = draft_design_doc(cr_text, target=target)
+        text = draft_design_doc(story_text, target=target)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    cr_label = _cr_label_for(target)
+    story_label = _story_label_for(target)
     diagram_svg, change_map = build_svg(target, downstream=payload.downstream_apps)
     html = render_document_html(
         text,
-        cr_label=cr_label,
+        story_label=story_label,
         ticket_key=payload.ticket_number or "unassigned",
         diagram_svg=diagram_svg if payload.include_diagram else None,
         diagram_caption=caption_for(change_map),
@@ -2322,7 +2430,7 @@ def design_doc_document(
             content=html,
             media_type="text/html; charset=utf-8",
             headers={
-                "Content-Disposition": f'attachment; filename="{cr_label}-design-doc.html"'
+                "Content-Disposition": f'attachment; filename="{story_label}-design-doc.html"'
             },
         )
 
@@ -2345,15 +2453,15 @@ def design_doc_document(
         content=pdf,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{cr_label}-design-doc.pdf"'
+            "Content-Disposition": f'attachment; filename="{story_label}-design-doc.pdf"'
         },
     )
 
 
 def _release_context(payload, identity: Identity):
-    """Everything the release beats share: target, CR text, change map, plan."""
+    """Everything the release beats share: target, user story text, change map, plan."""
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
     change_map = build_change_map(target, downstream=payload.downstream_apps)
     proposal_id = getattr(payload, "proposal_id", None)
     branch = scm.state_for(proposal_id) if proposal_id else None
@@ -2363,7 +2471,7 @@ def _release_context(payload, identity: Identity):
         applied_files=getattr(payload, "applied_files", None) or None,
         branch=branch,
     )
-    return target, cr_text, change_map, plan, branch
+    return target, story_text, change_map, plan, branch
 
 
 def _evidence_from(payload: ReleaseRecordRequest) -> list[SuiteEvidence]:
@@ -2393,7 +2501,7 @@ def _evidence_from(payload: ReleaseRecordRequest) -> list[SuiteEvidence]:
                 passed=passed == len(payload.regression_cases),
                 total=len(payload.regression_cases),
                 passed_count=passed,
-                note="checked in before this CR; the pipeline cannot write to it",
+                note="checked in before this user story; the pipeline cannot write to it",
             )
         )
     if payload.mutation:
@@ -2423,10 +2531,10 @@ def release_note_set(
     """The three audience-specific release notes, plus the derived deployment
     plan. One call because the plan costs nothing — it is computed from the
     change's own file set, not drafted."""
-    target, cr_text, change_map, plan, _branch = _release_context(payload, identity)
+    target, story_text, change_map, plan, _branch = _release_context(payload, identity)
     usage: dict = {}
     try:
-        notes = draft_release_note_set(cr_text, target=target, usage_out=usage)
+        notes = draft_release_note_set(story_text, target=target, usage_out=usage)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -2447,8 +2555,8 @@ def release_note_set(
 def _build_record(
     payload: ReleaseRecordRequest, identity: Identity
 ) -> tuple[ReleaseRecord, str]:
-    target, cr_text, change_map, plan, branch = _release_context(payload, identity)
-    criteria = parse_acceptance_criteria(cr_text)
+    target, story_text, change_map, plan, branch = _release_context(payload, identity)
+    criteria = parse_acceptance_criteria(story_text)
     matrix = (
         build_matrix(
             criteria,
@@ -2461,7 +2569,7 @@ def _build_record(
     )
     evidence = _evidence_from(payload)
     try:
-        notes = draft_release_note_set(cr_text, target=target)
+        notes = draft_release_note_set(story_text, target=target)
     except LLMError:
         # The record's value is the evidence, not the prose. A model that is
         # unreachable at release time must not stop the artifact being
@@ -2470,7 +2578,7 @@ def _build_record(
 
     diagram_svg, _ = build_svg(target, downstream=payload.downstream_apps)
     record = ReleaseRecord(
-        cr_label=_cr_label_for(target),
+        story_label=_story_label_for(target),
         ticket_key=payload.ticket_number or "unassigned",
         released_by=identity.name,
         generated_at=datetime.now(),
@@ -2497,7 +2605,7 @@ def release_record(
 ) -> Response:
     """The release record as a downloadable file."""
     record, html = _build_record(payload, identity)
-    filename = f"{record.cr_label}-release-record"
+    filename = f"{record.story_label}-release-record"
 
     if payload.format == "html":
         return Response(
@@ -2537,7 +2645,7 @@ def release_record_attach(
         pdf = render_pdf(html)
     except PdfUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    filename = f"{record.cr_label}-release-record.pdf"
+    filename = f"{record.story_label}-release-record.pdf"
 
     mode = os.environ.get("JIRA_MODE", "replay").lower()
     if mode == "replay":
@@ -2583,9 +2691,9 @@ def release_record_attach(
 @router.post("/release-notes")
 def release_notes(payload: TierRequest, identity: Identity = Depends(require_identity)) -> dict:
     target = targets.get_target(payload.target_id)
-    cr_text = _cr_text_or_400(payload.tier_name, target=target)
+    story_text = _story_text_or_400(payload.tier_name, target=target)
     try:
-        text = draft_release_notes(cr_text, target=target)
+        text = draft_release_notes(story_text, target=target)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"label": AI_SUGGESTION_LABEL, "release_notes": text}
@@ -2597,7 +2705,7 @@ def harness_latest(identity: Identity = Depends(require_identity)) -> dict:
     if run_dir is None or not (run_dir / "status.json").exists():
         raise HTTPException(
             status_code=404,
-            detail="No harness run found yet — run demo/run_s3_harness.sh first.",
+            detail="No harness run found yet — run the harness script first.",
         )
 
     status_dict = json.loads((run_dir / "status.json").read_text(encoding="utf-8"))
@@ -2631,11 +2739,11 @@ def gitlab_scope(
     payload: TierRequest,
     identity: Identity = Depends(require_identity),
 ) -> dict:
-    cr_text = _cr_text_or_400(payload.tier_name)
+    story_text = _story_text_or_400(payload.tier_name)
     try:
         repo_size = len(get_client().list_repo_paths(project_id))
-        gitlab_files = discover_gitlab_files(project_id, cr_text)
-        selection = select_relevant_files(cr_text, gitlab_files, core_files=(), design_docs={})
+        gitlab_files = discover_gitlab_files(project_id, story_text)
+        selection = select_relevant_files(story_text, gitlab_files, core_files=(), design_docs={})
     except GitLabError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -2647,15 +2755,15 @@ def gitlab_scope(
 
 
 class GitlabScopeAutoRequest(BaseModel):
-    # Exactly one of these carries the CR text: `tier_name` for one of the
-    # console's pinned CR templates (see TierRequest elsewhere in this
-    # file), or `cr_text` for a ticket with no tier/target linked in this
+    # Exactly one of these carries the user story text: `tier_name` for one of the
+    # console's pinned user story templates (see TierRequest elsewhere in this
+    # file), or `story_text` for a ticket with no tier/target linked in this
     # console (e.g. a cross-team ticket) — same free-text shape
     # AdhocAnalyzeRequest already uses for /analyze-adhoc, since those
     # ad-hoc tickets are exactly the case where the caller doesn't already
-    # know which repo the CR belongs to.
+    # know which repo the user story belongs to.
     tier_name: str | None = None
-    cr_text: str | None = None
+    story_text: str | None = None
     target_id: str | None = None
     ticket_number: str | None = None
     # Set once the developer has confirmed (or overridden) an uncertain
@@ -2670,7 +2778,7 @@ def gitlab_scope_auto(
     payload: GitlabScopeAutoRequest, identity: Identity = Depends(require_identity)
 ) -> dict:
     """Same as /gitlab/projects/{id}/scope, but for when the caller doesn't know
-    which repo the CR belongs to — an AI pick over the project list stands in for
+    which repo the user story belongs to — an AI pick over the project list stands in for
     the manual project_id above, labeled like every other AI suggestion.
 
     A repo-match below 'high' confidence is not scoped against silently: it
@@ -2679,18 +2787,18 @@ def gitlab_scope_auto(
     before file discovery runs against a possibly-wrong project. Resubmit
     with `confirmed_project_id` set to skip straight to scoping.
     """
-    if payload.cr_text is not None:
-        cr_text = payload.cr_text.strip()
-        if not cr_text:
-            raise HTTPException(status_code=422, detail="cr_text must not be empty")
-        if len(cr_text) > 4000:
+    if payload.story_text is not None:
+        story_text = payload.story_text.strip()
+        if not story_text:
+            raise HTTPException(status_code=422, detail="story_text must not be empty")
+        if len(story_text) > 4000:
             raise HTTPException(
-                status_code=422, detail="cr_text is too long (max 4000 characters)"
+                status_code=422, detail="story_text is too long (max 4000 characters)"
             )
     elif payload.tier_name:
-        cr_text = _cr_text_or_400(payload.tier_name)
+        story_text = _story_text_or_400(payload.tier_name)
     else:
-        raise HTTPException(status_code=422, detail="either tier_name or cr_text is required")
+        raise HTTPException(status_code=422, detail="either tier_name or story_text is required")
 
     try:
         projects = get_client().list_projects()
@@ -2702,7 +2810,7 @@ def gitlab_scope_auto(
             )
             alternates: tuple[RepoMatch, ...] = ()
         else:
-            suggestion = suggest_target_repo(cr_text, projects)
+            suggestion = suggest_target_repo(story_text, projects)
             if needs_confirmation(suggestion.best_match):
                 if payload.ticket_number:
                     record_event(
@@ -2726,8 +2834,8 @@ def gitlab_scope_auto(
 
         project_id = best_match.project_id
         repo_size = len(get_client().list_repo_paths(project_id))
-        gitlab_files = discover_gitlab_files(project_id, cr_text)
-        selection = select_relevant_files(cr_text, gitlab_files, core_files=(), design_docs={})
+        gitlab_files = discover_gitlab_files(project_id, story_text)
+        selection = select_relevant_files(story_text, gitlab_files, core_files=(), design_docs={})
     except GitLabError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except LLMError as exc:
@@ -2797,5 +2905,5 @@ def quick_impact_chat(
             "reasoning": result.effort_estimate.reasoning,
         }
         response["code_change_warranted"] = result.code_change_warranted
-        response["suggested_cr_summary"] = result.suggested_cr_summary
+        response["suggested_story_summary"] = result.suggested_story_summary
     return response

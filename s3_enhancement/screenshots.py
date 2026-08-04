@@ -1,5 +1,5 @@
 """Before/after screenshot capture for the S3 amendment-form demo beat
-(CR-2026-042) — proves "the app changed" visually, not just via a text diff.
+(US-2026-042) — proves "the app changed" visually, not just via a text diff.
 
 `SCREENSHOT_MODE` mirrors `GITLAB_MODE`/`HARNESS_MODE`/`LLM_MODE`: "live"
 launches a real headless browser against the running mockapp instance and
@@ -55,7 +55,7 @@ def capture_form_screenshot(stage: Stage, *, namespace: str) -> bytes:
     """Capture (or replay) a full-page PNG screenshot of the running mockapp.
 
     `namespace` mirrors a `Target.cache_namespace` (e.g.
-    "endorsement_field_add") so different CRs' screenshots never collide.
+    "endorsement_field_add") so different user stories' screenshots never collide.
     Full-page rather than a specific CSS selector: Streamlit's DOM structure
     for form widgets isn't a stable target to select against, and a live demo
     needs this to be robust more than it needs pixel-perfect framing.

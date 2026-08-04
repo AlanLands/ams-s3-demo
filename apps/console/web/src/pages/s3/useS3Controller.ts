@@ -30,6 +30,7 @@ import {
   type TokenPanel as TokenPanelData,
 } from '../../api_s3'
 import type { S3Stage } from './context'
+import { canSeeStage, type S3StageId } from './stageAccess'
 import { downloadBlob, parseDiff } from './utils'
 
 const AI_LABEL = 'AI suggestion — verify with your specialist before applying.'
@@ -44,17 +45,19 @@ const MOCKAPP_URL =
 
 // Where an applied change can actually be seen running, per target. Keyed by
 // target id so the post-apply "go look at it" link names the app the change
-// landed in — not always the mockapp portal. The ClaimsPortal target serves
-// its own consoles from two Python/FastAPI services (apps/run-policy-service.sh
-// :8081, apps/run-claims-service.sh :8082); CR-2026-043 changes claim intake,
-// so the claims console is the one worth opening.
+// landed in — not always the mockapp portal.
 const TARGET_APPS: Record<string, { url: string; label: string }> = {
-  'claimsportal-claims-deductible': {
-    url: import.meta.env.VITE_CLAIMS_SERVICE_URL || 'http://localhost:8082/',
-    label: 'open the Claims Team console',
+  // DocumentHub serves its own console from repos/documenthub/static
+  // (apps/run-documenthub.sh :8084). US-2026-046 changes which confirmation
+  // pack a rostered guest receives, and that console renders the pack itself
+  // — the selection audit on the same page is where the fix is visible as a
+  // contradiction count dropping to zero.
+  'documenthub-rostered-guest-wording': {
+    url: import.meta.env.VITE_DOCUMENTHUB_URL || 'http://localhost:8084/',
+    label: 'open the DocumentHub console',
   },
   // EnrolDirect serves its own console from repos/enroldirect/static
-  // (apps/run-enroldirect.sh :8083). CR-2026-045 changes the enrolment gate,
+  // (apps/run-enroldirect.sh :8083). US-2026-045 changes the enrolment gate,
   // and that console's Access check is where the prospect decision is visible
   // — the policy portal has nothing to do with this target.
   'enroldirect-prospect-access': {
@@ -69,42 +72,43 @@ const DEFAULT_TARGET_APP = { url: MOCKAPP_URL, label: 'open the policy portal' }
 // live roster since a ticket assignee is illustrative here, not a real Jira
 // user lookup (Jira Cloud needs an accountId, which this fictional roster
 // doesn't have — see common/jira_client.py's assignee note).
-const ASSIGNEE_ROSTER = ['Ravi Kumar', 'Elena Cruz', 'Priya Nair']
+// Developers only. Priya Nair used to appear here too, but she is a tester
+// (common/roster.py's TESTER_NAMES) — offering her as the assignee for build
+// work would hand a ticket to someone whose console has no Generate stage.
+const ASSIGNEE_ROSTER = ['Ravi Kumar', 'Elena Cruz']
 
-// QA hand-off roster — the ClaimsPortal support pair doubles as the test
-// team in this demo. Once a ticket is handed to QA, only the assigned
-// tester (logged in as themselves) can generate/run tests and close out.
+// QA hand-off roster. These two carry the `tester` role server-side
+// (common/roster.py's TESTER_NAMES) — keep the two lists in step, or the
+// console offers a hand-off to someone who logs in without a Tests stage.
+// Once a ticket is handed to QA, only the assigned tester (logged in as
+// themselves) can generate/run tests and close out.
 const TESTER_ROSTER = ['Priya Nair', 'Tom Becker']
 
-// Which CR a given Jira board ticket links to, so clicking it can run impact
+// Which user story a given Jira board ticket links to, so clicking it can run impact
 // analysis against the right target — the AMS-098 cleanup ticket has no
-// linked CR (it's a seeded example of unrelated work also on the board).
-// Deliberately NOT a ticket -> target_id table: crFile names a bare filename
-// under the repo's top-level crs/, and the console resolves it to a
+// linked user story (it's a seeded example of unrelated work also on the board).
+// Deliberately NOT a ticket -> target_id table: storyFile names a bare filename
+// under the repo's top-level stories/, and the console resolves it to a
 // target_id server-side (POST /api/s3/target/resolve, see useEffect below
-// and s3_enhancement/target_match.py) from the CR's own text — its
-// `CR-YYYY-NNN:` identifier, or failing that its `Application:` header.
+// and s3_enhancement/target_match.py) from the user story's own text — its
+// `US-YYYY-NNN:` identifier, or failing that its `Application:` header.
 // Onboarding a new repo/target is then: register the Target in targets.py,
-// drop its CR under crs/, and add its ticket key here with just a filename
+// drop its user story under stories/, and add its ticket key here with just a filename
 // — no target_id to look up or keep in sync by hand.
-const TICKET_CRS: Record<string, { crFile: string | null; tierName: string }> = {
-  'AMS-101': { crFile: 'CR-2026-041.md', tierName: 'Elite' },
-  'AMS-102': { crFile: 'CR-2026-042.md', tierName: 'Elite' },
-  // The ClaimsPortal target (repos/claimsportal) — S3's proof that the
-  // pipeline handles a second repo. tierName is a required placeholder like
-  // AMS-102's; CR-2026-043 has no {{TIER_NAME}}.
-  'AMS-103': { crFile: 'CR-2026-043.md', tierName: 'Elite' },
-  // Raised on the support floor, so its CR names the application but no
-  // target system: CR-2026-044's title is no registered target's
-  // cr_template_path.stem, and its "Application: PolicyCore" header narrows
+const TICKET_CRS: Record<string, { storyFile: string | null; tierName: string }> = {
+  'AMS-101': { storyFile: 'US-2026-041.md', tierName: 'Elite' },
+  'AMS-102': { storyFile: 'US-2026-042.md', tierName: 'Elite' },
+  // Raised on the support floor, so its user story names the application but no
+  // target system: US-2026-044's title is no registered target's
+  // story_template_path.stem, and its "Application: PolicyCore" header narrows
   // to two targets rather than one. Both deterministic tiers therefore miss
   // and target_match falls through to the AI tier -- this is the ticket that
   // exercises repo selection on stage (see the Repo selection card below).
-  'AMS-104': { crFile: 'CR-2026-044.md', tierName: 'Elite' },
+  'AMS-104': { storyFile: 'US-2026-044.md', tierName: 'Elite' },
 }
 
-function crLabelFromFile(crFile: string | null): string {
-  return crFile ? crFile.replace(/\.md$/, '') : ''
+function storyLabelFromFile(storyFile: string | null): string {
+  return storyFile ? storyFile.replace(/\.md$/, '') : ''
 }
 
 const TICKET_STORAGE_PREFIX = 'ams-s3:ticket:'
@@ -178,6 +182,11 @@ export function useS3Controller() {
   const { identity } = useAuth()
   const isManager = identity?.role === 'manager'
   const isEngineer = identity?.role === 'engineer'
+  const isTester = identity?.role === 'tester'
+  // Engineers and testers both work a queue of tickets assigned to them —
+  // the tester's is the QA hand-off. Only the manager works the whole board
+  // instead of a personal queue.
+  const worksTickets = isEngineer || isTester
 
   const [generated, setGenerated] = useState<GenerateResponse | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -199,6 +208,11 @@ export function useS3Controller() {
   const [fileReasons, setFileReasons] = useState<Record<string, string>>({})
 
   const [applied, setApplied] = useState(false)
+  // Whether Apply also got the target process onto the new code. Separate from
+  // `applied` on purpose — the files landing and the running app changing are
+  // different facts, and the banner has to be able to tell them apart.
+  const [applyRestarted, setApplyRestarted] = useState(false)
+  const [applyRestartDetail, setApplyRestartDetail] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [appliedFiles, setAppliedFiles] = useState<Record<string, boolean>>({})
@@ -217,7 +231,7 @@ export function useS3Controller() {
   const [postApplyFailure, setPostApplyFailure] = useState<PostApplyResult | null>(null)
   // Design-doc drift found after Apply. Runs automatically — never a button the
   // developer has to know to press — and stays null whenever the change touched
-  // no documented subsystem, which is the case for every current demo CR.
+  // no documented subsystem, which is the case for every current demo user story.
   const [designSync, setDesignSync] = useState<DesignSyncResponse | null>(null)
   const [designDocApplying, setDesignDocApplying] = useState<string | null>(null)
   const [designDocApplied, setDesignDocApplied] = useState<Record<string, boolean>>({})
@@ -321,9 +335,9 @@ export function useS3Controller() {
   // brushing past a dropdown.
   const [reassignTicket, setReassignTicket] = useState<string | null>(null)
 
-  // Which ticket's CR the codegen section (Generate/Tests/Release notes)
+  // Which ticket's user story the codegen section (Generate/Tests/Release notes)
   // currently targets — set by clicking a board ticket. null means "nothing
-  // assigned to this engineer with a linked CR yet."
+  // assigned to this engineer with a linked user story yet."
   const [activeTicketKey, setActiveTicketKey] = useState<string | null>(null)
   const [expandedTicket, setExpandedTicket] = useState<string | null>(null)
   const [ticketAnalysis, setTicketAnalysis] = useState<Record<string, AnalyzeResponse>>(() => {
@@ -355,10 +369,10 @@ export function useS3Controller() {
   const [screenshotBefore, setScreenshotBefore] = useState<string | null>(null)
   const [screenshotAfter, setScreenshotAfter] = useState<string | null>(null)
 
-  // Which target each ticket's CR resolved to, server-side, and how it got
+  // Which target each ticket's user story resolved to, server-side, and how it got
   // there — undefined means "not resolved yet" (see the effect below), null
   // means the resolve call itself failed. Everything else about a ticket's
-  // linked CR (tierName, crLabel) is static and needs no round trip; only
+  // linked user story (tierName, storyLabel) is static and needs no round trip; only
   // the target has to come from the server, since that's the one thing this
   // console must not hardcode per ticket (see TICKET_CRS).
   //
@@ -378,77 +392,90 @@ export function useS3Controller() {
   // every board refresh without re-issuing a request per poll.
   const resolveRequested = useRef<Set<string>>(new Set())
 
-  // A ticket auto-opened from a dropped CR is not in TICKET_CRS — it only
-  // exists on the board, carrying its own `cr_file`. Resolving the seeded
+  // Tracks unmount, and *only* unmount. The resolve effect below must not
+  // cancel on a dependency change: `resolveRequested` is a ref that outlives
+  // the run that populated it, so a per-run `cancelled` flag strands every
+  // in-flight ticket — the response is discarded while the key stays marked
+  // as already-requested, and the next run skips it forever. Under
+  // StrictMode's mount/unmount/remount that happened on every single dev
+  // load, which is what left "Identifying the repo…" on screen permanently.
+  const resolveMounted = useRef(true)
+  useEffect(() => {
+    resolveMounted.current = true
+    return () => {
+      resolveMounted.current = false
+    }
+  }, [])
+
+  // A ticket auto-opened from a dropped user story is not in TICKET_CRS — it only
+  // exists on the board, carrying its own `story_file`. Resolving the seeded
   // table alone leaves such a ticket with no entry in `resolvedTarget`, and
   // `matchPending` is defined as "no entry yet" — so the Repo selection card
   // sits on "Identifying the repo…" forever rather than for a while. Walk the
-  // board too, on the same fallback `crLinkFor` already uses for routing.
+  // board too, on the same fallback `storyLinkFor` already uses for routing.
   useEffect(() => {
-    let cancelled = false
     const pending = new Map<string, string>()
-    for (const [ticketKey, cr] of Object.entries(TICKET_CRS)) {
-      if (cr.crFile) pending.set(ticketKey, cr.crFile)
+    for (const [ticketKey, story] of Object.entries(TICKET_CRS)) {
+      if (story.storyFile) pending.set(ticketKey, story.storyFile)
     }
     for (const issue of boardIssues || []) {
-      if (issue.cr_file && !pending.has(issue.key)) pending.set(issue.key, issue.cr_file)
+      if (issue.story_file && !pending.has(issue.key)) pending.set(issue.key, issue.story_file)
     }
-    for (const [ticketKey, crFile] of pending) {
+    for (const [ticketKey, storyFile] of pending) {
       if (resolveRequested.current.has(ticketKey)) continue
       resolveRequested.current.add(ticketKey)
       s3Api
-        .resolveTarget(crFile, ticketKey)
+        .resolveTarget(storyFile, ticketKey)
         .then((result) => {
-          if (cancelled) return
+          if (!resolveMounted.current) return
           setResolvedTarget((prev) => ({ ...prev, [ticketKey]: result }))
         })
         .catch(() => {
-          if (cancelled) return
-          // Let a later board refresh retry — a null entry clears
-          // `matchPending` and the card reports the failure honestly, but a
-          // one-off network blip should not strand the ticket for the session.
+          // Release the key on failure so a later board refresh retries. A
+          // null entry clears `matchPending` and the card reports the failure
+          // honestly, but a one-off network blip should not strand the ticket
+          // for the session. Released before the mount check: an unmount must
+          // not leave the key claimed for a remount that follows it.
           resolveRequested.current.delete(ticketKey)
+          if (!resolveMounted.current) return
           setResolvedTarget((prev) => ({ ...prev, [ticketKey]: null }))
         })
     }
-    return () => {
-      cancelled = true
-    }
   }, [boardIssues])
 
-  // TICKET_CRS covers the seeded demo tickets. A CR dropped into `crs/` is
+  // TICKET_CRS covers the seeded demo tickets. A user story dropped into `stories/` is
   // opened on the board automatically and is not in that table — the board
-  // row carries its own `cr_file`/`target_id` instead, so fall back to those
+  // row carries its own `story_file`/`target_id` instead, so fall back to those
   // rather than growing a lookup table nobody remembers to edit. Without this
   // an auto-opened ticket appears on the board but cannot be worked, which is
-  // the half of "pick the CR up automatically" that would actually matter.
-  function crLinkFor(
+  // the half of "pick the user story up automatically" that would actually matter.
+  function storyLinkFor(
     ticketKey: string
-  ): { crFile: string | null; tierName: string } | undefined {
+  ): { storyFile: string | null; tierName: string } | undefined {
     const known = TICKET_CRS[ticketKey]
     if (known) return known
     const issue = (boardIssues || []).find((candidate) => candidate.key === ticketKey)
-    if (!issue?.cr_file) return undefined
-    // Elite is the placeholder every non-{{TIER_NAME}} CR already uses; a
-    // dropped-in CR has no audience-picked token to substitute.
-    return { crFile: issue.cr_file, tierName: 'Elite' }
+    if (!issue?.story_file) return undefined
+    // Elite is the placeholder every non-{{TIER_NAME}} user story already uses; a
+    // dropped-in user story has no audience-picked token to substitute.
+    return { storyFile: issue.story_file, tierName: 'Elite' }
   }
 
   function getLinked(
     ticketKey: string | null | undefined
-  ): { targetId: string | null; tierName: string; crLabel: string } | undefined {
+  ): { targetId: string | null; tierName: string; storyLabel: string } | undefined {
     if (!ticketKey) return undefined
-    const cr = crLinkFor(ticketKey)
-    if (!cr) return undefined
+    const story = storyLinkFor(ticketKey)
+    if (!story) return undefined
     // Prefer the resolver's answer; fall back to the target the board already
     // resolved server-side, which is the only source for an auto-opened ticket
     // until its own resolveTarget call lands.
     const boardTargetId =
       (boardIssues || []).find((candidate) => candidate.key === ticketKey)?.target_id ?? null
     return {
-      targetId: cr.crFile ? resolvedTarget[ticketKey]?.target_id ?? boardTargetId : null,
-      tierName: cr.tierName,
-      crLabel: crLabelFromFile(cr.crFile),
+      targetId: story.storyFile ? resolvedTarget[ticketKey]?.target_id ?? boardTargetId : null,
+      tierName: story.tierName,
+      storyLabel: storyLabelFromFile(story.storyFile),
     }
   }
 
@@ -596,6 +623,12 @@ export function useS3Controller() {
       for (const path of result.applied_files) nextAppliedFiles[path] = true
       const failure = result.post_apply && !result.post_apply.ok ? result.post_apply : null
       setApplied(true)
+      setApplyRestarted(Boolean(result.restarted))
+      setApplyRestartDetail(
+        result.restarted
+          ? null
+          : (result.restarts || []).map((item) => item.detail).filter(Boolean).join(' ') || null,
+      )
       setAppliedFiles(nextAppliedFiles)
       setRejectedFiles(result.rejected_files)
       setPostApplyFailure(failure)
@@ -1002,7 +1035,7 @@ export function useS3Controller() {
         activeTicketKey,
         (ticketCrossTeam[activeTicketKey] ?? []).map((impact) => impact.app_name)
       )
-      downloadBlob(`${getLinked(activeTicketKey)?.crLabel ?? 'design'}-design-doc.${format}`, blob)
+      downloadBlob(`${getLinked(activeTicketKey)?.storyLabel ?? 'design'}-design-doc.${format}`, blob)
     } catch (err) {
       if (format === 'pdf' && err instanceof ApiError && err.status === 503) {
         printDesignDoc()
@@ -1091,7 +1124,7 @@ export function useS3Controller() {
     }
   }
 
-  // Independent of generate/run: the regression suite predates the CR, so it
+  // Independent of generate/run: the regression suite predates the user story, so it
   // is runnable at any point. Presenters take a green baseline before Apply
   // and re-run it after — the pair is the "we broke nothing" evidence.
   async function handleRunRegression() {
@@ -1225,7 +1258,7 @@ export function useS3Controller() {
     setReleaseError(null)
     try {
       const blob = await s3Api.releaseRecord(releaseRecordPayload('pdf'))
-      const label = getLinked(activeTicketKey)?.crLabel ?? 'release'
+      const label = getLinked(activeTicketKey)?.storyLabel ?? 'release'
       downloadBlob(`${label}-release-record.pdf`, blob)
     } catch (err) {
       setReleaseError(err instanceof ApiError ? err.message : 'Could not build the record.')
@@ -1327,10 +1360,15 @@ export function useS3Controller() {
       // Created open/unassigned — assignment is a deliberate separate step
       // (see handleAssignCrossTeamTicket) so it's visible to the manager as
       // open and can be assigned whenever, not forced at creation time.
+      // The generated body, not the one-line reason. `reason` justifies
+      // raising the ticket to someone holding this user story; the other
+      // team holds neither the story nor the analysis, so they get the
+      // description written for them. Falls back to `reason` only for a
+      // recording made before that field existed.
       const result = await s3Api.createCrossTeamTicket(
         impact.app_name,
         impact.suggested_summary,
-        impact.reason,
+        impact.description || impact.reason,
         primaryTicketKey
       )
       setCreatedTickets((prev) => ({
@@ -1417,13 +1455,13 @@ export function useS3Controller() {
     // Only tickets with a real codegen target (AMS-101/102 today) should
     // change what "Generate the change" below acts on — a cross-team
     // ticket like AMS-500 has no target, and silently falling back to the
-    // default CR would be confusing with no indication it happened.
+    // default user story would be confusing with no indication it happened.
     if (linked) {
       setActiveTicketKey(ticketKey)
       if (!ticketCrText[ticketKey]) {
         s3Api
-          .cr(linked.tierName, linked.targetId)
-          .then((result) => setTicketCrText((prev) => ({ ...prev, [ticketKey]: result.cr_text })))
+          .story(linked.tierName, linked.targetId)
+          .then((result) => setTicketCrText((prev) => ({ ...prev, [ticketKey]: result.story_text })))
           .catch(() => {})
       }
     }
@@ -1444,16 +1482,16 @@ export function useS3Controller() {
 
   async function handleRunAnalysisForTicket(ticketKey: string, clarificationAnswer?: string) {
     const linked = getLinked(ticketKey)
-    // A CR that had to be matched by the AI tier named no target system of
+    // A user story that had to be matched by the AI tier named no target system of
     // its own, so there is no repo to scope an analysis to yet — /analyze
     // would have to pick one first and then present file selection from it,
     // which is the answer this beat is supposed to be working towards. Those
     // tickets analyze their text directly instead (no target, no file
     // selection), and the repo is chosen afterwards. Derived from the
-    // resolution rather than a per-ticket flag, so a new ambiguous CR gets
+    // resolution rather than a per-ticket flag, so a new ambiguous user story gets
     // this automatically — see TICKET_CRS on why there is no lookup table.
-    const crNamesTarget = resolvedTarget[ticketKey]?.method !== 'ai'
-    const targetScoped = !!linked?.targetId && crNamesTarget
+    const storyNamesTarget = resolvedTarget[ticketKey]?.method !== 'ai'
+    const targetScoped = !!linked?.targetId && storyNamesTarget
     setTicketAnalysisLoading((prev) => ({ ...prev, [ticketKey]: true }))
     setTicketAnalysisError((prev) => ({ ...prev, [ticketKey]: '' }))
     try {
@@ -1463,7 +1501,7 @@ export function useS3Controller() {
         let answer: string | undefined
         if (pendingQuestion) {
           // A clarifying question is outstanding (e.g. an unstated field
-          // default check_cr_gaps caught) — this call carries the
+          // default check_story_gaps caught) — this call carries the
           // engineer's answer; the server keeps the transcript.
           answer = (clarificationAnswer || '').trim()
           if (!answer) return
@@ -1495,30 +1533,39 @@ export function useS3Controller() {
           effort_estimate: analyzeResult.effort_estimate as EffortEstimate,
           file_selection: analyzeResult.file_selection,
           token_panel: analyzeResult.token_panel,
+          cross_team_impacts: analyzeResult.cross_team_impacts,
+        }
+        // The server now runs the cross-team check as part of the analysis, so
+        // seed the same state the old button used to fill. `null` means the
+        // check could not run — leave it unset so the panel can say so rather
+        // than claiming nobody is affected.
+        if (analyzeResult.cross_team_impacts) {
+          const impacts = analyzeResult.cross_team_impacts
+          setTicketCrossTeam((prev) => ({ ...prev, [ticketKey]: impacts }))
         }
       } else {
-        // Either no CR/target registered for this ticket at all (e.g. a
-        // cross-team ticket for another application), or a CR that names no
-        // target system (see crNamesTarget above) — analyze the text
+        // Either no user story/target registered for this ticket at all (e.g. a
+        // cross-team ticket for another application), or a user story that names no
+        // target system (see storyNamesTarget above) — analyze the text
         // directly, with no repo scoping it.
-        let crText: string
+        let storyText: string
         if (pendingQuestion) {
           // A clarifying question is outstanding — this call carries the
           // engineer's answer, not the original ticket text again (the
           // server keeps the transcript server-side).
-          crText = (clarificationAnswer || '').trim()
-          if (!crText) return
-        } else if (crLinkFor(ticketKey)?.crFile) {
-          // There *is* a CR, it just doesn't say which repo it's for. Read
+          storyText = (clarificationAnswer || '').trim()
+          if (!storyText) return
+        } else if (storyLinkFor(ticketKey)?.storyFile) {
+          // There *is* a user story, it just doesn't say which repo it's for. Read
           // it rather than falling back to the ticket's summary, so the
           // analysis and the resolver both work from the same document.
-          const crFile = crLinkFor(ticketKey)!.crFile as string
-          crText = (await s3Api.crFile(crFile)).cr_text.trim()
-          if (!crText) return
+          const storyFile = storyLinkFor(ticketKey)!.storyFile as string
+          storyText = (await s3Api.storyFile(storyFile)).story_text.trim()
+          if (!storyText) return
         } else {
           const issue = (boardIssues || []).find((candidate) => candidate.key === ticketKey)
-          crText = [issue?.summary, issue?.description].filter(Boolean).join('\n\n').trim()
-          if (!crText) return
+          storyText = [issue?.summary, issue?.description].filter(Boolean).join('\n\n').trim()
+          if (!storyText) return
         }
         // The ticket's own ServiceNow context, when it arrived with any —
         // present, it routes deterministically and the server skips the LLM
@@ -1526,7 +1573,7 @@ export function useS3Controller() {
         const issueForRouting = (boardIssues || []).find(
           (candidate) => candidate.key === ticketKey
         )
-        const adhocResult = await s3Api.analyzeAdhoc(crText, ticketKey, !pendingQuestion, {
+        const adhocResult = await s3Api.analyzeAdhoc(storyText, ticketKey, !pendingQuestion, {
           ci: issueForRouting?.ci,
           businessService: issueForRouting?.business_service,
         })
@@ -1670,29 +1717,29 @@ export function useS3Controller() {
   }, [isEngineer])
 
   // Auto-pick which ticket the codegen section targets: the first ticket
-  // assigned to this engineer that has a linked CR. Re-evaluated whenever
+  // assigned to this engineer that has a linked user story. Re-evaluated whenever
   // the board changes (e.g. a manager just assigned something) so a ticket
   // reassigned away from this engineer doesn't leave a stale target.
   useEffect(() => {
-    if (!isEngineer || !boardIssues) return
+    if (!worksTickets || !boardIssues) return
     setActiveTicketKey((prev) => {
       if (prev && boardIssues.some((issue) => issue.key === prev && issue.assignee === identity?.name)) {
         return prev
       }
       const mine = boardIssues.find(
-        // Inlined rather than calling crLinkFor: this runs inside an effect,
+        // Inlined rather than calling storyLinkFor: this runs inside an effect,
         // and closing over the helper would add it to the dependency list for
         // no benefit — both sources it reads are already dependencies here.
-        (issue) => issue.assignee === identity?.name && (TICKET_CRS[issue.key] || issue.cr_file)
+        (issue) => issue.assignee === identity?.name && (TICKET_CRS[issue.key] || issue.story_file)
       )
       return mine ? mine.key : null
     })
-  }, [isEngineer, boardIssues, identity?.name])
+  }, [worksTickets, boardIssues, identity?.name])
 
   useEffect(() => {
-    if (!isEngineer || !activeTicketKey) return
+    if (!worksTickets || !activeTicketKey) return
     loadDependencies(activeTicketKey)
-  }, [isEngineer, activeTicketKey])
+  }, [worksTickets, activeTicketKey])
 
   // Restore whatever proposal was already generated for this ticket (e.g.
   // after a page reload, or switching back to a ticket worked on earlier) —
@@ -1781,7 +1828,7 @@ export function useS3Controller() {
   // different things to show someone.
   const activeMatch = activeTicketKey ? resolvedTarget[activeTicketKey] : undefined
   const matchPending = activeTicketKey ? !(activeTicketKey in resolvedTarget) : false
-  // A deterministic match needs no sign-off — tiers 1 and 2 matched the CR's
+  // A deterministic match needs no sign-off — tiers 1 and 2 matched the user story's
   // own identifier or application header structurally, and never guessed.
   // Every AI pick does, deliberately stricter than the server's
   // `needs_confirmation` (which trusts a high-confidence guess outright):
@@ -1807,7 +1854,7 @@ export function useS3Controller() {
       : matchPending
         ? 'Identifying which repo this ticket belongs to…'
         : !activeMatch?.resolved
-          ? "This ticket's CR didn't resolve to a repo this console can automate."
+          ? "This ticket's user story didn't resolve to a repo this console can automate."
           : targetConfirmationRequired && !targetAccepted
             ? // Repo confirmation sits on this same stage, just above checkout.
               'Confirm the repo above before checking out.'
@@ -1827,9 +1874,14 @@ export function useS3Controller() {
   const canGenerate = generateLockedReason === null
 
   const canDesignDoc = generated !== null && (generated.diff_text.trim() === '' || applied)
+  // Role-aware: the fix is on the "Generate the change" stage, which a tester
+  // does not have. Telling them to go there sends them somewhere their console
+  // will not take them.
   const designDocLockedReason = canDesignDoc
     ? null
-    : 'Apply the proposed change on the "Generate the change" stage before drafting a design doc.'
+    : isTester
+      ? 'Waiting on the developer — this opens once the change is applied and the ticket is handed to QA.'
+      : 'Apply the proposed change on the "Generate the change" stage before drafting a design doc.'
 
   // Tests belong to QA: the ticket must be handed off (status QA) and the
   // logged-in user must be the assigned tester — the developer who wrote the
@@ -1842,9 +1894,14 @@ export function useS3Controller() {
       : !designDoc
         ? 'Draft the design doc on the "Draft design doc (for QA)" stage before generating tests.'
         : !inQa
-          ? 'Hand the ticket off to QA on the "Draft design doc (for QA)" stage — the assigned tester runs this step.'
+          ? isTester
+            ? 'Not handed to QA yet — the developer moves the ticket here when the design doc is ready.'
+            : 'Hand the ticket off to QA on the "Draft design doc (for QA)" stage — the assigned tester runs this step.'
           : `With QA — only ${activeIssue?.assignee || 'the assigned tester'} can generate and run tests.`
 
+  // Drafted by the assigned tester once their run has produced results. The
+  // `!inQa` arm keeps the pre-hand-off path working for a target that never
+  // goes through QA.
   const canDraftNotes = !!testsRun && (!inQa || isActiveAssignee)
   const notesLockedReason = canDraftNotes
     ? null
@@ -1852,7 +1909,7 @@ export function useS3Controller() {
       ? `With QA — only ${activeIssue?.assignee || 'the assigned tester'} can draft release notes.`
       : 'Generate and run tests first.'
 
-  const crLabel = activeLinked?.crLabel ?? null
+  const storyLabel = activeLinked?.storyLabel ?? null
   // Absolute paths, not bare segments. These feed <Link to={stage.path}> from two
   // different depths: StageRail renders in the /s3 layout element, StageNav
   // renders inside the child stage element. A relative `to="target"` therefore
@@ -1884,7 +1941,7 @@ export function useS3Controller() {
       statusVariant: (mutationCheck && !mutationCheck.tests_caught_bug) || (testsRun && !testsRun.passed) || (regressionRun && !regressionRun.passed) ? 'error' : 'ok',
     },
     { id: 'release', title: 'Draft release notes', path: '/s3/release', locked: !canDraftNotes, lockedReason: notesLockedReason, done: !!releaseNoteSet, statusLabel: releaseNoteSet ? '✓ Drafted' : null },
-  ]
+  ].filter((stage) => canSeeStage(identity?.role, stage.id as S3StageId))
 
 
 
@@ -1893,6 +1950,8 @@ export function useS3Controller() {
     identity,
     isManager,
     isEngineer,
+    isTester,
+    worksTickets,
     generated,
     setGenerated,
     generating,
@@ -1914,6 +1973,8 @@ export function useS3Controller() {
     fileReasons,
     setFileReasons,
     applied,
+    applyRestarted,
+    applyRestartDetail,
     setApplied,
     applying,
     setApplying,
@@ -2113,7 +2174,7 @@ export function useS3Controller() {
     setScreenshotBefore,
     screenshotAfter,
     setScreenshotAfter,
-    crLabel,
+    storyLabel,
     stages,
     resolvedTarget,
     setResolvedTarget,

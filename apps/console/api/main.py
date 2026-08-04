@@ -15,6 +15,7 @@ matching route there) instead of the SPA.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -32,9 +33,21 @@ app = FastAPI(title="MapleSure AMS Console API")
 # Dev-only: the Vite dev server runs on a different port than uvicorn. Once
 # the frontend is built and served by this same process (mounted below),
 # requests are same-origin and this middleware is inert.
+#
+# Origins come from CONSOLE_ALLOWED_ORIGINS (comma-separated) so a host that
+# serves the console under a real hostname can name it without a code change.
+# The default is the local Vite pair it has always been, so an unset variable
+# behaves exactly as before.
+_DEFAULT_ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CONSOLE_ALLOWED_ORIGINS", _DEFAULT_ALLOWED_ORIGINS).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

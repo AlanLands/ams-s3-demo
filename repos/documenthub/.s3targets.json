@@ -1,0 +1,37 @@
+{
+  "targets": [
+    {
+      "target_id": "documenthub-rostered-guest-wording",
+      "display_name": "DocumentHub — confirmation pack wording for rostered guests (US-2026-046)",
+      "application_id": "documenthub",
+      "cache_namespace": "documenthub_rostered_guest_wording",
+      "story": "stories/US-2026-046.md",
+      "core_files": [
+        "repos/documenthub/feed.py",
+        "repos/documenthub/wording.py",
+        "repos/documenthub/enclosures.py",
+        "repos/documenthub/packs.py",
+        "repos/documenthub/main.py"
+      ],
+      "codegen_allowlist": [
+        "repos/documenthub/wording.py",
+        "repos/documenthub/enclosures.py",
+        "repos/documenthub/packs.py"
+      ],
+      "testgen_allowlist": [
+        "tests/test_s3_rostered_guest_wording.py"
+      ],
+      "regression_paths": [
+        "tests/test_regression_documenthub.py"
+      ],
+      "mutations": [
+        {
+          "rel_path": "repos/documenthub/wording.py",
+          "old_snippet": "if record.onRoster:",
+          "new_snippet": "if record.onRoster and False:",
+          "description": "Disabled the roster test in audience selection — a rostered applicant admitted under guest access falls back to the guest pack, silently reverting the user story and re-enclosing the identity form."
+        }
+      ]
+    }
+  ]
+}

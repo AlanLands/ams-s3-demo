@@ -3,7 +3,7 @@
 ## Project Context
 
 This repo builds **S3 (Enhancement Delivery) only** — one AI pipeline taking a
-small change request on a mock insurance app from impact analysis → code
+small user story on a mock insurance app from impact analysis → code
 generation → tests → docs → release notes.
 
 It was split out of an original six-scenario AMS demo repo. The other five
@@ -13,7 +13,7 @@ elsewhere by the team.
 Source of truth:
 - `CLAUDE.md` — project context, hard rules, repo layout.
 - `README.md` — setup, running, resetting, layout.
-- `demo/DEMO_TEST_GUIDE.md` — the three CR scenarios, end to end.
+- `demo/DEMO_TEST_GUIDE.md` — the three user story scenarios, end to end.
 - `docs/history/` — the *original six-scenario* SCENARIOS.md and BUILD_PLAN.md,
   kept as background only. They do not describe current scope.
 
@@ -78,8 +78,8 @@ demo/run_mockapp.sh                  # the client's app on :8501/sl_policycore, 
 ```
 
 Reset between rehearsals with `demo/reset_s3.sh`,
-`demo/reset_s3_endorsement.sh`, or `demo/reset_s3_claimsportal.sh` depending on
-the CR. `tools/verify_s3_live.py --skip-live` is the offline rehearsal gate.
+`demo/reset_s3_endorsement.sh`, `demo/reset_s3_enroldirect.sh` or
+`demo/reset_s3_documenthub.sh` depending on the user story. `tools/verify_s3_live.py --skip-live` is the offline rehearsal gate.
 
 ## Working Rules
 

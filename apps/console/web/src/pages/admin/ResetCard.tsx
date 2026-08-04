@@ -16,17 +16,17 @@ const SOURCE_SCOPES: ScopeCopy[] = [
   {
     scope: 'policycore',
     title: 'PolicyCore source',
-    detail: 'Puts the MapleSure portal target app back to the baseline the CR starts from.',
+    detail: 'Puts the MapleSure portal target app back to the baseline the story starts from.',
   },
   {
-    scope: 'claimsportal',
-    title: 'ClaimsPortal source',
-    detail: 'Puts both ClaimsPortal services back to the baseline the CR starts from.',
+    scope: 'documenthub',
+    title: 'DocumentHub source',
+    detail: 'Puts the confirmation-pack wording back to the baseline the story starts from.',
   },
   {
     scope: 'enroldirect',
     title: 'EnrolDirect source',
-    detail: 'Puts the enrolment channel back to the baseline the CR starts from.',
+    detail: 'Puts the enrolment channel back to the baseline the story starts from.',
   },
 ]
 
@@ -136,7 +136,7 @@ export default function ResetCard({
 
   return (
     <AdminSection
-      title="Reset demo state"
+      title="Reset environment state"
       tone="danger"
       description={
         <>

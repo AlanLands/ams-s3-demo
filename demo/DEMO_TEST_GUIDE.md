@@ -4,26 +4,27 @@ A hands-on script for running (and testing) all four S3 change-request
 scenarios end to end. Use this to rehearse before presenting, or just to
 verify the pipeline still works after a change.
 
-This repo has **one pipeline, four CR scenarios** riding on it:
+This repo has **one pipeline, four user story scenarios** riding on it:
 
-| # | Ticket | CR | Target repo | Language | What the AI adds |
+| # | Ticket | user story | Target repo | Language | What the AI adds |
 |---|--------|----|-----------|---------|--------------------|
-| 1 | AMS-101 | CR-2026-041 — Plan Tier Upgrade Option | PolicyCore (`repos/policycore`) | Python / Streamlit | A new top plan tier (audience picks the name) |
-| 2 | AMS-102 | CR-2026-042 — Amendment Priority Field | PolicyCore (same repo) | Python / Streamlit | A "Priority" field on the contract-amendment request form |
-| 3 | AMS-103 | CR-2026-043 — Benefit Claim Deductible Handling | ClaimsPortal (`repos/claimsportal`) | Python / FastAPI | Per-policy deductible handling, across two services |
-| 4 | **AMS-1045** | CR-2026-045 — Prospect Member Eligibility Check For Online Enrolment | EnrolDirect (`repos/enroldirect`) | Python / FastAPI | Prospect classification at the online enrolment gate |
+| 1 | AMS-101 | US-2026-041 — Plan Tier Upgrade Option | PolicyCore (`repos/policycore`) | Python / Streamlit | A new top plan tier (audience picks the name) |
+| 2 | AMS-102 | US-2026-042 — Amendment Priority Field | PolicyCore (same repo) | Python / Streamlit | A "Priority" field on the contract-amendment request form |
+| 3 | **AMS-1045** | US-2026-045 — Prospect Member Eligibility Check For Online Enrolment | EnrolDirect (`repos/enroldirect`) | Python / FastAPI | Prospect classification at the online enrolment gate |
 
 **AMS-1045 is not seeded by anything.** A `.md` dropped into the top-level
-`crs/` opens a board ticket by itself, keyed deterministically off the CR id
-(`CR-2026-045` → `AMS-1045`, in the AMS-1000+ band so it cannot collide with
-the hand-seeded AMS-100..999 tickets), and it lands **unassigned** so the
-manager routes it. See `s3_enhancement/cr_intake.py`. The scenario below can
+`stories/` opens a board ticket by itself, keyed deterministically off the user story id
+(`US-2026-045` → `AMS-1045`, in the AMS-1000+ band so it cannot collide with
+the hand-seeded AMS-100..999 tickets), and it lands in **Ravi Kumar's To Do**
+column — the default assignee, `STORY_DEFAULT_ASSIGNEE`, empty to leave it
+unassigned for a manager to route instead. See
+`s3_enhancement/story_intake.py`. The scenario below can
 still be driven straight from `target_id`, but you no longer have to.
 
 All four run through the same AMS console (FastAPI + React, `apps/console/api/` +
 `apps/console/web/`) — the ticket you click determines which registered
 `target_id` the pipeline analyzes/codegens against (see
-`s3_enhancement/targets.py`; for a CR-derived ticket the resolved target is
+`s3_enhancement/targets.py`; for a story-derived ticket the resolved target is
 recorded on the ticket at intake, and `POST /s3/target/resolve` is the retry).
 
 ### Two folders
@@ -74,35 +75,29 @@ read-only. **Every command below was run on 2026-08-03 and the output shown is
 what it actually printed at baseline.**
 
 ```bash
-# --- CR-2026-041, PolicyCore plan tier ---------------------------------
-# tiers.py and the generated suite are CREATED by the CR: absent = baseline.
+# --- US-2026-041, PolicyCore plan tier ---------------------------------
+# tiers.py and the generated suite are CREATED by the user story: absent = baseline.
 ls repos/policycore/core/tiers.py tests/test_s3_tier_upgrade.py
 #   ls: repos/policycore/core/tiers.py: No such file or directory
 #   ls: tests/test_s3_tier_upgrade.py: No such file or directory
 grep -c "upgrade_tier\|PLAN_TIERS" repos/policycore/app.py
-#   0        <- baseline. Non-zero means the CR is applied.
+#   0        <- baseline. Non-zero means the user story is applied.
 
-# --- CR-2026-042, amendment Priority field -----------------------------
+# --- US-2026-042, amendment Priority field -----------------------------
 grep -c priority repos/policycore/core/amendments.py
-#   0        <- baseline. The CR adds `priority: str = "Standard"`.
+#   0        <- baseline. The user story adds `priority: str = "Standard"`.
 ls tests/test_s3_amendment_priority.py
 #   ls: tests/test_s3_amendment_priority.py: No such file or directory
-# The "Request a Contract Amendment" form has 5 fields before the CR, 6 after:
+# The "Request a Contract Amendment" form has 5 fields before the user story, 6 after:
 # Anchored on the leading dot, not on `st.`: the contact phone/email pair is
 # laid out in columns, so those two are `col1.text_input` / `col2.text_input`.
 awk '/st.form\("submit_amendment_form"/,/form_submit_button/' repos/policycore/app.py \
   | grep -cE '\.(selectbox|text_area|date_input|text_input)\('
 #   5        <- baseline (amendment type, requested change, effective date,
-#                contact phone, contact email). 6 after the CR adds Priority.
+#                contact phone, contact email). 6 after the user story adds Priority.
 
-# --- CR-2026-043, ClaimsPortal deductible ------------------------------
-ls repos/claimsportal/claims_service/claim_rules.py tests/test_s3_claims_deductible.py
-#   ls: repos/claimsportal/claims_service/claim_rules.py: No such file or directory
-#   ls: tests/test_s3_claims_deductible.py: No such file or directory
-grep -c deductible repos/claimsportal/policy_service/policy.py
-#   0        <- baseline.
 
-# --- CR-2026-045, EnrolDirect prospect access --------------------------
+# --- US-2026-045, EnrolDirect prospect access --------------------------
 ls tests/test_s3_prospect_access.py
 #   ls: tests/test_s3_prospect_access.py: No such file or directory
 grep -c PROSPECT repos/enroldirect/eligibility.py
@@ -123,12 +118,6 @@ grep -c PROSPECT repos/enroldirect/eligibility.py
 Two of the four have a live before/after you can show, no console needed.
 
 ```bash
-# ClaimsPortal (:8081) — no deductible field on any policy at baseline:
-curl -s localhost:8081/api/policies | python3 -m json.tool | grep -c deductible
-#   0        <- baseline. Policies carry policyNumber, holderName, product,
-#                status, annualMaximum. MS-1001 and MS-1004 are the two the
-#                demo uses.
-
 # EnrolDirect (:8083) — a prospect is refused at the gate at baseline:
 curl -s -X POST localhost:8083/api/eligibility/check \
   -H 'Content-Type: application/json' \
@@ -151,21 +140,19 @@ AP-4003 (Devon Achebe) is a PROSPECT on MS-2001; AP-4001 (Rowan Iqbal) is a
 MEMBER on the same contract. `GET localhost:8083/api/applicants` lists all
 twelve if you want a different pair.
 
-### What each CR changes on screen
+### What each user story changes on screen
 
-| CR | App | Before | After |
+| user story | App | Before | After |
 |---|---|---|---|
-| CR-2026-041 | PolicyCore :8501/sl_policycore | A contract shows Plan Sponsor, Monthly Contribution, plan tier. No way to move a contract up a tier. | The audience-named top tier is selectable and the monthly contribution recalculates. `core/tiers.py` exists. |
-| CR-2026-042 | PolicyCore :8501/sl_policycore | "Request a Contract Amendment" form: **5 fields** — Amendment type, Describe the requested change, Effective date, Contact phone, Contact email. | **6 fields** — a Priority selector (Standard/Urgent) defaulting to Standard. Existing submit flow unchanged. |
-| CR-2026-043 | ClaimsPortal :8081 / :8082 | An **$80 claim on MS-1004 is ACCEPTED**. Policies carry no deductible. | Same $80 claim → **REJECTED_BELOW_DEDUCTIBLE**. A $1,200 claim on MS-1001 → ACCEPTED with **payableAmount 700**. |
-| CR-2026-045 | EnrolDirect :8083 | Prospect AP-4003 → `granted: false`, "category PROSPECT has no online enrolment preference". | Prospect resolves through the module-level policy to the **Guest** preference; the decision names it, and the benefit catalogue filters on the same effective category. |
+| US-2026-041 | PolicyCore :8501/sl_policycore | A contract shows Plan Sponsor, Monthly Contribution, plan tier. No way to move a contract up a tier. | The audience-named top tier is selectable and the monthly contribution recalculates. `core/tiers.py` exists. |
+| US-2026-042 | PolicyCore :8501/sl_policycore | "Request a Contract Amendment" form: **5 fields** — Amendment type, Describe the requested change, Effective date, Contact phone, Contact email. | **6 fields** — a Priority selector (Standard/Urgent) defaulting to Standard. Existing submit flow unchanged. |
+| US-2026-045 | EnrolDirect :8083 | Prospect AP-4003 → `granted: false`, "category PROSPECT has no online enrolment preference". | Prospect resolves through the module-level policy to the **Guest** preference; the decision names it, and the benefit catalogue filters on the same effective category. |
 
-Note ClaimsPortal deliberately keeps `claim`, `deductible`, `annual maximum`,
-`policyNumber`, `holderName`, `decide`, `payable` and
-`REJECTED_BELOW_DEDUCTIBLE`. That is correct group-benefits
-health/dental/disability vocabulary, and its API contract is frozen on purpose
-— renaming any of it desyncs the committed recording. The GRS reskin was
-PolicyCore only.
+Note the GRS reskin (endorsement → amendment, coverage tier → plan tier,
+premium → contribution, policyholder → plan sponsor) was **PolicyCore only**.
+EnrolDirect and DocumentHub keep their own vocabulary, and each target's API
+contract is frozen on purpose — renaming any of it desyncs the committed
+recording.
 
 ---
 
@@ -175,8 +162,8 @@ PolicyCore only.
 > reskin. The names below are the names things had **at the time**; today's
 > equivalents are noted in brackets. Nothing here is an outstanding action.
 
-1. `demo/reset_s3_endorsement.sh` (CR-2026-042 reset) depended on a git tag,
-   `s3-endorsement-baseline`, marking the pre-CR-042 commit. That tag had
+1. `demo/reset_s3_endorsement.sh` (US-2026-042 reset) depended on a git tag,
+   `s3-endorsement-baseline`, marking the pre-US-2026-042 commit. That tag had
    never been created, so the script would fail with `FAIL: git tag
    's3-endorsement-baseline' does not exist`.
 
@@ -184,9 +171,9 @@ PolicyCore only.
    `HEAD`, because the tag predates both this layout and the amendments table.
    The tag still exists and deliberately keeps its old spelling; renaming it
    would be a replay miss.
-2. Bigger gap: the pre-CR-042 baseline itself was incomplete.
+2. Bigger gap: the pre-US-2026-042 baseline itself was incomplete.
    `mockapp/core/endorsements.py` [today `repos/policycore/core/amendments.py`]
-   was committed for CR-2026-042, but the scaffold it depends on — the
+   was committed for US-2026-042, but the scaffold it depends on — the
    `Endorsement` model [`Amendment`], the `endorsements` table [`amendments`],
    and the "Request a Policy Endorsement" form in `mockapp/app.py` [today
    "Request a Contract Amendment" in `repos/policycore/app.py`] — was never
@@ -198,7 +185,7 @@ PolicyCore only.
    an existing form, so even the replay path wouldn't have shown a real
    before/after.
 
-   Fixed by adding the missing scaffold (matching exactly what the CR's own
+   Fixed by adding the missing scaffold (matching exactly what the user story's own
    codegen prompt in `s3_enhancement/codegen.py::build_amendment_prompt`
    already assumed it would be adding a field *to*), re-recording both the
    codegen and testgen fixed-key replay caches
@@ -219,7 +206,7 @@ PolicyCore only.
    replacement" style drops blank lines and docstrings across the whole
    file, not just the lines it's actually changing, so the diff shown in
    the console is noisier than a hand-written patch would be (same
-   characteristic likely applies to CR-2026-041's diffs too — not new to
+   characteristic likely applies to US-2026-041's diffs too — not new to
    this fix). Functionally harmless; flagging so it isn't mistaken for a
    demo bug if a presenter reviews the diff closely on stage.
 
@@ -230,8 +217,8 @@ roster`; scheme documented in `common/roster.py`):
 
 | Name | Passcode | Used as |
 |---|---|---|
-| Ravi Kumar | 1001 | Developer (CR-2026-041, CR-2026-043) |
-| Elena Cruz | 1002 | Developer (CR-2026-042 assignee option) |
+| Ravi Kumar | 1001 | Developer (US-2026-041) |
+| Elena Cruz | 1002 | Developer (US-2026-042 assignee option) |
 | Priya Nair | 1003 | Tester / QA hand-off |
 | Tom Becker | 1004 | Tester / QA hand-off (alt) |
 | Manager | 9000 | Manager rollup view. **The only login that can assign/reassign a ticket or open `/admin`** — both enforced server-side by `require_manager`, not hidden in the UI. |
@@ -261,7 +248,7 @@ read-only after any such move:
 git cat-file -e HEAD:repos/policycore/app.py 2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
 ```
 
-`demo/reset_s3_claimsportal.sh` and `demo/reset_s3_enroldirect.sh` restore by
+`demo/reset_s3_enroldirect.sh` and `demo/reset_s3_documenthub.sh` restore by
 `cp` from the in-repo `.baseline/` snapshots and never touch git, so nothing
 about HEAD can affect them. The admin panel checks the HEAD condition up front
 and greys out the PolicyCore reset with a `reset_blocked_reason` rather than
@@ -272,7 +259,7 @@ than trusting that a reset did what you expected.
 
 ---
 
-## Scenario 1 — CR-2026-041: Plan Tier Upgrade Option (AMS-101)
+## Scenario 1 — US-2026-041: Plan Tier Upgrade Option (AMS-101)
 
 The flagship demo beat: audience picks the new tier's name live.
 
@@ -323,9 +310,9 @@ demo/run_mockapp.sh           # repos/policycore/app.py on :8501/sl_policycore
 
 ---
 
-## Scenario 2 — CR-2026-042: Amendment Priority Field (AMS-102)
+## Scenario 2 — US-2026-042: Amendment Priority Field (AMS-102)
 
-Same app, second independent CR — proves the pipeline isn't hardcoded to
+Same app, second independent user story — proves the pipeline isn't hardcoded to
 one change.
 
 **Reset:**
@@ -362,86 +349,19 @@ Streamlit :8501/sl_policycore via `demo/run_mockapp.sh`).
 
 ---
 
-## Scenario 3 — CR-2026-043: Benefit Claim Deductible Handling (AMS-103, ClaimsPortal)
 
-Second repo, second language *until 2026-07-30* — ClaimsPortal was rebuilt
-to Python/FastAPI so it runs on nothing but the venv. Same
-pipeline, same pytest-based test/regression path as the other scenarios;
-what this beat now proves is a second independent repo/target, not a second
-language.
-
-ClaimsPortal keeps `claim`, `deductible` and `annual maximum` — correct
-group-benefits vocabulary, and the GRS reskin deliberately left it alone. Its
-API contract (`policyNumber`, `decide`, `payable`,
-`REJECTED_BELOW_DEDUCTIBLE`) is frozen: renaming any of it desyncs the
-committed recording.
-
-**Reset:**
-```bash
-demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-CR baseline (cp from .baseline/)
-demo/reset_s3.sh                # shared out/, ticket events, .cache/llm
-```
-
-**Run (3 terminals):**
-```bash
-# terminal 1 — API
-uvicorn apps.console.api.main:app --port 8000
-
-# terminal 2 — console
-cd apps/console/web && npm run dev
-
-# terminal 3 — the two Python/FastAPI services
-demo/run_s3_claimsportal.sh
-```
-
-**Steps:**
-1. Contracts Team console `http://localhost:8081` and Claims Team console
-   `http://localhost:8082`. Submit an **$80 claim on MS-1004** → ACCEPTED
-   (no deductible logic yet — this exact claim gets rejected later).
-2. Log in to the console (:5173) as **Ravi Kumar / 1001**, open **AMS-103**.
-   File-selection panel shows the ClaimsPortal-scoped pool (5 files, all
-   Python).
-3. Impact analysis — should name `policy.py`, `policy_client.py`'s
-   `PolicyView`, and a new `claim_rules` module.
-4. Generate — diff spans **both** services (policy gains `deductible`,
-   claims gains the consuming field, plus a new `claim_rules.py`). Apply.
-5. Draft the design doc — press **View design doc** to open it in the pop-up
-   (downloadable .html/.md/.pdf), then hand off to a tester
-   — pick **Priya Nair (1003)** or **Tom Becker (1004)**. Ticket moves to
-   the QA column; the developer is now locked out of the test step.
-6. Log out, log back in as the tester, open AMS-103 from the QA column, run
-   "Generate tests + run" — expect `tests/test_s3_claims_deductible.py`,
-   same pytest runner as the other scenarios. All green.
-7. Restart the services to pick up the change:
-   ```bash
-   # Ctrl-C terminal 3, then:
-   demo/run_s3_claimsportal.sh
-   ```
-   Resubmit the same $80 claim on MS-1004 → **REJECTED_BELOW_DEDUCTIBLE**.
-   Submit a $1,200 claim on MS-1001 → ACCEPTED with **payableAmount 700**.
-8. Draft release notes (still as the tester), open them in the pop-up, then
-   mark the ticket **Done**.
-
-**Reset between rehearsals:**
-```bash
-demo/reset_s3_claimsportal.sh   # ClaimsPortal source, from .baseline/
-demo/reset_s3.sh                # shared out/, ticket events, .cache/llm
-```
-
----
-
-## Scenario 4 — CR-2026-045: Prospect Member Eligibility Check (AMS-1045, EnrolDirect)
+## Scenario 3 — US-2026-045: Prospect Member Eligibility Check (AMS-1045, EnrolDirect)
 
 Third repo, and the one whose **baseline is a removal** — which is what makes
 it different. The checked-in source is the state *after* the impact analysis
 and *before* the gate acts on it: `eligibility.preference_for_category` returns
-`None` for a prospect, so they are refused. The CR settles the classification.
+`None` for a prospect, so they are refused. The user story settles the classification.
 
 Two other things are worth pointing at during this beat:
 
 - **Nobody seeded this ticket.** AMS-1045 opened itself from
-  `crs/CR-2026-045.md` and landed unassigned. Show it on the board before you
-  start, then assign it as **Manager / 9000**.
+  `stories/US-2026-045.md` and landed in Ravi Kumar's To Do column. Show it on
+  the board before you start.
 - **`impact.py` is in `core_files` but deliberately NOT in
   `codegen_allowlist`.** The model must *read* the analysis to understand the
   change and must not edit it. This target has its own file-set validator
@@ -470,14 +390,14 @@ apps/run-enroldirect.sh        # :8083
    MS-2001) → granted under "Online Enrolment - Member". Check a **prospect**
    (AP-4003, Devon Achebe, same contract) → refused, reason: *"Applicant
    category PROSPECT has no online enrolment preference and cannot be granted
-   access."* That refusal is nobody's decision — it is the omission the CR
+   access."* That refusal is nobody's decision — it is the omission the user story
    exists to close.
-2. Log in to the console (:5173) as **Manager / 9000**, show **AMS-1045**
-   unassigned on the board, assign it to an engineer. Press **Reassign** to
-   show the decision is reversible.
+2. Log in to the console (:5173) as **Manager / 9000** and show **AMS-1045**
+   already in Ravi Kumar's To Do column. Press **Reassign** to show the
+   decision is a manager's and is reversible.
 3. Log in as that engineer and open AMS-1045. File-selection panel scopes to
    the EnrolDirect pool (**8 candidate files**).
-4. Impact analysis — the CR's own analysis is already in the repo
+4. Impact analysis — the user story's own analysis is already in the repo
    (`impact.py`, `/api/analysis/*`), and it recommended Guest as the narrower
    grant. The pipeline reads it; it does not redo it.
 5. Generate — the prospect policy lands as a single module-level value in
@@ -485,7 +405,7 @@ apps/run-enroldirect.sh        # :8083
    and a new `effective_category` carries it past the gate. Apply.
 6. Generate tests + run — expect `tests/test_s3_prospect_access.py` green,
    plus `tests/test_regression_enroldirect.py` still green (the independent
-   check that this CR broke nothing).
+   check that this user story broke nothing).
 7. Restart EnrolDirect and re-check AP-4003 → now granted, with the decision
    naming the Guest preference that admitted them and the policy that resolved
    it. The benefit catalogue filters on the same effective category, so the
@@ -535,9 +455,8 @@ editing the check.
 
 For the "why," the risk framing, and word-for-word talk track (not just the
 click-path), see:
-- `demo/presenter_notes/s3_enhancement.md` — CR-2026-041 narrative
-- `demo/presenter_notes/s3_claimsportal_beat.md` — CR-2026-043 narrative
+- `demo/presenter_notes/s3_enhancement.md` — US-2026-041 narrative
 
-CR-2026-042 and CR-2026-045 have no separate presenter-notes file; this
+US-2026-042 and US-2026-045 have no separate presenter-notes file; this
 guide's Scenario 2 and Scenario 4 sections are the only scripts for them
 today.

@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
 # Step 0 (SCM_MODE=live) can leave the repo on a branch this demo cut for a
-# previous rehearsal's CR (`feature/AMS-nnn-<target>`, see
+# previous rehearsal's user story (`feature/AMS-nnn-<target>`, see
 # scm.branch_name_for). Those never diverge from main — this pass never
 # commits, see s3_enhancement/scm_live.py — so returning to main is safe.
 #
@@ -43,6 +43,15 @@ rm -f data/ticket_events.jsonl
 # _update_get_issue_cache — restore them so every rehearsal starts from the
 # seeded To Do / In Progress board, not wherever the last run ended.
 git checkout -- 's3_enhancement/cache/jira_*.json' 2>/dev/null || true
+# `git checkout` only restores files git is tracking. A run that touches a
+# ticket git has never seen — AMS-1045, opened from stories/ rather than seeded
+# — writes a *new*, untracked jira_get_issue_*.json holding that ticket's
+# latest status. Left behind, the next board load reads it back and the ticket
+# reappears as In Progress/Done on a board that is supposed to be freshly
+# seeded: source correctly reset, board quietly wrong. Verified twice on
+# 2026-08-03. Delete only untracked ones; the tracked seeds were just restored.
+git ls-files --others --exclude-standard -z 's3_enhancement/cache/jira_*.json' \
+  | xargs -0 -r rm -f
 # Lets the AMS console (which caches per-ticket analysis/proposal results in
 # the browser's localStorage) detect that server state was just reset and
 # drop its stale cache instead of continuing to show it — see

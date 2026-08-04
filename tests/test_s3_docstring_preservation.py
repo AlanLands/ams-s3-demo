@@ -1,5 +1,5 @@
 """Whole-file replacement makes the model shed the leading module docstring
-— and, per the CR-2026-042 replay recording that motivated
+— and, per the US-2026-042 replay recording that motivated
 `_restore_body_docstrings` and `_format_generated_python`, every function
 docstring and the blank-line spacing between top-level defs too.
 `_restore_module_docstring` repairs the module case deterministically,
@@ -158,7 +158,7 @@ def test_body_docstrings_invalid_python_passes_through(repo_root) -> None:
 # ---------------------------------------------------------------------------
 # _restore_dropped_comment_lines — the general, non-docstring case: a plain
 # `#` comment deleted from the middle of a function body, with no docstring
-# involved at all. Found against the real CR-2026-042 recording, in
+# involved at all. Found against the real US-2026-042 recording, in
 # repos/policycore/app.py's render(): a design-rationale comment between two
 # statements vanished with nothing marking its former position.
 # ---------------------------------------------------------------------------
@@ -256,7 +256,7 @@ def test_comment_lines_bails_out_if_restoring_breaks_syntax(repo_root) -> None:
 # _restore_top_level_blank_lines — narrow, name-matched fix for the blank-
 # line collapse (2 blank lines between top-level defs -> 1) whole-file
 # replacement introduces. Deliberately not a general formatter pass: it must
-# never touch a line the CR didn't ask about, only the blank-line run right
+# never touch a line the user story didn't ask about, only the blank-line run right
 # above a def/class it recognizes from the original file.
 # ---------------------------------------------------------------------------
 
@@ -322,7 +322,7 @@ def test_blank_lines_invalid_python_passes_through(repo_root) -> None:
 
 # ---------------------------------------------------------------------------
 # _repair_generated_content — the full chain, end to end against a synthetic
-# reproduction of the CR-2026-042 replay bug (module docstring, function
+# reproduction of the US-2026-042 replay bug (module docstring, function
 # docstrings, and blank-line spacing all lost in the same file).
 # ---------------------------------------------------------------------------
 

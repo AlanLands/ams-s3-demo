@@ -13,8 +13,8 @@ would act on, plus `git_transcript()`, which renders the commands that
 integration would issue. Two reasons it has to stay that way:
 
 1. The target apps live *inside this repo*, and `demo/reset_s3*.sh` restores the
-   pre-CR baseline with `git checkout HEAD -- <target files>`. A real commit
-   would make HEAD carry the CR, so the reset scripts would quietly start
+   pre-user story baseline with `git checkout HEAD -- <target files>`. A real commit
+   would make HEAD carry the user story, so the reset scripts would quietly start
    restoring the change instead of the baseline — the failure would surface as
    a mystery mid-rehearsal, not as an error here.
 2. A demo that pushes to a remote is a demo that can fail on stage for reasons
@@ -321,18 +321,18 @@ def commit_branch(proposal_id: str, message: str) -> BranchState:
     return _write(state)
 
 
-# A target's display_name reads "<App> — <what the CR does> (<CR label>)". The
+# A target's display_name reads "<App> — <what the user story does> (<user story label>)". The
 # middle clause is the only human summary of the change S3 has without asking a
 # model for one, so the commit subject borrows it.
-_DISPLAY_NAME_TAIL = re.compile(r"\s*\((?:CR|AMS)[-\w]*\)\s*$", re.IGNORECASE)
+_DISPLAY_NAME_TAIL = re.compile(r"\s*\((?:US|AMS)[-\w]*\)\s*$", re.IGNORECASE)
 
 
 def summary_from_display_name(display_name: str) -> str:
     """The "what it does" clause of a target's display name, or "".
 
     Falls back to empty rather than guessing: an unrecognised shape should make
-    the commit subject fall back to the CR label, not put a whole display name
-    including the app and the CR number into the subject line.
+    the commit subject fall back to the user story label, not put a whole display name
+    including the app and the user story number into the subject line.
     """
     if "—" not in display_name:
         return ""
@@ -340,12 +340,12 @@ def summary_from_display_name(display_name: str) -> str:
     return _DISPLAY_NAME_TAIL.sub("", tail).strip()
 
 
-def commit_message_for(ticket: str, cr_label: str, summary: str = "") -> str:
+def commit_message_for(ticket: str, story_label: str, summary: str = "") -> str:
     """A conventional commit subject built from the ticket, not from the model.
 
-    `AMS-103: claims deductible handling (CR-2026-043)` — the ticket key so the
+    `AMS-103: claims deductible handling (US-2026-043)` — the ticket key so the
     board can find it, what changed so a reader of `git log` does not have to,
-    and the CR label so it ties back to the change request.
+    and the user story label so it ties back to the user story.
 
     Pure string assembly on data already on hand, so there is no cache key to
     warm and nothing to be confidently wrong about on stage — the same reasoning
@@ -353,7 +353,7 @@ def commit_message_for(ticket: str, cr_label: str, summary: str = "") -> str:
     """
     head = f"{ticket.strip()}: " if ticket.strip() else ""
     summary = summary.strip()
-    label = cr_label.strip()
+    label = story_label.strip()
     if summary and label:
         body = f"{summary} ({label})"
     else:
@@ -411,7 +411,7 @@ def commit_blockers(events: list[dict]) -> list[str]:
     Empty list means the gate is open. The generated suite is a hard gate — the
     beat's claim is "committed once the tests passed", and committing without a
     test run would make that claim false. The pre-existing regression suite is
-    also a hard gate when it *ran and failed*: the CR broke something that
+    also a hard gate when it *ran and failed*: the user story broke something that
     already worked, and that is the one result the whole regression beat exists
     to catch. A regression suite that was never run is reported as a gap in the
     release record instead (see `release.unproven_claims`), not blocked here,
