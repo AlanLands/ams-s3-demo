@@ -30,7 +30,7 @@ PROBLEM_ID = "PRB0012345"
 # routes to App Support — BillingGateway, an application this console has no
 # repo for: the ticket reaches the right team and automation stays off, which
 # is the boundary worth showing. Override to demo the other half —
-# `SEED_CI=ClaimsPortal` routes to a team *and* offers the user story to run against
+# `SEED_CI=DocumentHub` routes to a team *and* offers the user story to run against
 # it (see s3_enhancement/applications.py for the registry).
 CI = os.environ.get("SEED_CI", "BillingGateway")
 BUSINESS_SERVICE = os.environ.get("SEED_BUSINESS_SERVICE", "Premium Billing")

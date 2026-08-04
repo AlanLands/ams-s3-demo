@@ -88,11 +88,11 @@ def test_markdown_without_a_story_title_is_not_a_ticket(tmp_path, monkeypatch):
 
 def test_story_ids_on_issue_reads_summary_and_description():
     """Both shapes the seeded board actually uses: the user story id leading the
-    summary (AMS-101..103), and a bare mention in the description
+    summary (AMS-101, AMS-102), and a bare mention in the description
     (AMS-104)."""
     assert story_intake.story_ids_on_issue(
-        {"summary": "US-2026-043: Claims Deductible Handling (ClaimsPortal)"}
-    ) == {"US-2026-043"}
+        {"summary": "US-2026-046: Confirmation Pack Wording For Rostered Applicants Admitted As Guests"}
+    ) == {"US-2026-046"}
     assert story_intake.story_ids_on_issue(
         {
             "summary": "Flag urgent amendment requests (from Support Ops)",

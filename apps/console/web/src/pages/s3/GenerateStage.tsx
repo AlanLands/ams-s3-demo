@@ -169,7 +169,7 @@ export default function GenerateStage() {
                           alignItems: 'center',
                           cursor: 'pointer',
                           ...(collapsed
-                            ? { borderRadius: 6, borderBottom: '1px solid var(--ams-line)' }
+                            ? { borderRadius: 'var(--ams-radius-md)', borderBottom: '1px solid var(--ams-line)' }
                             : {}),
                         }}
                         onClick={() =>
@@ -254,7 +254,7 @@ export default function GenerateStage() {
                                     fontSize: 'var(--ams-text-sm)',
                                     margin: '0.3rem 0',
                                     padding: '0.5rem 0.75rem',
-                                    borderRadius: 6,
+                                    borderRadius: 'var(--ams-radius-md)',
                                     maxWidth: '80%',
                                     // Replies carry deliberate line breaks (e.g. the
                                     // "no code was changed" note) — don't collapse them.
@@ -278,7 +278,7 @@ export default function GenerateStage() {
                                     fontSize: 'var(--ams-text-sm)',
                                     margin: '0.3rem 0',
                                     padding: '0.5rem 0.75rem',
-                                    borderRadius: 6,
+                                    borderRadius: 'var(--ams-radius-md)',
                                     maxWidth: '80%',
                                     background: 'var(--ams-surface)',
                                     border: '1px solid var(--ams-line)',

@@ -206,8 +206,8 @@ def register_target(target: Target) -> None:
 # recordings is a replay miss that silently falls through to a live call. They
 # are internal identifiers, not display strings — except target_id, which
 # scm.branch_name_for folds into the branch shown at Step 0. Rename them only
-# together with the recordings (see the ClaimsPortal note below for the shape
-# of that change).
+# together with the recordings: the rename and the recording move are one
+# change, and doing either alone is a replay miss.
 DEFAULT_TARGET_ID = "mockapp-coverage-upgrade"
 
 MOCKAPP_TIER_UPGRADE = Target(
@@ -309,68 +309,6 @@ MOCKAPP_AMENDMENT_FIELD_ADD = Target(
     cache_namespace="endorsement_field_add",
 )
 register_target(MOCKAPP_AMENDMENT_FIELD_ADD)
-
-
-CLAIMSPORTAL_TARGET_ID = "claimsportal-claims-deductible"
-
-_CLAIMSPORTAL_ROOT = REPO_ROOT / "repos" / "claimsportal"
-_CLAIMSPORTAL_CLAIMS_SRC = "repos/claimsportal/claims_service"
-_CLAIMSPORTAL_POLICY_SRC = "repos/claimsportal/policy_service"
-
-# target_id and cache_namespace were renamed off their original
-# "spring"/"springdemo" literals once nothing in this target was Spring any
-# more (it has been Python/FastAPI since the 2026-07-30 rewrite). target_id
-# is not purely internal — scm.branch_name_for folds it into the branch the
-# console shows at Step 0 — so a stale name was visible on stage.
-#
-# The rename had to move the committed stream recordings with it:
-# cache_namespace feeds Target.stream_cache_key, which *is* the recording's
-# filename (s3_{beat}__{cache_namespace}.json). Renaming one without the
-# other means a replay miss, which falls through to a live call.
-CLAIMSPORTAL_CLAIMS_DEDUCTIBLE = Target(
-    target_id=CLAIMSPORTAL_TARGET_ID,
-    source_kind="local",
-    display_name="ClaimsPortal — claims deductible handling (US-2026-043)",
-    application_id=applications.CLAIMS_PORTAL_ID,
-    root=_CLAIMSPORTAL_ROOT,
-    story_template_path=REPO_ROOT / "stories" / "US-2026-043.md",
-    story_placeholder="",  # like US-2026-042, no audience-picked placeholder token
-    core_files=(
-        f"{_CLAIMSPORTAL_POLICY_SRC}/policy.py",
-        f"{_CLAIMSPORTAL_POLICY_SRC}/main.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/policy_client.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/main.py",
-        # Does not exist until the user story creates it — same idiom as
-        # repos/policycore/core/tiers.py on the default target.
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
-    ),
-    codegen_allowlist=(
-        f"{_CLAIMSPORTAL_POLICY_SRC}/policy.py",
-        f"{_CLAIMSPORTAL_POLICY_SRC}/main.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/policy_client.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/main.py",
-        f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
-    ),
-    testgen_allowlist=("tests/test_s3_claims_deductible.py",),
-    regression_paths=("tests/test_regression_claimsportal.py",),
-    harness_expected_files=(),
-    mutations=(
-        Mutation(
-            rel_path=f"{_CLAIMSPORTAL_CLAIMS_SRC}/claim_rules.py",
-            old_snippet="if amount <= deductible:",
-            new_snippet="if amount < deductible:",
-            description=(
-                "Weakened the deductible boundary check from `<=` to `<` — "
-                "a claim for exactly the deductible amount is now accepted "
-                "instead of rejected below-deductible."
-            ),
-        ),
-    ),
-    cache_namespace="claimsportal_claims_deductible",
-)
-register_target(CLAIMSPORTAL_CLAIMS_DEDUCTIBLE)
 
 
 ENROLDIRECT_TARGET_ID = "enroldirect-prospect-access"

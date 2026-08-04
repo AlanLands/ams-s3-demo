@@ -131,26 +131,26 @@ def test_live_mode_disabled_for_any_other_value(monkeypatch):
 def test_checkout_refuses_when_target_root_is_unset(monkeypatch):
     monkeypatch.delenv("SCM_LIVE_TARGET_ROOT", raising=False)
     with pytest.raises(ScmLiveError, match="SCM_LIVE_TARGET_ROOT"):
-        checkout_branch("AMS-103", "claimsportal-claims-deductible")
+        checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
 
 
 def test_checkout_refuses_when_target_root_is_ams_s3_demo_itself(monkeypatch):
     monkeypatch.setenv("SCM_LIVE_TARGET_ROOT", str(scm_live._AMS_S3_DEMO_ROOT))
     with pytest.raises(ScmLiveError, match="ams-s3-demo itself"):
-        checkout_branch("AMS-103", "claimsportal-claims-deductible")
+        checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
 
 
 def test_checkout_refuses_when_target_root_is_nested_inside_ams_s3_demo(monkeypatch):
     nested = scm_live._AMS_S3_DEMO_ROOT / "repos" / "policycore"
     monkeypatch.setenv("SCM_LIVE_TARGET_ROOT", str(nested))
     with pytest.raises(ScmLiveError, match="ams-s3-demo itself"):
-        checkout_branch("AMS-103", "claimsportal-claims-deductible")
+        checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
 
 
 def test_checkout_refuses_when_target_root_does_not_exist(tmp_path, monkeypatch):
     monkeypatch.setenv("SCM_LIVE_TARGET_ROOT", str(tmp_path / "nowhere"))
     with pytest.raises(ScmLiveError, match="not a directory"):
-        checkout_branch("AMS-103", "claimsportal-claims-deductible")
+        checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
 
 
 # --- checkout_branch, against real throwaway folders --------------------------
@@ -193,15 +193,15 @@ def git_repo(tmp_path, monkeypatch):
 
 
 def test_bootstraps_a_plain_folder_into_a_git_repo(plain_folder):
-    result = checkout_branch("AMS-103", "claimsportal-claims-deductible")
+    result = checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
     assert (plain_folder / ".git").is_dir()
-    assert result.branch == scm.branch_name_for("AMS-103", "claimsportal-claims-deductible")
+    assert result.branch == scm.branch_name_for("AMS-1046", "documenthub-rostered-guest-wording")
     assert result.created is True
     assert _current_branch(plain_folder) == result.branch
 
 
 def test_bootstrap_produces_exactly_one_baseline_commit(plain_folder):
-    checkout_branch("AMS-103", "claimsportal-claims-deductible")
+    checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
     log = subprocess.run(
         ["git", "-C", str(plain_folder), "log", "--oneline", "main"],
         check=True,
@@ -219,7 +219,7 @@ def test_bootstrap_is_a_no_op_when_history_already_exists(git_repo):
         capture_output=True,
         text=True,
     ).stdout.strip()
-    checkout_branch("AMS-103", "claimsportal-claims-deductible")
+    checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
     after_log = subprocess.run(
         ["git", "-C", str(git_repo), "log", "--oneline", "main"],
         check=True,
@@ -238,8 +238,8 @@ def test_bootstrap_is_a_no_op_when_history_already_exists(git_repo):
 
 
 def test_creates_a_new_branch_off_main(git_repo):
-    result = checkout_branch("AMS-103", "claimsportal-claims-deductible")
-    assert result.branch == scm.branch_name_for("AMS-103", "claimsportal-claims-deductible")
+    result = checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
+    assert result.branch == scm.branch_name_for("AMS-1046", "documenthub-rostered-guest-wording")
     assert result.base == "main"
     assert result.created is True
     assert result.already_current is False
@@ -247,19 +247,19 @@ def test_creates_a_new_branch_off_main(git_repo):
 
 
 def test_idempotent_when_already_on_the_branch(git_repo):
-    first = checkout_branch("AMS-103", "claimsportal-claims-deductible")
-    second = checkout_branch("AMS-103", "claimsportal-claims-deductible")
+    first = checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
+    second = checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
     assert second.branch == first.branch
     assert second.created is False
     assert second.already_current is True
 
 
 def test_switches_back_to_an_existing_branch(git_repo):
-    checkout_branch("AMS-103", "claimsportal-claims-deductible")
+    checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
     subprocess.run(["git", "-C", git_repo, "checkout", "main"], check=True, capture_output=True)
     assert _current_branch(git_repo) == "main"
 
-    result = checkout_branch("AMS-103", "claimsportal-claims-deductible")
+    result = checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
     assert result.created is False
     assert result.already_current is False
     assert _current_branch(git_repo) == result.branch
@@ -267,19 +267,19 @@ def test_switches_back_to_an_existing_branch(git_repo):
 
 def test_reports_dirty_files_without_blocking(git_repo):
     (git_repo / "scratch.txt").write_text("uncommitted\n", encoding="utf-8")
-    result = checkout_branch("AMS-103", "claimsportal-claims-deductible")
+    result = checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
     assert "scratch.txt" in result.dirty_files
     # Dirty files are informational only — checkout still succeeds.
     assert result.created is True
 
 
 def test_clean_tree_reports_no_dirty_files(git_repo):
-    result = checkout_branch("AMS-103", "claimsportal-claims-deductible")
+    result = checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
     assert result.dirty_files == ()
 
 
 def test_sha_matches_real_head(git_repo):
-    result = checkout_branch("AMS-103", "claimsportal-claims-deductible")
+    result = checkout_branch("AMS-1046", "documenthub-rostered-guest-wording")
     real_sha = subprocess.run(
         ["git", "-C", str(git_repo), "rev-parse", "--short", "HEAD"],
         check=True,

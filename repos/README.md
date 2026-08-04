@@ -26,6 +26,11 @@ That is the whole procedure.
 
 One repo may declare several targets — PolicyCore has two, one per user story.
 
+`repos/documenthub/.s3targets.json` is a real, working one to read alongside
+this. It is the only target in this repo registered this way; the three
+built-ins stay declared by hand in `s3_enhancement/targets.py` for the reasons
+at the bottom of this file.
+
 ```json
 {
   "targets": [
@@ -105,6 +110,14 @@ call that records itself for every run after. And it does not get a bespoke
 structural validator: the three built-in targets carry hand-written file-set
 validators in `codegen.py` tuned to their own user story's shape, while a discovered
 target uses the generic one. Both are honest defaults.
+
+The live-first-run consequence is worth planning for rather than discovering on
+stage. `mutations[].old_snippet` must appear **verbatim in the generated code**,
+and until that first run there is no generated code to check it against — so a
+manifest's mutation is a prediction, however carefully the user story prescribes
+the shape. Verify it against the recording after the first live run, and again
+after every re-record. A snippet that stops matching makes the mutation beat
+silently no-op rather than fail loudly, which is the worst of the two.
 
 ## One thing that is not a `mv`
 

@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-172"
+  },
+  "response": {
+    "key": "AMS-172",
+    "status": "To Do",
+    "summary": "Adjust NightlyBatch reconciliation processes for enrolment records when prospects use guest access",
+    "issue_type": "Task",
+    "assignee": "Ravi Kumar",
+    "description": "NightlyBatch reconciles enrolments based on the authorising preference, and the new classification for prospects affects the reconciliation counts."
+  }
+}

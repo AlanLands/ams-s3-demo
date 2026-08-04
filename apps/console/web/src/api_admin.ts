@@ -51,7 +51,7 @@ export interface AdminStatus {
 // No "everything" scope by design — each reset is an explicit act.
 export type ResetScope =
   | 'policycore'
-  | 'claimsportal'
+  | 'documenthub'
   | 'enroldirect'
   | 'tickets'
   | 'logs'

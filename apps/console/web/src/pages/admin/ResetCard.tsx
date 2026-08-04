@@ -19,9 +19,9 @@ const SOURCE_SCOPES: ScopeCopy[] = [
     detail: 'Puts the MapleSure portal target app back to the baseline the story starts from.',
   },
   {
-    scope: 'claimsportal',
-    title: 'ClaimsPortal source',
-    detail: 'Puts both ClaimsPortal services back to the baseline the story starts from.',
+    scope: 'documenthub',
+    title: 'DocumentHub source',
+    detail: 'Puts the confirmation-pack wording back to the baseline the story starts from.',
   },
   {
     scope: 'enroldirect',

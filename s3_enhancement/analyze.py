@@ -76,7 +76,14 @@ CROSS_TEAM_SYSTEM_PROMPT = (
     "change - e.g. a downstream consumer of data this user story changes, a shared "
     "data contract, or a document/notification another system generates. "
     "Only flag a team if there is a concrete, specific reason; most small user stories "
-    "affect no other team, and an empty list is a normal, correct answer."
+    "affect no other team, and an empty list is a normal, correct answer. "
+    "The bar is a CODE CHANGE that team must make, not the fact that they are "
+    "affected. A system that reads a changed value and keeps working - its "
+    "totals move between buckets it already has, its events carry an existing "
+    "field with an existing value - is affected and has nothing to do. Do not "
+    "raise a ticket for it. Every entry you return is a real ticket landing on "
+    "a real team's board, so an entry that turns out to be a no-op costs that "
+    "team a triage conversation and costs you their attention next time."
 )
 
 
@@ -90,8 +97,20 @@ class EffortEstimate:
 @dataclass(frozen=True)
 class CrossTeamImpact:
     app_name: str
+    # One sentence, for the console's impact row — why this app is implicated
+    # at all. Read by the engineer deciding whether to raise the ticket.
     reason: str
     suggested_summary: str
+    # The body of the ticket the other team receives, generated rather than
+    # reused from `reason`. Those two have different readers and different
+    # jobs: `reason` justifies raising the ticket to someone who has the user
+    # story in front of them, while this is read by an engineer on another
+    # team who has neither the user story nor the analysis and needs to know
+    # what changed upstream, what it means for their system, and what "done"
+    # is. Passing the one-line reason as the description — which is what this
+    # console did until now — hands them a ticket they have to come back and
+    # ask about.
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -170,11 +189,20 @@ def build_impact_prompt(story_text: str, *, target: Target | None = None) -> str
 Current codebase context:
 {_read_codebase_context(story_text, target=target)}
 
-Write a short impact analysis (roughly 5-10 lines) covering:
+Write a short impact analysis (roughly 6-12 lines) covering:
 1. What files/functions need to change to implement this user story.
 2. What risk areas exist (e.g. schema/data migration, contribution calculation
    correctness, effect on existing flows).
 3. What should be tested before this ships.
+4. What this does to any OTHER application downstream of it, and what that
+   team has to do about it. Name the application, say what specifically
+   changes for it, and give the figure if the codebase context computes one -
+   an analysis that reports "downstream systems may be affected" has told the
+   reader nothing they did not already suspect. If the context contains a
+   downstream impact already worked out (counts, consequences, the change
+   required), use those numbers rather than restating the point in general
+   terms. If nothing downstream is affected, say so in one line and move on -
+   most small user stories affect no other team.
 
 Keep it concise and practical - this is read by a support engineer deciding
 whether to approve the user story for build, not a formal spec document.
@@ -241,16 +269,33 @@ include an app if there's a concrete, specific reason from the codebase or user 
 text above — most small user stories affect no other team, so an empty list is a
 normal, correct answer.
 
+Include an application only if that team must CHANGE CODE. Being affected is
+not enough. If the system consumes the changed value as data — counting it,
+carrying it on an event, aggregating it into a bucket that already exists —
+it keeps working untouched and must NOT be listed. List it only if it has to
+handle a case it has no handling for today. If the codebase context above
+states, for a given system, that no change is required, trust that and leave
+it out.
+
 Return JSON exactly matching:
 {{
   "impacts": [
     {{
       "app_name": "<one of the known application names above, never the user story's own app>",
       "reason": "<one sentence, specific to this user story>",
-      "suggested_summary": "<one-line Jira ticket summary for that team>"
+      "suggested_summary": "<one-line Jira ticket summary for that team>",
+      "description": "<the ticket body for that team, 4-8 lines of plain prose>"
     }}
   ]
-}}"""
+}}
+
+The description is read by an engineer on that other team who has not seen
+this user story and cannot see this codebase. Write it for them: what is
+changing in the upstream system, what that means for theirs specifically,
+what they need to do, and how they will know it is done. Do not restate the
+reason, do not address the upstream team, and do not assume the reader knows
+what a prospect, a preference or an authorising preference is — say it in
+terms of their own system."""
 
 
 def draft_cross_team_impact(
@@ -286,6 +331,11 @@ def draft_cross_team_impact(
                 app_name=app_name,
                 reason=str(item.get("reason", "")),
                 suggested_summary=str(item.get("suggested_summary", "")),
+                # Falls back to the reason rather than to empty: an older
+                # recording predating this field would otherwise create the
+                # other team's ticket with a blank body, which is worse than
+                # the one-liner this replaced.
+                description=str(item.get("description") or item.get("reason", "")),
             )
         )
     return results

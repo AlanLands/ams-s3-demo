@@ -35,9 +35,9 @@ def test_new_story_with_no_pinned_title_resolves_by_application_header():
     "just add another repo" case, so long as that application has exactly
     one registered target."""
     story_text = (
-        "US-2026-999: Some Future Claims Change\n\n"
-        "Requested by: MapleSure Claims Operations\n"
-        "Application: ClaimsPortal (FastAPI claims intake + policy lookup services)\n"
+        "US-2026-999: Some Future Enrolment Change\n\n"
+        "Requested by: MapleSure Group Retirement Product\n"
+        "Application: EnrolDirect (online enrolment channel)\n"
         "Priority: P4 - small enhancement\n\n"
         "Description:\nSomething not yet built.\n"
     )
@@ -45,7 +45,7 @@ def test_new_story_with_no_pinned_title_resolves_by_application_header():
         match = resolve_target_for_story(story_text)
     mock_complete.assert_not_called()
     assert match.method == "application_header"
-    assert match.target is targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
+    assert match.target is targets.ENROLDIRECT_PROSPECT_ACCESS
     assert match.resolved
 
 
@@ -141,7 +141,7 @@ def test_ai_tier_ranks_every_candidate_best_first():
     see the runner-up's score, not just the winner's name."""
     canned = _ai_response(
         ranking=[
-            {"target_id": targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.target_id, "score": 5, "reasoning": "c"},
+            {"target_id": targets.ENROLDIRECT_PROSPECT_ACCESS.target_id, "score": 5, "reasoning": "c"},
             {"target_id": targets.MOCKAPP_AMENDMENT_FIELD_ADD.target_id, "score": 95, "reasoning": "a"},
             {"target_id": targets.MOCKAPP_TIER_UPGRADE.target_id, "score": 20, "reasoning": "b"},
         ]

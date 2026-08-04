@@ -29,25 +29,22 @@ fi
 
 API_PORT="${API_PORT:-20111}"
 STREAMLIT_PORT="${STREAMLIT_PORT:-20112}"
-POLICY_SERVICE_PORT="${POLICY_SERVICE_PORT:-20113}"
-CLAIMS_SERVICE_PORT="${CLAIMS_SERVICE_PORT:-20114}"
 ENROLDIRECT_PORT="${ENROLDIRECT_PORT:-20115}"
+DOCUMENTHUB_PORT="${DOCUMENTHUB_PORT:-20116}"
 BASE_URL_PATH="${STREAMLIT_BASE_URL_PATH:-sl_policycore}"
 BIND_HOST="${BIND_HOST:-127.0.0.1}"
 # Claims-Service dials this for policy lookups; default it to whatever port
 # Policy-Service actually got above rather than a second hard-coded number.
-export POLICY_SERVICE_URL="${POLICY_SERVICE_URL:-http://127.0.0.1:${POLICY_SERVICE_PORT}}"
 
 mkdir -p logs
 
 # PID-file names overlap the console admin panel's, which writes
 # logs/{service_id}.pid for the same apps (s3_enhancement/admin_ops.py,
-# SERVICES). `policycore` and `enroldirect` are spelled identically in both;
-# `policy-service`/`claims-service` are not (the panel uses underscores). So on
-# a host running both, stop-apps.sh can kill a process the panel started and
-# believes it owns — its owned_pid() is a PID file, not a process scan. The two
-# are meant for different hosts (this script for a deployed box, the panel for
-# the presenter's machine); run only one per host and the overlap is moot.
+# SERVICES). Every surviving app is spelled identically in both. So on a host
+# running both, stop-apps.sh can kill a process the panel started and believes
+# it owns — its owned_pid() is a PID file, not a process scan. The two are
+# meant for different hosts (this script for a deployed box, the panel for the
+# presenter's machine); run only one per host and the overlap is moot.
 start() {
   local name="$1"; shift
   if [ -f "logs/$name.pid" ] && kill -0 "$(cat "logs/$name.pid")" 2>/dev/null; then
@@ -69,23 +66,20 @@ start policycore python -m streamlit run repos/policycore/app.py \
     --server.headless true \
     --browser.gatherUsageStats false
 
-start policy-service python -m uvicorn repos.claimsportal.policy_service.main:app \
-    --host "$BIND_HOST" --port "$POLICY_SERVICE_PORT"
-
-start claims-service python -m uvicorn repos.claimsportal.claims_service.main:app \
-    --host "$BIND_HOST" --port "$CLAIMS_SERVICE_PORT"
-
-# EnrolDirect (US-2026-045's target) calls no other service and seeds itself
-# in-process, so it has no ordering constraint against the four above. No
-# --reload here, unlike apps/run-enroldirect.sh's TARGET_RELOAD switch: a
-# detached process restarting mid-Apply has no terminal to say so on.
+# EnrolDirect (US-2026-045's target) and DocumentHub (US-2026-046's) both call
+# no other service and seed themselves in-process, so neither has an ordering
+# constraint against the two above or each other. No --reload here, unlike the
+# apps/run-*.sh TARGET_RELOAD switch: a detached process restarting mid-Apply
+# has no terminal to say so on.
 start enroldirect python -m uvicorn repos.enroldirect.main:app \
     --host "$BIND_HOST" --port "$ENROLDIRECT_PORT"
+
+start documenthub python -m uvicorn repos.documenthub.main:app \
+    --host "$BIND_HOST" --port "$DOCUMENTHUB_PORT"
 
 echo
 echo "  Console API    -> http://${BIND_HOST}:${API_PORT}                    (nginx /api/)"
 echo "  PolicyCore     -> http://${BIND_HOST}:${STREAMLIT_PORT}/${BASE_URL_PATH}   (nginx /${BASE_URL_PATH}/)"
-echo "  Policy-Service -> http://${BIND_HOST}:${POLICY_SERVICE_PORT}/"
-echo "  Claims-Service -> http://${BIND_HOST}:${CLAIMS_SERVICE_PORT}/   (POLICY_SERVICE_URL=${POLICY_SERVICE_URL})"
 echo "  EnrolDirect    -> http://${BIND_HOST}:${ENROLDIRECT_PORT}/"
+echo "  DocumentHub    -> http://${BIND_HOST}:${DOCUMENTHUB_PORT}/"
 echo "  UI             -> served by nginx from apps/console/web/dist"

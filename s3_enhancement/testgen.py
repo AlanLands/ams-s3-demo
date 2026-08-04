@@ -113,8 +113,6 @@ def _generate_tests_once(
 ) -> TestgenResult:
     if target.cache_namespace == targets.MOCKAPP_AMENDMENT_FIELD_ADD.cache_namespace:
         prompt = build_amendment_prompt(story_text, target=target)
-    elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
-        prompt = build_spring_prompt(story_text, target=target)
     elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
         prompt = build_enroldirect_prompt(story_text, target=target)
     else:
@@ -293,64 +291,6 @@ Use pytest, reseed the mock app database before each test via an autouse
 fixture, and import directly from repos.policycore.core.amendments, repos.policycore.core.db,
 and repos.policycore.core.seed using the exact names given above. The test file should
 be deterministic and have no LLM calls or network access."""
-
-
-def build_spring_prompt(story_text: str, *, target: Target) -> str:
-    """Prompt for US-2026-043's generated pytest suite — a plain unit test of
-    the claim_rules contract, no HTTP/app startup, so it stays fast and
-    deterministic. Name kept from this target's Java-era history (see
-    CLAUDE.md); the source is Python since the 2026-07-30 rewrite."""
-    test_path = target.testgen_allowlist[0]
-
-    reference = """Tests should cover:
-- a claim strictly above the deductible and within the limit on an ACTIVE
-  policy is "ACCEPTED"
-- a claim at exactly the deductible, and one below it, is
-  "REJECTED_BELOW_DEDUCTIBLE"
-- a claim above the coverage limit is "REJECTED_OVER_LIMIT" even when it is
-  also above the deductible
-- any non-ACTIVE status (e.g. "LAPSED") is "REJECTED_POLICY_LAPSED",
-  taking precedence over both amount checks
-- payable(amount, deductible) is amount minus deductible, and never negative
-  (a deductible larger than the amount floors at zero)
-"""
-
-    context_files = []
-    context_paths = [
-        rel_path
-        for rel_path in target.codegen_allowlist
-        if rel_path.endswith(("claim_rules.py", "claim.py"))
-    ]
-    for rel_path in context_paths:
-        path = REPO_ROOT / rel_path
-        content = path.read_text(encoding="utf-8") if path.exists() else ""
-        context_files.append(f"--- {rel_path} ---\n{content}")
-
-    return f"""User story:
-{story_text}
-
-Current generated app files are already applied. Generate only this test file:
-{test_path}
-
-{reference}
-
-Exact API to test — this is a fixed, known contract, do not guess names and
-do not add fallback logic:
-{chr(10).join(context_files)}
-
-Return structured JSON only with this exact shape:
-{{
-  "files": [
-    {{"path": "{test_path}", "content": "<complete replacement>"}}
-  ]
-}}
-
-Use plain pytest functions importing `decide`/`payable` directly from
-repos.claimsportal.claims_service.claim_rules. Plain unit tests of claim_rules
-only: no FastAPI TestClient, no server startup, no mocking, no network. Use
-modern built-in generics for any type hint (never `typing.Optional` etc.) and
-keep every line at 100 characters or fewer. The test file must be
-deterministic."""
 
 
 def build_enroldirect_prompt(story_text: str, *, target: Target) -> str:

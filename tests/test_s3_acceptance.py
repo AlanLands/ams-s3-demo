@@ -75,7 +75,8 @@ def test_every_demo_story_states_criteria_including_a_regression_one():
     for target in (
         targets.MOCKAPP_TIER_UPGRADE,
         targets.MOCKAPP_AMENDMENT_FIELD_ADD,
-        targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
+        targets.ENROLDIRECT_PROSPECT_ACCESS,
+        targets.get_target("documenthub-rostered-guest-wording"),
     ):
         criteria = parse_acceptance_criteria(story.render_story("Elite", target=target))
         assert criteria, f"{target.target_id} user story has no acceptance criteria"

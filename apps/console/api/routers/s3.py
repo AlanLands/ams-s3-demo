@@ -791,6 +791,7 @@ def analyze(
                 "app_name": item.app_name,
                 "reason": item.reason,
                 "suggested_summary": item.suggested_summary,
+                "description": item.description,
             }
             for item in draft_cross_team_impact(story_text, target=target, usage_out=usage)
         ]
@@ -998,6 +999,7 @@ def cross_team_impact(payload: TierRequest, identity: Identity = Depends(require
                 "app_name": impact.app_name,
                 "reason": impact.reason,
                 "suggested_summary": impact.suggested_summary,
+                "description": impact.description,
             }
             for impact in impacts
         ],

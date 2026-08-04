@@ -2,7 +2,7 @@
 # US-2026-045 ("Prospect Member Eligibility Check For Online Enrolment",
 # board ticket AMS-1045 — opened automatically from stories/US-2026-045.md, not
 # seeded by any script) between-rehearsals reset.
-# Same shape as demo/reset_s3_claimsportal.sh, and for a stronger reason: the
+# Same shape as demo/reset_s3_documenthub.sh, and for a stronger reason: the
 # pre-user story baseline comes from the committed-in-place snapshot at
 # repos/enroldirect/.baseline/ rather than `git checkout HEAD --`. This user story
 # creates no new file, so every path below has a pre-user story counterpart — but the

@@ -108,7 +108,7 @@ function parseCrText(raw: string, summary: string): CrBlock[] {
 
 // Read one "Key: Value" header off the user story. The Details rail used to hardcode
 // PolicyCore / MapleSure Product Team, which was simply wrong on the
-// ClaimsPortal user story — the user story states both, so read them from it.
+// EnrolDirect user story — the user story states both, so read them from it.
 function storyMeta(text: string, label: string): string | null {
   for (const block of parseCrText(text, '')) {
     if (block.kind !== 'meta') continue
@@ -215,6 +215,24 @@ function CrossTeamImpactRow({
       <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)' }}>
         Suggested ticket: {impact.suggested_summary}
       </p>
+      {/* The generated body, shown before the ticket is raised rather than
+          after. This is the text another team will actually receive, so it is
+          the thing the engineer is approving — hiding it until Jira has it
+          makes "a human confirms each one" a click, not a review. */}
+      {impact.description && !created && (
+        <p
+          style={{
+            fontSize: 'var(--ams-text-sm)',
+            color: 'var(--ams-ink-soft)',
+            whiteSpace: 'pre-wrap',
+            margin: '0.4rem 0 0.6rem',
+            paddingLeft: '0.6rem',
+            borderLeft: '2px solid var(--ams-line)',
+          }}
+        >
+          {impact.description}
+        </p>
+      )}
       {!created && (
         <button className="ams-button-secondary" onClick={onCreate} disabled={creating}>
           {creating ? 'Creating…' : 'Create ticket in Jira'}
@@ -557,7 +575,7 @@ export default function TicketModal({
                           padding: '0.6rem 0.75rem',
                           background: 'var(--ams-accent-soft)',
                           border: '1px solid var(--ams-line)',
-                          borderRadius: 4,
+                          borderRadius: 'var(--ams-radius-sm)',
                         }}
                       >
                         {/* Reachable only once the clarification-turn budget is

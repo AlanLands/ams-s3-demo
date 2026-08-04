@@ -6,7 +6,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 
-for name in console-api policycore policy-service claims-service enroldirect; do
+for name in console-api policycore enroldirect documenthub; do
   pidfile="logs/$name.pid"
   if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
     kill "$(cat "$pidfile")" && echo "  stopped $name (pid $(cat "$pidfile"))"

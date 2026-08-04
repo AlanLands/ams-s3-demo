@@ -63,7 +63,7 @@ export default function BoardStage() {
                   fontSize: 'var(--ams-text-sm)',
                   margin: '0.3rem 0',
                   padding: '0.5rem 0.75rem',
-                  borderRadius: 6,
+                  borderRadius: 'var(--ams-radius-md)',
                   maxWidth: '80%',
                   marginLeft: turn.role === 'user' ? 'auto' : 0,
                   background: turn.role === 'user' ? 'var(--ams-accent)' : 'var(--ams-surface)',
@@ -427,7 +427,7 @@ export default function BoardStage() {
                 <img
                   src={`data:image/png;base64,${screenshotBefore}`}
                   alt="Amendment form before the change"
-                  style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 4 }}
+                  style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 'var(--ams-radius-sm)' }}
                 />
               </div>
             )}
@@ -437,7 +437,7 @@ export default function BoardStage() {
                 <img
                   src={`data:image/png;base64,${screenshotAfter}`}
                   alt="Amendment form after the change"
-                  style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 4 }}
+                  style={{ maxWidth: 220, border: '1px solid var(--ams-line)', borderRadius: 'var(--ams-radius-sm)' }}
                 />
               </div>
             )}

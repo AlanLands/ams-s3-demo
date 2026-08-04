@@ -142,8 +142,6 @@ def _propose_change_once(
     )
     if target.cache_namespace == targets.MOCKAPP_AMENDMENT_FIELD_ADD.cache_namespace:
         prompt = build_amendment_prompt(story_text, selection=selection)
-    elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
-        prompt = build_spring_prompt(story_text, selection=selection)
     elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
         prompt = build_enroldirect_prompt(story_text, selection=selection, target=target)
     else:
@@ -176,8 +174,6 @@ def _propose_change_once(
     files, file_reasons = _parse_files_response(response)
     if target.cache_namespace == targets.MOCKAPP_AMENDMENT_FIELD_ADD.cache_namespace:
         _validate_amendment_file_set(files, selection)
-    elif target.cache_namespace == targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.cache_namespace:
-        _validate_spring_file_set(files, selection)
     elif target.cache_namespace == targets.ENROLDIRECT_PROSPECT_ACCESS.cache_namespace:
         _validate_enroldirect_file_set(files, selection, target)
     else:
@@ -777,74 +773,6 @@ Rules:
   chosen must still succeed."""
 
 
-def build_spring_prompt(story_text: str, *, selection: relevance.SelectionResult) -> str:
-    """Prompt for US-2026-043 (claims deductible) against the ClaimsPortal
-    target — no audience-picked placeholder, like the amendment user story. Name
-    kept from this target's Java-era history (see CLAUDE.md); the source is
-    Python since the 2026-07-30 rewrite."""
-    current_files = []
-    for rel_path, content in selection.selected.items():
-        current_files.append(f"--- {rel_path} ---\n{content}")
-    json_shape = json.dumps(
-        {
-            "files": [
-                {
-                    "path": rel_path,
-                    "content": "<complete replacement>",
-                    "reason": "<one short sentence: why this file needs to change>",
-                }
-                for rel_path in selection.selected
-            ]
-        },
-        indent=2,
-    )
-
-    return f"""User story:
-{story_text}
-
-Current contents of the only files you may replace (an empty file is one the
-user story creates from scratch):
-{chr(10).join(current_files)}
-
-Return structured JSON only with this exact shape:
-{json_shape}
-
-Rules:
-- Return every listed file, each as a complete replacement, not a patch or diff.
-- "reason" is one short sentence (plain English, no code) a reviewer can read
-  at a glance to know why that specific file is part of this change.
-- These are FastAPI sources in two services (policy_service, claims_service).
-- claim_rules.py's public API is a fixed contract the generated test suite
-  depends on by these exact names — module-level functions, no class:
-  - `decide(policy_status: str, coverage_limit: float, deductible: float,
-    amount: float) -> str` returning exactly one of
-    "REJECTED_POLICY_" + policy_status (any non-ACTIVE status),
-    "REJECTED_OVER_LIMIT", "REJECTED_BELOW_DEDUCTIBLE", or "ACCEPTED" —
-    checked in exactly that precedence order.
-  - `payable(amount: float, deductible: float) -> float` returning the
-    amount minus the deductible, floored at zero.
-- "at or below the deductible" means `amount <= deductible` is rejected;
-  strictly above the deductible (and within the limit) is accepted.
-- policy.py's `Policy` model gains a `deductible: float` field as the LAST
-  field, after annualMaximum. main.py's seeded contracts use the user story's
-  deductible values. policy_client.py's `PolicyView` model gains the
-  matching last field.
-- claim.py's `Claim` model gains a `payableAmount: float` field as the LAST
-  field, after submittedAt. claims_service/main.py computes the status via
-  claim_rules.decide(...) and payableAmount via claim_rules.payable(...) for
-  accepted claims (0.0 for rejected claims) — no inline decision logic left
-  in main.py.
-- Do not touch the static HTML consoles — they are not in your file list and
-  must keep working unchanged.
-{_PRESERVATION_RULES}
-- Use modern built-in generics for every type hint (`list[str]`, `dict[str,
-  float]`, `X | None`) — never `typing.List`, `typing.Dict`, `typing.Tuple`,
-  or `typing.Optional`; this repo's ruff config rejects them.
-- Keep every line at 100 characters or fewer (this repo's ruff line-length
-  limit) — wrap long f-strings and comments rather than exceeding it.
-- Existing flows must keep working: policy list/detail, the claims service's
-  policy-directory passthrough, claim submission, and claim listing."""
-
 
 _ENROLDIRECT_READ_ONLY_REASONS = {
     "repos/enroldirect/impact.py": (
@@ -869,7 +797,7 @@ def build_enroldirect_prompt(
 ) -> str:
     """Prompt for US-2026-045 (prospect access) against the EnrolDirect target.
 
-    No audience-picked placeholder, like the amendment and ClaimsPortal user stories.
+    No audience-picked placeholder, like the amendment user story.
 
     The instruction with no counterpart in the other builders is the read-only
     set. Three of this target's selected files are context the model needs and
@@ -1133,52 +1061,6 @@ def _validate_amendment_file_set(
     for rel_path, content in files.items():
         _validate_content(rel_path, content)
     _validate_amendment_priority_field(files["repos/policycore/core/models.py"])
-
-
-def _validate_spring_file_set(
-    files: dict[str, str], selection: relevance.SelectionResult
-) -> None:
-    relevance.verify_core_recall(files, core_files=selection.core_files)
-    unexpected = set(files) - set(selection.selected)
-    if unexpected:
-        raise LLMError(
-            "S3 codegen returned unexpected file set: "
-            f"outside selected scope {sorted(unexpected)}; selected {sorted(selection.selected)}"
-        )
-    for rel_path, content in files.items():
-        _validate_content(rel_path, content)
-    _validate_claim_rules_contract(files)
-
-
-def _validate_claim_rules_contract(files: dict[str, str]) -> None:
-    """US-2026-043's fixed contract — the generated pytest suite calls
-    claim_rules.decide/payable by these exact names, and both Policy-side
-    models must actually carry the new deductible for the cross-service
-    JSON mapping to line up."""
-    rules_path = next((path for path in files if path.endswith("claim_rules.py")), None)
-    if rules_path is None:
-        raise LLMError("S3 generated file set is missing claim_rules.py")
-    rules = files[rules_path]
-    try:
-        tree = ast.parse(rules, filename=rules_path)
-    except SyntaxError as exc:
-        raise LLMError(f"S3 generated invalid Python for {rules_path}: {exc}") from exc
-
-    def_names = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
-    missing_defs = {"decide", "payable"} - def_names
-    if missing_defs:
-        raise LLMError(f"S3 generated claim_rules.py is missing function(s) {sorted(missing_defs)}")
-
-    required_tokens = ("REJECTED_OVER_LIMIT", "REJECTED_BELOW_DEDUCTIBLE", "ACCEPTED")
-    missing_tokens = [token for token in required_tokens if token not in rules]
-    if missing_tokens:
-        raise LLMError(
-            f"S3 generated claim_rules.py is missing required contract token(s) {missing_tokens}"
-        )
-    for suffix in ("policy.py", "policy_client.py"):
-        path = next((p for p in files if p.endswith(suffix)), None)
-        if path is not None and "deductible" not in files[path]:
-            raise LLMError(f"S3 generated {suffix} does not carry the new deductible field")
 
 
 def _validate_amendment_priority_field(models_content: str) -> None:

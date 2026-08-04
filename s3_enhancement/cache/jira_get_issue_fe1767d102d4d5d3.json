@@ -1,0 +1,14 @@
+{
+  "call": "get_issue",
+  "args": {
+    "key": "AMS-504"
+  },
+  "response": {
+    "key": "AMS-504",
+    "status": "To Do",
+    "summary": "Ensure IntegrationBridge handles new prospect classification for enrolment events",
+    "issue_type": "Task",
+    "assignee": "Ravi Kumar",
+    "description": "IntegrationBridge publishes enrolment events with the authorising preference, and prospect classifications will change the event stream."
+  }
+}

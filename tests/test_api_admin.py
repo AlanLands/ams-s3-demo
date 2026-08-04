@@ -75,11 +75,11 @@ _SOURCE_PATHS = (
     "repos/policycore/core/models.py",
     "repos/policycore/core/db.py",
     "repos/policycore/core/amendments.py",
-    "repos/claimsportal/policy_service/policy.py",
-    "repos/claimsportal/policy_service/main.py",
-    "repos/claimsportal/claims_service/claim.py",
-    "repos/claimsportal/claims_service/policy_client.py",
-    "repos/claimsportal/claims_service/main.py",
+    "repos/documenthub/feed.py",
+    "repos/documenthub/wording.py",
+    "repos/documenthub/enclosures.py",
+    "repos/documenthub/packs.py",
+    "repos/documenthub/main.py",
     "repos/enroldirect/applicants.py",
     "repos/enroldirect/eligibility.py",
     "repos/enroldirect/enrolments.py",
@@ -89,11 +89,10 @@ _SOURCE_PATHS = (
 _SCRIPTS = (
     "demo/reset_s3.sh",
     "demo/reset_s3_endorsement.sh",
-    "demo/reset_s3_claimsportal.sh",
+    "demo/reset_s3_documenthub.sh",
     "demo/reset_s3_enroldirect.sh",
     "demo/run_mockapp.sh",
-    "apps/run-policy-service.sh",
-    "apps/run-claims-service.sh",
+    "apps/run-documenthub.sh",
     "apps/run-enroldirect.sh",
 )
 
@@ -176,9 +175,8 @@ def test_status_shape_and_reset_safe_on_a_clean_tree(clean_repo):
 
     assert [s["id"] for s in body["services"]] == [
         "policycore",
-        "policy_service",
-        "claims_service",
         "enroldirect",
+        "documenthub",
     ]
     for service in body["services"]:
         assert set(service) == {"id", "label", "port", "up", "command"}
@@ -281,15 +279,13 @@ def test_a_tracked_and_edited_generated_test_still_counts_as_dirty(clean_repo):
     assert response.status_code == 409
 
 
-def test_preview_for_claimsportal_lists_the_baseline_restore_set(clean_repo):
-    body = _client().get("/api/admin/reset/claimsportal/preview").json()
+def test_preview_for_documenthub_lists_the_baseline_restore_set(clean_repo):
+    body = _client().get("/api/admin/reset/documenthub/preview").json()
     assert body["restores"] == sorted(
         [
-            "repos/claimsportal/policy_service/policy.py",
-            "repos/claimsportal/policy_service/main.py",
-            "repos/claimsportal/claims_service/claim.py",
-            "repos/claimsportal/claims_service/policy_client.py",
-            "repos/claimsportal/claims_service/main.py",
+            "repos/documenthub/wording.py",
+            "repos/documenthub/enclosures.py",
+            "repos/documenthub/packs.py",
         ]
     )
     assert body["dirty"] == []
@@ -316,7 +312,7 @@ def test_unknown_scope_is_404(clean_repo):
 def test_there_is_no_everything_scope(clean_repo):
     assert set(admin_ops.SCOPES) == {
         "policycore",
-        "claimsportal",
+        "documenthub",
         "enroldirect",
         "tickets",
         "logs",
@@ -556,16 +552,16 @@ def test_stop_of_a_process_the_console_did_not_start_is_an_honest_no(clean_repo,
         raise AssertionError("must not signal a pid it does not own")
 
     monkeypatch.setattr(admin_ops.os, "kill", explode)
-    body = _client().post("/api/admin/services/claims_service/stop").json()
+    body = _client().post("/api/admin/services/documenthub/stop").json()
 
     assert body["ok"] is False
     assert "did not start it" in body["detail"]
-    assert body["command"] == "apps/run-claims-service.sh"
+    assert body["command"] == "apps/run-documenthub.sh"
 
 
 def test_stop_of_something_already_down_is_ok(clean_repo, monkeypatch):
     monkeypatch.setattr(admin_ops, "port_open", lambda port, **kw: False)
-    body = _client().post("/api/admin/services/policy_service/stop").json()
+    body = _client().post("/api/admin/services/enroldirect/stop").json()
     assert body["ok"] is True
     assert "Already down" in body["detail"]
 
@@ -645,7 +641,7 @@ def test_onboard_rejects_an_unsafe_repo_name(name, clean_repo):
     # No directory is created anywhere — inside repos/ or, for a traversal
     # attempt, above it.
     assert sorted(p.name for p in (clean_repo / "repos").iterdir()) == [
-        "claimsportal",
+        "documenthub",
         "enroldirect",
         "policycore",
     ]
@@ -653,11 +649,11 @@ def test_onboard_rejects_an_unsafe_repo_name(name, clean_repo):
 
 
 def test_onboard_rejects_a_registered_target_id_and_namespace(clean_repo):
-    from s3_enhancement.targets import CLAIMSPORTAL_TARGET_ID
+    from s3_enhancement.targets import ENROLDIRECT_TARGET_ID
 
     body = _client().post(
         "/api/admin/repos/onboard",
-        json={**_ONBOARD, "target_id": CLAIMSPORTAL_TARGET_ID, "dry_run": False},
+        json={**_ONBOARD, "target_id": ENROLDIRECT_TARGET_ID, "dry_run": False},
     ).json()
     assert body["ok"] is False
     assert any("already registered" in e for e in body["errors"])

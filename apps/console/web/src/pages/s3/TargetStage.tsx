@@ -167,7 +167,7 @@ export default function TargetStage() {
                         <div
                           style={{
                             height: 5,
-                            borderRadius: 3,
+                            borderRadius: 'var(--ams-radius-sm)',
                             background: 'var(--ams-line)',
                             marginTop: '0.25rem',
                             overflow: 'hidden',
@@ -177,7 +177,7 @@ export default function TargetStage() {
                             style={{
                               width: `${candidate.score}%`,
                               height: '100%',
-                              borderRadius: 3,
+                              borderRadius: 'var(--ams-radius-sm)',
                               background: isPick
                                 ? 'var(--ams-accent)'
                                 : 'var(--ams-ink-soft)',

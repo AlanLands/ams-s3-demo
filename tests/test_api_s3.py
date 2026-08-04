@@ -155,7 +155,7 @@ def test_target_resolve_matches_pinned_story_by_id_with_no_target_id_needed():
     target and gets its target_id back -- no ticket-key table involved."""
     from s3_enhancement import targets
 
-    target = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
+    target = targets.ENROLDIRECT_PROSPECT_ACCESS
     story_text = target.story_template_path.read_text(encoding="utf-8")
 
     client = _client()
@@ -975,10 +975,10 @@ def test_board_does_not_duplicate_or_renumber_the_seeded_story_tickets(tmp_path,
         board = client.get("/api/s3/jira/board")
 
     keys = [issue["key"] for issue in board.json()["issues"]]
-    assert {"AMS-101", "AMS-102", "AMS-103", "AMS-104", "AMS-098"} <= set(keys)
+    assert {"AMS-101", "AMS-102", "AMS-104", "AMS-098"} <= set(keys)
     assert len(keys) == len(set(keys))
     # The seeded user stories are covered, so none of their derived keys is opened.
-    for story_id in ("US-2026-041", "US-2026-042", "US-2026-043", "US-2026-044"):
+    for story_id in ("US-2026-041", "US-2026-042", "US-2026-044"):
         assert story_intake.ticket_key_for(story_id) not in keys
 
 
@@ -1502,7 +1502,7 @@ def test_apply_post_apply_failure_carried_in_response(tmp_path, monkeypatch):
     assert "KeyError: 'deductible'" in failed[0]["detail"]
 
 
-def _apply(client: TestClient, ticket: str = "AMS-103", files: list[str] | None = None) -> None:
+def _apply(client: TestClient, ticket: str = "AMS-1045", files: list[str] | None = None) -> None:
     with patch(
         "apps.console.api.routers.s3.apply_change", return_value=files or ["a.py"]
     ):
@@ -1511,7 +1511,7 @@ def _apply(client: TestClient, ticket: str = "AMS-103", files: list[str] | None 
             json={
                 "proposal_id": "prop-1",
                 "ticket_number": ticket,
-                "target_id": "claimsportal-claims-deductible",
+                "target_id": "enroldirect-prospect-access",
             },
         )
     assert response.status_code == 200
@@ -1537,7 +1537,7 @@ def test_apply_opens_the_branch_before_writing(tmp_path, monkeypatch):
     ):
         response = client.post(
             "/api/s3/apply",
-            json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+            json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
         )
 
     assert response.status_code == 200
@@ -1554,7 +1554,7 @@ def test_apply_records_the_branch_on_the_ticket_timeline(tmp_path, monkeypatch):
     opened = [e for e in events if e["action"] == "branch_opened"]
     assert len(opened) == 1
     assert "simulated" in opened[0]["detail"]
-    assert "feature/AMS-103-claimsportal-claims-deductible" in opened[0]["detail"]
+    assert "feature/AMS-1045-enroldirect-prospect-access" in opened[0]["detail"]
 
 
 def test_checkout_is_simulated_by_default(tmp_path, monkeypatch):
@@ -1574,12 +1574,12 @@ def test_checkout_is_simulated_by_default(tmp_path, monkeypatch):
 
     response = client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
+        json={"ticket_number": "AMS-1045", "target_id": "enroldirect-prospect-access"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["mode"] == "simulated"
-    assert body["branch"] == "feature/AMS-103-claimsportal-claims-deductible"
+    assert body["branch"] == "feature/AMS-1045-enroldirect-prospect-access"
     assert body["sha"] is None
     assert body["detail"] is None
 
@@ -1592,7 +1592,7 @@ def test_checkout_records_a_ticket_event(tmp_path, monkeypatch):
 
     client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
+        json={"ticket_number": "AMS-1045", "target_id": "enroldirect-prospect-access"},
     )
 
     events = [json.loads(line) for line in events_path.read_text().splitlines()]
@@ -1602,7 +1602,7 @@ def test_checkout_records_a_ticket_event(tmp_path, monkeypatch):
     # surfaces in the ticket's Activity tab, so it is deliberately free of
     # "simulated"/"live" commentary -- see test_checkout_is_simulated_by_default
     # on where the source-control honesty actually lives.
-    assert checked_out[0]["detail"] == "feature/AMS-103-claimsportal-claims-deductible"
+    assert checked_out[0]["detail"] == "feature/AMS-1045-enroldirect-prospect-access"
 
 
 def test_checkout_runs_a_real_local_branch_under_scm_mode_live(tmp_path, monkeypatch):
@@ -1623,12 +1623,12 @@ def test_checkout_runs_a_real_local_branch_under_scm_mode_live(tmp_path, monkeyp
 
     response = client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
+        json={"ticket_number": "AMS-1045", "target_id": "enroldirect-prospect-access"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["mode"] == "live"
-    assert body["branch"] == "feature/AMS-103-claimsportal-claims-deductible"
+    assert body["branch"] == "feature/AMS-1045-enroldirect-prospect-access"
     assert body["created"] is True
     assert body["sha"] is not None
 
@@ -1652,7 +1652,7 @@ def test_checkout_409s_under_scm_mode_live_without_a_target_root(tmp_path, monke
 
     response = client.post(
         "/api/s3/scm/checkout",
-        json={"ticket_number": "AMS-103", "target_id": "claimsportal-claims-deductible"},
+        json={"ticket_number": "AMS-1045", "target_id": "enroldirect-prospect-access"},
     )
     assert response.status_code == 409
     assert "SCM_LIVE_TARGET_ROOT" in response.json()["detail"]
@@ -1673,7 +1673,7 @@ def test_commit_is_blocked_until_the_tests_have_run(tmp_path, monkeypatch):
 
     response = client.post(
         "/api/s3/scm/commit",
-        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
     )
     assert response.status_code == 409
     assert "has not been run" in response.json()["detail"]
@@ -1688,15 +1688,15 @@ def test_commit_is_blocked_by_a_failing_suite_even_if_the_client_says_otherwise(
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "events.jsonl"))
     client = _client()
     _apply(client)
-    record_event("AMS-103", "ai", "tests_failed", detail="3/12 passed")
+    record_event("AMS-1045", "ai", "tests_failed", detail="3/12 passed")
 
     response = client.post(
         "/api/s3/scm/commit",
         json={
             "proposal_id": "prop-1",
-            "ticket_number": "AMS-103",
+            "ticket_number": "AMS-1045",
             "tests_passed": True,
-            "message": "AMS-103: ship it anyway",
+            "message": "AMS-1045: ship it anyway",
         },
     )
     assert response.status_code == 409
@@ -1708,14 +1708,14 @@ def test_commit_then_push_walks_the_flow(tmp_path, monkeypatch):
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(events_path))
     client = _client()
     _apply(client)
-    record_event("AMS-103", "ai", "tests_passed", detail="12/12 passed")
+    record_event("AMS-1045", "ai", "tests_passed", detail="12/12 passed")
 
     committed = client.post(
         "/api/s3/scm/commit",
         json={
             "proposal_id": "prop-1",
-            "ticket_number": "AMS-103",
-            "target_id": "claimsportal-claims-deductible",
+            "ticket_number": "AMS-1045",
+            "target_id": "enroldirect-prospect-access",
         },
     )
     assert committed.status_code == 200
@@ -1726,7 +1726,7 @@ def test_commit_then_push_walks_the_flow(tmp_path, monkeypatch):
 
     pushed = client.post(
         "/api/s3/scm/push",
-        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
     )
     assert pushed.status_code == 200
     assert pushed.json()["scm"]["status"] == "pushed"
@@ -1755,7 +1755,7 @@ def test_push_without_a_commit_is_409(tmp_path, monkeypatch):
 
     response = client.post(
         "/api/s3/scm/push",
-        json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+        json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
     )
     assert response.status_code == 409
     assert "commit the applied files first" in response.json()["detail"]
@@ -1777,7 +1777,7 @@ def test_reverting_everything_abandons_the_branch(tmp_path, monkeypatch):
     with patch("apps.console.api.routers.s3.revert_change", return_value=["a.py"]):
         response = client.post(
             "/api/s3/revert",
-            json={"proposal_id": "prop-1", "ticket_number": "AMS-103"},
+            json={"proposal_id": "prop-1", "ticket_number": "AMS-1045"},
         )
 
     assert response.status_code == 200
@@ -2292,13 +2292,13 @@ def test_design_doc_includes_the_derived_change_map():
     with patch("apps.console.api.routers.s3.draft_design_doc", return_value="1. Summary\nx"):
         response = client.post(
             "/api/s3/design-doc",
-            json={"tier_name": "Elite", "target_id": "claimsportal-claims-deductible"},
+            json={"tier_name": "Elite", "target_id": "enroldirect-prospect-access"},
         )
 
     assert response.status_code == 200
     body = response.json()
     assert body["diagram_svg"].startswith("<svg")
-    assert "claim_rules.py" in body["diagram_svg"]
+    assert "eligibility.py" in body["diagram_svg"]
     assert "not generated by a model" in body["diagram_caption"]
 
 
@@ -2389,15 +2389,18 @@ def test_release_notes_returns_three_audiences_and_the_plan():
     with patch("apps.console.api.routers.s3.draft_release_note_set", return_value=_note_set()):
         response = client.post(
             "/api/s3/release/notes",
-            json={"tier_name": "Elite", "target_id": "claimsportal-claims-deductible"},
+            json={"tier_name": "Elite", "target_id": "enroldirect-prospect-access"},
         )
 
     assert response.status_code == 200
     body = response.json()
     assert set(body["notes"]) == {"changelog", "ops_note", "whats_new"}
-    # The plan rides along because it costs no model call.
-    assert body["plan"]["service_order"] == ["policy_service", "claims_service"]
-    assert "policy_service first" in body["plan"]["order_reason"]
+    # The plan rides along because it costs no model call. EnrolDirect is a
+    # single-service target, so it claims no ordering constraint — the
+    # callee-before-caller path is covered in test_s3_release.py against the
+    # multi-service fixture.
+    assert body["plan"]["service_order"] == ["enroldirect"]
+    assert body["plan"]["order_reason"] == ""
 
 
 def test_release_record_returns_a_pdf():

@@ -65,8 +65,13 @@ def _pushed_branch() -> BranchState:
 def _case(name: str, status: str = "passed") -> _TestCase:
     return _TestCase(name, "cls", name.replace("_", " "), status, 0.0, None)
 
+from tests.multiservice_fixture import TWO_SERVICE
 
-SPRING = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
+
+# Was the ClaimsPortal target until it was removed on 2026-08-04; now a
+# synthetic stand-in so the multi-service behaviour stays covered.
+# See tests/multiservice_fixture.py.
+SPRING = TWO_SERVICE
 POLICYCORE = targets.MOCKAPP_AMENDMENT_FIELD_ADD
 
 
@@ -74,11 +79,11 @@ POLICYCORE = targets.MOCKAPP_AMENDMENT_FIELD_ADD
 
 
 def test_callee_deploys_before_caller():
-    """claims_service calls policy_service. Ship claims first and it spends
-    the gap reading a field policy_service has not deployed yet."""
+    """orders_service calls ledger_service. Ship orders first and it spends
+    the gap reading a field ledger_service has not deployed yet."""
     plan = build_deployment_plan(SPRING, build_change_map(SPRING))
-    assert plan.service_order == ["policy_service", "claims_service"]
-    assert "policy_service first" in plan.order_reason
+    assert plan.service_order == ["ledger_service", "orders_service"]
+    assert "ledger_service first" in plan.order_reason
 
 
 def test_single_service_plan_claims_no_ordering_constraint():
@@ -103,15 +108,15 @@ def test_plan_verifies_with_the_regression_suite():
     plan = build_deployment_plan(SPRING, build_change_map(SPRING))
     verify = [step for step in plan.steps if step.kind == "verify"]
     assert len(verify) == 1
-    assert "test_regression_claimsportal.py" in verify[0].command
+    assert "test_regression_twoservice.py" in verify[0].command
 
 
 def test_rollback_reverses_the_deploy_order():
     plan = build_deployment_plan(SPRING, build_change_map(SPRING))
     assert plan.rollback
     restore = plan.rollback[0]
-    # claims_service (the caller) comes down first.
-    assert restore.detail.index("claims_service") < restore.detail.index("policy_service")
+    # orders_service (the caller) comes down first.
+    assert restore.detail.index("orders_service") < restore.detail.index("ledger_service")
 
 
 def test_rollback_is_itself_verified():
@@ -372,16 +377,16 @@ def test_note_set_strips_markdown_fences():
 
 def test_note_set_uses_a_distinct_cache_beat_per_target():
     """Sharing the old release_notes key would replay prose into a caller
-    expecting JSON -- common/llm.py keys on the literal, not the shape."""
-    keys = {
-        target.cache_key("release_note_set")
-        for target in (
-            targets.MOCKAPP_TIER_UPGRADE,
-            targets.MOCKAPP_AMENDMENT_FIELD_ADD,
-            targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
-        )
-    }
-    assert len(keys) == 3
-    assert targets.MOCKAPP_TIER_UPGRADE.cache_key(
-        "release_note_set"
-    ) != targets.MOCKAPP_TIER_UPGRADE.cache_key("release_notes")
+    expecting JSON -- common/llm.py keys on the literal, not the shape.
+
+    Ranges over every registered target rather than a hand-listed few, so a
+    target added later (or discovered from a `.s3targets.json` manifest, which
+    no list here would know about) is covered without anyone remembering to
+    add it.
+    """
+    all_targets = targets.all_targets()
+    keys = {target.cache_key("release_note_set") for target in all_targets}
+
+    assert len(keys) == len(all_targets), "two targets share a release_note_set cache key"
+    for target in all_targets:
+        assert target.cache_key("release_note_set") != target.cache_key("release_notes")

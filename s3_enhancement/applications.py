@@ -7,7 +7,7 @@ answer when nothing better exists, but it is a guess, and it runs on every
 ticket — including the ones where the client's CMDB already states the answer.
 
 This module is the deterministic tier that runs first. A ticket carrying a
-Configuration Item ("ClaimsPortal", "Claims Portal", "claims-portal") resolves
+Configuration Item ("PolicyCore", "Policy Core", "policy-core") resolves
 by table lookup to exactly one `Application`: its Jira project key, its repo,
 its component team, and its tech stack. No model call, no confidence score,
 nothing to confirm. `repo_match` stays as the fallback for tickets that arrive
@@ -15,9 +15,9 @@ with no CI or a CI this registry has never heard of.
 
 Two things this deliberately encodes:
 
-- **Not every routable application is automatable.** `BILLING_GATEWAY` and
-  `DOCUMENT_HUB` are real routing destinations with real owning teams, and no
-  registered S3 target. Routing them succeeds and reports
+- **Not every routable application is automatable.** `BILLING_GATEWAY` is a
+  real routing destination with a real owning team, and no registered S3
+  target. Routing it succeeds and reports
   `automation_available=False` — the ticket reaches the correct team without
   the console pretending it can generate code for a repo it does not have.
   Answering "which team owns this" and "can we act on it" as two separate
@@ -83,8 +83,8 @@ def _normalize(value: str) -> str:
     """Fold a CI/business-service string to its comparison key.
 
     Case, spaces, hyphens and underscores all vary between CMDB entries for
-    what is the same application ("ClaimsPortal", "Claims Portal",
-    "claims-portal"), and none of that variation carries meaning.
+    what is the same application ("EnrolDirect", "Enrol Direct",
+    "enrol-direct"), and none of that variation carries meaning.
     """
     return "".join(ch for ch in value.lower() if ch.isalnum())
 
@@ -115,7 +115,6 @@ def register_application(application: Application) -> None:
 
 
 POLICY_CORE_ID = "policycore"
-CLAIMS_PORTAL_ID = "claimsportal"
 
 POLICY_CORE = Application(
     app_id=POLICY_CORE_ID,
@@ -135,23 +134,6 @@ POLICY_CORE = Application(
 )
 register_application(POLICY_CORE)
 
-CLAIMS_PORTAL = Application(
-    app_id=CLAIMS_PORTAL_ID,
-    display_name="ClaimsPortal",
-    business_service="Claims Management",
-    ci_names=(
-        "ClaimsPortal",
-        "Claims Portal",
-        "ClaimsPortal API",
-        "Claims Service",
-    ),
-    jira_project_key="AMS",
-    component_team="App Support — ClaimsPortal",
-    tech_stack="Python / FastAPI",
-    repo_path="repos/claimsportal",
-)
-register_application(CLAIMS_PORTAL)
-
 # Routable, not automatable — see module docstring. These exist so the routing
 # beat can demonstrate the boundary: the ticket reaches the right team, and the
 # console says plainly that it has no repo to generate against.
@@ -166,6 +148,23 @@ BILLING_GATEWAY = Application(
 )
 register_application(BILLING_GATEWAY)
 
+# DocumentHub carried no `repo_path` until US-2026-046 was written and
+# `repos/documenthub/.s3targets.json` registered a target against it — the same
+# progression EnrolDirect made, and for the same reason (see the note below).
+#
+# It arrived here by a different route from the other four, and that route is
+# the point. The cross-team check on US-2026-045 identified DocumentHub as the
+# one other team owed work by the prospect reclassification; the ticket that
+# raised is US-2026-046. So this row is the demo's own claim tested on itself:
+# the estate map said another system had a change to make, and the repo was
+# then dropped into `repos/` and became automatable without an edit to
+# `targets.py`. It is the first target registered by manifest rather than by
+# hand.
+#
+# `tech_stack` was "React / Node" while this was a routing-only destination —
+# a placeholder for a repo nobody had. The service that exists is Python /
+# FastAPI, running on the venv alone, because hard rule 4 requires a
+# locked-down host to be able to serve it.
 DOCUMENT_HUB = Application(
     app_id="documenthub",
     display_name="DocumentHub",
@@ -173,7 +172,8 @@ DOCUMENT_HUB = Application(
     ci_names=("DocumentHub", "Document Hub", "DocumentHub Storage"),
     jira_project_key="AMS",
     component_team="App Support — DocumentHub",
-    tech_stack="React / Node",
+    tech_stack="Python / FastAPI",
+    repo_path="repos/documenthub",
 )
 register_application(DOCUMENT_HUB)
 

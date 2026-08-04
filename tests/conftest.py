@@ -18,7 +18,7 @@ def _no_real_process_control(monkeypatch: pytest.MonkeyPatch) -> None:
     `/s3/apply` restarts the target application so the running process picks up
     the code that was just applied (see the apply handler). That is correct in
     the app and wrong in a test run: `pytest tests/` would stop and start
-    EnrolDirect and ClaimsPortal on the developer's machine, fight with whatever
+    EnrolDirect and DocumentHub on the developer's machine, fight with whatever
     they had running for a rehearsal, and leave services up that were down
     before. It bit on the first run of the restart change — a unit test spawned
     a real uvicorn on :8083.

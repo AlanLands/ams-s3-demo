@@ -45,14 +45,16 @@ const MOCKAPP_URL =
 
 // Where an applied change can actually be seen running, per target. Keyed by
 // target id so the post-apply "go look at it" link names the app the change
-// landed in — not always the mockapp portal. The ClaimsPortal target serves
-// its own consoles from two Python/FastAPI services (apps/run-policy-service.sh
-// :8081, apps/run-claims-service.sh :8082); US-2026-043 changes claim intake,
-// so the claims console is the one worth opening.
+// landed in — not always the mockapp portal.
 const TARGET_APPS: Record<string, { url: string; label: string }> = {
-  'claimsportal-claims-deductible': {
-    url: import.meta.env.VITE_CLAIMS_SERVICE_URL || 'http://localhost:8082/',
-    label: 'open the Claims Team console',
+  // DocumentHub serves its own console from repos/documenthub/static
+  // (apps/run-documenthub.sh :8084). US-2026-046 changes which confirmation
+  // pack a rostered guest receives, and that console renders the pack itself
+  // — the selection audit on the same page is where the fix is visible as a
+  // contradiction count dropping to zero.
+  'documenthub-rostered-guest-wording': {
+    url: import.meta.env.VITE_DOCUMENTHUB_URL || 'http://localhost:8084/',
+    label: 'open the DocumentHub console',
   },
   // EnrolDirect serves its own console from repos/enroldirect/static
   // (apps/run-enroldirect.sh :8083). US-2026-045 changes the enrolment gate,
@@ -96,10 +98,6 @@ const TESTER_ROSTER = ['Priya Nair', 'Tom Becker']
 const TICKET_CRS: Record<string, { storyFile: string | null; tierName: string }> = {
   'AMS-101': { storyFile: 'US-2026-041.md', tierName: 'Elite' },
   'AMS-102': { storyFile: 'US-2026-042.md', tierName: 'Elite' },
-  // The ClaimsPortal target (repos/claimsportal) — S3's proof that the
-  // pipeline handles a second repo. tierName is a required placeholder like
-  // AMS-102's; US-2026-043 has no {{TIER_NAME}}.
-  'AMS-103': { storyFile: 'US-2026-043.md', tierName: 'Elite' },
   // Raised on the support floor, so its user story names the application but no
   // target system: US-2026-044's title is no registered target's
   // story_template_path.stem, and its "Application: PolicyCore" header narrows
@@ -1362,10 +1360,15 @@ export function useS3Controller() {
       // Created open/unassigned — assignment is a deliberate separate step
       // (see handleAssignCrossTeamTicket) so it's visible to the manager as
       // open and can be assigned whenever, not forced at creation time.
+      // The generated body, not the one-line reason. `reason` justifies
+      // raising the ticket to someone holding this user story; the other
+      // team holds neither the story nor the analysis, so they get the
+      // description written for them. Falls back to `reason` only for a
+      // recording made before that field existed.
       const result = await s3Api.createCrossTeamTicket(
         impact.app_name,
         impact.suggested_summary,
-        impact.reason,
+        impact.description || impact.reason,
         primaryTicketKey
       )
       setCreatedTickets((prev) => ({

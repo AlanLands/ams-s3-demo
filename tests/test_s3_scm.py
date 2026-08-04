@@ -401,11 +401,11 @@ def test_unrecognised_display_name_yields_no_summary():
 
 def test_real_targets_all_produce_a_readable_commit_subject():
     """Guards the parse against a display name being reworded later — a silent
-    fallback here would show `AMS-103: US-2026-043` on stage."""
+    fallback here would show `AMS-1046: US-2026-046` on stage."""
     from s3_enhancement import targets
 
     for target in (
-        targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
+        targets.get_target("documenthub-rostered-guest-wording"),
         targets.MOCKAPP_AMENDMENT_FIELD_ADD,
         targets.MOCKAPP_TIER_UPGRADE,
     ):

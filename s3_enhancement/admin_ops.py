@@ -255,24 +255,19 @@ SCOPES: dict[str, Scope] = {
             "generated files removed, LLM cache / staged proposals / ticket timeline cleared."
         ),
     ),
-    "claimsportal": Scope(
-        id="claimsportal",
+    "documenthub": Scope(
+        id="documenthub",
         restores_source=True,
-        scripts=("demo/reset_s3_claimsportal.sh",),
-        ran_labels=("demo/reset_s3_claimsportal.sh",),
+        scripts=("demo/reset_s3_documenthub.sh",),
+        ran_labels=("demo/reset_s3_documenthub.sh",),
         baseline_restores=(
-            "repos/claimsportal/policy_service/policy.py",
-            "repos/claimsportal/policy_service/main.py",
-            "repos/claimsportal/claims_service/claim.py",
-            "repos/claimsportal/claims_service/policy_client.py",
-            "repos/claimsportal/claims_service/main.py",
+            "repos/documenthub/wording.py",
+            "repos/documenthub/enclosures.py",
+            "repos/documenthub/packs.py",
         ),
-        delete_paths=(
-            "repos/claimsportal/claims_service/claim_rules.py",
-            "tests/test_s3_claims_deductible.py",
-        ),
+        delete_paths=("tests/test_s3_rostered_guest_wording.py",),
         detail=(
-            "ClaimsPortal source restored from its committed .baseline/ snapshot; "
+            "DocumentHub source restored from its committed .baseline/ snapshot; "
             "generated files removed. Staged proposals are shared across targets — "
             "run the proposals scope too for a full between-rehearsals reset."
         ),
@@ -597,21 +592,14 @@ class Service:
 # they read, so the TCP probe hits the port the app would actually bind.
 SERVICES: tuple[Service, ...] = (
     Service("policycore", "PolicyCore portal", "PORT", 8501, "demo/run_mockapp.sh"),
-    Service(
-        "policy_service",
-        "ClaimsPortal — contracts",
-        "POLICY_SERVICE_PORT",
-        8081,
-        "apps/run-policy-service.sh",
-    ),
-    Service(
-        "claims_service",
-        "ClaimsPortal — claims",
-        "CLAIMS_SERVICE_PORT",
-        8082,
-        "apps/run-claims-service.sh",
-    ),
     Service("enroldirect", "EnrolDirect", "ENROLDIRECT_PORT", 8083, "apps/run-enroldirect.sh"),
+    Service(
+        "documenthub",
+        "DocumentHub",
+        "DOCUMENTHUB_PORT",
+        8084,
+        "apps/run-documenthub.sh",
+    ),
 )
 
 SERVICES_BY_ID: dict[str, Service] = {s.id: s for s in SERVICES}
@@ -844,14 +832,17 @@ def restart_service(service: Service) -> dict[str, Any]:
 ACTIONS = {"start": start_service, "stop": stop_service, "restart": restart_service}
 
 
-# Which OS processes serve a given application. ClaimsPortal is the reason this
-# is a tuple rather than a lookup: one folder, one target, two services, and a
-# change to it can land in either — restarting one and not the other leaves the
-# demo half on the new code.
+# Which OS processes serve a given application. The value is a tuple rather
+# than a single id because one application can be served by several processes:
+# ClaimsPortal was one folder holding two services, and restarting one without
+# the other left the demo half on the new code. It was removed on 2026-08-04
+# and every surviving application happens to be a single process — the tuple
+# stays because the next multi-service target would otherwise reintroduce the
+# same bug, and widening a str to a tuple later is a change at every call site.
 SERVICES_BY_APPLICATION: dict[str, tuple[str, ...]] = {
     "policycore": ("policycore",),
-    "claimsportal": ("policy_service", "claims_service"),
     "enroldirect": ("enroldirect",),
+    "documenthub": ("documenthub",),
 }
 
 

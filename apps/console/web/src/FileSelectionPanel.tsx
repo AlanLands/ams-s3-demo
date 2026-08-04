@@ -95,7 +95,7 @@ function SubsystemRow({ name, score, inScope }: { name: string; score: number; i
         style={{
           flex: 1,
           height: 6,
-          borderRadius: 3,
+          borderRadius: 'var(--ams-radius-sm)',
           background: 'var(--ams-line)',
           overflow: 'hidden',
           maxWidth: 160,

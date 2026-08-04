@@ -236,6 +236,88 @@ def test_consumer_inventory_names_the_enforcing_system_and_its_direction():
     assert [c["application"] for c in enforcing] == ["EnrolDirect"]
 
 
+def test_consumer_inventory_separates_being_affected_from_having_work():
+    """Being affected and having work to do are different questions.
+
+    Three downstream systems consume the authorising preference; exactly one
+    has to write code. NightlyBatch's totals move between buckets it already
+    has and IntegrationBridge carries an existing field with an existing
+    value — both keep working untouched. DocumentHub has to word a pack for a
+    recipient neither of its existing packs was written for.
+
+    This is pinned rather than left to prose because the cross-team check
+    raises a real ticket on a real team's board per entry, and the failure
+    mode is silent: collapsing the two questions turns a one-repo user story
+    into a multi-team programme that nobody notices is fictional until three
+    teams have triaged it. It holds before and after US-2026-045 — the user
+    story changes the gate, not the estate around it.
+    """
+    consumers = client.get("/api/analysis/consumers").json()
+    by_app = {c["application"]: c for c in consumers}
+
+    # Every consumer answers the question, and gives its reason either way. A
+    # blank rationale on a `False` is indistinguishable from an omission.
+    for consumer in consumers:
+        assert isinstance(consumer["changeRequired"], bool)
+        assert consumer["changeRationale"].strip()
+
+    assert by_app["DocumentHub"]["changeRequired"] is True
+    assert by_app["NightlyBatch"]["changeRequired"] is False
+    assert by_app["IntegrationBridge"]["changeRequired"] is False
+    assert by_app["PolicyCore"]["changeRequired"] is False
+
+
+def test_the_analysis_sizes_the_downstream_document_consequence():
+    """The DocumentHub effect is a number, not an adjective.
+
+    It rides on `/api/analysis/prospect-impact` rather than an endpoint of its
+    own, deliberately: a downstream consequence served separately is one a
+    reader can finish the analysis without having seen.
+
+    Both options are reported, not just the recommended one. An analysis that
+    only priced the option it advocates would be advocacy — the same rule that
+    governs `catalogueReach` and `notEvidencedByThisAnalysis`. Asserted before
+    and after the user story because `impact.py` sizes options the gate does
+    not implement, and must keep doing so once one is adopted.
+    """
+    document = client.get("/api/analysis/prospect-impact").json()["documentImpact"]
+
+    assert document["consumer"] == "DocumentHub"
+    assert set(document["perOption"]) == {"MEMBER", "GUEST"}
+    for option in document["perOption"].values():
+        assert isinstance(option["packsRequiringNewWording"], int)
+        assert option["consequenceIfUnchanged"].strip()
+
+    # The headline figure must be the recommended option's, not the larger of
+    # the two — quoting whichever number is bigger is how a sizing becomes a
+    # sales pitch.
+    recommended = document["recommendedOption"]
+    assert document["packsUnderRecommendedOption"] == (
+        document["perOption"][recommended]["packsRequiringNewWording"]
+    )
+
+    # The rule it assumes about DocumentHub is stated as an assumption. This
+    # app cannot see that code, and a consequence derived from an unverifiable
+    # premise has to say so.
+    assert document["assumption"].strip()
+
+
+def test_only_one_other_team_is_owed_work_by_this_change():
+    """The cross-team ticket list is exactly [DocumentHub].
+
+    EnrolDirect is `changeRequired` too — the change is its own — so this also
+    pins that the enforcing system is excluded. A change cannot be cross-team
+    with itself, and letting it through would put this story's own work on
+    another team's board.
+    """
+    from repos.enroldirect import impact
+
+    owed = impact.other_teams_requiring_change()
+
+    assert [entry["application"] for entry in owed] == ["DocumentHub"]
+    assert all(entry["changeRationale"].strip() for entry in owed)
+
+
 def test_health_endpoint_reports_ok():
     response = client.get("/health")
 

@@ -129,17 +129,17 @@ def test_design_docs_are_scoped_to_the_root_they_are_asked_for() -> None:
     so any target rooted elsewhere was screened against mockapp's decoy
     subsystems.
     """
-    spring_root = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE.root
-    assert spring_root is not None
-    assert relevance.discover_subsystem_design_docs(spring_root) == {}
+    other_root = targets.get_target("documenthub-rostered-guest-wording").root
+    assert other_root is not None
+    assert relevance.discover_subsystem_design_docs(other_root) == {}
 
 
 def test_non_mockapp_target_is_never_screened_against_mockapp_subsystems() -> None:
     """The UI's "which part of the repo the AI matched this change to" panel
     reads straight off this screen, so a mockapp subsystem showing up as
-    in-scope for the ClaimsPortal target is a wrong answer on stage, not cosmetic.
+    in-scope for the DocumentHub target is a wrong answer on stage, not cosmetic.
     """
-    target = targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE
+    target = targets.get_target("documenthub-rostered-guest-wording")
     story_text = story.render_story("Elite", target=target)
     all_files = relevance.discover_files_for_target(target, story_text)
     selection = relevance.select_relevant_files(
@@ -150,7 +150,7 @@ def test_non_mockapp_target_is_never_screened_against_mockapp_subsystems() -> No
     assert screen.in_scope == ()
     assert screen.screened_out == ()
     assert screen.scores == {}
-    assert all(path.startswith("repos/claimsportal/") for path in selection.selected)
+    assert all(path.startswith("repos/documenthub/") for path in selection.selected)
 
 
 def test_select_relevant_files_never_opens_a_screened_out_subsystems_files() -> None:

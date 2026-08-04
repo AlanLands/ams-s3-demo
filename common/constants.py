@@ -24,18 +24,26 @@ AUTO_RESOLVED_LABEL = (
 
 INSURER_NAME = "MapleSure Insurance"
 
+# The application landscape the cross-team impact check is allowed to name.
+# `analyze.draft_cross_team_impact` raises if the model returns anything
+# outside this list, deliberately: a hallucinated application produces a Jira
+# ticket for a team that does not exist, and the demo cannot show a repo for it.
+#
+# Not every name here has code in this repo. BillingGateway, NightlyBatch and
+# IntegrationBridge are routing/impact destinations only — that is the point of
+# them, and `applications.py` keeps "which team owns this" and "can we act on
+# it" as two separate questions.
 APPLICATIONS = [
     "PolicyCore",
-    "ClaimsPortal",
     "BillingGateway",
     "DocumentHub",
     "NightlyBatch",
     "IntegrationBridge",
+    "EnrolDirect",
 ]
 
 ASSIGNMENT_GROUPS = [
     "App Support — PolicyCore",
-    "App Support — ClaimsPortal",
     "App Support — BillingGateway",
     "App Support — DocumentHub",
     "Batch Ops",

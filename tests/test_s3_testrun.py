@@ -172,7 +172,7 @@ def test_demo_targets_all_declare_a_mutation():
     for target in (
         targets.MOCKAPP_TIER_UPGRADE,
         targets.MOCKAPP_AMENDMENT_FIELD_ADD,
-        targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
+        targets.get_target("documenthub-rostered-guest-wording"),
     ):
         assert target.mutations, f"{target.target_id} has no seeded mutation"
 
@@ -185,7 +185,7 @@ def test_demo_targets_all_declare_a_regression_suite():
     for target in (
         targets.MOCKAPP_TIER_UPGRADE,
         targets.MOCKAPP_AMENDMENT_FIELD_ADD,
-        targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
+        targets.get_target("documenthub-rostered-guest-wording"),
     ):
         assert target.has_regression_suite, f"{target.target_id} has no regression suite"
 

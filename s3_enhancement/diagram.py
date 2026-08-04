@@ -58,7 +58,18 @@ LAYER_ORDER = ("Interface", "Logic", "Data", "Other")
 # A record/dataclass carrying only fields is the data shape for its service,
 # not logic — but it has no suffix that says so. These are the demo estate's
 # record types; anything else falls through to the rules above.
-_DATA_RECORDS = ("policy.py", "claim.py")
+#
+# Was ("policy.py", "claim.py") until ClaimsPortal was removed on 2026-08-04,
+# at which point both named files that no longer existed. Retargeted to the
+# surviving estate rather than deleted, because the rule the list encodes is
+# still true — a module of field-only dataclasses is that service's data shape
+# whatever it is called.
+#
+# Neither name is in any target's `codegen_allowlist` today (both are
+# read-but-don't-edit files), so this list currently changes no diagram the
+# demo draws. That is fine: it is here so the layer is right when one of them
+# does get changed, not to make a picture look better now.
+_DATA_RECORDS = ("feed.py", "directory.py")
 
 _BOX_W = 190
 _BOX_H = 46

@@ -544,6 +544,10 @@ export interface CrossTeamImpact {
   app_name: string
   reason: string
   suggested_summary: string
+  // Generated body for the other team's ticket. Optional on the wire so a
+  // console build stays compatible with a recording made before this field
+  // existed; the server falls back to `reason` when it is absent.
+  description?: string
 }
 
 export interface CrossTeamImpactResponse {

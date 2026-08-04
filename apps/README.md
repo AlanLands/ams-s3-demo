@@ -8,7 +8,7 @@ The split is the point, and it is load-bearing:
 
 | | Holds | S3's relationship to it |
 |---|---|---|
-| `repos/` | The target repositories — PolicyCore, ClaimsPortal, EnrolDirect | Something S3 **changes** |
+| `repos/` | The target repositories — PolicyCore, ClaimsPortal, EnrolDirect, DocumentHub | Something S3 **changes** |
 | `apps/` | The console, and the launch scripts | Something that **does the changing** |
 
 See [`../repos/README.md`](../repos/README.md) for the target repositories and
@@ -26,16 +26,22 @@ below; only the middle two depend on each other.
 | 3 | **Policy-Service** | `apps/run-policy-service.sh` | 8081 | ClaimsPortal's contracts side (`repos/claimsportal/policy_service/`). Start before Claims-Service. |
 | 4 | **Claims-Service** | `apps/run-claims-service.sh` | 8082 | ClaimsPortal's claims side (`repos/claimsportal/claims_service/`). Target of US-2026-043. |
 | 5 | **EnrolDirect** | `apps/run-enroldirect.sh` | 8083 | The online enrolment channel and its access-preference analysis (`repos/enroldirect/`). Target of US-2026-045. |
+| 6 | **DocumentHub** | `apps/run-documenthub.sh` | 8084 | The enrolment document service (`repos/documenthub/`). Target of US-2026-046 — the cross-team ticket US-2026-045 raises. |
 
-Only the console lives here as source. Scripts 2–5 launch code out of `repos/`
+Only the console lives here as source. Scripts 2–6 launch code out of `repos/`
 — they are here because starting the applications is a tooling job, not because the
 apps they start are.
 
-You do **not** need all five for every beat. The PolicyCore user stories (US-2026-041,
+You do **not** need all six for every beat. The PolicyCore user stories (US-2026-041,
 US-2026-042) need 1 and 2. US-2026-043 needs 1, 3 and 4. US-2026-045 needs 1
-and 5, and EnrolDirect runs on nothing but the venv.
+and 5. US-2026-046 needs 1 and 6. EnrolDirect and DocumentHub both run on
+nothing but the venv.
 
-A manager can also see and control 2–5 from the console's **admin panel**
+Running 5 and 6 together is worth it once: US-2026-045 changes who EnrolDirect
+admits, and US-2026-046 fixes the document DocumentHub then produces for them.
+The two beats are the same change seen from either side of a team boundary.
+
+A manager can also see and control 2–6 from the console's **admin panel**
 (`/admin`, see below) without a terminal. The console is deliberately not on
 that list — it cannot restart the process serving the request.
 
@@ -52,6 +58,7 @@ before, so a plain `localhost` run needs nothing set:
 | `CLAIMS_SERVICE_PORT` | Claims-Service | `8082` |
 | `POLICY_SERVICE_URL` | Claims-Service → Policy-Service lookups | `http://localhost:8081` |
 | `ENROLDIRECT_PORT` | EnrolDirect | `8083` |
+| `DOCUMENTHUB_PORT` | DocumentHub | `8084` |
 
 **PolicyCore serves under a base path**, at
 `http://localhost:8501/sl_policycore` rather than the bare port root, so all
@@ -99,8 +106,8 @@ front (`admin_ops.head_missing_paths`) and reports a named
 `reset_blocked_reason` rather than surfacing a raw git error out of a button —
 keep that check, because the situation recurs on every target move.
 
-The ClaimsPortal and EnrolDirect resets restore by copying from their
-committed `.baseline/` snapshots, so they never depend on HEAD at all.
+The ClaimsPortal, EnrolDirect and DocumentHub resets restore by copying from
+their committed `.baseline/` snapshots, so they never depend on HEAD at all.
 
 ## How these map to the walkthrough
 
@@ -113,12 +120,19 @@ place before any AI step runs (`s3_enhancement/applications.py`):
 | `repos/policycore/` | PolicyCore | App Support — PolicyCore | yes (US-2026-041, US-2026-042) |
 | `repos/claimsportal/` | ClaimsPortal | App Support — ClaimsPortal | yes (US-2026-043) |
 | `repos/enroldirect/` | EnrolDirect | App Support — PolicyCore | yes (US-2026-045) |
+| `repos/documenthub/` | DocumentHub | App Support — DocumentHub | yes (US-2026-046) |
 | — | BillingGateway | App Support — BillingGateway | no — routes only, no repo here |
-| — | DocumentHub | App Support — DocumentHub | no — routes only, no repo here |
 
-The last two exist on purpose: they show a ticket reaching the correct team
+BillingGateway exists on purpose: it shows a ticket reaching the correct team
 for an application this console has no code for, instead of the console
 pretending it can generate a fix.
+
+DocumentHub was that kind of row until US-2026-046, and how it stopped being
+one is the demo's own claim tested on itself. The cross-team check on
+US-2026-045 named DocumentHub as the one other team owed work; its repo was
+then dropped into `repos/` with a `.s3targets.json` manifest and became
+automatable **with no edit to `s3_enhancement/targets.py`**. It is the first
+target registered that way rather than declared by hand.
 
 EnrolDirect was a third kind of row until US-2026-045: the console had its code
 but no registered target, so it carried an empty `repo_path` and reported

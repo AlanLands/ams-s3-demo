@@ -19,15 +19,33 @@ from dataclasses import dataclass
 from common.constants import ASSIGNMENT_GROUPS
 
 # Two engineers per assignment group so any group resolves to a real roster.
+#
+# The PolicyCore list is six rather than two because it absorbed the
+# ClaimsPortal group's members when that application was removed (2026-08-04).
+# They were **appended in their original order, at the position the
+# ClaimsPortal group used to occupy**, and that is load-bearing rather than
+# tidy: passcodes are `1001 + position in the flattened roster`, so merging
+# here keeps every passcode in the presenter notes pointing at the same person
+# it did before — 1001 Ravi, 1003 Priya, 1004 Tom. Reordering this list
+# renumbers everyone below it.
+#
+# Priya Nair and Tom Becker carry the `tester` role (TESTER_NAMES below), which
+# is why the group needs builders of its own: `suggested_assignee` skips
+# testers, and a team of nothing but testers suggests nobody at all.
+#
+# The group is also the right home on the merits, not just arithmetically:
+# App Support — PolicyCore already owns EnrolDirect (see
+# `s3_enhancement/applications.py`), so it is the surviving application-support
+# team for the plan-administration estate.
 ENGINEERS_BY_GROUP: dict[str, list[str]] = {
-    "App Support — PolicyCore": ["Ravi Kumar", "Elena Cruz"],
-    # Priya Nair and Tom Becker carry the `tester` role (TESTER_NAMES below),
-    # so this group needs builders of its own — `suggested_assignee` skips
-    # testers, and a team of nothing but testers suggests nobody at all.
-    # Appended after them deliberately: passcodes are `1001 + position`, and
-    # adding these two at the end of the group keeps 1001/1003/1004 pointing at
-    # the same people the presenter notes cite.
-    "App Support — ClaimsPortal": ["Priya Nair", "Tom Becker", "Arjun Mehta", "Clara Bishop"],
+    "App Support — PolicyCore": [
+        "Ravi Kumar",
+        "Elena Cruz",
+        "Priya Nair",
+        "Tom Becker",
+        "Arjun Mehta",
+        "Clara Bishop",
+    ],
     "App Support — BillingGateway": ["Sam Patel", "Grace Liu"],
     "App Support — DocumentHub": ["Noah Bennett", "Aisha Khan"],
     "Batch Ops": ["Jordan Blake", "Meera Iyer"],

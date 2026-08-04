@@ -39,23 +39,17 @@ AI analysis → codegen → tests → docs → release notes.
 - `repos/policycore/` (was `mockapp/`) is the MapleSure portal AND S3's first
   target — US-2026-041 and US-2026-042. Its Python package moved with it, so
   imports are `repos.policycore.core.*`.
-- `repos/claimsportal/` is S3's second target — "ClaimsPortal"
-  (Python/FastAPI, US-2026-043, ticket AMS-103, target id
-  `claimsportal-claims-deductible`). Runs on nothing but the venv, so a
-  locked-down sandbox can host it. Its `target_id` and `cache_namespace` were
-  renamed off their original "spring"/"springdemo" literals on 2026-07-31:
-  `target_id` is not internal — `scm.branch_name_for` folds it into the
-  branch shown at Step 0, so the stale name was on screen. `cache_namespace`
-  *is* the committed recording's filename
-  (`s3_{beat}__{cache_namespace}.json`), so both recordings were renamed in
-  the same commit; renaming one without the other is a replay miss that
-  silently falls through to a live call. It is one
-  folder holding two services because US-2026-043 edits files in both, so S3
-  treats it as a single target root; they still start as two processes.
-  Checked-in source is the pre-user story baseline (snapshot in `.baseline/`); reset
-  with `demo/reset_s3_claimsportal.sh`. Its generated test and regression suite
-  now live in the top-level `tests/` dir like the other two targets (the
-  Java-only exception for in-target-root test discovery no longer applies).
+- **ClaimsPortal was removed on 2026-08-04** and is no longer a target. It was
+  S3's second (US-2026-043, ticket AMS-103, target id
+  `claimsportal-claims-deductible`, one folder holding two services). The repo,
+  its story, its recordings, its regression and unit suites, its reset and run
+  scripts and its `apps/run-*.sh` launchers all went with it. Its App Support
+  group's members were merged into `App Support — PolicyCore` **appended in
+  their original order at the position ClaimsPortal's group used to occupy** —
+  passcodes are `1001 + position in the flattened roster`, so that placement is
+  what keeps every presenter-note passcode pointing at the same person
+  (`common/roster.py`). Historical references to it further down this file are
+  dated and describe things that really happened; they are kept deliberately.
 - `repos/enroldirect/` is S3's third target — "EnrolDirect"
   (Python/FastAPI, US-2026-045, target id `enroldirect-prospect-access`,
   cache namespace `enroldirect_prospect_access`). The online enrolment
@@ -73,13 +67,41 @@ AI analysis → codegen → tests → docs → release notes.
   only, plus a loud failure if a read-only file comes back modified).
   Baseline snapshot in `.baseline/`; reset with
   `demo/reset_s3_enroldirect.sh`.
+- `repos/documenthub/` is S3's fourth target — "DocumentHub"
+  (Python/FastAPI, US-2026-046, target id
+  `documenthub-rostered-guest-wording`, cache namespace
+  `documenthub_rostered_guest_wording`, port 8084). The enrolment document
+  service: it words a confirmation pack per *audience* and picks one.
+  **It is the only target registered by a `.s3targets.json` manifest rather
+  than declared by hand in `targets.py`**, and that is the point of it — the
+  cross-team check on US-2026-045 names DocumentHub as the one other team
+  owed work, and the repo was then dropped into `repos/` and became
+  automatable with no edit to `targets.py`. It has **no committed codegen or
+  testgen recording**: a discovered target has nothing to record against
+  until its story runs once, so the first run is a live call that records
+  itself (`repos/README.md`). Its declared mutation quotes
+  `if record.onRoster:` from the *generated* `wording.py`, so re-verify that
+  snippet against the recording after that first run — a stale snippet makes
+  the mutation beat no-op silently.
+  Its baseline is a **wrong document, not a failure**: `wording.audience_for`
+  selects on the authorising preference alone, so the seeded record
+  `ENR-20260804-005` (on the sponsor's roster, admitted under guest access —
+  exactly what US-2026-045 starts producing) falls through to the guest pack
+  and is told we hold no member record for them, with an identity form
+  enclosed. Nothing raises and nothing logs. `feed.py` is in `core_files` but
+  deliberately NOT in `codegen_allowlist` — it is EnrolDirect's integration
+  contract, the same read-but-don't-edit arrangement as EnrolDirect's
+  `impact.py` — and so is `main.py`, whose audit endpoint is the independent
+  check on the selection rule. Baseline snapshot in `.baseline/`; reset with
+  `demo/reset_s3_documenthub.sh`.
 - `apps/console/` is the console: `api/` (FastAPI, run as
   `uvicorn apps.console.api.main:app`) and `web/` (React, was `frontend/`).
 - `s3_enhancement/cache/` is the committed replay cache that makes the demo
   deterministic; `s3_enhancement/out/` is gitignored and regenerated per run.
 - `tests/` holds both the pipeline's own tests **and** the target apps'
   checked-in regression suites (`test_regression_policycore.py`,
-  `test_regression_claimsportal.py`, `test_regression_enroldirect.py`). The
+  `test_regression_enroldirect.py`, `test_regression_documenthub.py` — the
+  ClaimsPortal one went with that target on 2026-08-04). The
   regression suites are deliberately
   outside every target root: anything ending `.py` under a target root joins
   the codegen candidate pool (see below). Until the 2026-07-30 Python rewrite,
@@ -365,6 +387,49 @@ user story (they are invariants, not assertions about the change under test), an
 must stay out of the target roots for the corpus reason above. Both suites
 were verified pre-user story, post-user story, and against three injected breakages on
 2026-07-29.
+
+## Cross-team impact raises a ticket only for a *code change*
+
+Changed 2026-08-04. The check used to return every system the change touched,
+which on US-2026-045 was three — DocumentHub, NightlyBatch, IntegrationBridge —
+and put three cards on the board. Two of them were no-ops: NightlyBatch
+aggregates by authorising preference into buckets it already has, and
+IntegrationBridge carries the preference through on an existing field. Their
+numbers move; their code does not. Only DocumentHub has to *author behaviour*
+for a case it has never handled.
+
+The bar is now "that team must change code", not "that team is affected", and
+it is stated in three places that must stay in step:
+
+- `repos/enroldirect/impact.py::Consumer` carries `changeRequired` +
+  `changeRationale`, so a "no" is auditable rather than an omission, and
+  `other_teams_requiring_change()` is the short list. All five consumers stay
+  in the inventory — the estate map is not the ticket list.
+- `analyze.CROSS_TEAM_SYSTEM_PROMPT` and `build_cross_team_prompt` say it to
+  the model, in the terms above.
+- `tests/test_regression_enroldirect.py` pins it, because the failure is
+  silent: nobody notices the extra tickets are fictional until three teams have
+  triaged them.
+
+The downstream consequence is also **sized, not described**.
+`impact.document_impact()` computes how many confirmation packs would need
+wording that does not exist, per option, from the seeded directory — no LLM,
+same rule as `diagram.py` and `acceptance.py`. It rides inside
+`prospect_impact()["documentImpact"]` rather than on an endpoint of its own,
+because a downstream consequence served separately is one a reader can finish
+the analysis without having seen. `build_impact_prompt` now asks point 4 for
+the named downstream application and its figure, and tells the model to use a
+computed one from the context rather than restate the point in general terms.
+Both options are priced, not just the recommended one — pricing only the
+option you advocate is advocacy.
+
+`CrossTeamImpact` also gained a generated `description` — the body the other
+team actually receives. It is a different artifact from `reason`, which
+justifies raising the ticket to someone holding the user story; the receiving
+engineer has neither the story nor the analysis. Until this change the console
+passed `reason` as the description (`useS3Controller.ts`), which handed another
+team a one-line ticket they had to come back and ask about. It falls back to
+`reason` when absent so an older recording still creates a usable ticket.
 
 ## Hard rules — carried over, still non-negotiable
 

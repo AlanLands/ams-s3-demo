@@ -161,7 +161,7 @@ def test_every_demo_target_has_a_distinct_scenario_cache_key():
         for target in (
             targets.MOCKAPP_TIER_UPGRADE,
             targets.MOCKAPP_AMENDMENT_FIELD_ADD,
-            targets.CLAIMSPORTAL_CLAIMS_DEDUCTIBLE,
+            targets.get_target("documenthub-rostered-guest-wording"),
         )
     ]
     assert len(set(keys)) == len(keys)
