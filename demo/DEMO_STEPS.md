@@ -19,9 +19,8 @@ tooling that drives them. You do **not** need all five for every beat.
 |---|-------------|-------|------|------------|
 | 1 | **Console** — FastAPI + React. The screen you present from. | `apps/run-console.sh` | 8000 + 5173 | Every beat |
 | 2 | **PolicyCore** — the client's plan-administration portal (Streamlit). The window the audience watches change. | `apps/run-policycore.sh` | 8501 (open `/sl_policycore`) | US-2026-041, US-2026-042 |
-| 3 | **Policy-Service** — ClaimsPortal contracts side (Python/FastAPI). | `apps/run-policy-service.sh` | 8081 | US-2026-043 |
-| 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI). Start after #3. | `apps/run-claims-service.sh` | 8082 | US-2026-043 |
-| 5 | **EnrolDirect** — the online enrolment channel (Python/FastAPI). | `apps/run-enroldirect.sh` | 8083 | US-2026-045 |
+| 3 | **EnrolDirect** — the online enrolment channel (Python/FastAPI). | `apps/run-enroldirect.sh` | 8083 | US-2026-045 |
+| 4 | **DocumentHub** — the enrolment document service (Python/FastAPI). | `apps/run-documenthub.sh` | 8084 | US-2026-046 |
 
 > **Open this one** — the console UI is `http://localhost:5173`, not `:8000`.
 > Port 8000 is the API the UI talks to.
@@ -30,11 +29,11 @@ tooling that drives them. You do **not** need all five for every beat.
 
 | | Holds | S3's relationship to it |
 |---|---|---|
-| `repos/` | The target repositories — `policycore/`, `claimsportal/`, `enroldirect/` | Something S3 **changes** |
-| `apps/` | The console (`apps/console/`) and the five launch scripts above | Something that **does the changing** |
+| `repos/` | The target repositories — `policycore/`, `enroldirect/`, `documenthub/` | Something S3 **changes** |
+| `apps/` | The console (`apps/console/`) and the four launch scripts above | Something that **does the changing** |
 
 Python imports follow the folders: the targets are `repos.policycore.*`,
-`repos.claimsportal.*`, `repos.enroldirect.*`; the console is
+`repos.enroldirect.*`, `repos.documenthub.*`; the console is
 `apps.console.api.main:app`.
 
 `repos/` is also a drop folder. A directory placed there with a
@@ -49,7 +48,7 @@ and how each process maps to a ServiceNow application.
 
 | Tool | Version | Needed for | Check |
 |------|---------|------------|-------|
-| Python | 3.12+ | Console API, PolicyCore, S3 tooling, ClaimsPortal | `python3 --version` |
+| Python | 3.12+ | Console API, PolicyCore, S3 tooling, EnrolDirect, DocumentHub | `python3 --version` |
 | Node.js | 18+ | Console UI | `node --version` |
 
 ---
@@ -148,8 +147,8 @@ the amendment baseline then builds on.
 ```bash
 demo/reset_s3.sh                # US-2026-041 (PolicyCore plan tier) + shared state
 demo/reset_s3_endorsement.sh    # US-2026-042 (PolicyCore amendment priority)
-demo/reset_s3_claimsportal.sh   # US-2026-043 (ClaimsPortal deductible)
 demo/reset_s3_enroldirect.sh    # US-2026-045 (EnrolDirect prospect access)
+demo/reset_s3_documenthub.sh    # US-2026-046 (DocumentHub pack wording)
 demo/warm_s3_cache.sh           # ALWAYS last — reset_s3.sh wipes .cache/llm
 ```
 
@@ -158,8 +157,8 @@ Expected final lines:
 ```text
 S3 source baseline restored, PolicyCore reseeded, LLM cache cleared, and ticket timeline cleared.
 US-2026-042 source baseline restored, PolicyCore reseeded, and LLM cache cleared.
-ClaimsPortal source baseline restored; generated files removed.
 EnrolDirect source baseline restored; generated files removed.
+DocumentHub source baseline restored; generated files removed.
 ```
 
 ### The first two restore from `HEAD`
@@ -182,7 +181,7 @@ read-only whenever a target has just moved:
 git cat-file -e HEAD:repos/policycore/app.py 2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
 ```
 
-- **`reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` never touch git**
+- **`reset_s3_enroldirect.sh` and `reset_s3_documenthub.sh` never touch git**
   — they restore by `cp` from the in-repo `.baseline/` snapshots, so a target
   move cannot affect them.
 - The admin panel checks the same thing up front: `GET /api/admin/status`
@@ -204,12 +203,11 @@ One terminal per process. For the PolicyCore user stories you need only the firs
 apps/run-console.sh           # terminal 1 — API :8000 + UI :5173
 apps/run-policycore.sh        # terminal 2 — portal :8501/sl_policycore
 
-# only for the ClaimsPortal user story (US-2026-043):
-apps/run-policy-service.sh    # terminal 3 — :8081  (start before claims)
-apps/run-claims-service.sh    # terminal 4 — :8082
-
 # only for the EnrolDirect user story (US-2026-045):
-apps/run-enroldirect.sh       # terminal 5 — :8083
+apps/run-enroldirect.sh       # terminal 3 — :8083
+
+# only for the DocumentHub user story (US-2026-046):
+apps/run-documenthub.sh       # terminal 4 — :8084
 ```
 
 Then open `http://localhost:5173` and log in. Any roster name works; passcodes
@@ -222,8 +220,8 @@ scheme lives in `common/roster.py`.
 | Elena Cruz | 1002 | Engineer — App Support, PolicyCore |
 | Priya Nair | 1003 | **Tester** — the QA hand-off receives work here |
 | Tom Becker | 1004 | **Tester** — the second QA login |
-| Arjun Mehta | 1005 | Engineer — App Support, ClaimsPortal |
-| Clara Bishop | 1006 | Engineer — App Support, ClaimsPortal |
+| Arjun Mehta | 1005 | Engineer — App Support, PolicyCore |
+| Clara Bishop | 1006 | Engineer — App Support, PolicyCore |
 | Manager | 9000 | Manager view — **the only login that can assign tickets or open `/admin`** |
 
 **Each role sees only its own stages.** This is why the same pipeline looks
@@ -254,7 +252,6 @@ Six tickets. Five are seeded; the sixth opens by itself.
 |---|---|---|---|---|
 | AMS-101 | US-2026-041: Plan Tier Upgrade Option | QA | Priya Nair | Seeded Jira replay cache |
 | AMS-102 | US-2026-042: Amendment Priority Field | In Progress | Ravi Kumar | Seeded Jira replay cache |
-| AMS-103 | US-2026-043: Claims Deductible Handling (ClaimsPortal) | To Do | Ravi Kumar | Seeded Jira replay cache |
 | AMS-098 | Quarterly policy data cleanup | Done | Elena Cruz | Seeded Jira replay cache (background noise) |
 | AMS-104 | Flag urgent amendment requests (from Support Ops) | To Do | Ravi Kumar | `demo/seed_s3_repo_selection_ticket.sh` (US-2026-044) |
 | **AMS-1045** | **Prospect Member Eligibility Check For Online Enrolment** | **To Do** | **— unassigned —** | **Opened automatically from `stories/US-2026-045.md`** |
@@ -304,7 +301,7 @@ before any AI step runs.
 demo/seed_problem_record_ticket.sh
 
 # The other half: routes to a team AND offers the user story to run against it.
-SEED_CI=ClaimsPortal SEED_BUSINESS_SERVICE="Claims Management" \
+SEED_CI=DocumentHub SEED_BUSINESS_SERVICE="Enrolment Documents" \
   demo/seed_problem_record_ticket.sh
 ```
 
@@ -362,7 +359,7 @@ repo**. It is worth showing precisely because of what it refuses to do:
   what they would restore, what they would delete, and which of those files
   currently carry uncommitted changes — before you press anything.
 - There is **no "reset everything"** button. Seven explicit scopes:
-  PolicyCore, ClaimsPortal, EnrolDirect, tickets, logs, proposals, caches.
+  PolicyCore, EnrolDirect, DocumentHub, tickets, logs, proposals, caches.
 - **No service id for the console itself** — it cannot restart the process
   serving the request, and does not pretend it can.
 - Service status is a plain TCP port probe (no `ps`, no `lsof`), so it works on
@@ -378,9 +375,12 @@ button carries a `reset_blocked_reason` saying which, instead of firing a
 script that would fail halfway. That is the gate working, and it is a fine
 thing to say out loud.
 
-On beats 12-13: the deployment order is **derived**, not drafted — on
-US-2026-043 the plan puts policy_service before claims_service because
-claims_service calls it, and says why. The release record is assembled from
+On beats 12-13: the deployment order is **derived**, not drafted — it comes
+from the change map's service graph, callee before caller, and the plan says
+why. Worth knowing before someone asks: every current target is a single
+service, so the ordering rule is real but has nothing to sort. ClaimsPortal
+used to be the demonstration of it (policy_service before claims_service,
+because claims called policy) and was retired on 2026-08-04. The release record is assembled from
 what the run actually produced; its "Not evidenced by this release" block is
 the part worth pausing on, because a release document that only lists
 successes is marketing. **Attach to ticket** is honest about the default:
@@ -409,8 +409,8 @@ honest undo at that point is a revert commit, not a rewritten history.
 On beat 6b: the change map is **derived, not drawn by the model** — services,
 layers and the cross-service arrow are read from the changed-file set, so it
 costs no LLM call and needs no cache warming. The `NEW` badge comes from git
-(the file is absent from `HEAD`), which is why `claim_rules.py` carries one on
-US-2026-043 and nothing does on US-2026-042. The PDF is rendered server-side by
+(the file is absent from `HEAD`), which is why `core/tiers.py` carries one on
+US-2026-041 and nothing does on US-2026-042. The PDF is rendered server-side by
 headless Chromium; if `playwright install chromium` has not been run on the
 presenter machine the endpoint answers 503 and the console silently falls back to
 the browser's own print-to-PDF, so the button always does something.
@@ -419,15 +419,16 @@ Beats 7, 9 and 10 are the QA-facing half of the tests stage. Two things worth
 saying out loud when showing them:
 
 - The regression suite (`tests/test_regression_policycore.py`,
-  `tests/test_regression_claimsportal.py`,
-  `tests/test_regression_enroldirect.py`) appears in **no** target's
+  `tests/test_regression_enroldirect.py`,
+  `tests/test_regression_documenthub.py`) appears in **no** target's
   `testgen_allowlist`. The pipeline physically cannot write to it, which is
   what makes "the pre-existing tests still pass" a result rather than a claim.
 - In the matrix, only the scenario→test column is inferred, and it is
   deliberately conservative: an ambiguous pairing renders as "no automated
-  test" rather than guessing. On US-2026-043 two criteria legitimately land
-  there — that is the honest answer, and a good moment to make the point that
-  the tool reports gaps instead of hiding them.
+  test" rather than guessing. Where criteria legitimately land there, that is
+  the honest answer, and a good moment to make the point that the tool reports
+  gaps instead of hiding them. (Check the current story's matrix before
+  promising a number on stage — it changes with the acceptance criteria.)
 
 For the full per-scenario talk track and the fallback ladder, see
 `demo/DEMO_TEST_GUIDE.md`.
@@ -438,7 +439,7 @@ For the full per-scenario talk track and the fallback ladder, see
 
 | Symptom | Cause and fix |
 |---------|---------------|
-| `error: pathspec 'repos/policycore/app.py' did not match any file(s) known to git` | `reset_s3.sh` / `reset_s3_endorsement.sh` restore from HEAD, and a target directory was moved without committing the move, so HEAD does not have that path. **Commit the move** — see section 5. The ClaimsPortal and EnrolDirect resets restore from `.baseline/` and are unaffected. |
+| `error: pathspec 'repos/policycore/app.py' did not match any file(s) known to git` | `reset_s3.sh` / `reset_s3_endorsement.sh` restore from HEAD, and a target directory was moved without committing the move, so HEAD does not have that path. **Commit the move** — see section 5. The EnrolDirect and DocumentHub resets restore from `.baseline/` and are unaffected. |
 | `FOREIGN KEY constraint failed` during a reset or seed | An old baseline whose `wipe_db()` predates the amendments table (it was called `endorsements` before the 2026-08-03 GRS reskin). Fixed in the current scripts. If you hit it on an older checkout: `rm -f data/mockapp.db`, then re-run the reset. |
 | `codegen returned unexpected file set` | A target directory under `repos/` was renamed or moved. `relevance.py` folds each file's path into the text it scores, so a rename reshuffles the selection and desyncs it from the committed recordings. Restore the directory name — see `repos/README.md` and the "File paths are load-bearing" section of the root `CLAUDE.md`. |
 | A reset button in `/admin` is greyed out | Deliberate. Hover it — `reset_blocked_reason` says whether it is the dirty tree or a path missing from HEAD. Source resets never run over uncommitted work. |
@@ -447,7 +448,6 @@ For the full per-scenario talk track and the fallback ladder, see
 | Applied change crashed the portal | Expected and handled — the console shows the migration traceback in a pop-up with a one-click fix. You can also press **Revert all**. |
 | Console UI loads but every call 401s | Not logged in, or the API on :8000 is not running. Check terminal 1. |
 | `/admin` 403s, or the Assign control is missing | You are logged in as an engineer. Both are manager-only, enforced server-side. Log in as **Manager / 9000**. |
-| Claims-Service errors on a claim | Policy-Service on :8081 is not up. Claims calls policy over HTTP; start #3 first. |
 | Port already in use | `lsof -ti:8000 \| xargs kill` (repeat per port). Note that `--reload` is deliberately not used on the API: the reloader restarts mid-beat when codegen writes to the tree. Also note `demo/run_s3.sh` (the legacy Streamlit console) defaults to :8501 and will collide with PolicyCore. |
 
 ---
@@ -461,8 +461,8 @@ For the full per-scenario talk track and the fallback ladder, see
 - [ ] `demo/warm_s3_cache.sh` ran *after* the resets
 - [ ] Console reachable at `:5173`; you are logged in
 - [ ] PolicyCore reachable at `:8501/sl_policycore` in a second window
-- [ ] For the ClaimsPortal user story: `:8081` and `:8082` both responding
 - [ ] For the EnrolDirect user story: `:8083` responding
+- [ ] For the DocumentHub user story: `:8084` responding
 - [ ] AMS-1045 is on the board and unassigned
 - [ ] You have opened and closed at least one artifact modal, so the click-path is muscle memory
 - [ ] You have walked beats 0–13 once, end to end, on this machine

@@ -25,23 +25,26 @@ directory dropped into `repos/` with a `.s3targets.json` manifest registers
 itself as an S3 target at next start, with no code edit; see
 [`repos/README.md`](repos/README.md) for the contract.
 
-Five processes, one launch script each. You do not need all five for every
+Four processes, one launch script each. You do not need all four for every
 beat.
 
 | # | Process | Start | Port | Needed for |
 |---|-------------|-------|------|------------|
 | 1 | **Console** — FastAPI + React. The screen you present from. | `apps/run-console.sh` | 8000 + **5173** | every beat |
 | 2 | **PolicyCore** — the client's plan-administration portal (Streamlit) | `apps/run-policycore.sh` | 8501 (open `/sl_policycore`) | US-2026-041, US-2026-042 |
-| 3 | **Policy-Service** — ClaimsPortal contracts side (Python/FastAPI) | `apps/run-policy-service.sh` | 8081 | US-2026-043 |
-| 4 | **Claims-Service** — ClaimsPortal claims side (Python/FastAPI) | `apps/run-claims-service.sh` | 8082 | US-2026-043 |
-| 5 | **EnrolDirect** — the online enrolment channel (Python/FastAPI) | `apps/run-enroldirect.sh` | 8083 | US-2026-045 |
+| 3 | **EnrolDirect** — the online enrolment channel (Python/FastAPI) | `apps/run-enroldirect.sh` | 8083 | US-2026-045 |
+| 4 | **DocumentHub** — the enrolment document service (Python/FastAPI) | `apps/run-documenthub.sh` | 8084 | US-2026-046 |
+
+ClaimsPortal (US-2026-043, :8081/:8082) was retired on 2026-08-04; its two
+launch scripts went with it, which is why the numbering skips nothing but the
+port block 8081–8082 is now free.
 
 Open **`http://localhost:5173`** and log in with a name/passcode from
 `common/roster.py` (the scheme is `1001 + roster position`, so the first
 engineer is `1001`).
 
 A manager also gets **`/admin`** — reset environment state, clear logs, start and stop
-processes 2–5, and onboard a repo, without a terminal. See
+processes 2–4, and onboard a repo, without a terminal. See
 [`apps/README.md`](apps/README.md) for what it can and deliberately cannot do,
 how each application maps to a ServiceNow application, and why the directory
 names must not change.
@@ -64,7 +67,7 @@ pip install -r requirements.txt
 cp .env.example .env                              # then configure a provider
 cd apps/console/web && npm install && cd ../../..
 python -m repos.policycore.core.seed
-python -m pytest -q                               # expect: 679 passed
+python -m pytest -q                               # expect: 728 passed
 ```
 
 ### Pointing it at your own LLM
@@ -85,7 +88,7 @@ miss even in replay mode — run `demo/warm_s3_cache.sh` before presenting.
 
 ## Running
 
-Use the five scripts above. To run the console manually instead:
+Use the four scripts above. To run the console manually instead:
 
 ```bash
 uvicorn apps.console.api.main:app --port 8000     # see the --reload caveat below
@@ -126,8 +129,8 @@ this order**, because the amendment baseline builds on the database
 ```bash
 demo/reset_s3.sh               # US-2026-041 (PolicyCore plan tier) + shared state
 demo/reset_s3_endorsement.sh   # US-2026-042 (PolicyCore amendment priority)
-demo/reset_s3_claimsportal.sh    # US-2026-043 (ClaimsPortal)
 demo/reset_s3_enroldirect.sh   # US-2026-045 (EnrolDirect prospect access)
+demo/reset_s3_documenthub.sh   # US-2026-046 (DocumentHub pack wording)
 demo/warm_s3_cache.sh          # ALWAYS last — reset_s3.sh wipes .cache/llm
 ```
 
@@ -138,7 +141,7 @@ demo/warm_s3_cache.sh          # ALWAYS last — reset_s3.sh wipes .cache/llm
 > uncommitted; committing it was the whole fix.) The admin panel checks the
 > same condition up front and reports it as `reset_blocked_reason` rather than
 > running a script that would fail halfway.
-> `reset_s3_claimsportal.sh` and `reset_s3_enroldirect.sh` restore by copying
+> `reset_s3_enroldirect.sh` and `reset_s3_documenthub.sh` restore by copying
 > from their committed `.baseline/` snapshots, so they never depend on HEAD.
 
 A manager can run the same resets from the console's `/admin` panel, one

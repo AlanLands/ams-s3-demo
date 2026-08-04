@@ -73,11 +73,11 @@ CORE_FILES: tuple[str, ...] = targets.MOCKAPP_TIER_UPGRADE.core_files
 # eligible to be selected as extra editable context.
 NEVER_EXTRA: frozenset[str] = targets.MOCKAPP_TIER_UPGRADE.never_extra
 
-# "target" is Maven's build-output directory (the Spring Boot target's root
-# contains two Maven services) and ".baseline" is that target's pristine
-# pre-user story snapshot (demo/reset_s3_claimsportal.sh restores from it) — sources
-# under either must never enter the candidate pool, same reasoning as
-# __pycache__ for Python.
+# "target" is Maven's build-output directory — a holdover from when a target
+# was a Spring/Maven build, kept because the name is still a plausible decoy
+# directory — and ".baseline" is a target's pristine pre-user story snapshot
+# (the demo/reset_s3_*.sh scripts restore from it). Sources under either must
+# never enter the candidate pool, same reasoning as __pycache__ for Python.
 #
 # "test"/"tests" joins them because test sources are not implementation
 # context for codegen, and — more importantly — including them made the pool

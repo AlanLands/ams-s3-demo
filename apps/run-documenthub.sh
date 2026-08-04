@@ -15,8 +15,9 @@ cd "$(dirname "$0")/.."
 source .venv/bin/activate
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
-# Port comes from .env (DOCUMENTHUB_PORT), defaulting to 8084 — 8081 and 8082
-# belong to ClaimsPortal's two services, 8083 to EnrolDirect, 8501 to PolicyCore.
+# Port comes from .env (DOCUMENTHUB_PORT), defaulting to 8084 — 8083 belongs to
+# EnrolDirect and 8501 to PolicyCore. (8081/8082 were ClaimsPortal's two
+# services; that target was retired on 2026-08-04 and the ports are free.)
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
 echo "  DocumentHub -> http://localhost:${DOCUMENTHUB_PORT:-8084}/"

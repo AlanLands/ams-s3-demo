@@ -10,8 +10,7 @@ This repo has **one pipeline, four user story scenarios** riding on it:
 |---|--------|----|-----------|---------|--------------------|
 | 1 | AMS-101 | US-2026-041 — Plan Tier Upgrade Option | PolicyCore (`repos/policycore`) | Python / Streamlit | A new top plan tier (audience picks the name) |
 | 2 | AMS-102 | US-2026-042 — Amendment Priority Field | PolicyCore (same repo) | Python / Streamlit | A "Priority" field on the contract-amendment request form |
-| 3 | AMS-103 | US-2026-043 — Benefit Claim Deductible Handling | ClaimsPortal (`repos/claimsportal`) | Python / FastAPI | Per-policy deductible handling, across two services |
-| 4 | **AMS-1045** | US-2026-045 — Prospect Member Eligibility Check For Online Enrolment | EnrolDirect (`repos/enroldirect`) | Python / FastAPI | Prospect classification at the online enrolment gate |
+| 3 | **AMS-1045** | US-2026-045 — Prospect Member Eligibility Check For Online Enrolment | EnrolDirect (`repos/enroldirect`) | Python / FastAPI | Prospect classification at the online enrolment gate |
 
 **AMS-1045 is not seeded by anything.** A `.md` dropped into the top-level
 `stories/` opens a board ticket by itself, keyed deterministically off the user story id
@@ -95,12 +94,6 @@ awk '/st.form\("submit_amendment_form"/,/form_submit_button/' repos/policycore/a
 #   5        <- baseline (amendment type, requested change, effective date,
 #                contact phone, contact email). 6 after the user story adds Priority.
 
-# --- US-2026-043, ClaimsPortal deductible ------------------------------
-ls repos/claimsportal/claims_service/claim_rules.py tests/test_s3_claims_deductible.py
-#   ls: repos/claimsportal/claims_service/claim_rules.py: No such file or directory
-#   ls: tests/test_s3_claims_deductible.py: No such file or directory
-grep -c deductible repos/claimsportal/policy_service/policy.py
-#   0        <- baseline.
 
 # --- US-2026-045, EnrolDirect prospect access --------------------------
 ls tests/test_s3_prospect_access.py
@@ -123,12 +116,6 @@ grep -c PROSPECT repos/enroldirect/eligibility.py
 Two of the four have a live before/after you can show, no console needed.
 
 ```bash
-# ClaimsPortal (:8081) — no deductible field on any policy at baseline:
-curl -s localhost:8081/api/policies | python3 -m json.tool | grep -c deductible
-#   0        <- baseline. Policies carry policyNumber, holderName, product,
-#                status, annualMaximum. MS-1001 and MS-1004 are the two the
-#                demo uses.
-
 # EnrolDirect (:8083) — a prospect is refused at the gate at baseline:
 curl -s -X POST localhost:8083/api/eligibility/check \
   -H 'Content-Type: application/json' \
@@ -157,15 +144,13 @@ twelve if you want a different pair.
 |---|---|---|---|
 | US-2026-041 | PolicyCore :8501/sl_policycore | A contract shows Plan Sponsor, Monthly Contribution, plan tier. No way to move a contract up a tier. | The audience-named top tier is selectable and the monthly contribution recalculates. `core/tiers.py` exists. |
 | US-2026-042 | PolicyCore :8501/sl_policycore | "Request a Contract Amendment" form: **5 fields** — Amendment type, Describe the requested change, Effective date, Contact phone, Contact email. | **6 fields** — a Priority selector (Standard/Urgent) defaulting to Standard. Existing submit flow unchanged. |
-| US-2026-043 | ClaimsPortal :8081 / :8082 | An **$80 claim on MS-1004 is ACCEPTED**. Policies carry no deductible. | Same $80 claim → **REJECTED_BELOW_DEDUCTIBLE**. A $1,200 claim on MS-1001 → ACCEPTED with **payableAmount 700**. |
 | US-2026-045 | EnrolDirect :8083 | Prospect AP-4003 → `granted: false`, "category PROSPECT has no online enrolment preference". | Prospect resolves through the module-level policy to the **Guest** preference; the decision names it, and the benefit catalogue filters on the same effective category. |
 
-Note ClaimsPortal deliberately keeps `claim`, `deductible`, `annual maximum`,
-`policyNumber`, `holderName`, `decide`, `payable` and
-`REJECTED_BELOW_DEDUCTIBLE`. That is correct group-benefits
-health/dental/disability vocabulary, and its API contract is frozen on purpose
-— renaming any of it desyncs the committed recording. The GRS reskin was
-PolicyCore only.
+Note the GRS reskin (endorsement → amendment, coverage tier → plan tier,
+premium → contribution, policyholder → plan sponsor) was **PolicyCore only**.
+EnrolDirect and DocumentHub keep their own vocabulary, and each target's API
+contract is frozen on purpose — renaming any of it desyncs the committed
+recording.
 
 ---
 
@@ -230,7 +215,7 @@ roster`; scheme documented in `common/roster.py`):
 
 | Name | Passcode | Used as |
 |---|---|---|
-| Ravi Kumar | 1001 | Developer (US-2026-041, US-2026-043) |
+| Ravi Kumar | 1001 | Developer (US-2026-041) |
 | Elena Cruz | 1002 | Developer (US-2026-042 assignee option) |
 | Priya Nair | 1003 | Tester / QA hand-off |
 | Tom Becker | 1004 | Tester / QA hand-off (alt) |
@@ -261,7 +246,7 @@ read-only after any such move:
 git cat-file -e HEAD:repos/policycore/app.py 2>/dev/null && echo "in HEAD" || echo "NOT in HEAD"
 ```
 
-`demo/reset_s3_claimsportal.sh` and `demo/reset_s3_enroldirect.sh` restore by
+`demo/reset_s3_enroldirect.sh` and `demo/reset_s3_documenthub.sh` restore by
 `cp` from the in-repo `.baseline/` snapshots and never touch git, so nothing
 about HEAD can affect them. The admin panel checks the HEAD condition up front
 and greys out the PolicyCore reset with a `reset_blocked_reason` rather than
@@ -362,75 +347,8 @@ Streamlit :8501/sl_policycore via `demo/run_mockapp.sh`).
 
 ---
 
-## Scenario 3 — US-2026-043: Benefit Claim Deductible Handling (AMS-103, ClaimsPortal)
 
-Second repo, second language *until 2026-07-30* — ClaimsPortal was rebuilt
-to Python/FastAPI so it runs on nothing but the venv. Same
-pipeline, same pytest-based test/regression path as the other scenarios;
-what this beat now proves is a second independent repo/target, not a second
-language.
-
-ClaimsPortal keeps `claim`, `deductible` and `annual maximum` — correct
-group-benefits vocabulary, and the GRS reskin deliberately left it alone. Its
-API contract (`policyNumber`, `decide`, `payable`,
-`REJECTED_BELOW_DEDUCTIBLE`) is frozen: renaming any of it desyncs the
-committed recording.
-
-**Reset:**
-```bash
-demo/reset_s3_claimsportal.sh   # ClaimsPortal back to pre-user story baseline (cp from .baseline/)
-demo/reset_s3.sh                # shared out/, ticket events, .cache/llm
-```
-
-**Run (3 terminals):**
-```bash
-# terminal 1 — API
-uvicorn apps.console.api.main:app --port 8000
-
-# terminal 2 — console
-cd apps/console/web && npm run dev
-
-# terminal 3 — the two Python/FastAPI services
-demo/run_s3_claimsportal.sh
-```
-
-**Steps:**
-1. Contracts Team console `http://localhost:8081` and Claims Team console
-   `http://localhost:8082`. Submit an **$80 claim on MS-1004** → ACCEPTED
-   (no deductible logic yet — this exact claim gets rejected later).
-2. Log in to the console (:5173) as **Ravi Kumar / 1001**, open **AMS-103**.
-   File-selection panel shows the ClaimsPortal-scoped pool (5 files, all
-   Python).
-3. Impact analysis — should name `policy.py`, `policy_client.py`'s
-   `PolicyView`, and a new `claim_rules` module.
-4. Generate — diff spans **both** services (policy gains `deductible`,
-   claims gains the consuming field, plus a new `claim_rules.py`). Apply.
-5. Draft the design doc — press **View design doc** to open it in the pop-up
-   (downloadable .html/.md/.pdf), then hand off to a tester
-   — pick **Priya Nair (1003)** or **Tom Becker (1004)**. Ticket moves to
-   the QA column; the developer is now locked out of the test step.
-6. Log out, log back in as the tester, open AMS-103 from the QA column, run
-   "Generate tests + run" — expect `tests/test_s3_claims_deductible.py`,
-   same pytest runner as the other scenarios. All green.
-7. Restart the services to pick up the change:
-   ```bash
-   # Ctrl-C terminal 3, then:
-   demo/run_s3_claimsportal.sh
-   ```
-   Resubmit the same $80 claim on MS-1004 → **REJECTED_BELOW_DEDUCTIBLE**.
-   Submit a $1,200 claim on MS-1001 → ACCEPTED with **payableAmount 700**.
-8. Draft release notes (still as the tester), open them in the pop-up, then
-   mark the ticket **Done**.
-
-**Reset between rehearsals:**
-```bash
-demo/reset_s3_claimsportal.sh   # ClaimsPortal source, from .baseline/
-demo/reset_s3.sh                # shared out/, ticket events, .cache/llm
-```
-
----
-
-## Scenario 4 — US-2026-045: Prospect Member Eligibility Check (AMS-1045, EnrolDirect)
+## Scenario 3 — US-2026-045: Prospect Member Eligibility Check (AMS-1045, EnrolDirect)
 
 Third repo, and the one whose **baseline is a removal** — which is what makes
 it different. The checked-in source is the state *after* the impact analysis
@@ -536,7 +454,6 @@ editing the check.
 For the "why," the risk framing, and word-for-word talk track (not just the
 click-path), see:
 - `demo/presenter_notes/s3_enhancement.md` — US-2026-041 narrative
-- `demo/presenter_notes/s3_claimsportal_beat.md` — US-2026-043 narrative
 
 US-2026-042 and US-2026-045 have no separate presenter-notes file; this
 guide's Scenario 2 and Scenario 4 sections are the only scripts for them

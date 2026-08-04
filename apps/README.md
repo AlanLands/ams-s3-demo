@@ -16,19 +16,20 @@ how to onboard a new one. The rest of the tooling sits at the root:
 `s3_enhancement/` is the AI pipeline, `common/` the shared clients, `demo/` the
 presenter scripts.
 
-Each process starts with one script and owns one port. Start them in the order
-below; only the middle two depend on each other.
+Each process starts with one script and owns one port. They are independent —
+start only the ones the beat you are rehearsing needs.
 
 | # | Process | Start with | Port | What it is |
 |---|---|---|---|---|
 | 1 | **Console** | `apps/run-console.sh` | 8000 + **5173** | The AMS console the presenter drives. FastAPI backend + React UI, both from this folder (`console/`). Open **:5173**. |
 | 2 | **PolicyCore** | `apps/run-policycore.sh` | 8501 | The client's plan-administration portal (`repos/policycore/`, Python/Streamlit/SQLite). The window the audience watches change. Open **:8501/sl_policycore** — see below. |
-| 3 | **Policy-Service** | `apps/run-policy-service.sh` | 8081 | ClaimsPortal's contracts side (`repos/claimsportal/policy_service/`). Start before Claims-Service. |
-| 4 | **Claims-Service** | `apps/run-claims-service.sh` | 8082 | ClaimsPortal's claims side (`repos/claimsportal/claims_service/`). Target of US-2026-043. |
-| 5 | **EnrolDirect** | `apps/run-enroldirect.sh` | 8083 | The online enrolment channel and its access-preference analysis (`repos/enroldirect/`). Target of US-2026-045. |
-| 6 | **DocumentHub** | `apps/run-documenthub.sh` | 8084 | The enrolment document service (`repos/documenthub/`). Target of US-2026-046 — the cross-team ticket US-2026-045 raises. |
+| 3 | **EnrolDirect** | `apps/run-enroldirect.sh` | 8083 | The online enrolment channel and its access-preference analysis (`repos/enroldirect/`). Target of US-2026-045. |
+| 4 | **DocumentHub** | `apps/run-documenthub.sh` | 8084 | The enrolment document service (`repos/documenthub/`). Target of US-2026-046 — the cross-team ticket US-2026-045 raises. |
 
-Only the console lives here as source. Scripts 2–6 launch code out of `repos/`
+ClaimsPortal (:8081/:8082, US-2026-043) was retired on 2026-08-04; its two
+launchers went with it and those ports are now free.
+
+Only the console lives here as source. Scripts 2–4 launch code out of `repos/`
 — they are here because starting the applications is a tooling job, not because the
 apps they start are.
 
@@ -54,9 +55,6 @@ before, so a plain `localhost` run needs nothing set:
 | Variable | Used by | Default |
 |---|---|---|
 | `STREAMLIT_BASE_URL_PATH` | PolicyCore (also `demo/run_mockapp.sh`) | `sl_policycore` |
-| `POLICY_SERVICE_PORT` | Policy-Service | `8081` |
-| `CLAIMS_SERVICE_PORT` | Claims-Service | `8082` |
-| `POLICY_SERVICE_URL` | Claims-Service → Policy-Service lookups | `http://localhost:8081` |
 | `ENROLDIRECT_PORT` | EnrolDirect | `8083` |
 | `DOCUMENTHUB_PORT` | DocumentHub | `8084` |
 

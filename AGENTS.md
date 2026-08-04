@@ -78,8 +78,8 @@ demo/run_mockapp.sh                  # the client's app on :8501/sl_policycore, 
 ```
 
 Reset between rehearsals with `demo/reset_s3.sh`,
-`demo/reset_s3_endorsement.sh`, or `demo/reset_s3_claimsportal.sh` depending on
-the user story. `tools/verify_s3_live.py --skip-live` is the offline rehearsal gate.
+`demo/reset_s3_endorsement.sh`, `demo/reset_s3_enroldirect.sh` or
+`demo/reset_s3_documenthub.sh` depending on the user story. `tools/verify_s3_live.py --skip-live` is the offline rehearsal gate.
 
 ## Working Rules
 

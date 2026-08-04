@@ -23,9 +23,9 @@ under `apps/` with the rest of the tooling (everything that *does the
 changing*). A manager can also start and stop it from the console's `/admin`
 panel without a terminal.
 
-Port comes from `DOCUMENTHUB_PORT` in `.env`, defaulting to 8084 — 8081 and
-8082 belong to ClaimsPortal's two services, 8083 to EnrolDirect, 8501 to
-PolicyCore.
+Port comes from `DOCUMENTHUB_PORT` in `.env`, defaulting to 8084 — 8083 belongs
+to EnrolDirect and 8501 to PolicyCore. (8081 and 8082 were ClaimsPortal's two
+services; that target was retired on 2026-08-04 and the ports are free.)
 
 ## What it does
 

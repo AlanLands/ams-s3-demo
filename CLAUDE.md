@@ -451,6 +451,17 @@ team a one-line ticket they had to come back and ask about. It falls back to
   `apps/` on 2026-07-28 (see Layout above). No re-record was required.
 - `deploy/aws/` lost three uncommitted files on 2026-07-28 —
   `ams-s3-claims.service`, `ams-s3-policy.service`, `rebuild-spring.sh`. They
-  were never committed, so they are unrecoverable; the systemd units still in
-  the folder also predate the `apps/` restructure and will need their paths
-  updated before the next EC2 deploy.
+  were never committed, so they are unrecoverable. (Those three were
+  ClaimsPortal's, and ClaimsPortal was retired on 2026-08-04, so there is
+  nothing left to restore.)
+- **`deploy/aws/` is stale and was deliberately left that way on 2026-08-04.**
+  Verified that day: the two surviving systemd units *do* carry current paths
+  (`apps.console.api.main:app`, `repos/policycore/app.py`) — an earlier version
+  of this note claimed they predate the `apps/` restructure, and that was
+  wrong. What is actually missing is coverage: no unit and no nginx `location`
+  for EnrolDirect or DocumentHub, so the console's `VITE_ENROLDIRECT_URL` /
+  `VITE_DOCUMENTHUB_URL` links have no public address on an EC2 deploy. And
+  `nginx.conf` proxies `127.0.0.1:8000` / `:8501` while
+  `deploy/production/start-apps.sh` defaults to the 20111–20116 block, so the
+  two deployment paths cannot be used together unchanged. `deploy/production/`
+  itself IS current — DocumentHub is on 20116 in both start and stop scripts.
