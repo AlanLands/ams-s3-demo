@@ -604,7 +604,7 @@ catch.</p>
 <section class="scenario">
   <div class="scenario-head">
     <span class="num">05</span>
-    <span class="scenario-title">Cross-team impact &amp; the dependency gate</span>
+    <span class="scenario-title">Cross-team impact &amp; the linked ticket</span>
   </div>
   <p class="who"><strong>Needs two logins</strong> · Ravi Kumar (1001) + whoever the new ticket is assigned to</p>
 
@@ -616,8 +616,10 @@ catch.</p>
   </ol>
 
   <ul class="check">
-    <li>After step 2, Stage 1 is blocked: <em>"Waiting on 1 other team to finish their ticket."</em></li>
-    <li>After step 3, the gate clears for Ravi — state comes from the append-only events log,
+    <li>After step 2, Stage 1 shows <em>"1 other team picking up linked work"</em> and stays
+        <strong>open</strong> — the other team's work is downstream and parallel, so it must not
+        block this ticket.</li>
+    <li>After step 3, the panel clears for Ravi — state comes from the append-only events log,
         not the browser, which is why it crosses separate logins.</li>
     <li>No ticket is ever created without a human confirming it.</li>
   </ul>

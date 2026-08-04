@@ -845,7 +845,7 @@ with a stage that isn't unlocked yet unopenable:
 
 | Stage | Unlock condition |
 |---|---|
-| 1 · Generate | a ticket assigned to you is selected · impact analysis has run for it · **no open cross-team dependencies** |
+| 1 · Generate | a ticket assigned to you is selected · impact analysis has run for it |
 | 2 · Design doc | the proposal has been applied (or had nothing to apply) |
 | 3 · Tests | design doc drafted · ticket status is **QA** · **you are the assigned tester** |
 | 4 · Release notes | tests have run · (if in QA) you are the assigned tester |
@@ -858,9 +858,12 @@ design doc, test artifacts. Server-side staged proposals under
 `s3_enhancement/out/{proposal_id}/` survive too, so "Ask"/"Apply" on a restored proposal
 still works as long as the backend process hasn't restarted.
 
-The cross-team dependency gate reads from the append-only ticket-events log rather than
-client state, so one engineer's screen sees a dependency clear after *another* team, logged
-in separately, marks their ticket Done.
+Linked cross-team tickets are shown on the Generate stage but **do not gate it**. They are
+downstream, parallel work — on US-2026-045 the DocumentHub wording only becomes reachable
+once EnrolDirect starts admitting prospects, so blocking EnrolDirect on it stalls the ticket
+that has to move first. The panel reads from the append-only ticket-events log rather than
+client state, so one engineer's screen sees a linked ticket clear after *another* team,
+logged in separately, marks their ticket Done.
 
 `GET /s3/reset-marker` closes the loop with `demo/reset_s3.sh`: the marker changes only on
 reset, and the SPA drops its cached per-ticket state rather than showing results for a
