@@ -64,8 +64,10 @@ identifier (`US-2026-045` → `AMS-1045`), so it survives restarts, resets and
 processes — a key that changed between two board loads would strand every
 event recorded against the old one. Derived keys start at AMS-1000 because the
 seeded demo tickets and `jira_client`'s synthetic replay keys both live in
-AMS-100..999. The ticket lands **unassigned**, which routes it to a manager to
-assign; nothing here calls an LLM, touches Jira, or writes anything.
+AMS-100..999. The ticket lands in the default engineer's **To Do** column
+(`s3.py::_story_default_assignee` — `STORY_DEFAULT_ASSIGNEE`, empty to leave it
+unassigned for a manager instead); a manager can reassign it either way.
+Nothing here calls an LLM, touches Jira, or writes anything.
 
 ## GitLab beat (`relevance.discover_gitlab_files`, `repo_match.py`)
 

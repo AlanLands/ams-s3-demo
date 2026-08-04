@@ -199,7 +199,10 @@ would survive `demo/reset_s3.sh`, and a key that changed between two board loads
 strand every event already recorded against the old one. Derived keys start at AMS-1000: the
 seeded demo tickets (AMS-098, AMS-101..104) and `jira_client._synthetic_issue`'s replay keys
 both live in AMS-100..999, so the band is provably collision-free and still readable from the
-back of the room. The ticket lands **unassigned**, which routes it to a manager. Nothing in
+back of the room. The ticket lands in the default engineer's **To Do** column
+(`s3.py::_story_default_assignee`, `STORY_DEFAULT_ASSIGNEE` — empty routes it to the
+manager's unassigned queue instead), and the assignment is written to the ticket's event log
+as a `system` actor so the timeline says how the holder came to hold it. Nothing in
 the module calls an LLM, touches Jira, or writes anything — the router owns those decisions.
 
 ### File paths are a scoring input — never move a target
@@ -758,13 +761,28 @@ tier name → **422**, missing precondition (no generated test file, no matching
 The router is deliberately **thin**: no business logic, every function it calls is the same
 one the original Streamlit view called.
 
-### 9.1 Assignment is a manager's decision, enforced server-side
+### 9.1 Who may reassign is decided server-side
 
 Assignment used to be set-once, and the "once" was a **UI-only** gate:
 `POST /s3/jira/assign-ticket` had no role check at all, so anything that could reach the
-endpoint could assign any ticket to anyone. It is now `require_manager`, and a manager can
-reassign or unassign as well as assign. Tickets derived from `stories/*.md` land unassigned
-precisely so this path is the one that routes them.
+endpoint could assign any ticket to anyone. The endpoint now assigns, reassigns and
+unassigns, and decides who may do it from the ticket's *current assignee*, read server-side:
+a manager may do anything; anyone else may pick up an unassigned ticket or hand on a ticket
+already assigned to them, and gets a **403** naming the current holder otherwise.
+
+It is deliberately not `require_manager`. The QA hand-off is the reason: the engineer assigns
+the tester and moves the ticket to QA themselves, which a blanket manager-only gate answers
+with "Manager role required" at the hand-off card. What the rule actually refuses is one
+person taking a ticket **off** a third party, which is the thing worth refusing.
+
+The same rule *permits* the return leg — a tester holding a ticket may hand it back to the
+engineer — but **the console has no control for it yet**: the Reassign dialog in
+`BoardStage.tsx` renders under `isManager` only, so today a failed test is handed back by a
+manager, or by a tester calling the endpoint directly. The QA-fail round trip is on the
+client's 2026-08-03 walkthrough list and is not built.
+
+Tickets derived from `stories/*.md` land on the default engineer (§ story intake), so the
+common case needs no routing step at all; a manager reassigns when the default is wrong.
 
 Same rule as the release record's approvals and the commit gate: a claim about *who* is
 responsible is read and written server-side, never asserted by a client.

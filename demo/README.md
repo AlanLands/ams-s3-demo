@@ -81,9 +81,11 @@ rather than assuming it worked.
 
 There is deliberately none. A `.md` dropped into the top-level `stories/` opens a
 board ticket by itself — the key is derived from the user story id (`US-2026-045` →
-**AMS-1045**), and the ticket lands **unassigned** so the manager routes it.
-`seed_s3_repo_selection_ticket.sh` is the older hand-seeding path and stays
-only because AMS-104 needs a specific pre-set assignee to make its beat work.
+**AMS-1045**), and the ticket lands in **Ravi Kumar's To Do** column
+(`STORY_DEFAULT_ASSIGNEE`; set it empty to leave the ticket unassigned for a
+manager to route instead). `seed_s3_repo_selection_ticket.sh` is the older
+hand-seeding path and stays only because AMS-104 needs a specific pre-set
+assignee to make its beat work.
 
 `reset_s3.sh` wipes `.cache/llm` on purpose, so the next click after a reset
 pays full LLM latency. Run `warm_s3_cache.sh` as the last step before

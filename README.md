@@ -167,7 +167,8 @@ provider path deliberately booby-trapped — the pre-session confidence check.
     changed to act on it
 - `stories/` — the user stories. A `.md` dropped in here opens a board ticket
   automatically, keyed off the user story id (`US-2026-045` → `AMS-1045`), and lands
-  unassigned so a manager routes it
+  in the default engineer's To Do column (`STORY_DEFAULT_ASSIGNEE`; empty
+  leaves it unassigned for a manager to route)
 - `apps/` — the tooling that drives all of the above (see the table and
   `apps/README.md`): `apps/console/api/` + `apps/console/web/` (FastAPI
   backend + React console, including the `/admin` panel) and the launch

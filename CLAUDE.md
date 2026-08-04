@@ -26,7 +26,10 @@ AI analysis → codegen → tests → docs → release notes.
   `.s3targets.json` manifest registers itself at import via
   `s3_enhancement/discovery.py`; no edit to `targets.py` is needed. user stories go in
   the top-level `stories/` and are picked up on the board automatically, landing
-  unassigned so the manager routes them. See `repos/README.md` for the
+  in the default engineer's **To Do** column — Ravi Kumar, per
+  `s3.py::DEFAULT_STORY_ASSIGNEE`, overridable with `STORY_DEFAULT_ASSIGNEE`
+  and set to unassigned by an empty value (which is what it did before
+  2026-08-04). See `repos/README.md` for the
   manifest contract and what a dropped-in repo does and does not get.
   The three built-in targets stay declared by hand in `targets.py` because
   they carry bespoke codegen file-set validators a manifest cannot express;

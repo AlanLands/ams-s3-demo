@@ -44,12 +44,12 @@ MapleSure PolicyCore portal opens separately on :8501/sl_policycore as "the
 client's app"; a second terminal pane runs `run_s3_harness.sh` for beat 4 if
 using the harness path):
 0. *(optional, 30 seconds, lands well)* Show the board itself. **AMS-1045 is
-   sitting there unassigned and nobody seeded it** — dropping
+   sitting in Ravi Kumar's To Do column and nobody seeded it** — dropping
    `stories/US-2026-045.md` into the repo opened its own ticket, keyed off the user story
-   id, deliberately unassigned so it routes to a manager. Assign it as
-   **Manager / 9000**, then press **Reassign** and change your mind:
-   assignment is a manager decision, reversible, and enforced server-side —
-   an engineer's session cannot call the endpoint at all.
+   id, and put it on the owning team's board ready to work. Then log in as
+   **Manager / 9000** and press **Reassign**: assignment is reversible and
+   enforced server-side — an engineer's session cannot take a ticket off
+   someone else.
 1. Show the MapleSure PolicyCore portal: contracts, claims, plan sponsor,
    monthly contribution. **No tier-upgrade feature exists.** (live, zero risk)
 2. Open US-2026-041 and ask the audience to **pick the new top tier's name** — the
@@ -182,7 +182,7 @@ a much bigger real codebase.
 real answer, not a roadmap one. Drop the repo into `repos/`, put its user stories in
 the top-level `stories/`, and add a `repos/<name>/.s3targets.json` manifest
 declaring what the pipeline may read and write. The target registers itself at
-next start; the user story opens its own ticket, unassigned, for a manager to route.
+next start; the user story opens its own ticket on the default engineer's board.
 The manifest is required because `codegen_allowlist`, `core_files` and the
 seeded-bug mutations are *decisions*, not things inferable from source — and a
 broken manifest raises at import rather than being silently skipped. There is

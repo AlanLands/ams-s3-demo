@@ -15,8 +15,10 @@ This repo has **one pipeline, four user story scenarios** riding on it:
 **AMS-1045 is not seeded by anything.** A `.md` dropped into the top-level
 `stories/` opens a board ticket by itself, keyed deterministically off the user story id
 (`US-2026-045` → `AMS-1045`, in the AMS-1000+ band so it cannot collide with
-the hand-seeded AMS-100..999 tickets), and it lands **unassigned** so the
-manager routes it. See `s3_enhancement/story_intake.py`. The scenario below can
+the hand-seeded AMS-100..999 tickets), and it lands in **Ravi Kumar's To Do**
+column — the default assignee, `STORY_DEFAULT_ASSIGNEE`, empty to leave it
+unassigned for a manager to route instead. See
+`s3_enhancement/story_intake.py`. The scenario below can
 still be driven straight from `target_id`, but you no longer have to.
 
 All four run through the same AMS console (FastAPI + React, `apps/console/api/` +
@@ -358,8 +360,8 @@ and *before* the gate acts on it: `eligibility.preference_for_category` returns
 Two other things are worth pointing at during this beat:
 
 - **Nobody seeded this ticket.** AMS-1045 opened itself from
-  `stories/US-2026-045.md` and landed unassigned. Show it on the board before you
-  start, then assign it as **Manager / 9000**.
+  `stories/US-2026-045.md` and landed in Ravi Kumar's To Do column. Show it on
+  the board before you start.
 - **`impact.py` is in `core_files` but deliberately NOT in
   `codegen_allowlist`.** The model must *read* the analysis to understand the
   change and must not edit it. This target has its own file-set validator
@@ -390,9 +392,9 @@ apps/run-enroldirect.sh        # :8083
    category PROSPECT has no online enrolment preference and cannot be granted
    access."* That refusal is nobody's decision — it is the omission the user story
    exists to close.
-2. Log in to the console (:5173) as **Manager / 9000**, show **AMS-1045**
-   unassigned on the board, assign it to an engineer. Press **Reassign** to
-   show the decision is reversible.
+2. Log in to the console (:5173) as **Manager / 9000** and show **AMS-1045**
+   already in Ravi Kumar's To Do column. Press **Reassign** to show the
+   decision is a manager's and is reversible.
 3. Log in as that engineer and open AMS-1045. File-selection panel scopes to
    the EnrolDirect pool (**8 candidate files**).
 4. Impact analysis — the user story's own analysis is already in the repo

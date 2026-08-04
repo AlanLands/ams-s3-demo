@@ -12,8 +12,10 @@ scripts — the tooling. A repo in here is something S3 changes; an app in
 
 1. Drop the source in as `repos/<name>/`.
 2. Add its user stories to the top-level `stories/` folder. A story file placed
-   there is picked up on the board automatically and lands unassigned, which
-   routes it to the manager to assign.
+   there is picked up on the board automatically and lands in the default
+   engineer's To Do column (`STORY_DEFAULT_ASSIGNEE`, Ravi Kumar by default;
+   set it empty to leave the ticket unassigned for a manager to route). A
+   manager can reassign it either way.
 3. Add `repos/<name>/.s3targets.json` declaring what that repo contributes.
 4. Put the repo's human-authored regression suite in the top-level `tests/`,
    **not** under `repos/<name>/`. Anything ending `.py` under a repo root

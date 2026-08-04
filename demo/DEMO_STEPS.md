@@ -254,7 +254,7 @@ Six tickets. Five are seeded; the sixth opens by itself.
 | AMS-102 | US-2026-042: Amendment Priority Field | In Progress | Ravi Kumar | Seeded Jira replay cache |
 | AMS-098 | Quarterly policy data cleanup | Done | Elena Cruz | Seeded Jira replay cache (background noise) |
 | AMS-104 | Flag urgent amendment requests (from Support Ops) | To Do | Ravi Kumar | `demo/seed_s3_repo_selection_ticket.sh` (US-2026-044) |
-| **AMS-1045** | **Prospect Member Eligibility Check For Online Enrolment** | **To Do** | **— unassigned —** | **Opened automatically from `stories/US-2026-045.md`** |
+| **AMS-1045** | **Prospect Member Eligibility Check For Online Enrolment** | **To Do** | **Ravi Kumar** | **Opened automatically from `stories/US-2026-045.md`** |
 
 **AMS-101..103 keep their `US-2026-0NN:` summary prefix on purpose.** They come
 from the seeded Jira replay cache, and the board search fetches only
@@ -275,17 +275,23 @@ the manual equivalent.
 **AMS-1045 is the beat worth showing.** Nobody seeded it. Dropping a user story file
 into the top-level `stories/` opens a ticket for it, keyed deterministically off
 the user story id (`US-2026-045` → `AMS-1045`, in the AMS-1000+ band so it can never
-collide with the hand-seeded AMS-100..999 tickets), and it lands **unassigned**
-— which is exactly what puts it in front of the manager on the dashboard, with
-an Assign control next to it. See `s3_enhancement/story_intake.py`.
+collide with the hand-seeded AMS-100..999 tickets), and it lands in **Ravi
+Kumar's To Do** column — the default assignee (`STORY_DEFAULT_ASSIGNEE`; set it
+empty and the ticket lands unassigned in the manager's queue instead, which is
+what this did before 2026-08-04). See `s3_enhancement/story_intake.py` and
+`s3.py::_story_default_assignee`.
 
-Pair it with the reassignment beat: log in as **Manager / 9000**, assign
-AMS-1045 to an engineer, then press **Reassign** on the row and change your
-mind. Assignment used to be set-once; it is now assign / reassign / unassign,
-and `POST /s3/jira/assign-ticket` is **manager-only enforced server-side**
-(`require_manager` in `apps/console/api/auth.py`), not merely hidden in the UI.
-Log in as an engineer and the control is gone; the endpoint would refuse it
-anyway.
+Pair it with the reassignment beat: log in as **Manager / 9000**, press
+**Reassign** on the row and hand AMS-1045 to someone else. Assignment used to
+be set-once; it is now assign / reassign / unassign, and `POST
+/s3/jira/assign-ticket` decides **server-side, from the ticket's current
+assignee** — a manager may do anything, and anyone else may only pick up an
+unassigned ticket or hand on one already assigned to them. That last rule is
+what lets an engineer hand a ticket to a tester at QA without being able to
+take a ticket off a third person. The return leg (tester → engineer on a failed
+test) is permitted by the same rule but has **no control in the console yet** —
+the Reassign dialog renders for a manager only, so if you are asked about it on
+stage, the honest answer is "a manager hands it back today".
 
 ---
 
@@ -332,8 +338,8 @@ changed is what sits *inside* a stage.
 
 | # | Beat | What to say it proves |
 |---|------|------------------------|
-| 0 | The board itself — AMS-1045 sitting there unassigned | Onboarding a change is dropping its user story file in. The ticket opened itself, and landed unassigned so a manager routes it |
-| 0b | As **Manager / 9000**: assign AMS-1045, then **Reassign** it | Assignment is a manager decision, reversible, and enforced server-side — an engineer's session cannot call the endpoint at all |
+| 0 | The board itself — AMS-1045 sitting in Ravi Kumar's To Do | Onboarding a change is dropping its user story file in. The ticket opened itself and landed on the owning team's board, ready to work |
+| 0b | As **Manager / 9000**: **Reassign** AMS-1045 to someone else | Assignment is a manager decision and reversible, enforced server-side — an engineer's session cannot take a ticket off someone else |
 | 1 | Open the ticket; routing panel appears above the analysis | The CI resolved to an application, owning team and repo by table lookup — no model call, nothing to confirm |
 | 2 | Impact analysis + effort estimate | Vague tickets get a clarifying question first, rather than a confident guess |
 | 3 | Generate code | Only the files the relevance funnel selected are sent — the token panel shows scoped vs naive cost |
@@ -463,7 +469,7 @@ For the full per-scenario talk track and the fallback ladder, see
 - [ ] PolicyCore reachable at `:8501/sl_policycore` in a second window
 - [ ] For the EnrolDirect user story: `:8083` responding
 - [ ] For the DocumentHub user story: `:8084` responding
-- [ ] AMS-1045 is on the board and unassigned
+- [ ] AMS-1045 is on the board, in Ravi Kumar's To Do column
 - [ ] You have opened and closed at least one artifact modal, so the click-path is muscle memory
 - [ ] You have walked beats 0–13 once, end to end, on this machine
 

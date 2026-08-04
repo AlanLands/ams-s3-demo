@@ -24,7 +24,7 @@ from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError, get_client
 from common.jira_client import JiraError, get_jira_client
 from common.llm import LLMError
-from common.roster import Identity
+from common.roster import ROSTER, Identity
 from common.ticket_events import (
     distinct_tickets_with_action,
     events_for,
@@ -1897,6 +1897,13 @@ def _record_story_ticket(ticket: story_intake.StoryTicket) -> None:
             f";target_method={_detail_value(match.method)}"
         )
     record_event(ticket.key, "system", story_intake.TICKET_CREATED_ACTION, detail=detail)
+    default_assignee = _story_default_assignee()
+    if default_assignee is not None:
+        # The board row carries this assignee on every load; without an event
+        # for it the timeline would show a ticket someone is holding with no
+        # record of how they came to hold it. Actor "system", not "human" —
+        # nobody made this decision, a default did.
+        record_event(ticket.key, "system", "ticket_assigned", detail=default_assignee)
     if match.resolved and match.target is not None:
         record_event(
             ticket.key,
@@ -1904,6 +1911,31 @@ def _record_story_ticket(ticket: story_intake.StoryTicket) -> None:
             "target_resolved",
             detail=f"{match.target.display_name} via {match.method}",
         )
+
+
+# The engineer an auto-opened user-story ticket lands on. Ravi Kumar is the
+# first name on the App Support — PolicyCore roster, which owns every target
+# S3 currently generates against, and the account the demo drives the pipeline
+# from (passcode 1001).
+DEFAULT_STORY_ASSIGNEE = "Ravi Kumar"
+
+
+def _story_default_assignee() -> str | None:
+    """Who an auto-opened user-story ticket lands on.
+
+    A derived row has no Jira assignee of its own, so this is the only thing
+    deciding whether dropping a user story in puts it on an engineer's board or
+    in the manager's unassigned queue. It defaults to the first engineer on the
+    PolicyCore roster (`STORY_DEFAULT_ASSIGNEE` overrides it; empty means land
+    unassigned, which is what this did before 2026-08-04).
+
+    Validated against the roster because the console's board filters by exact
+    display name (`BoardStage.tsx`: `issue.assignee === identity.name`) — a
+    misspelled default would put the ticket on nobody's board at all, which is
+    strictly worse than leaving it unassigned, so that is where it falls back.
+    """
+    name = os.environ.get("STORY_DEFAULT_ASSIGNEE", DEFAULT_STORY_ASSIGNEE).strip()
+    return name if name in ROSTER else None
 
 
 def _story_board_rows(issues: list[dict], project_key: str) -> list[dict]:
@@ -1958,11 +1990,14 @@ def _story_board_rows(issues: list[dict], project_key: str) -> list[dict]:
                 # first thing the demo audience reads. The *release* document at
                 # the end is the user story — see release.py.
                 "issue_type": "Story",
-                # Unassigned on purpose: an unassigned ticket is what puts the
-                # user story in front of the manager, who already sees exactly those
-                # on the dashboard with an Assign control. Nothing here picks
-                # an engineer.
-                "assignee": None,
+                # Lands in the default engineer's To Do column rather than the
+                # manager's unassigned queue — see `_story_default_assignee`.
+                # Not a decision this row gets to keep: the moment anyone
+                # assigns or unassigns the ticket, `assign_issue` writes a
+                # per-issue cache entry and the overlay in `jira_board` wins
+                # over this value, including an explicit unassign back to the
+                # manager's queue.
+                "assignee": _story_default_assignee(),
                 "description": ticket.description,
             }
         )

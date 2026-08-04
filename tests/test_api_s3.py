@@ -17,7 +17,7 @@ from common.constants import AI_SUGGESTION_LABEL
 from common.gitlab_client import GitLabError
 from common.llm import LLMError
 from common.roster import PASSCODE_BY_NAME
-from common.ticket_events import record_event
+from common.ticket_events import events_for, record_event
 from s3_enhancement import story_intake, scm
 from s3_enhancement.conversation import MAX_CLARIFICATION_TURNS
 from s3_enhancement.target_match import TargetMatch
@@ -928,8 +928,8 @@ def _write_scratch_story(stories_root, name: str, title: str) -> None:
 
 def test_board_opens_a_ticket_for_a_story_with_none(tmp_path, monkeypatch):
     """The board's third intake source: a user story dropped into stories/ shows up as a
-    ticket without anyone seeding one, unassigned so it lands in the
-    manager's queue."""
+    ticket without anyone seeding one, in the default engineer's To Do
+    column."""
     monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
     monkeypatch.setattr(story_intake, "STORIES_ROOT", tmp_path / "stories")
     _write_scratch_story(tmp_path / "stories", "US-2027-007.md", "US-2027-007: Renewal Notice Channel")
@@ -954,11 +954,33 @@ def test_board_opens_a_ticket_for_a_story_with_none(tmp_path, monkeypatch):
     # the description, which is what dedup reads back.
     assert auto["summary"] == "Renewal Notice Channel"
     assert "US-2027-007" in auto["description"]
-    # Unassigned is the whole routing mechanism: the manager's dashboard is
-    # what shows unassigned tickets with an Assign control.
-    assert auto["assignee"] is None
+    # Lands on the default engineer, in To Do — a dropped-in user story is
+    # work someone already has, not a routing decision waiting on the manager.
+    assert auto["assignee"] == s3_router.DEFAULT_STORY_ASSIGNEE
+    assert auto["status"] == "To Do"
     assert auto["story_file"] == "US-2027-007.md"
     assert auto["target_id"] == "policycore-demo"
+    # …and the timeline says how they came to hold it, rather than showing a
+    # ticket with an assignee nobody assigned.
+    events = [
+        (event["actor"], event["action"], event["detail"])
+        for event in events_for("AMS-1007")
+    ]
+    assert ("system", "ticket_assigned", s3_router.DEFAULT_STORY_ASSIGNEE) in events
+
+
+def test_story_default_assignee_falls_back_to_unassigned_when_off_the_roster(monkeypatch):
+    """A misspelled or retired name would put the ticket on nobody's board —
+    the console filters by exact display name — so it lands unassigned in the
+    manager's queue instead, which is at least somewhere a human looks."""
+    monkeypatch.setenv("STORY_DEFAULT_ASSIGNEE", "Ravi Kumr")
+    assert s3_router._story_default_assignee() is None
+
+    monkeypatch.setenv("STORY_DEFAULT_ASSIGNEE", "")
+    assert s3_router._story_default_assignee() is None
+
+    monkeypatch.setenv("STORY_DEFAULT_ASSIGNEE", "Elena Cruz")
+    assert s3_router._story_default_assignee() == "Elena Cruz"
 
 
 def test_board_does_not_duplicate_or_renumber_the_seeded_story_tickets(tmp_path, monkeypatch):
