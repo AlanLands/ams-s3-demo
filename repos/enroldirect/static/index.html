@@ -233,9 +233,7 @@ async function viewOverview() {
   const summary = await get('/api/enrolments/summary');
   const d = state.impact;
   const opt = Object.fromEntries(d.options.map(o => [o.option, o]));
-  const reach = d.catalogueReach;
   const maxAdmitted = Math.max(...d.options.map(o => o.prospectsGranted), 1);
-  const maxReach = Math.max(...Object.values(reach).map(r => r.planOpeningsReachable), 1);
 
   $('#main').innerHTML = `
     <div class="page-head">
@@ -253,40 +251,20 @@ async function viewOverview() {
       <div class="tile"><div class="label">Enrolments</div><div class="value">${summary.submitted}</div><div class="sub">${summary.refused} refused</div></div>
     </div>
 
-    <div class="grid2">
-      <div class="card">
-        <h3>Prospects admitted at the gate</h3>
-        <div class="body">
-          <div class="legend">
-            <span><span class="swatch" style="background:${POLICY_COLOR.MEMBER}"></span>Treated as member</span>
-            <span><span class="swatch" style="background:${POLICY_COLOR.GUEST}"></span>Treated as guest</span>
-          </div>
-          <figure>
-            ${barRow('Treated as member', opt.MEMBER.prospectsGranted, maxAdmitted, POLICY_COLOR.MEMBER)}
-            ${barRow('Treated as guest', opt.GUEST.prospectsGranted, maxAdmitted, POLICY_COLOR.GUEST)}
-            <figcaption>Of ${d.prospectCount} prospects. The two policies disagree
-              about ${d.disagreementCount} — in both directions, because sponsors
-              enabled different preferences.</figcaption>
-          </figure>
+    <div class="card">
+      <h3>Prospects admitted under each policy</h3>
+      <div class="body">
+        <div class="legend">
+          <span><span class="swatch" style="background:${POLICY_COLOR.MEMBER}"></span>Treated as member</span>
+          <span><span class="swatch" style="background:${POLICY_COLOR.GUEST}"></span>Treated as guest</span>
         </div>
-      </div>
-
-      <div class="card">
-        <h3>Plan openings those prospects can reach</h3>
-        <div class="body">
-          <div class="legend">
-            <span><span class="swatch" style="background:${POLICY_COLOR.MEMBER}"></span>Treated as member</span>
-            <span><span class="swatch" style="background:${POLICY_COLOR.GUEST}"></span>Treated as guest</span>
-          </div>
-          <figure>
-            ${barRow('Treated as member', reach.MEMBER.planOpeningsReachable, maxReach, POLICY_COLOR.MEMBER)}
-            ${barRow('Treated as guest', reach.GUEST.planOpeningsReachable, maxReach, POLICY_COLOR.GUEST)}
-            <figcaption>Counted only for prospects the gate admits under that
-              policy. Guest access blocks a further
-              ${reach.GUEST.planOpeningsBlockedAsMemberOnly} member-only opening(s)
-              past the door — the classification bites twice.</figcaption>
-          </figure>
-        </div>
+        <figure>
+          ${barRow('Treated as member', opt.MEMBER.prospectsGranted, maxAdmitted, POLICY_COLOR.MEMBER)}
+          ${barRow('Treated as guest', opt.GUEST.prospectsGranted, maxAdmitted, POLICY_COLOR.GUEST)}
+          <figcaption>Of ${d.prospectCount} prospects. The two policies disagree
+            about ${d.disagreementCount} — in both directions, because sponsors
+            enabled different preferences.</figcaption>
+        </figure>
       </div>
     </div>
 
