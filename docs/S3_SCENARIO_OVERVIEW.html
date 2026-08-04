@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Enhancement Delivery — What Changes, and What AI Is Expected To Do</title>
+<title>Enhancement Delivery — What Changes, and What AI Does</title>
 <style>
-  @page { size: A4 landscape; margin: 12mm 12mm; }
+  @page { size: A4 landscape; margin: 11mm 12mm; }
 
   :root {
     --ink: #1a1a1a;
@@ -12,187 +12,986 @@
     --ink-faint: #8a8a8a;
     --line: #d8d8d8;
     --accent: #8b1e2d;
+    --mark: #a83244;
     --accent-soft: #f6ecee;
     --ok: #1c6b3c;
     --ok-soft: #edf5f0;
-    --warn: #8a5a00;
-    --warn-soft: #fdf6e6;
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --ok-line: #b9d6c5;
+    --paper: #fcfcfb;
   }
 
   * { box-sizing: border-box; }
 
   body {
-    font: 11pt/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font: 12pt/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     color: var(--ink);
     margin: 0;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  h1 { font-size: 23pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
+  h1 { font-size: 27pt; margin: 0 0 2mm; letter-spacing: -0.4pt; }
   h2 {
-    font-size: 13pt; margin: 0 0 3mm; padding-bottom: 1.5mm;
-    border-bottom: 2px solid var(--accent); letter-spacing: -0.2pt;
+    font-size: 15pt; margin: 0 0 3.5mm; padding-bottom: 1.5mm;
+    border-bottom: 2px solid var(--accent); letter-spacing: -0.2pt; break-after: avoid;
   }
+  h3 { font-size: 11.5pt; margin: 0 0 3mm; break-after: avoid; }
   p { margin: 0 0 2.5mm; }
-  code, .mono { font-family: var(--mono); font-size: 0.88em; }
 
-  .cover { border-bottom: 3pt solid var(--accent); padding-bottom: 4mm; margin-bottom: 6mm; }
+  .page { break-after: page; }
+  .page:last-child { break-after: auto; }
+
+  .cover { border-bottom: 3pt solid var(--accent); padding-bottom: 3.5mm; margin-bottom: 5mm; }
   .kicker { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.6pt; color: var(--accent); font-weight: 700; margin-bottom: 2mm; }
-  .subtitle { font-size: 12pt; color: var(--ink-soft); margin: 0; }
+  .subtitle { font-size: 13.5pt; color: var(--ink-soft); margin: 0; }
+  .runhead { font-size: 8pt; text-transform: uppercase; letter-spacing: 1.6pt; color: var(--accent); font-weight: 700; margin-bottom: 4mm; padding-bottom: 2mm; border-bottom: 2pt solid var(--accent); }
 
-  .section { margin-bottom: 7mm; }
+  .section { margin-bottom: 5mm; }
+  .section:last-child { margin-bottom: 0; }
 
-  /* --- the business change, before any tooling is shown --- */
-  .change { display: grid; grid-template-columns: 1fr auto 1fr; gap: 5mm; align-items: stretch; margin-bottom: 3mm; }
-  .state { border: 1pt solid var(--line); border-radius: 3px; padding: 4mm; background: #fcfcfb; }
-  .state.after { border-color: var(--ok); background: var(--ok-soft); }
-  .state .lead { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; font-weight: 700; color: var(--ink-soft); margin-bottom: 2.5mm; }
-  .state.after .lead { color: var(--ok); }
-  .arrow { display: flex; align-items: center; font-size: 20pt; color: var(--accent); font-weight: 700; }
+  .icon { width: 100%; height: 100%; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .fig { width: 100%; height: auto; display: block; }
 
-  .who { display: flex; align-items: baseline; gap: 2.5mm; margin-bottom: 2mm; }
-  .who:last-child { margin-bottom: 0; }
-  .who-name { font-weight: 700; min-width: 26mm; }
-  .who-note { font-size: 9.5pt; color: var(--ink-soft); }
-  .yes { color: var(--ok); font-weight: 700; }
-  .no { color: var(--accent); font-weight: 700; }
+  /* ---------- page 1 ---------- */
+  .lead-line { font-size: 13.5pt; margin-bottom: 4mm; }
+  .lead-line strong { color: var(--accent); }
 
-  /* --- the five steps --- */
-  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4mm; }
-  .step {
-    border: 1pt solid var(--line); border-top: 3pt solid var(--accent);
-    border-radius: 3px; padding: 4mm 3.5mm; background: #fff; break-inside: avoid;
-    display: flex; flex-direction: column;
+  .oneline {
+    margin-top: 4mm; border-left: 3pt solid var(--accent); background: var(--accent-soft);
+    padding: 4mm 5mm; font-size: 13pt;
   }
-  .step-n {
-    font-size: 8pt; font-weight: 700; letter-spacing: 1pt; text-transform: uppercase;
-    color: var(--accent); margin-bottom: 2mm;
-  }
-  .step-title { font-size: 11pt; font-weight: 700; margin-bottom: 2.5mm; line-height: 1.3; }
-  .step-body { font-size: 9.5pt; color: var(--ink-soft); margin: 0 0 3mm; }
-  .step-human {
-    margin-top: auto; font-size: 8.5pt; padding-top: 2.5mm;
-    border-top: 0.5pt solid var(--line); color: var(--ink);
-  }
-  .step-human .lead {
-    display: block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.8pt;
-    color: var(--ok); font-weight: 700; margin-bottom: 1mm;
-  }
+  .oneline strong { color: var(--accent); }
 
-  .callout {
-    background: var(--accent-soft); border-left: 2.5pt solid var(--accent);
-    padding: 3mm 3.5mm; margin: 4mm 0 0; break-inside: avoid;
+  /* ---------- page 3 ---------- */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; margin-bottom: 5mm; }
+  .stat {
+    border: 1pt solid var(--line); border-radius: 4px; padding: 4mm; background: var(--paper);
+    break-inside: avoid;
   }
-  .callout .lead { font-size: 8pt; text-transform: uppercase; letter-spacing: 1pt; color: var(--accent); font-weight: 700; margin-bottom: 1.5mm; }
-  .callout p:last-child { margin-bottom: 0; }
+  .stat-top { display: flex; align-items: baseline; gap: 2.5mm; margin-bottom: 2.5mm; }
+  .stat-n { font-size: 19pt; font-weight: 700; color: var(--mark); line-height: 1; letter-spacing: -0.5pt; }
+  .stat-of { font-size: 9pt; color: var(--ink-faint); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8pt; }
+  .stat-l { font-size: 9.5pt; color: var(--ink-soft); line-height: 1.35; margin-top: 2.5mm; }
 
-  .footnote { font-size: 8.5pt; color: var(--ink-soft); border-top: 0.5pt solid var(--line); padding-top: 2mm; margin-top: 5mm; }
+  .meter { display: flex; flex-wrap: wrap; gap: 1.1mm; }
+  .cell { width: 3.4mm; height: 3.4mm; border-radius: 0.7px; border: 0.75pt solid var(--mark); background: #fff; }
+  .cell.on { background: var(--mark); }
+  .cell.ok { border-color: var(--ok); }
+  .cell.ok.on { background: var(--ok); }
+  .meter.people { gap: 1.6mm; }
+  .meter.people svg { width: 5.4mm; height: 5.4mm; color: var(--ok); }
+
+  .two { display: grid; grid-template-columns: 1.15fr 1fr; gap: 6mm; }
+
+  .swap { display: grid; grid-template-columns: 1fr 7mm 1fr; gap: 2.5mm; align-items: center; margin-bottom: 3.5mm; }
+  .swap:last-child { margin-bottom: 0; }
+  .swap-was { font-size: 10pt; color: var(--ink-soft); }
+  .swap-now { font-size: 10pt; color: #2f5741; font-weight: 600; }
+  .swap-arrow { color: var(--mark); }
+  .swap-arrow svg { width: 5mm; height: 5mm; }
+  .swap-head {
+    display: grid; grid-template-columns: 1fr 7mm 1fr; gap: 2.5mm;
+    font-size: 8.5pt; text-transform: uppercase; letter-spacing: 1pt; font-weight: 700;
+    padding-bottom: 2mm; margin-bottom: 3.5mm; border-bottom: 1pt solid var(--line);
+  }
+  .swap-head .a { color: var(--ink-soft); }
+  .swap-head .b { color: var(--ok); }
+
+  .rule { border: 1pt solid var(--line); border-radius: 4px; padding: 4.5mm; background: #fff; break-inside: avoid; }
+  .rule h3 { color: var(--accent); display: flex; align-items: center; gap: 2mm; }
+  .rule h3 svg { width: 6mm; height: 6mm; flex: none; }
+  .rule ul { margin: 0; padding-left: 4.5mm; }
+  .rule li { font-size: 10pt; margin-bottom: 3mm; color: var(--ink-soft); line-height: 1.4; }
+  .rule li:last-child { margin-bottom: 0; }
+  .rule li strong { color: var(--ink); }
+
+  .footnote { font-size: 9pt; color: var(--ink-soft); border-top: 0.5pt solid var(--line); padding-top: 2mm; margin-top: 4mm; }
 </style>
 </head>
 <body>
 
+<!-- icon sprite: line art, inherits currentColor -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-person" viewBox="0 0 24 24">
+    <circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5c0-4 3.4-7 7.5-7s7.5 3 7.5 7"/>
+  </symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24">
+    <rect x="4.5" y="10" width="15" height="10.5" rx="2.2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+  </symbol>
+</svg>
+
+<!-- ============================ PAGE 1 ============================ -->
+<div class="page">
+
 <div class="cover">
   <div class="kicker">MapleSure Insurance · Enhancement Delivery · Scenario Overview</div>
-  <h1>Extending online enrolment to prospect members</h1>
-  <p class="subtitle">What the business asked for, and what AI is expected to do about it —
-    before we open the tooling.</p>
+  <h1>Letting prospect members enrol online</h1>
+  <p class="subtitle">What the business asked for, and what AI will do about it — before we open any tools.</p>
 </div>
 
 <div class="section">
-  <h2>1 · The application, and the change being requested</h2>
-  <p><strong>EnrolDirect</strong> is MapleSure's online enrolment channel — where someone on a
-    group contract enrols in their benefit plan themselves, without calling anyone. Who is
-    allowed to use it is decided by two access preferences the sponsor agrees at inception.</p>
+  <p class="lead-line"><strong>EnrolDirect</strong> is where people join their benefit plan online,
+    without phoning anyone. A single check decides who is allowed in.</p>
 
-  <div class="change">
-    <div class="state">
-      <div class="lead">Today</div>
-      <div class="who"><span class="who-name">Members</span><span class="who-note"><span class="yes">Can enrol online</span> — on the roster, holding an active benefit</span></div>
-      <div class="who"><span class="who-name">Guests</span><span class="who-note"><span class="yes">Can enrol online</span> — off the roster, under a sponsor-agreed exception</span></div>
-      <div class="who"><span class="who-name">Prospects</span><span class="who-note"><span class="no">Refused</span> — on the roster, no active benefit yet. Neither preference was written for them.</span></div>
-    </div>
-    <div class="arrow">→</div>
-    <div class="state after">
-      <div class="lead">After this change</div>
-      <div class="who"><span class="who-name">Members</span><span class="who-note"><span class="yes">Unchanged</span></span></div>
-      <div class="who"><span class="who-name">Guests</span><span class="who-note"><span class="yes">Unchanged</span></span></div>
-      <div class="who"><span class="who-name">Prospects</span><span class="who-note"><span class="yes">Can enrol online</span> — classified and admitted under the guest access preference</span></div>
-    </div>
-  </div>
+  <svg class="fig" viewBox="0 0 1000 300" role="img"
+       aria-label="Members, guests and prospects arrive at the enrolment check. The check holds a member rule and a guest rule, so members and guests are allowed online and prospects are refused. This change adds a third rule covering prospects under the guest rule, so they are allowed too.">
+    <defs>
+      <marker id="a-grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 10 5 0 10z" fill="#9a9a9a"/>
+      </marker>
+      <marker id="a-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 10 5 0 10z" fill="#1c6b3c"/>
+      </marker>
+      <marker id="a-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 10 5 0 10z" fill="#8b1e2d"/>
+      </marker>
+    </defs>
 
-  <p style="font-size:9.5pt;color:var(--ink-soft);margin:0">The business request is one sentence:
-    <em>decide whether a prospect member is eligible for online enrolment, and return that
-    decision through the channel's existing eligibility check.</em> It arrives as a user story
-    with acceptance criteria, on the delivery team's board.</p>
-</div>
+    <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
 
-<div class="section">
-  <h2>2 · What AI is expected to do with it</h2>
+      <!-- ---- who turns up ---- -->
+      <text x="6" y="9" font-size="11" font-weight="700" fill="#8a8a8a" letter-spacing="1.2">WHO TURNS UP</text>
 
-  <div class="steps">
-    <div class="step">
-      <div class="step-n">Step 1</div>
-      <div class="step-title">Understand the request</div>
-      <p class="step-body">Reads the user story <em>and</em> the source code together, and asks
-        the business a question when the story leaves something unsaid — rather than guessing
-        and writing the wrong thing.</p>
-      <div class="step-human"><span class="lead">Human decides</span>Answers the clarifying
-        questions. Nothing proceeds until they do.</div>
-    </div>
+      <rect x="6" y="18" width="170" height="54" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
+      <use href="#i-person" x="20" y="31" width="28" height="28" fill="none" stroke="#5c5c5c" stroke-width="1.8"/>
+      <text x="62" y="43" font-size="16" font-weight="700" fill="#1a1a1a">Members</text>
+      <text x="62" y="61" font-size="12" fill="#5c5c5c">Already have a benefit</text>
 
-    <div class="step">
-      <div class="step-n">Step 2</div>
-      <div class="step-title">Assess the impact</div>
-      <p class="step-body">Names the components that have to change, sizes the effort, and
-        identifies which <em>other</em> application teams this change also needs work from.</p>
-      <div class="step-human"><span class="lead">Human decides</span>Accepts the assessment and
-        routes the work to an engineer.</div>
-    </div>
+      <rect x="6" y="108" width="170" height="54" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
+      <use href="#i-person" x="20" y="121" width="28" height="28" fill="none" stroke="#5c5c5c" stroke-width="1.8"/>
+      <text x="62" y="133" font-size="16" font-weight="700" fill="#1a1a1a">Guests</text>
+      <text x="62" y="151" font-size="12" fill="#5c5c5c">Allowed in as an exception</text>
 
-    <div class="step">
-      <div class="step-n">Step 3</div>
-      <div class="step-title">Write the code</div>
-      <p class="step-body">Cuts a feature branch and drafts the change file by file, each one
-        with its reason. Nothing is written to the repository until it is approved.</p>
-      <div class="step-human"><span class="lead">Human decides</span>Peer-reviews the diff, asks
-        the AI why it made a change, requests amendments, applies or rejects.</div>
-    </div>
+      <rect x="6" y="198" width="170" height="54" rx="4" fill="#f6ecee" stroke="#8b1e2d"/>
+      <use href="#i-person" x="20" y="211" width="28" height="28" fill="none" stroke="#8b1e2d" stroke-width="1.8"/>
+      <text x="62" y="223" font-size="16" font-weight="700" fill="#8b1e2d">Prospects</text>
+      <text x="62" y="241" font-size="12" fill="#5c5c5c">On the list, no benefit yet</text>
 
-    <div class="step">
-      <div class="step-n">Step 4</div>
-      <div class="step-title">Prove it works</div>
-      <p class="step-body">Designs the test scenarios first, then writes and runs the tests —
-        and separately re-runs the pre-existing suite it is not allowed to touch, to show
-        nothing else broke.</p>
-      <div class="step-human"><span class="lead">Human decides</span>QA reviews and edits the
-        test plan, and approves it before any test code exists.</div>
-    </div>
+      <!-- ---- into the check ---- -->
+      <path d="M182 45 L262 66"   stroke="#9a9a9a" stroke-width="2" fill="none" marker-end="url(#a-grey)"/>
+      <path d="M182 135 L262 135" stroke="#9a9a9a" stroke-width="2" fill="none" marker-end="url(#a-grey)"/>
+      <path d="M182 225 L262 218" stroke="#9a9a9a" stroke-width="2" fill="none" marker-end="url(#a-grey)"/>
 
-    <div class="step">
-      <div class="step-n">Step 5</div>
-      <div class="step-title">Hand it over</div>
-      <p class="step-body">Commits only once the tests actually pass, then produces the release
-        notes, the deployment and rollback plan, and a record of what was — and was not —
-        proven.</p>
-      <div class="step-human"><span class="lead">Human decides</span>Approves the release and
-        closes the ticket.</div>
-    </div>
-  </div>
+      <!-- ---- the check ---- -->
+      <rect x="270" y="18" width="380" height="272" rx="5" fill="#fff" stroke="#8b1e2d" stroke-width="2"/>
+      <text x="460" y="46" text-anchor="middle" font-size="17" font-weight="700" fill="#1a1a1a">Can this person enrol online?</text>
+      <path d="M290 60 H630" stroke="#e8e8e8" stroke-width="1"/>
 
-  <div class="callout">
-    <div class="lead">The point of the demo</div>
-    <p>Every step above is AI-assisted and every step has a human gate. What follows is the same
-      five steps, run for real against a working application — you will see the request arrive on
-      the board, the code change proposed and reviewed, the tests pass, and the prospect who was
-      refused a moment ago get through.</p>
+      <rect x="290" y="72" width="340" height="42" rx="3" fill="#fcfcfb" stroke="#e0e0e0"/>
+      <path d="m302 93 5 6 11-14" stroke="#1c6b3c" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="330" y="98" font-size="13.5" fill="#1a1a1a">Member rule — on the roster, with a benefit</text>
+
+      <rect x="290" y="122" width="340" height="42" rx="3" fill="#fcfcfb" stroke="#e0e0e0"/>
+      <path d="m302 143 5 6 11-14" stroke="#1c6b3c" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="330" y="148" font-size="13.5" fill="#1a1a1a">Guest rule — allowed in as an exception</text>
+
+      <rect x="290" y="180" width="340" height="66" rx="3" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.8" stroke-dasharray="6 3.5"/>
+      <text x="302" y="200" font-size="10.5" font-weight="700" fill="#1c6b3c" letter-spacing="1.1">+ ADDED BY THIS CHANGE</text>
+      <path d="m302 226 5 6 11-14" stroke="#1c6b3c" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="330" y="231" font-size="13.5" font-weight="700" fill="#1a1a1a">Prospects — covered by the guest rule</text>
+
+      <text x="460" y="272" text-anchor="middle" font-size="12" fill="#5c5c5c">Two rules today. The change adds a third.</text>
+
+      <!-- ---- out of the check ---- -->
+      <path d="M656 112 L726 86"  stroke="#1c6b3c" stroke-width="2.2" fill="none" marker-end="url(#a-green)"/>
+      <path d="M656 224 L726 214" stroke="#8b1e2d" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#a-red)"/>
+      <text x="660" y="248" font-size="11.5" font-weight="700" fill="#8b1e2d">today only</text>
+
+      <!-- ---- the answer ---- -->
+      <text x="732" y="9" font-size="11" font-weight="700" fill="#8a8a8a" letter-spacing="1.2">THE ANSWER</text>
+
+      <rect x="732" y="50" width="262" height="66" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.8"/>
+      <path d="m752 86 7 7 14-18" stroke="#1c6b3c" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="790" y="80" font-size="16" font-weight="700" fill="#1c6b3c">Can enrol online</text>
+      <text x="790" y="100" font-size="11.5" fill="#5c5c5c">Members, Guests and Prospects</text>
+
+      <rect x="732" y="184" width="262" height="66" rx="4" fill="#f6ecee" stroke="#8b1e2d" stroke-width="1.8"/>
+      <path d="M752 209 l16 16 M768 209 l-16 16" stroke="#8b1e2d" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <text x="790" y="214" font-size="16" font-weight="700" fill="#8b1e2d">Refused</text>
+      <text x="790" y="234" font-size="11.5" fill="#5c5c5c">Nobody, once this change is in</text>
+
+    </g>
+  </svg>
+
+  <div class="oneline">
+    That is the whole change: <strong>we add one rule, and one group of people gets a yes instead
+    of a no.</strong> It arrives as a written request on the delivery team's board.
   </div>
 </div>
 
 <div class="footnote">
-  MapleSure Insurance is a fictional insurer; all data is synthetic.
-  Scenario: US-2026-045 · EnrolDirect · prospect access at the online enrolment gate.
+  MapleSure Insurance is a made-up insurer and all data is invented.
+  Scenario: US-2026-045 · EnrolDirect · who is allowed to enrol online.
+</div>
+
+</div>
+
+<!-- ============================ PAGE 2 ============================ -->
+<div class="page">
+
+<div class="runhead">MapleSure Insurance · Enhancement Delivery · Scenario Overview</div>
+
+<div class="section">
+  <h2>What AI does — and where a person still decides</h2>
+  <p style="margin-bottom:2mm">The request comes in on the left and goes live on the right.
+    <strong>AI helps at all five stages. A person signs off at all five.</strong> The work does not
+    move on until they do — and each stage has its own page after this one.</p>
+
+  <!-- FLOW-DIAGRAM-SLOT — generated by tools/render_scenario_overview.py; edit the copy there,
+       not here, and re-run it. Column geometry lives in that script. -->
+
+  <svg class="fig" viewBox="0 0 1000 514" role="img"
+       aria-label="For each of the five steps: what comes in, what AI does, where a person decides, what comes out, and the impact.">
+    <defs>
+      <marker id="f-down" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+        <path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="f-side" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 10 5 0 10z" fill="#c0c0c0"/></marker>
+    </defs>
+    <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+      <rect x="0" y="6" width="58" height="28" rx="14" fill="#fff" stroke="#b3b3b3"/>
+      <text x="29" y="25" text-anchor="middle" font-size="11" font-weight="700" fill="#5c5c5c" letter-spacing="0.5">REQUEST</text>
+      <path d="M58 20 H72" stroke="#c0c0c0" stroke-width="2.5" fill="none" marker-end="url(#f-side)"/>
+      <circle cx="100" cy="20" r="14" fill="#8b1e2d"/>
+      <text x="100" y="25.5" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">1</text>
+      <path d="M114 20 H282" stroke="#c0c0c0" stroke-width="2.5" fill="none" marker-end="url(#f-side)"/>
+      <path d="M100 34 V44" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <circle cx="300" cy="20" r="14" fill="#8b1e2d"/>
+      <text x="300" y="25.5" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">2</text>
+      <path d="M314 20 H482" stroke="#c0c0c0" stroke-width="2.5" fill="none" marker-end="url(#f-side)"/>
+      <path d="M300 34 V44" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <circle cx="500" cy="20" r="14" fill="#8b1e2d"/>
+      <text x="500" y="25.5" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">3</text>
+      <path d="M514 20 H682" stroke="#c0c0c0" stroke-width="2.5" fill="none" marker-end="url(#f-side)"/>
+      <path d="M500 34 V44" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <circle cx="700" cy="20" r="14" fill="#8b1e2d"/>
+      <text x="700" y="25.5" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">4</text>
+      <path d="M714 20 H882" stroke="#c0c0c0" stroke-width="2.5" fill="none" marker-end="url(#f-side)"/>
+      <path d="M700 34 V44" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <circle cx="900" cy="20" r="14" fill="#8b1e2d"/>
+      <text x="900" y="25.5" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">5</text>
+      <path d="M900 34 V44" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <path d="M914 20 H936" stroke="#c0c0c0" stroke-width="2.5" fill="none" marker-end="url(#f-side)"/>
+      <rect x="942" y="6" width="58" height="28" rx="14" fill="#edf5f0" stroke="#1c6b3c"/>
+      <text x="971" y="25" text-anchor="middle" font-size="11" font-weight="700" fill="#1c6b3c" letter-spacing="0.5">LIVE</text>
+      <rect x="8" y="48" width="184" height="448" rx="5" fill="#fff" stroke="#d8d8d8"/>
+      <path d="M8 53 a5 5 0 0 1 5 -5 h174 a5 5 0 0 1 5 5 v23 h-184 z" fill="#8b1e2d"/>
+      <text x="100" y="67" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fff">Impact analysis</text>
+      <rect x="17" y="86" width="166" height="44" rx="3" fill="#f4f4f2" stroke="#cfcfcf"/>
+      <text x="25" y="101" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+      <text x="25" y="117" font-size="11.5" data-maxw="150" fill="#1a1a1a">The user story</text>
+      <path d="M100 130 V142" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="17" y="146" width="166" height="104" rx="3" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+      <text x="25" y="162" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+      <circle cx="28" cy="176" r="2.2" fill="#8b1e2d"/>
+      <text x="36" y="180" font-size="11.5" fill="#1a1a1a" data-maxw="147">Reads story and code</text>
+      <circle cx="28" cy="193" r="2.2" fill="#8b1e2d"/>
+      <text x="36" y="197" font-size="11.5" fill="#1a1a1a" data-maxw="147">Asks what is unclear</text>
+      <circle cx="28" cy="210" r="2.2" fill="#8b1e2d"/>
+      <text x="36" y="214" font-size="11.5" fill="#1a1a1a" data-maxw="147">Sizes the job</text>
+      <circle cx="28" cy="227" r="2.2" fill="#8b1e2d"/>
+      <text x="36" y="231" font-size="11.5" fill="#1a1a1a" data-maxw="147">Checks 5 other systems</text>
+      <path d="M100 250 V262" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="17" y="266" width="166" height="74" rx="3" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+      <text x="25" y="282" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+      <text x="25" y="298" font-size="11.5" data-maxw="150" fill="#2f5741">Answers, then accepts</text>
+      <text x="25" y="312" font-size="11.5" data-maxw="150" fill="#2f5741">the assessment</text>
+      <path d="M100 340 V352" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="17" y="356" width="166" height="48" rx="3" fill="#fcfcfb" stroke="#b8b8b8" stroke-dasharray="5 3"/>
+      <text x="25" y="371" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+      <text x="25" y="387" font-size="11.5" data-maxw="150" fill="#1a1a1a">An assessment, plus 1 job</text>
+      <text x="25" y="401" font-size="11.5" data-maxw="150" fill="#1a1a1a">for the other team</text>
+      <path d="M100 404 V416" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="17" y="420" width="166" height="62" rx="3" fill="#f6ecee"/>
+      <rect x="17" y="420" width="3" height="62" fill="#8b1e2d"/>
+      <text x="27" y="435" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">THE IMPACT</text>
+      <text x="27" y="451" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">Wrong assumptions are</text>
+      <text x="27" y="465" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">caught before any</text>
+      <text x="27" y="479" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">code is written</text>
+      <rect x="208" y="48" width="184" height="448" rx="5" fill="#fff" stroke="#d8d8d8"/>
+      <path d="M208 53 a5 5 0 0 1 5 -5 h174 a5 5 0 0 1 5 5 v23 h-184 z" fill="#8b1e2d"/>
+      <text x="300" y="67" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fff">Target selection</text>
+      <rect x="217" y="86" width="166" height="44" rx="3" fill="#f4f4f2" stroke="#cfcfcf"/>
+      <text x="225" y="101" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+      <text x="225" y="117" font-size="11.5" data-maxw="150" fill="#1a1a1a">The assessment</text>
+      <path d="M300 130 V142" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="217" y="146" width="166" height="104" rx="3" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+      <text x="225" y="162" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+      <circle cx="228" cy="176" r="2.2" fill="#8b1e2d"/>
+      <text x="236" y="180" font-size="11.5" fill="#1a1a1a" data-maxw="147">Finds the repository</text>
+      <circle cx="228" cy="193" r="2.2" fill="#8b1e2d"/>
+      <text x="236" y="197" font-size="11.5" fill="#1a1a1a" data-maxw="147">Narrows 9 files to 4</text>
+      <circle cx="228" cy="210" r="2.2" fill="#8b1e2d"/>
+      <text x="236" y="214" font-size="11.5" fill="#1a1a1a" data-maxw="147">Marks read-only files</text>
+      <circle cx="228" cy="227" r="2.2" fill="#8b1e2d"/>
+      <text x="236" y="231" font-size="11.5" fill="#1a1a1a" data-maxw="147">Checks out a copy</text>
+      <path d="M300 250 V262" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="217" y="266" width="166" height="74" rx="3" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+      <text x="225" y="282" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+      <text x="225" y="298" font-size="11.5" data-maxw="150" fill="#2f5741">Confirms it, and</text>
+      <text x="225" y="312" font-size="11.5" data-maxw="150" fill="#2f5741">checks it out</text>
+      <path d="M300 340 V352" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="217" y="356" width="166" height="48" rx="3" fill="#fcfcfb" stroke="#b8b8b8" stroke-dasharray="5 3"/>
+      <text x="225" y="371" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+      <text x="225" y="387" font-size="11.5" data-maxw="150" fill="#1a1a1a">A working copy, and the</text>
+      <text x="225" y="401" font-size="11.5" data-maxw="150" fill="#1a1a1a">files it may touch</text>
+      <path d="M300 404 V416" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="217" y="420" width="166" height="62" rx="3" fill="#f6ecee"/>
+      <rect x="217" y="420" width="3" height="62" fill="#8b1e2d"/>
+      <text x="227" y="435" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">THE IMPACT</text>
+      <text x="227" y="451" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">AI cannot wander into</text>
+      <text x="227" y="465" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">code this change has</text>
+      <text x="227" y="479" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">nothing to do with</text>
+      <rect x="408" y="48" width="184" height="448" rx="5" fill="#fff" stroke="#d8d8d8"/>
+      <path d="M408 53 a5 5 0 0 1 5 -5 h174 a5 5 0 0 1 5 5 v23 h-184 z" fill="#8b1e2d"/>
+      <text x="500" y="67" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fff">Code generation</text>
+      <rect x="417" y="86" width="166" height="44" rx="3" fill="#f4f4f2" stroke="#cfcfcf"/>
+      <text x="425" y="101" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+      <text x="425" y="117" font-size="11.5" data-maxw="150" fill="#1a1a1a">The working copy</text>
+      <path d="M500 130 V142" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="417" y="146" width="166" height="104" rx="3" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+      <text x="425" y="162" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+      <circle cx="428" cy="176" r="2.2" fill="#8b1e2d"/>
+      <text x="436" y="180" font-size="11.5" fill="#1a1a1a" data-maxw="147">Works on a branch</text>
+      <circle cx="428" cy="193" r="2.2" fill="#8b1e2d"/>
+      <text x="436" y="197" font-size="11.5" fill="#1a1a1a" data-maxw="147">Edits 4 files, each</text>
+      <text x="436" y="214" font-size="11.5" fill="#1a1a1a" data-maxw="147">with a reason</text>
+      <circle cx="428" cy="227" r="2.2" fill="#8b1e2d"/>
+      <text x="436" y="231" font-size="11.5" fill="#1a1a1a" data-maxw="147">Answers “why did you?”</text>
+      <path d="M500 250 V262" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="417" y="266" width="166" height="74" rx="3" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+      <text x="425" y="282" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+      <text x="425" y="298" font-size="11.5" data-maxw="150" fill="#2f5741">Reviews, questions, then</text>
+      <text x="425" y="312" font-size="11.5" data-maxw="150" fill="#2f5741">approves or rejects</text>
+      <path d="M500 340 V352" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="417" y="356" width="166" height="48" rx="3" fill="#fcfcfb" stroke="#b8b8b8" stroke-dasharray="5 3"/>
+      <text x="425" y="371" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+      <text x="425" y="387" font-size="11.5" data-maxw="150" fill="#1a1a1a">A reviewed change, plus</text>
+      <text x="425" y="401" font-size="11.5" data-maxw="150" fill="#1a1a1a">a design document</text>
+      <path d="M500 404 V416" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="417" y="420" width="166" height="62" rx="3" fill="#f6ecee"/>
+      <rect x="417" y="420" width="3" height="62" fill="#8b1e2d"/>
+      <text x="427" y="435" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">THE IMPACT</text>
+      <text x="427" y="451" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">The reviewer can ask</text>
+      <text x="427" y="465" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">the author why — the</text>
+      <text x="427" y="479" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">author is still there</text>
+      <rect x="608" y="48" width="184" height="448" rx="5" fill="#fff" stroke="#d8d8d8"/>
+      <path d="M608 53 a5 5 0 0 1 5 -5 h174 a5 5 0 0 1 5 5 v23 h-184 z" fill="#8b1e2d"/>
+      <text x="700" y="67" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fff">Test</text>
+      <rect x="617" y="86" width="166" height="44" rx="3" fill="#f4f4f2" stroke="#cfcfcf"/>
+      <text x="625" y="101" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+      <text x="625" y="117" font-size="11.5" data-maxw="150" fill="#1a1a1a">The applied change</text>
+      <path d="M700 130 V142" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="617" y="146" width="166" height="104" rx="3" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+      <text x="625" y="162" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+      <circle cx="628" cy="176" r="2.2" fill="#8b1e2d"/>
+      <text x="636" y="180" font-size="11.5" fill="#1a1a1a" data-maxw="147">Drafts the test plan</text>
+      <circle cx="628" cy="193" r="2.2" fill="#8b1e2d"/>
+      <text x="636" y="197" font-size="11.5" fill="#1a1a1a" data-maxw="147">Writes and runs tests</text>
+      <circle cx="628" cy="210" r="2.2" fill="#8b1e2d"/>
+      <text x="636" y="214" font-size="11.5" fill="#1a1a1a" data-maxw="147">Re-runs 27 older tests</text>
+      <path d="M700 250 V262" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="617" y="266" width="166" height="74" rx="3" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+      <text x="625" y="282" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+      <text x="625" y="298" font-size="11.5" data-maxw="150" fill="#2f5741">Tester edits and approves</text>
+      <text x="625" y="312" font-size="11.5" data-maxw="150" fill="#2f5741">the plan before any test</text>
+      <text x="625" y="326" font-size="11.5" data-maxw="150" fill="#2f5741">code exists</text>
+      <path d="M700 340 V352" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="617" y="356" width="166" height="48" rx="3" fill="#fcfcfb" stroke="#b8b8b8" stroke-dasharray="5 3"/>
+      <text x="625" y="371" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+      <text x="625" y="387" font-size="11.5" data-maxw="150" fill="#1a1a1a">Results, plus proof each</text>
+      <text x="625" y="401" font-size="11.5" data-maxw="150" fill="#1a1a1a">requirement was checked</text>
+      <path d="M700 404 V416" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="617" y="420" width="166" height="62" rx="3" fill="#f6ecee"/>
+      <rect x="617" y="420" width="3" height="62" fill="#8b1e2d"/>
+      <text x="627" y="435" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">THE IMPACT</text>
+      <text x="627" y="451" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">Nothing else broke —</text>
+      <text x="627" y="465" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">and that is proven,</text>
+      <text x="627" y="479" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">not claimed</text>
+      <rect x="808" y="48" width="184" height="448" rx="5" fill="#fff" stroke="#d8d8d8"/>
+      <path d="M808 53 a5 5 0 0 1 5 -5 h174 a5 5 0 0 1 5 5 v23 h-184 z" fill="#8b1e2d"/>
+      <text x="900" y="67" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fff">Release</text>
+      <rect x="817" y="86" width="166" height="44" rx="3" fill="#f4f4f2" stroke="#cfcfcf"/>
+      <text x="825" y="101" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+      <text x="825" y="117" font-size="11.5" data-maxw="150" fill="#1a1a1a">Green test results</text>
+      <path d="M900 130 V142" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="817" y="146" width="166" height="104" rx="3" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+      <text x="825" y="162" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+      <circle cx="828" cy="176" r="2.2" fill="#8b1e2d"/>
+      <text x="836" y="180" font-size="11.5" fill="#1a1a1a" data-maxw="147">Writes the release notes</text>
+      <circle cx="828" cy="193" r="2.2" fill="#8b1e2d"/>
+      <text x="836" y="197" font-size="11.5" fill="#1a1a1a" data-maxw="147">Writes the go-live steps</text>
+      <circle cx="828" cy="210" r="2.2" fill="#8b1e2d"/>
+      <text x="836" y="214" font-size="11.5" fill="#1a1a1a" data-maxw="147">Writes how to undo it</text>
+      <path d="M900 250 V262" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="817" y="266" width="166" height="74" rx="3" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+      <text x="825" y="282" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+      <text x="825" y="298" font-size="11.5" data-maxw="150" fill="#2f5741">Approves the release and</text>
+      <text x="825" y="312" font-size="11.5" data-maxw="150" fill="#2f5741">closes the job off</text>
+      <path d="M900 340 V352" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="817" y="356" width="166" height="48" rx="3" fill="#fcfcfb" stroke="#b8b8b8" stroke-dasharray="5 3"/>
+      <text x="825" y="371" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+      <text x="825" y="387" font-size="11.5" data-maxw="150" fill="#1a1a1a">A release note, plus a</text>
+      <text x="825" y="401" font-size="11.5" data-maxw="150" fill="#1a1a1a">go-live and rollback plan</text>
+      <path d="M900 404 V416" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#f-down)"/>
+      <rect x="817" y="420" width="166" height="62" rx="3" fill="#f6ecee"/>
+      <rect x="817" y="420" width="3" height="62" fill="#8b1e2d"/>
+      <text x="827" y="435" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">THE IMPACT</text>
+      <text x="827" y="451" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">The paperwork matches</text>
+      <text x="827" y="465" font-size="12" data-maxw="147" font-weight="600" fill="#1a1a1a">what actually happened</text>
+    </g>
+  </svg>
+</div>
+
+</div>
+
+<!-- DETAIL-PAGES-SLOT — one page per stage, generated by
+     tools/render_scenario_overview.py. Everything between this marker and the
+     CLOSING-PAGE marker below is replaced on each run; edit the copy in that script. -->
+
+<!-- ==================== STAGE 1 · IMPACT ANALYSIS ==================== -->
+<div class="page">
+
+<div class="runhead">MapleSure Insurance · Enhancement Delivery · Stage 1 of 5</div>
+
+<div class="section">
+  <h2>Stage 1 · Impact analysis</h2>
+  <p style="margin-bottom:3mm;font-size:12.5pt;color:var(--ink-soft)">What has to change, how big it is, and who else it touches — worked out before anyone opens an editor.</p>
+
+  <svg class="fig" viewBox="0 0 1000 422" role="img"
+       aria-label="Stage 1, Impact analysis: what comes in, what AI does, where a person decides, what comes out, and how the stage works.">
+    <defs>
+      <marker id="d-side" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-side-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+      <marker id="d-side-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#8b1e2d"/></marker>
+      <marker id="d-down" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-down-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+    </defs>
+    <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+    <rect x="0" y="26" width="176" height="142" rx="4" fill="#f4f4f2" stroke="#cfcfcf" stroke-width="1"/>
+    <text x="10" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+    <text x="10" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="156">The story from the board</text>
+    <text x="10" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="156">The application source code</text>
+    <rect x="208" y="26" width="300" height="142" rx="4" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+    <text x="218" y="43" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+    <circle cx="225" cy="61" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="64.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">1</text>
+    <text x="239" y="65" font-size="11.5" fill="#1a1a1a" data-maxw="259">Reads the story and the code together</text>
+    <circle cx="225" cy="85" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="88.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">2</text>
+    <text x="239" y="89" font-size="11.5" fill="#1a1a1a" data-maxw="259">Asks the business what the story omits</text>
+    <circle cx="225" cy="109" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="112.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">3</text>
+    <text x="239" y="113" font-size="11.5" fill="#1a1a1a" data-maxw="259">Names what must change, and sizes it</text>
+    <circle cx="225" cy="133" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="136.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">4</text>
+    <text x="239" y="137" font-size="11.5" fill="#1a1a1a" data-maxw="259">Checks every system that depends on this one</text>
+    <rect x="540" y="26" width="240" height="142" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+    <text x="550" y="43" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+    <text x="550" y="62" font-size="11.5" fill="#2f5741" data-maxw="220">Answers the questions AI raised</text>
+    <text x="550" y="78" font-size="11.5" fill="#2f5741" data-maxw="220">Accepts the assessment</text>
+    <text x="550" y="94" font-size="11.5" fill="#2f5741" data-maxw="220">Hands the job to an engineer</text>
+    <rect x="812" y="26" width="188" height="142" rx="4" fill="#fcfcfb" stroke="#b8b8b8" stroke-width="1" stroke-dasharray="5 3"/>
+    <text x="822" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+    <text x="822" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="168">A written assessment</text>
+    <text x="822" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="168">A job for one other team</text>
+    <text x="822" y="94" font-size="11.5" fill="#1a1a1a" data-maxw="168">The ticket moves itself on</text>
+    <path d="M176 97 H204" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M508 97 H536" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M780 97 H808" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <text x="0" y="202" font-size="12.5" font-weight="700" fill="#8b1e2d">How it decides whether another team is actually affected</text>
+    <path d="M0 209 H1000" stroke="#e2e2e2" stroke-width="1"/>
+    <rect x="0" y="228" width="188" height="86" rx="4" fill="#f6ecee" stroke="#8b1e2d" stroke-width="1.4"/>
+    <text x="10" y="248" font-size="12" font-weight="700" fill="#1a1a1a">EnrolDirect</text>
+    <rect x="10" y="256" width="62" height="17" rx="8.5" fill="#8b1e2d"/>
+    <text x="41" y="268" text-anchor="middle" font-size="9" font-weight="700" fill="#fff" letter-spacing="0.6">THIS ONE</text>
+    <text x="10" y="289" font-size="10" fill="#5c5c5c">The change itself</text>
+    <rect x="203" y="228" width="188" height="86" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.4"/>
+    <text x="213" y="248" font-size="12" font-weight="700" fill="#1a1a1a">DocumentHub</text>
+    <rect x="213" y="256" width="38" height="17" rx="8.5" fill="#1c6b3c"/>
+    <text x="232" y="268" text-anchor="middle" font-size="9" font-weight="700" fill="#fff" letter-spacing="0.6">YES</text>
+    <text x="213" y="289" font-size="10" fill="#5c5c5c">Must word a pack it has</text>
+    <text x="213" y="302" font-size="10" fill="#5c5c5c">never written.</text>
+    <rect x="406" y="228" width="188" height="86" rx="4" fill="#fcfcfb" stroke="#d8d8d8" stroke-width="1.4"/>
+    <text x="416" y="248" font-size="12" font-weight="700" fill="#1a1a1a">PolicyCore</text>
+    <rect x="416" y="256" width="34" height="17" rx="8.5" fill="#efefef"/>
+    <text x="433" y="268" text-anchor="middle" font-size="9" font-weight="700" fill="#5c5c5c" letter-spacing="0.6">NO</text>
+    <text x="416" y="289" font-size="10" fill="#5c5c5c">Upstream. Nothing it holds</text>
+    <text x="416" y="302" font-size="10" fill="#5c5c5c">changes.</text>
+    <rect x="609" y="228" width="188" height="86" rx="4" fill="#fcfcfb" stroke="#d8d8d8" stroke-width="1.4"/>
+    <text x="619" y="248" font-size="12" font-weight="700" fill="#1a1a1a">NightlyBatch</text>
+    <rect x="619" y="256" width="34" height="17" rx="8.5" fill="#efefef"/>
+    <text x="636" y="268" text-anchor="middle" font-size="9" font-weight="700" fill="#5c5c5c" letter-spacing="0.6">NO</text>
+    <text x="619" y="289" font-size="10" fill="#5c5c5c">Its totals move. Its code</text>
+    <text x="619" y="302" font-size="10" fill="#5c5c5c">does not.</text>
+    <rect x="812" y="228" width="188" height="86" rx="4" fill="#fcfcfb" stroke="#d8d8d8" stroke-width="1.4"/>
+    <text x="822" y="248" font-size="12" font-weight="700" fill="#1a1a1a">IntegrationBridge</text>
+    <rect x="822" y="256" width="34" height="17" rx="8.5" fill="#efefef"/>
+    <text x="839" y="268" text-anchor="middle" font-size="9" font-weight="700" fill="#5c5c5c" letter-spacing="0.6">NO</text>
+    <text x="822" y="289" font-size="10" fill="#5c5c5c">Carries the value on a</text>
+    <text x="822" y="302" font-size="10" fill="#5c5c5c">field it has.</text>
+    <path d="M297 314 V334" stroke="#1c6b3c" stroke-width="2.2" fill="none" marker-end="url(#d-down-ok)"/>
+    <path d="M500 314 V334" stroke="#a8a8a8" stroke-width="1.8" fill="none" stroke-dasharray="5 3" marker-end="url(#d-down)"/>
+    <path d="M703 314 V334" stroke="#a8a8a8" stroke-width="1.8" fill="none" stroke-dasharray="5 3" marker-end="url(#d-down)"/>
+    <path d="M906 314 V334" stroke="#a8a8a8" stroke-width="1.8" fill="none" stroke-dasharray="5 3" marker-end="url(#d-down)"/>
+    <rect x="203" y="338" width="188" height="32" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.4"/>
+    <text x="297" y="359" text-anchor="middle" font-size="11" font-weight="700" fill="#1c6b3c">A job is raised for them</text>
+    <rect x="406" y="338" width="594" height="32" rx="4" fill="#fff" stroke="#c8c8c8" stroke-dasharray="5 3"/>
+    <text x="703" y="359" text-anchor="middle" font-size="11" fill="#5c5c5c">Recorded, each with the reason no job was raised — the estate map is not the job list</text>
+    <rect x="0" y="384" width="1000" height="30" rx="4" fill="#f6ecee"/>
+    <rect x="0" y="384" width="3" height="30" fill="#8b1e2d"/>
+    <text x="14" y="404" font-size="11.5" font-weight="600" fill="#1a1a1a">The bar is “that team must change code”, not “that team is affected”. Three of these are affected and have nothing to do — raising jobs for them wastes three teams’ time.</text>
+    </g>
+  </svg>
+
+</div>
+
+</div>
+
+<!-- ==================== STAGE 2 · TARGET SELECTION ==================== -->
+<div class="page">
+
+<div class="runhead">MapleSure Insurance · Enhancement Delivery · Stage 2 of 5</div>
+
+<div class="section">
+  <h2>Stage 2 · Target selection</h2>
+  <p style="margin-bottom:3mm;font-size:12.5pt;color:var(--ink-soft)">Which repository the work belongs in, and which files inside it AI is even allowed to look at.</p>
+
+  <svg class="fig" viewBox="0 0 1000 438" role="img"
+       aria-label="Stage 2, Target selection: what comes in, what AI does, where a person decides, what comes out, and how the stage works.">
+    <defs>
+      <marker id="d-side" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-side-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+      <marker id="d-side-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#8b1e2d"/></marker>
+      <marker id="d-down" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-down-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+    </defs>
+    <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+    <rect x="0" y="26" width="176" height="142" rx="4" fill="#f4f4f2" stroke="#cfcfcf" stroke-width="1"/>
+    <text x="10" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+    <text x="10" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="156">The accepted assessment</text>
+    <text x="10" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="156">Every repository we have</text>
+    <rect x="208" y="26" width="300" height="142" rx="4" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+    <text x="218" y="43" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+    <circle cx="225" cy="61" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="64.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">1</text>
+    <text x="239" y="65" font-size="11.5" fill="#1a1a1a" data-maxw="259">Works out which repository it belongs to</text>
+    <circle cx="225" cy="85" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="88.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">2</text>
+    <text x="239" y="89" font-size="11.5" fill="#1a1a1a" data-maxw="259">Narrows it to the files worth reading</text>
+    <circle cx="225" cy="109" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="112.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">3</text>
+    <text x="239" y="113" font-size="11.5" fill="#1a1a1a" data-maxw="259">Splits editable files from read-only ones</text>
+    <circle cx="225" cy="133" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="136.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">4</text>
+    <text x="239" y="137" font-size="11.5" fill="#1a1a1a" data-maxw="259">Checks out a working copy to change</text>
+    <rect x="540" y="26" width="240" height="142" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+    <text x="550" y="43" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+    <text x="550" y="62" font-size="11.5" fill="#2f5741" data-maxw="220">Confirms the repository is the right one</text>
+    <text x="550" y="78" font-size="11.5" fill="#2f5741" data-maxw="220">Checks it out</text>
+    <rect x="812" y="26" width="188" height="142" rx="4" fill="#fcfcfb" stroke="#b8b8b8" stroke-width="1" stroke-dasharray="5 3"/>
+    <text x="822" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+    <text x="822" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="168">A working copy of EnrolDirect</text>
+    <text x="822" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="168">The files it may touch</text>
+    <path d="M176 97 H204" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M508 97 H536" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M780 97 H808" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <text x="0" y="202" font-size="12.5" font-weight="700" fill="#8b1e2d">How the file list narrows before a single line is written</text>
+    <path d="M0 209 H1000" stroke="#e2e2e2" stroke-width="1"/>
+    <rect x="0" y="228" width="1000" height="34" rx="3" fill="#e6e6e6"/>
+    <text x="14" y="250" font-size="12.5" font-weight="700" fill="#1a1a1a">9 files in the application</text>
+    <text x="1014" y="250" font-size="11" fill="#5c5c5c">Everything EnrolDirect is made of</text>
+    <path d="M40 262 V266" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#d-down)"/>
+    <rect x="0" y="270" width="760" height="34" rx="3" fill="#e2b9c0"/>
+    <text x="14" y="292" font-size="12.5" font-weight="700" fill="#1a1a1a">6 files central to this change</text>
+    <text x="774" y="292" font-size="11" fill="#5c5c5c">What AI is given to read</text>
+    <path d="M40 304 V308" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#d-down)"/>
+    <rect x="0" y="312" width="500" height="34" rx="3" fill="#8b1e2d"/>
+    <text x="14" y="334" font-size="12.5" font-weight="700" fill="#fff">4 files AI may edit</text>
+    <text x="514" y="334" font-size="11" fill="#5c5c5c">The only files it can write to</text>
+    <path d="M40 346 V350" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#d-down)"/>
+    <rect x="0" y="354" width="280" height="34" rx="3" fill="#7a7a7a"/>
+    <text x="14" y="376" font-size="12.5" font-weight="700" fill="#fff">2 files it may read but never edit</text>
+    <text x="294" y="376" font-size="11" fill="#5c5c5c">Including the earlier analysis</text>
+    <rect x="0" y="400" width="1000" height="30" rx="4" fill="#f6ecee"/>
+    <rect x="0" y="400" width="3" height="30" fill="#8b1e2d"/>
+    <text x="14" y="420" font-size="11.5" font-weight="600" fill="#1a1a1a">A read-only file that comes back changed fails the run outright — the AI cannot quietly widen its own permissions.</text>
+    </g>
+  </svg>
+
+</div>
+
+</div>
+
+<!-- ==================== STAGE 3 · CODE GENERATION ==================== -->
+<div class="page">
+
+<div class="runhead">MapleSure Insurance · Enhancement Delivery · Stage 3 of 5</div>
+
+<div class="section">
+  <h2>Stage 3 · Code generation</h2>
+  <p style="margin-bottom:3mm;font-size:12.5pt;color:var(--ink-soft)">The change itself — written on a branch, explained line by line, and applied only when a person agrees.</p>
+
+  <svg class="fig" viewBox="0 0 1000 432" role="img"
+       aria-label="Stage 3, Code generation: what comes in, what AI does, where a person decides, what comes out, and how the stage works.">
+    <defs>
+      <marker id="d-side" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-side-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+      <marker id="d-side-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#8b1e2d"/></marker>
+      <marker id="d-down" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-down-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+    </defs>
+    <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+    <rect x="0" y="26" width="176" height="142" rx="4" fill="#f4f4f2" stroke="#cfcfcf" stroke-width="1"/>
+    <text x="10" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+    <text x="10" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="156">The working copy</text>
+    <text x="10" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="156">The list of files it may edit</text>
+    <rect x="208" y="26" width="300" height="142" rx="4" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+    <text x="218" y="43" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+    <circle cx="225" cy="61" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="64.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">1</text>
+    <text x="239" y="65" font-size="11.5" fill="#1a1a1a" data-maxw="259">Opens a separate branch — never the main line</text>
+    <circle cx="225" cy="85" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="88.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">2</text>
+    <text x="239" y="89" font-size="11.5" fill="#1a1a1a" data-maxw="259">Writes it file by file, with a reason each</text>
+    <circle cx="225" cy="109" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="112.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">3</text>
+    <text x="239" y="113" font-size="11.5" fill="#1a1a1a" data-maxw="259">Checks it touched only allowed files</text>
+    <circle cx="225" cy="133" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="136.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">4</text>
+    <text x="239" y="137" font-size="11.5" fill="#1a1a1a" data-maxw="259">Answers questions about any line of it</text>
+    <rect x="540" y="26" width="240" height="142" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+    <text x="550" y="43" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+    <text x="550" y="62" font-size="11.5" fill="#2f5741" data-maxw="220">Reads the difference, green and red</text>
+    <text x="550" y="78" font-size="11.5" fill="#2f5741" data-maxw="220">Asks the AI why it did something</text>
+    <text x="550" y="94" font-size="11.5" fill="#2f5741" data-maxw="220">Requests changes, applies, or rejects</text>
+    <rect x="812" y="26" width="188" height="142" rx="4" fill="#fcfcfb" stroke="#b8b8b8" stroke-width="1" stroke-dasharray="5 3"/>
+    <text x="822" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+    <text x="822" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="168">A reviewed change</text>
+    <text x="822" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="168">A design document</text>
+    <text x="822" y="94" font-size="11.5" fill="#1a1a1a" data-maxw="168">The app running the new code</text>
+    <path d="M176 97 H204" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M508 97 H536" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M780 97 H808" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <text x="0" y="202" font-size="12.5" font-weight="700" fill="#8b1e2d">The review loop — nothing reaches the repository until a person says so</text>
+    <path d="M0 209 H1000" stroke="#e2e2e2" stroke-width="1"/>
+    <rect x="74" y="284" width="190" height="52" rx="4" fill="#f6ecee" stroke="#8b1e2d" stroke-width="1.5"/>
+    <text x="86" y="305" font-size="12.5" font-weight="700" fill="#1a1a1a">AI proposes</text>
+    <text x="86" y="320" font-size="10" fill="#5c5c5c">a change, with a</text>
+    <text x="86" y="332" font-size="10" fill="#5c5c5c">reason per file</text>
+    <rect x="312" y="284" width="190" height="52" rx="4" fill="#fff" stroke="#c8c8c8" stroke-width="1.5"/>
+    <text x="324" y="305" font-size="12.5" font-weight="700" fill="#1a1a1a">The reviewer reads it</text>
+    <text x="324" y="320" font-size="10" fill="#5c5c5c">green is added,</text>
+    <text x="324" y="332" font-size="10" fill="#5c5c5c">red is removed</text>
+    <path d="M264 310 H308" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <rect x="552" y="232" width="264" height="44" rx="4" fill="#fff" stroke="#1c6b3c" stroke-width="1.4"/>
+    <text x="564" y="251" font-size="11.5" font-weight="700" fill="#1c6b3c">Asks “why did you do this?”</text>
+    <text x="564" y="266" font-size="10" fill="#5c5c5c">AI answers on the spot</text>
+    <path d="M502 310 C528 310 528 254 548 254" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#d-side)"/>
+    <rect x="552" y="284" width="264" height="44" rx="4" fill="#fff" stroke="#8b1e2d" stroke-width="1.4"/>
+    <text x="564" y="303" font-size="11.5" font-weight="700" fill="#8b1e2d">Rejects it</text>
+    <text x="564" y="318" font-size="10" fill="#5c5c5c">AI proposes a different change</text>
+    <path d="M502 310 C528 310 528 306 548 306" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#d-side)"/>
+    <rect x="552" y="336" width="264" height="44" rx="4" fill="#fff" stroke="#1c6b3c" stroke-width="1.4"/>
+    <text x="564" y="355" font-size="11.5" font-weight="700" fill="#1c6b3c">Applies it</text>
+    <text x="564" y="370" font-size="10" fill="#5c5c5c">the change lands on the branch</text>
+    <path d="M502 310 C528 310 528 358 548 358" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#d-side)"/>
+    <rect x="848" y="336" width="152" height="44" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+    <text x="860" y="355" font-size="11.5" font-weight="700" fill="#1c6b3c">Applied to the branch</text>
+    <text x="860" y="370" font-size="10" fill="#5c5c5c">and the app restarts</text>
+    <path d="M816 358 H844" stroke="#1c6b3c" stroke-width="2.2" fill="none" marker-end="url(#d-side-ok)"/>
+    <path d="M816 254 H832 V410 H169 V340" stroke="#5c5c5c" stroke-width="1.8" fill="none" stroke-dasharray="5 4" marker-end="url(#d-down)"/>
+    <path d="M816 306 H832" stroke="#5c5c5c" stroke-width="1.8" fill="none" stroke-dasharray="5 4"/>
+    <text x="300" y="403" font-size="10.5" font-weight="700" fill="#5c5c5c">back to the AI, as many times as the reviewer wants</text>
+    </g>
+  </svg>
+
+</div>
+
+</div>
+
+<!-- ==================== STAGE 4 · TEST ==================== -->
+<div class="page">
+
+<div class="runhead">MapleSure Insurance · Enhancement Delivery · Stage 4 of 5</div>
+
+<div class="section">
+  <h2>Stage 4 · Test</h2>
+  <p style="margin-bottom:3mm;font-size:12.5pt;color:var(--ink-soft)">Proving the new behaviour works, and — separately — proving nothing else broke.</p>
+
+  <svg class="fig" viewBox="0 0 1000 428" role="img"
+       aria-label="Stage 4, Test: what comes in, what AI does, where a person decides, what comes out, and how the stage works.">
+    <defs>
+      <marker id="d-side" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-side-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+      <marker id="d-side-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#8b1e2d"/></marker>
+      <marker id="d-down" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-down-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+    </defs>
+    <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+    <rect x="0" y="26" width="176" height="142" rx="4" fill="#f4f4f2" stroke="#cfcfcf" stroke-width="1"/>
+    <text x="10" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+    <text x="10" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="156">The applied change</text>
+    <text x="10" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="156">The design document</text>
+    <rect x="208" y="26" width="300" height="142" rx="4" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+    <text x="218" y="43" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+    <circle cx="225" cy="61" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="64.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">1</text>
+    <text x="239" y="65" font-size="11.5" fill="#1a1a1a" data-maxw="259">Drafts the scenarios, good cases and bad</text>
+    <circle cx="225" cy="85" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="88.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">2</text>
+    <text x="239" y="89" font-size="11.5" fill="#1a1a1a" data-maxw="259">Writes test code only once approved</text>
+    <circle cx="225" cy="109" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="112.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">3</text>
+    <text x="239" y="113" font-size="11.5" fill="#1a1a1a" data-maxw="259">Runs it, then re-runs the 27 tests people wrote</text>
+    <circle cx="225" cy="133" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="136.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">4</text>
+    <text x="239" y="137" font-size="11.5" fill="#1a1a1a" data-maxw="259">Maps each requirement to its test</text>
+    <rect x="540" y="26" width="240" height="142" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+    <text x="550" y="43" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+    <text x="550" y="62" font-size="11.5" fill="#2f5741" data-maxw="220">Tester edits and approves the plan</text>
+    <text x="550" y="78" font-size="11.5" fill="#2f5741" data-maxw="220">— before any test code exists</text>
+    <text x="550" y="94" font-size="11.5" fill="#2f5741" data-maxw="220">Reviews the results</text>
+    <rect x="812" y="26" width="188" height="142" rx="4" fill="#fcfcfb" stroke="#b8b8b8" stroke-width="1" stroke-dasharray="5 3"/>
+    <text x="822" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+    <text x="822" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="168">Test results</text>
+    <text x="822" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="168">A regression pass</text>
+    <text x="822" y="94" font-size="11.5" fill="#1a1a1a" data-maxw="168">A traceability matrix</text>
+    <path d="M176 97 H204" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M508 97 H536" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M780 97 H808" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <text x="0" y="202" font-size="12.5" font-weight="700" fill="#8b1e2d">Two suites — and AI is allowed to write only one of them</text>
+    <path d="M0 209 H1000" stroke="#e2e2e2" stroke-width="1"/>
+    <rect x="0" y="228" width="488" height="94" rx="4" fill="#fff" stroke="#8b1e2d" stroke-width="1.6"/>
+    <text x="14" y="253" font-size="13" font-weight="700" fill="#1a1a1a">Tests AI wrote for this change</text>
+    <text x="14" y="274" font-size="11" fill="#5c5c5c">Proves the new behaviour works —</text>
+    <text x="14" y="289" font-size="11" fill="#5c5c5c">a prospect now gets through</text>
+    <rect x="14" y="294" width="151" height="18" rx="9" fill="#8b1e2d"/>
+    <text x="22" y="307" font-size="9.5" font-weight="700" fill="#fff" letter-spacing="0.5">AI writes these</text>
+    <rect x="512" y="228" width="488" height="94" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.6"/>
+    <text x="526" y="253" font-size="13" font-weight="700" fill="#1a1a1a">27 tests people wrote, long before this</text>
+    <text x="526" y="274" font-size="11" fill="#5c5c5c">Proves nothing else broke —</text>
+    <text x="526" y="289" font-size="11" fill="#5c5c5c">members and guests are untouched</text>
+    <rect x="526" y="294" width="205" height="18" rx="9" fill="#1c6b3c"/>
+    <text x="534" y="307" font-size="9.5" font-weight="700" fill="#fff" letter-spacing="0.5">AI may not write here</text>
+    <path d="M244 322 V342" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-down)"/>
+    <path d="M756 322 V342" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-down)"/>
+    <rect x="244" y="346" width="512" height="32" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+    <text x="500" y="367" text-anchor="middle" font-size="12" font-weight="700" fill="#1c6b3c">Both must pass before the change can be committed</text>
+    <rect x="0" y="390" width="1000" height="30" rx="4" fill="#f6ecee"/>
+    <rect x="0" y="390" width="3" height="30" fill="#8b1e2d"/>
+    <text x="14" y="410" font-size="11.5" font-weight="600" fill="#1a1a1a">A bug is then put into the code on purpose, to prove these tests would actually have caught it. Passing tests that catch nothing are worse than none.</text>
+    </g>
+  </svg>
+
+</div>
+
+</div>
+
+<!-- ==================== STAGE 5 · RELEASE ==================== -->
+<div class="page">
+
+<div class="runhead">MapleSure Insurance · Enhancement Delivery · Stage 5 of 5</div>
+
+<div class="section">
+  <h2>Stage 5 · Release</h2>
+  <p style="margin-bottom:3mm;font-size:12.5pt;color:var(--ink-soft)">Everything needed to put it live, assembled from what the run actually did.</p>
+
+  <svg class="fig" viewBox="0 0 1000 404" role="img"
+       aria-label="Stage 5, Release: what comes in, what AI does, where a person decides, what comes out, and how the stage works.">
+    <defs>
+      <marker id="d-side" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-side-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+      <marker id="d-side-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#8b1e2d"/></marker>
+      <marker id="d-down" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8a8a8"/></marker>
+      <marker id="d-down-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1c6b3c"/></marker>
+    </defs>
+    <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+    <rect x="0" y="26" width="176" height="142" rx="4" fill="#f4f4f2" stroke="#cfcfcf" stroke-width="1"/>
+    <text x="10" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">COMES IN</text>
+    <text x="10" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="156">Green test results</text>
+    <text x="10" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="156">The reviewed change</text>
+    <rect x="208" y="26" width="300" height="142" rx="4" fill="#fff" stroke="#8b1e2d" stroke-width="1.5"/>
+    <text x="218" y="43" font-size="8.5" font-weight="700" fill="#8b1e2d" letter-spacing="0.9">AI DOES</text>
+    <circle cx="225" cy="61" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="64.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">1</text>
+    <text x="239" y="65" font-size="11.5" fill="#1a1a1a" data-maxw="259">Writes the release note, three audiences</text>
+    <circle cx="225" cy="85" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="88.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">2</text>
+    <text x="239" y="89" font-size="11.5" fill="#1a1a1a" data-maxw="259">Works out the go-live order</text>
+    <circle cx="225" cy="109" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="112.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">3</text>
+    <text x="239" y="113" font-size="11.5" fill="#1a1a1a" data-maxw="259">Writes the steps to undo it if it goes wrong</text>
+    <circle cx="225" cy="133" r="7.5" fill="#8b1e2d"/>
+    <text x="225" y="136.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">4</text>
+    <text x="239" y="137" font-size="11.5" fill="#1a1a1a" data-maxw="259">Records what this release did not prove</text>
+    <rect x="540" y="26" width="240" height="142" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+    <text x="550" y="43" font-size="8.5" font-weight="700" fill="#1c6b3c" letter-spacing="0.9">A PERSON DECIDES</text>
+    <text x="550" y="62" font-size="11.5" fill="#2f5741" data-maxw="220">Approves the release</text>
+    <text x="550" y="78" font-size="11.5" fill="#2f5741" data-maxw="220">Closes the job off</text>
+    <rect x="812" y="26" width="188" height="142" rx="4" fill="#fcfcfb" stroke="#b8b8b8" stroke-width="1" stroke-dasharray="5 3"/>
+    <text x="822" y="43" font-size="8.5" font-weight="700" fill="#8a8a8a" letter-spacing="0.9">YOU GET</text>
+    <text x="822" y="62" font-size="11.5" fill="#1a1a1a" data-maxw="168">A release note</text>
+    <text x="822" y="78" font-size="11.5" fill="#1a1a1a" data-maxw="168">A go-live and rollback plan</text>
+    <text x="822" y="94" font-size="11.5" fill="#1a1a1a" data-maxw="168">A release record</text>
+    <path d="M176 97 H204" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M508 97 H536" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <path d="M780 97 H808" stroke="#a8a8a8" stroke-width="2.2" fill="none" marker-end="url(#d-side)"/>
+    <text x="0" y="202" font-size="12.5" font-weight="700" fill="#8b1e2d">The gate before anything is committed</text>
+    <path d="M0 209 H1000" stroke="#e2e2e2" stroke-width="1"/>
+    <rect x="0" y="248" width="250" height="58" rx="4" fill="#fff" stroke="#8b1e2d" stroke-width="1.6"/>
+    <text x="14" y="272" font-size="12.5" font-weight="700" fill="#1a1a1a">Did the tests pass?</text>
+    <text x="14" y="290" font-size="10.5" fill="#5c5c5c">read from the job’s own history</text>
+    <path d="M250 266 C300 266 300 244 348 244" stroke="#1c6b3c" stroke-width="2.2" fill="none" marker-end="url(#d-side-ok)"/>
+    <text x="284" y="240" font-size="10" font-weight="700" fill="#1c6b3c">YES</text>
+    <path d="M250 288 C300 288 300 328 348 328" stroke="#8b1e2d" stroke-width="2.2" fill="none" stroke-dasharray="6 4" marker-end="url(#d-side-red)"/>
+    <text x="284" y="344" font-size="10" font-weight="700" fill="#8b1e2d">NO</text>
+    <rect x="352" y="224" width="230" height="42" rx="4" fill="#edf5f0" stroke="#1c6b3c" stroke-width="1.5"/>
+    <text x="366" y="250" font-size="12" font-weight="700" fill="#1c6b3c">Commit and push allowed</text>
+    <rect x="352" y="308" width="230" height="42" rx="4" fill="#f6ecee" stroke="#8b1e2d" stroke-width="1.5"/>
+    <text x="366" y="334" font-size="12" font-weight="700" fill="#8b1e2d">Blocked — and it says why</text>
+    <path d="M582 245 H626" stroke="#1c6b3c" stroke-width="2.2" fill="none" marker-end="url(#d-side-ok)"/>
+    <rect x="630" y="226" width="82" height="38" rx="4" fill="#fff" stroke="#c8c8c8" stroke-width="1.3"/>
+    <text x="671" y="250" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1a1a1a">Branch</text>
+    <path d="M712 245 H720" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#d-side)"/>
+    <rect x="724" y="226" width="82" height="38" rx="4" fill="#fff" stroke="#c8c8c8" stroke-width="1.3"/>
+    <text x="765" y="250" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1a1a1a">Commit</text>
+    <path d="M806 245 H814" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#d-side)"/>
+    <rect x="818" y="226" width="82" height="38" rx="4" fill="#fff" stroke="#c8c8c8" stroke-width="1.3"/>
+    <text x="859" y="250" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1a1a1a">Push</text>
+    <path d="M900 245 H908" stroke="#a8a8a8" stroke-width="2" fill="none" marker-end="url(#d-side)"/>
+    <rect x="912" y="226" width="82" height="38" rx="4" fill="#fff" stroke="#c8c8c8" stroke-width="1.3"/>
+    <text x="953" y="250" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1a1a1a">Release</text>
+    <rect x="0" y="366" width="1000" height="30" rx="4" fill="#f6ecee"/>
+    <rect x="0" y="366" width="3" height="30" fill="#8b1e2d"/>
+    <text x="14" y="386" font-size="11.5" font-weight="600" fill="#1a1a1a">The answer is read from the job’s own history — never from the screen. A screen that could claim “tests passed” could commit a broken change.</text>
+    </g>
+  </svg>
+
+</div>
+
+</div>
+
+<!-- CLOSING-PAGE -->
+<div class="page">
+
+<div class="runhead">MapleSure Insurance · Enhancement Delivery · Scenario Overview</div>
+
+<div class="section">
+  <h2>What this actually gives you</h2>
+
+  <div class="stats">
+
+    <div class="stat">
+      <div class="stat-top"><span class="stat-n">4</span><span class="stat-of">of 9 files</span></div>
+      <div class="meter">
+        <span class="cell on"></span><span class="cell on"></span><span class="cell on"></span>
+        <span class="cell on"></span><span class="cell"></span><span class="cell"></span>
+        <span class="cell"></span><span class="cell"></span><span class="cell"></span>
+      </div>
+      <div class="stat-l">AI is allowed to change four files. It cannot touch the other five.</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-top"><span class="stat-n">1</span><span class="stat-of">of 5 systems</span></div>
+      <div class="meter">
+        <span class="cell on"></span><span class="cell"></span><span class="cell"></span>
+        <span class="cell"></span><span class="cell"></span>
+      </div>
+      <div class="stat-l">Five other systems were checked. Only one really has work to do, so only
+        one team gets a job raised.</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-top"><span class="stat-n">27</span><span class="stat-of">all passing</span></div>
+      <div class="meter">
+        <span class="cell ok on"></span><span class="cell ok on"></span><span class="cell ok on"></span>
+        <span class="cell ok on"></span><span class="cell ok on"></span><span class="cell ok on"></span>
+        <span class="cell ok on"></span><span class="cell ok on"></span><span class="cell ok on"></span>
+        <span class="cell ok on"></span><span class="cell ok on"></span><span class="cell ok on"></span>
+        <span class="cell ok on"></span><span class="cell ok on"></span><span class="cell ok on"></span>
+        <span class="cell ok on"></span><span class="cell ok on"></span><span class="cell ok on"></span>
+        <span class="cell ok on"></span><span class="cell ok on"></span><span class="cell ok on"></span>
+        <span class="cell ok on"></span><span class="cell ok on"></span><span class="cell ok on"></span>
+        <span class="cell ok on"></span><span class="cell ok on"></span><span class="cell ok on"></span>
+      </div>
+      <div class="stat-l">Older tests re-run, to prove members and guests still work exactly as
+        before.</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-top"><span class="stat-n">5</span><span class="stat-of">sign-offs</span></div>
+      <div class="meter people">
+        <svg class="icon" stroke="currentColor"><use href="#i-person"/></svg>
+        <svg class="icon" stroke="currentColor"><use href="#i-person"/></svg>
+        <svg class="icon" stroke="currentColor"><use href="#i-person"/></svg>
+        <svg class="icon" stroke="currentColor"><use href="#i-person"/></svg>
+        <svg class="icon" stroke="currentColor"><use href="#i-person"/></svg>
+      </div>
+      <div class="stat-l">Points where a person has to say yes before anything moves on.</div>
+    </div>
+
+  </div>
+
+  <div class="two">
+
+    <div>
+      <h3>How the work changes</h3>
+      <div class="swap-head">
+        <span class="a">Today</span><span></span><span class="b">With AI helping</span>
+      </div>
+
+      <div class="swap">
+        <span class="swap-was">Gaps in the request show up late, often after code is written</span>
+        <span class="swap-arrow"><svg class="icon" stroke="currentColor" stroke-width="2"><use href="#i-arrow"/></svg></span>
+        <span class="swap-now">The questions get asked before anything is written</span>
+      </div>
+      <div class="swap">
+        <span class="swap-was">Other teams find out late, or get told about work they don't have</span>
+        <span class="swap-arrow"><svg class="icon" stroke="currentColor" stroke-width="2"><use href="#i-arrow"/></svg></span>
+        <span class="swap-now">Only the team that really has work gets a job raised</span>
+      </div>
+      <div class="swap">
+        <span class="swap-was">A reviewer reads the code and guesses why it was written that way</span>
+        <span class="swap-arrow"><svg class="icon" stroke="currentColor" stroke-width="2"><use href="#i-arrow"/></svg></span>
+        <span class="swap-now">The reviewer asks "why did you do this?" and gets an answer</span>
+      </div>
+      <div class="swap">
+        <span class="swap-was">Older tests get re-run separately, if there is time</span>
+        <span class="swap-arrow"><svg class="icon" stroke="currentColor" stroke-width="2"><use href="#i-arrow"/></svg></span>
+        <span class="swap-now">They are re-run every time, as part of the same step</span>
+      </div>
+      <div class="swap">
+        <span class="swap-was">Release paperwork is written at the end, from memory</span>
+        <span class="swap-arrow"><svg class="icon" stroke="currentColor" stroke-width="2"><use href="#i-arrow"/></svg></span>
+        <span class="swap-now">It is built from what the run actually did</span>
+      </div>
+    </div>
+
+    <div class="rule">
+      <h3><svg class="icon" stroke="currentColor"><use href="#i-lock"/></svg>What AI is not allowed to do</h3>
+      <ul>
+        <li><strong>Touch the older tests.</strong> People wrote them. They are the independent
+          check that nothing else broke — so AI cannot edit them to agree with itself.</li>
+        <li><strong>Mark its own homework.</strong> Whether the change is good to go is read from
+          the job's own history, not from anything AI claims.</li>
+        <li><strong>Put anything live on its own.</strong> Everything sits on a separate copy until
+          a person approves the release.</li>
+        <li><strong>Automate everything.</strong> Some tests still have to be done by hand —
+          mainframe and other systems AI cannot reach. Those are listed as manual, not hidden.</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<div class="footnote">
+  MapleSure Insurance is a made-up insurer and all data is invented. The numbers above were counted
+  from the EnrolDirect application and its tests on 4 August 2026.
+  Scenario: US-2026-045 · EnrolDirect · who is allowed to enrol online.
+</div>
+
 </div>
 
 </body>

@@ -1,5 +1,12 @@
 # S3 — Enhancement Delivery (15 min)
 
+> **This scripts the PolicyCore plan-tier story (US-2026-041).** The walkthrough
+> reviewed on 2026-08-03 and rehearsed for the client is the **EnrolDirect
+> prospect-access** story — see `s3_us045_run_sheet.md` in this folder, which is
+> the timed script to present from. What stays useful here regardless of scenario:
+> the fallback ladder, the rehearsal gate, the demo-day prep order, and the
+> "how does this scale / other stacks / how do I add an application" answers.
+>
 > **Read first — two things this file predates.**
 >
 > 1. **The console is the React app on :5173**, not Streamlit. Where the notes
