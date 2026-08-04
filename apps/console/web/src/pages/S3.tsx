@@ -44,13 +44,15 @@ export default function S3() {
   return (
     <div className="ams-s3-page">
       {slot && createPortal(<StageRail activeTicketKey={activeTicketKey} storyLabel={storyLabel} stages={stages} />, slot)}
-      <span className="ams-eyebrow">
-        MapleSure Insurance · AMS Console · S3
-      </span>
-      <h1 style={{ fontSize: 'var(--ams-text-2xl)', margin: 'var(--ams-space-3) 0 var(--ams-space-1)' }}>Enhancement Delivery</h1>
-      <p className="ams-s3-summary">
-        Live user story intake, AI-assisted code generation, generated tests, and release notes.
-      </p>
+      {/* Scenario context only — one line, and the page's h1 is the stage
+          heading inside StageFrame. This used to be an eyebrow plus a 2rem h1
+          plus a two-line summary, identical on all seven stages: ~150px of
+          chrome above the fold that said the same thing every time, pushing the
+          actual work down. It was redundant three ways over — the topbar reads
+          "MapleSure AMS Console", the sidebar carries "S3 · Enhancement /
+          Enhancement Delivery", and the Home tile already describes the
+          pipeline in the same words the summary did. */}
+      <span className="ams-eyebrow">S3 · Enhancement Delivery</span>
       <div className="ams-s3-layout">
         <div className="ams-s3-stage-panel">
           {/* The active route is the only stage consumer, so memoizing this context would add bookkeeping without avoiding a render. */}

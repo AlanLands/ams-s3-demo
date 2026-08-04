@@ -27,9 +27,17 @@ export function StageFrame({
 
   return (
     <section className="ams-stage-view" aria-labelledby={`s3-stage-${stageId}`}>
-      <h2 id={`s3-stage-${stageId}`} tabIndex={-1} ref={headingRef}>
+      {/* h1, not h2. Each stage is its own route, so the stage title is the
+          page title — S3.tsx used to sit a fixed "Enhancement Delivery" h1
+          above this on all seven of them, which meant every stage announced the
+          same page name and the heading that actually changed was a level down.
+          The scenario name now rides in the eyebrow above (and in the sidebar,
+          and in the topbar), so nothing is lost by promoting this. Focus
+          already lands here on stageId change, which is exactly the behaviour
+          you want from a real h1. */}
+      <h1 id={`s3-stage-${stageId}`} tabIndex={-1} ref={headingRef}>
         {title}
-      </h2>
+      </h1>
       {/* Activity only. A locked stage has no activity, and putting its reason
           here too would print it twice on screen and read it twice aloud — the
           reason already sits in the body below, right under the heading focus
@@ -95,7 +103,7 @@ export function TestCaseTable({ cases }: { cases: TestCaseResult[] }) {
                 {testCase.description}
                 <div
                   style={{
-                    fontFamily: 'ui-monospace, monospace',
+                    fontFamily: 'var(--ams-font-mono)',
                     fontSize: 'var(--ams-text-xs)',
                     color: 'var(--ams-ink-soft)',
                   }}
@@ -126,7 +134,7 @@ export function TestCaseTable({ cases }: { cases: TestCaseResult[] }) {
                   style={{
                     padding: '0 0.5rem 0.5rem',
                     fontSize: 'var(--ams-text-xs)',
-                    fontFamily: 'ui-monospace, monospace',
+                    fontFamily: 'var(--ams-font-mono)',
                     color: 'var(--ams-error)',
                     whiteSpace: 'pre-wrap',
                   }}

@@ -1298,14 +1298,30 @@ select:focus-visible,
 .ams-stage-view > .ams-stage-live {
   max-width: 72ch;
 }
-.ams-stage-view > h2 {
-  font-size: var(--ams-text-xl);
-  margin-bottom: var(--ams-space-2);
+/* Same rule, one level in. The cap above only reaches paragraphs that are
+   direct children of the stage view, so prose that lives inside a card — which
+   is most of the explanatory text on the target and generate stages — was still
+   being set to the full column: measured 138 characters on a single 1082px line
+   on the target stage. Direct children only, deliberately: a card is also the
+   wrapper for tables, diffs, file lists and runner output, and those are
+   scannable structures that must keep the whole width. */
+.ams-card > p {
+  max-width: 72ch;
 }
-.ams-stage-view h2:focus {
+/* The stage heading is the page's h1 now (see StageFrame), so it takes the
+   display size the removed "Enhancement Delivery" h1 used to hold. The outline
+   suppression stays: focus is moved here programmatically on every route change
+   so screen readers announce the new stage, and a focus ring on a heading
+   nobody tabbed to reads as a rendering fault. Every heading a user can
+   actually reach by keyboard keeps its ring. */
+.ams-stage-view > h1 {
+  font-size: var(--ams-text-2xl);
+  margin: var(--ams-space-1) 0 var(--ams-space-2);
+}
+.ams-stage-view h1:focus {
   outline: none;
 }
-.ams-stage-view h2:focus-visible {
+.ams-stage-view h1:focus-visible {
   outline: none;
 }
 .ams-stage-live {
