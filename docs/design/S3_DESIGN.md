@@ -775,11 +775,20 @@ the tester and moves the ticket to QA themselves, which a blanket manager-only g
 with "Manager role required" at the hand-off card. What the rule actually refuses is one
 person taking a ticket **off** a third party, which is the thing worth refusing.
 
-The same rule *permits* the return leg — a tester holding a ticket may hand it back to the
-engineer — but **the console has no control for it yet**: the Reassign dialog in
-`BoardStage.tsx` renders under `isManager` only, so today a failed test is handed back by a
-manager, or by a tester calling the endpoint directly. The QA-fail round trip is on the
-client's 2026-08-03 walkthrough list and is not built.
+The return leg is `POST /s3/jira/return-to-developer`, on the tester's test stage — the
+client's 2026-08-03 walkthrough asked for it. It reassigns, moves the ticket back to **In
+Progress** (not To Do: the change exists and is being fixed) and records the tester's finding,
+in one action, because a hand-back split across three controls is one a tester can leave
+half-done with the board saying something untrue.
+
+**Who it goes back to is derived, not posted.** `qa_handback.previous_developer` walks the
+ticket's own assignee history for the last holder who is neither the current one nor a tester
+— the log records an assignment's actor as `human`, not by name, so the assignee history is
+the only copy of who held it, and skipping testers keeps a tester-to-tester second-pair-of-eyes
+hand-off from making a tester the developer. No earlier non-tester holder means **409**, not a
+guess: a guess puts someone's name on work they never touched. The reason text is the client's
+to write; the responsibility is not. Permission reuses `_assert_may_reassign`, so the fail path
+cannot become a way around the rule above.
 
 Tickets derived from `stories/*.md` land on the default engineer (§ story intake), so the
 common case needs no routing step at all; a manager reassigns when the default is wrong.

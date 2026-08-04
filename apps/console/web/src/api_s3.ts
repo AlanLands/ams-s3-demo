@@ -597,6 +597,20 @@ export interface JiraBoardResponse {
   issues: JiraIssue[]
 }
 
+export interface QaReturnResponse {
+  label: string
+  issue: JiraIssue
+  // Derived server-side from the ticket's assignee history — the console
+  // displays this, it does not choose it.
+  developer: string
+  reason: string
+  // The failing suite behind the return, or "" when the tester found the
+  // defect themselves and no run is red.
+  evidence: string
+  // How many times this ticket has now come back from QA.
+  returns: number
+}
+
 export interface TicketEvent {
   ts: string
   ticket_number: string
@@ -1102,6 +1116,14 @@ export const s3Api = {
     request<{ label: string; issue: JiraIssue }>('/api/s3/jira/assign-ticket', {
       method: 'POST',
       body: JSON.stringify({ key, assignee }),
+    }),
+  // QA fails the ticket and hands it back. Deliberately no assignee argument:
+  // the developer it returns to is derived server-side from the ticket's
+  // assignee history, so this console cannot name the wrong person.
+  returnToDeveloper: (key: string, reason: string) =>
+    request<QaReturnResponse>('/api/s3/jira/return-to-developer', {
+      method: 'POST',
+      body: JSON.stringify({ key, reason }),
     }),
   setTicketStatus: (key: string, status: string) =>
     request<{ label: string; issue: JiraIssue }>('/api/s3/jira/ticket-status', {

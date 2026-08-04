@@ -64,7 +64,14 @@ export default function TestsStage() {
     mutationCheck,
     handleBuildTraceability,
     buildingMatrix,
-    traceability
+    traceability,
+    qaReturnReason,
+    setQaReturnReason,
+    returningToDeveloper,
+    qaReturn,
+    qaReturnError,
+    handleReturnToDeveloper,
+    activeIssue
   } = useS3()
   const [openArtifact, setOpenArtifact] = useState<OpenArtifact>(null)
   const close = () => setOpenArtifact(null)
@@ -468,6 +475,73 @@ export default function TestsStage() {
             <TraceabilityMatrix matrix={traceability} />
           </Modal>
         )}
+
+        {/* The fail path, sitting next to the commit gate below it — those are
+            the two ways a ticket leaves QA, and only one of them existed
+            before. The reason is the tester's; who it goes back to is derived
+            server-side from the ticket's assignee history, so this card asks
+            for the finding and not for a name. */}
+        <div
+          className="ams-card"
+          style={{
+            marginTop: '0.75rem',
+            borderLeft: `3px solid ${
+              testsRun && !testsRun.passed ? 'var(--ams-error)' : 'var(--ams-warning)'
+            }`,
+          }}
+        >
+          <strong style={{ fontSize: 'var(--ams-text-sm)' }}>Failed QA — hand it back</strong>
+          <p className="ams-stage-note">
+            {testsRun && !testsRun.passed
+              ? 'The run above is red. Send the ticket back to the developer with what you found — it returns to In Progress, assigned to them, with your reason on the timeline.'
+              : 'Found a defect the suite does not cover? Send the ticket back to the developer with what you found — it returns to In Progress, assigned to them, with your reason on the timeline.'}
+          </p>
+          {qaReturn ? (
+            <p
+              style={{
+                fontWeight: 600,
+                fontSize: 'var(--ams-text-sm)',
+                margin: '0.4rem 0 0',
+                maxWidth: '68ch',
+                color: 'var(--ams-ink)',
+              }}
+            >
+              ✓ Handed back to {qaReturn.developer} — {activeIssue?.key} is In Progress again.{' '}
+              {qaReturn.evidence
+                ? `Recorded against ${qaReturn.evidence}.`
+                : 'No suite is red, so the record says this rests on your judgement.'}
+            </p>
+          ) : (
+            <>
+              <textarea
+                className="ams-textarea"
+                rows={3}
+                value={qaReturnReason}
+                onChange={(event) => setQaReturnReason(event.target.value)}
+                placeholder="What failed, and what you expected instead."
+                disabled={returningToDeveloper}
+              />
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                <button
+                  className="ams-button"
+                  onClick={handleReturnToDeveloper}
+                  disabled={returningToDeveloper || !qaReturnReason.trim()}
+                >
+                  {returningToDeveloper ? 'Handing back…' : 'Return to developer'}
+                </button>
+                {/* A hand-back with no finding on it is one the developer has
+                    to come back and ask about — the same failure the cross-team
+                    ticket's generated description exists to avoid. */}
+                {!qaReturnReason.trim() && (
+                  <span style={{ fontSize: 'var(--ams-text-xs)', color: 'var(--ams-ink-soft)' }}>
+                    Say what failed before handing it back.
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+          {qaReturnError && <p style={{ color: 'var(--ams-error)' }}>{qaReturnError}</p>}
+        </div>
 
         {/* The commit gate is the test run, so the branch closes out here
             rather than back on the engineer's stage — they see the same panel

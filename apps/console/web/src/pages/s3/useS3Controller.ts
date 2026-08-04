@@ -22,6 +22,7 @@ import {
   type TestScenario,
   type TraceabilityResponse,
   type PostApplyResult,
+  type QaReturnResponse,
   type QuickChatResponse,
   type TargetResolveResponse,
   type TestsGenerateResponse,
@@ -266,6 +267,12 @@ export function useS3Controller() {
   const [handingOff, setHandingOff] = useState(false)
   const [handoffError, setHandoffError] = useState<string | null>(null)
   const [closingTicket, setClosingTicket] = useState(false)
+  // QA's fail path, the mirror of the hand-off above. The reason is typed by
+  // the tester; who it goes back to is the server's answer, not this page's.
+  const [qaReturnReason, setQaReturnReason] = useState('')
+  const [returningToDeveloper, setReturningToDeveloper] = useState(false)
+  const [qaReturn, setQaReturn] = useState<QaReturnResponse | null>(null)
+  const [qaReturnError, setQaReturnError] = useState<string | null>(null)
   const [draftingDesignDoc, setDraftingDesignDoc] = useState(false)
   const [designDocError, setDesignDocError] = useState<string | null>(null)
 
@@ -1301,6 +1308,34 @@ export function useS3Controller() {
     }
   }
 
+  // The return leg. One action rather than three controls (reassign, move the
+  // status back, write the reason) because a tester who does two of the three
+  // leaves the board saying something untrue.
+  async function handleReturnToDeveloper() {
+    if (!activeTicketKey) return
+    setReturningToDeveloper(true)
+    setQaReturnError(null)
+    try {
+      const result = await s3Api.returnToDeveloper(activeTicketKey, qaReturnReason)
+      setQaReturn(result)
+      setQaReturnReason('')
+      setBoardIssues((prev) =>
+        (prev || []).map((issue) =>
+          issue.key === activeTicketKey
+            ? { ...issue, assignee: result.developer, status: 'In Progress' }
+            : issue
+        )
+      )
+      loadTicketEvents(activeTicketKey)
+    } catch (err) {
+      setQaReturnError(
+        err instanceof ApiError ? err.message : 'Could not hand the ticket back.'
+      )
+    } finally {
+      setReturningToDeveloper(false)
+    }
+  }
+
   async function handleMarkTicketDone() {
     if (!activeTicketKey) return
     setClosingTicket(true)
@@ -2047,6 +2082,12 @@ export function useS3Controller() {
     setHandoffError,
     closingTicket,
     setClosingTicket,
+    qaReturnReason,
+    setQaReturnReason,
+    returningToDeveloper,
+    qaReturn,
+    qaReturnError,
+    handleReturnToDeveloper,
     draftingDesignDoc,
     setDraftingDesignDoc,
     designDocError,
