@@ -34,6 +34,7 @@ from common.ticket_events import (
 from s3_enhancement import (
     admin_ops,
     applications,
+    docshell,
     qa_handback,
     routing,
     scm,
@@ -2519,6 +2520,21 @@ def design_doc(
     }
 
 
+def _target_source(target: Target, changed_files: list[str]) -> str:
+    """The repository the document's SOURCE row names.
+
+    The target's own root when it has one — a GitLab-hosted target does not —
+    falling back to the common root of the files that actually changed, so the
+    row is never blank on the cover.
+    """
+    if target.root is not None:
+        try:
+            return target.root.relative_to(targets.REPO_ROOT).as_posix()
+        except ValueError:
+            return target.root.name
+    return docshell.source_of(changed_files)
+
+
 @router.post("/design-doc/document")
 def design_doc_document(
     payload: DesignDocExportRequest, identity: Identity = Depends(require_identity)
@@ -2539,12 +2555,16 @@ def design_doc_document(
 
     story_label = _story_label_for(target)
     diagram_svg, change_map = build_svg(target, downstream=payload.downstream_apps)
+    changed_files = [node.rel_path for node in change_map.nodes]
     html = render_document_html(
         text,
         story_label=story_label,
         ticket_key=payload.ticket_number or "unassigned",
         diagram_svg=diagram_svg if payload.include_diagram else None,
         diagram_caption=caption_for(change_map),
+        source=_target_source(target, changed_files),
+        changed_files=changed_files,
+        prepared_by=identity.name,
     )
 
     if payload.format == "html":
@@ -2718,7 +2738,9 @@ def _build_record(
         unproven=unproven_claims(matrix, evidence, branch),
         branch=branch,
     )
-    return record, render_release_record_html(record)
+    return record, render_release_record_html(
+        record, source=_target_source(target, record.changed_files)
+    )
 
 
 @router.post("/release/record")

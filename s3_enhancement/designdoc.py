@@ -2,9 +2,10 @@
 
 Two documents share this module because they share a shell: the QA design
 document (engineering → QA, before testing) and the release record
-(everything → the ticket, after it). One stylesheet, one letterhead, one PDF
+(everything → the ticket, after it). One stylesheet, one cover, one PDF
 path, so the two cannot drift into looking like they came from different
-systems.
+systems. The shell itself — cover, contents, document control, numbered parts
+— lives in `docshell.py`; this module decides what goes in the sections.
 
 Server-side on purpose. The console used to build the downloadable HTML in the
 browser, which was fine while HTML was the only export; adding PDF would have
@@ -30,6 +31,8 @@ from datetime import date
 from html import escape
 
 from common.constants import AI_SUGGESTION_LABEL
+from s3_enhancement import docshell
+from s3_enhancement.docshell import ControlRow, Part, Section
 
 
 class PdfUnavailableError(Exception):
@@ -47,6 +50,10 @@ _HASH_HEADING_RE = re.compile(r"^#{1,4}\s+(.*)$")
 _NUMBERED_HEADING_RE = re.compile(r"^\d+\.\s+[A-Za-z][A-Za-z /&-]{1,40}:?$")
 _BULLET_RE = re.compile(r"^[-*•]\s+")
 _INLINE_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+# The model separates its sections with a markdown rule often enough that a
+# stray "---" turned up in the rendered document as a paragraph of dashes.
+_RULE_RE = re.compile(r"^([-_*])\1{2,}$")
 
 
 def parse_doc_blocks(text: str) -> list[DocBlock]:
@@ -56,7 +63,7 @@ def parse_doc_blocks(text: str) -> list[DocBlock]:
     blocks: list[DocBlock] = []
     for raw in text.split("\n"):
         line = raw.strip()
-        if not line:
+        if not line or _RULE_RE.match(line):
             continue
         bold = _BOLD_HEADING_RE.match(line)
         if bold:
@@ -77,44 +84,82 @@ def parse_doc_blocks(text: str) -> list[DocBlock]:
 
 
 def _inline(value: str) -> str:
-    return _INLINE_BOLD_RE.sub(r"<strong>\1</strong>", escape(value))
+    marked = _INLINE_BOLD_RE.sub(r"<strong>\1</strong>", escape(value))
+    return _INLINE_CODE_RE.sub(r"<code>\1</code>", marked)
 
 
-_STYLE = """
-  @page { size: A4; margin: 18mm 16mm; }
-  body { font-family: Georgia, 'Times New Roman', serif; max-width: 760px;
-         margin: 3rem auto; padding: 0 1.5rem; color: #1e293b; line-height: 1.55; }
-  .letterhead { display: flex; justify-content: space-between; align-items: baseline;
-                border-bottom: 3px double #94a3b8; padding-bottom: .6rem; }
-  .letterhead .org { font-size: 1.15rem; font-weight: 700; letter-spacing: .02em; }
-  .letterhead .kind { font-size: .8rem; color: #64748b; text-transform: uppercase;
-                      letter-spacing: .1em; }
-  .meta { font-size: .85rem; color: #475569; margin: .8rem 0 1.6rem; }
-  h2 { font-size: 1.05rem; margin: 1.4rem 0 .4rem; border-bottom: 1px solid #e2e8f0;
-       padding-bottom: .2rem; }
-  figure { margin: 1.4rem 0; page-break-inside: avoid; break-inside: avoid; }
-  figure svg { max-width: 100%; height: auto; }
-  figcaption { font-size: .78rem; color: #64748b; margin-top: .5rem; }
-  .label { margin-top: 2.2rem; font-size: .75rem; color: #64748b;
-           border-top: 1px solid #e2e8f0; padding-top: .6rem; }
-  table { width: 100%; border-collapse: collapse; font-size: .82rem; margin: .6rem 0 1rem; }
-  th { text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em;
-       color: #64748b; border-bottom: 1px solid #cbd5e1; padding: .3rem .4rem; }
-  td { padding: .35rem .4rem; border-bottom: 1px solid #eef2f6; vertical-align: top; }
-  code, .mono { font-family: 'SFMono-Regular', Consolas, monospace; font-size: .78rem;
-                overflow-wrap: anywhere; }
-  .ok { color: #0f766e; font-weight: 700; }
-  .bad { color: #b91c1c; font-weight: 700; }
-  .gaps { border: 1px solid #e2c391; background: #fdf6e7; border-radius: 4px;
-          padding: .7rem .9rem; margin: 1rem 0; }
-  .gaps h3 { font-size: .82rem; margin: 0 0 .4rem; text-transform: uppercase;
-             letter-spacing: .06em; color: #92610a; }
-  .gaps ul { margin: 0; padding-left: 1.1rem; }
-  .drafted { font-size: .72rem; color: #64748b; font-style: italic; }
-  .step-cmd { display: block; margin-top: .2rem; color: #334155; }
-  @media print { body { margin: 0; max-width: none; } }
-"""
+def _blocks_html(blocks: list[DocBlock]) -> str:
+    """Render a run of model blocks. Headings inside a section are subheadings —
+    the section's own number came from the skeleton, not from the model."""
+    out: list[str] = []
+    open_list = False
+    for block in blocks:
+        if block.kind == "bullet" and not open_list:
+            out.append("<ul>")
+            open_list = True
+        elif block.kind != "bullet" and open_list:
+            out.append("</ul>")
+            open_list = False
+        if block.kind == "heading":
+            out.append(f"<h4>{_inline(block.text)}</h4>")
+        elif block.kind == "bullet":
+            out.append(f"<li>{_inline(block.text)}</li>")
+        else:
+            out.append(f"<p>{_inline(block.text)}</p>")
+    if open_list:
+        out.append("</ul>")
+    return "".join(out)
 
+
+# The model writes four loose sections (see docgen.build_design_doc_prompt) and
+# titles them however it likes. Each bucket is claimed by the first heading that
+# matches one of its keywords; anything unclaimed lands in "Additional notes"
+# rather than being dropped, because a document that silently discards part of
+# what the model wrote is worse than one with an untidy last section.
+#
+# **The keywords are phrases, not single words, on purpose.** A bare "qa" or
+# "change" also matches the document's own title — the model opens with
+# "Internal Design Document for QA Handoff" — which claimed the QA-focus bucket
+# and pushed the real QA section into "Additional notes". A title cannot match
+# any of these.
+_BUCKETS: list[tuple[str, tuple[str, ...]]] = [
+    ("scope", ("summary", "overview", "scope", "what is changing")),
+    ("affected", ("affected", "impacted", "areas touched", "touches")),
+    ("risk", ("risk", "caution", "watch out")),
+    ("focus", ("qa focus", "suggested qa", "test focus", "testing focus", "coverage")),
+]
+
+
+def _split_by_bucket(design_doc: str) -> dict[str, list[DocBlock]]:
+    """Group the model's blocks under the four buckets the prompt asks for."""
+    groups: list[tuple[str | None, list[DocBlock]]] = [(None, [])]
+    for block in parse_doc_blocks(design_doc):
+        if block.kind == "heading":
+            groups.append((block.text, []))
+        else:
+            groups[-1][1].append(block)
+
+    found: dict[str, list[DocBlock]] = {}
+    leftovers: list[DocBlock] = []
+    for heading, blocks in groups:
+        if heading is None:
+            leftovers.extend(blocks)
+            continue
+        lowered = heading.lower()
+        for name, keywords in _BUCKETS:
+            if name not in found and any(word in lowered for word in keywords):
+                found[name] = blocks
+                break
+        else:
+            # A heading with nothing under it is the document's own title, which
+            # the shell already supplies — carrying it into "Additional notes"
+            # gives the reader a stray subheading and no content.
+            if blocks:
+                leftovers.append(DocBlock("heading", heading))
+                leftovers.extend(blocks)
+    if leftovers:
+        found["extra"] = leftovers
+    return found
 
 
 def render_document_html(
@@ -124,53 +169,183 @@ def render_document_html(
     ticket_key: str,
     diagram_svg: str | None = None,
     diagram_caption: str = "",
+    source: str = "",
+    changed_files: list[str] | None = None,
+    prepared_by: str = "",
     today: date | None = None,
 ) -> str:
     """The standalone design document, identical for the HTML and PDF exports."""
-    body: list[str] = []
-    open_list = False
-    for block in parse_doc_blocks(design_doc):
-        if block.kind == "bullet" and not open_list:
-            body.append("<ul>")
-            open_list = True
-        elif block.kind != "bullet" and open_list:
-            body.append("</ul>")
-            open_list = False
-        if block.kind == "heading":
-            body.append(f"<h2>{_inline(block.text)}</h2>")
-        elif block.kind == "bullet":
-            body.append(f"<li>{_inline(block.text)}</li>")
-        else:
-            body.append(f"<p>{_inline(block.text)}</p>")
-    if open_list:
-        body.append("</ul>")
+    buckets = _split_by_bucket(design_doc)
+    stamp = docshell.stamp(today or date.today())
+    files = changed_files or []
+    source = source or docshell.source_of(files)
 
-    figure = ""
+    intro = Part(
+        "Introduction",
+        [
+            Section(
+                "Purpose of this document",
+                docshell.paragraphs(
+                    "This document hands the change described below from engineering to "
+                    f"QA. It is generated from the run that produced the change — {escape(ticket_key)} "
+                    f"for user story {escape(story_label)} — and records what was altered, what it "
+                    "reaches, and where testing should concentrate.",
+                    "It is written before any test has been run. Nothing in it is evidence "
+                    "that the change works; that is the release record's job.",
+                ),
+            ),
+            Section(
+                "Intended audience",
+                docshell.bullets(
+                    [
+                        "<strong>The tester</strong> picking the ticket up — sections 3.1 and "
+                        "3.2 are addressed to them.",
+                        "<strong>The reviewing engineer</strong>, as the record of what was "
+                        "agreed at hand-off.",
+                        "<strong>Whoever supports the application later</strong>, as the "
+                        "account of why this change was made.",
+                    ]
+                ),
+            ),
+            Section(
+                "Scope of this change",
+                _blocks_html(buckets.get("scope", []))
+                or f"<p>{docshell.todo('the model returned no summary section for this run.')}</p>",
+            ),
+        ],
+    )
+
+    change_sections = []
     if diagram_svg:
         # The caption is not decoration: without it a reader assumes the model
         # drew the diagram, which is the one thing it did not do.
         caption = (
             f"<figcaption>{escape(diagram_caption)}</figcaption>" if diagram_caption else ""
         )
-        figure = (
-            '<figure><h2 style="border:none;padding:0;margin-bottom:.6rem">Change map</h2>'
-            f"{diagram_svg}{caption}</figure>"
+        change_sections.append(
+            Section("Change map", f"<figure>{diagram_svg}{caption}</figure>")
         )
+    change_sections.append(
+        Section(
+            "Affected areas",
+            _blocks_html(buckets.get("affected", []))
+            or f"<p>{docshell.todo('the model returned no affected-areas section for this run.')}</p>",
+        )
+    )
+    if files:
+        change_sections.append(
+            Section(
+                "Files changed",
+                docshell.table(
+                    ["#", "File"],
+                    [[str(i), f"<code>{escape(path)}</code>"] for i, path in enumerate(files, 1)],
+                    widths=["8%", "92%"],
+                ),
+            )
+        )
+    change = Part("The change", change_sections)
 
-    stamp = (today or date.today()).strftime("%d %B %Y")
-    return f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8">
-<title>{escape(story_label)} — Design Document</title>
-<style>{_STYLE}</style></head><body>
-<div class="letterhead"><span class="org">MapleSure Insurance</span>\
-<span class="kind">Internal Design Document</span></div>
-<div class="meta">{escape(story_label)} · Ticket {escape(ticket_key)} · {stamp} · \
-Engineering → QA hand-off</div>
-{figure}
-{chr(10).join(body)}
-<div class="label">{escape(AI_SUGGESTION_LABEL)}</div>
-</body></html>
-"""
+    handoff = Part(
+        "Hand-off to QA",
+        [
+            Section(
+                "Risk areas",
+                _blocks_html(buckets.get("risk", []))
+                or f"<p>{docshell.todo('the model returned no risk section for this run.')}</p>",
+            ),
+            Section(
+                "Suggested QA focus",
+                _blocks_html(buckets.get("focus", []))
+                or f"<p>{docshell.todo('the model returned no QA-focus section for this run.')}</p>",
+            ),
+        ],
+    )
+    if "extra" in buckets:
+        handoff.sections.append(Section("Additional notes", _blocks_html(buckets["extra"])))
+
+    signoff = Part(
+        "Sign-off",
+        [
+            Section(
+                "Prepared by",
+                docshell.table(
+                    ["Role", "Name", "Date"],
+                    [
+                        [
+                            "Engineer",
+                            escape(prepared_by) if prepared_by else docshell.FILL_MARK,
+                            escape(stamp),
+                        ],
+                        ["Reviewer", docshell.FILL_MARK, docshell.FILL_MARK],
+                    ],
+                    widths=["24%", "46%", "30%"],
+                ),
+            ),
+            Section(
+                "Accepted by QA",
+                f"<p>{docshell.todo('countersigned by the tester when the ticket is accepted into QA.')}</p>"
+                + docshell.table(
+                    ["Role", "Name", "Date"],
+                    [["Tester", docshell.FILL_MARK, docshell.FILL_MARK]],
+                    widths=["24%", "46%", "30%"],
+                ),
+            ),
+        ],
+    )
+
+    return docshell.render(
+        kicker="Technical documentation",
+        title="Design Document — Ready for QA",
+        running_title=f"Design Document — Ready for QA ({story_label} · {ticket_key})",
+        system_line=f"{docshell.ORG} · {docshell.SYSTEM}",
+        meta=[
+            ("Document ID", f"{ticket_key}-DD"),
+            ("User story", story_label),
+            ("Version", "v1.0"),
+            ("Mode", "Engineering → QA hand-off"),
+            ("Source", source),
+            ("Generated", stamp),
+            ("Classification", docshell.CLASSIFICATION),
+        ],
+        control=[
+            ControlRow("v1.0", stamp, f"Issued at hand-off to QA from run {ticket_key}."),
+        ],
+        change_note=(
+            "Generated per run. Each run issues a fresh version 1.0 — there is no "
+            "revision history to carry, because the run that produced the document "
+            "is the record."
+        ),
+        parts=[intro, change, handoff, signoff],
+        closing=f'<p class="note">{escape(AI_SUGGESTION_LABEL)}</p>',
+    )
+
+
+_CHROME_CSS = (
+    "font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;"
+    "font-size:7.5pt;color:#7a7a7a;width:100%;padding:0 18mm;"
+)
+
+_HEADER_TEMPLATE = (
+    f'<div style="{_CHROME_CSS}border-bottom:0.5px solid #e6e6e6;padding-bottom:2mm">'
+    '<span class="title"></span></div>'
+)
+
+# `pageNumber` / `totalPages` are Chromium's own placeholder classes — this is
+# the only place a page count is available, which is why the contents page does
+# not try to print one.
+_FOOTER_TEMPLATE = (
+    f'<div style="{_CHROME_CSS}border-top:0.5px solid #e6e6e6;padding-top:2mm;'
+    'display:flex;justify-content:space-between">'
+    f"<span>{docshell.ORG} · {docshell.SYSTEM} — {docshell.CLASSIFICATION}</span>"
+    '<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>'
+    "</div>"
+)
+
+# The document carries its own fixed header/footer for the browser's print
+# path. Chromium's templates do the same job better here (they can count
+# pages), so the in-document pair is suppressed for the server PDF — printing
+# both would stack two footers on every page.
+_SUPPRESS_IN_DOC_CHROME = "<style>.print-chrome{display:none !important}</style>"
 
 
 def render_pdf(html: str) -> bytes:
@@ -195,15 +370,18 @@ def render_pdf(html: str) -> bytes:
             try:
                 page = browser.new_page()
                 page.route("**/*", lambda route: route.abort())
-                page.set_content(html, wait_until="load")
+                page.set_content(html + _SUPPRESS_IN_DOC_CHROME, wait_until="load")
                 return page.pdf(
                     format="A4",
                     print_background=True,
+                    display_header_footer=True,
+                    header_template=_HEADER_TEMPLATE,
+                    footer_template=_FOOTER_TEMPLATE,
                     margin={
-                        "top": "18mm",
-                        "bottom": "18mm",
-                        "left": "16mm",
-                        "right": "16mm",
+                        "top": "22mm",
+                        "bottom": "20mm",
+                        "left": "18mm",
+                        "right": "18mm",
                     },
                 )
             finally:
@@ -236,40 +414,55 @@ def _steps_table(steps) -> str:
             f'<code class="step-cmd">$ {escape(step.command)}</code>' if step.command else ""
         )
         rows.append(
-            f"<tr><td>{step.order}</td><td><strong>{escape(step.title)}</strong><br>"
-            f"{escape(step.detail)}{command}</td></tr>"
+            [
+                str(step.order),
+                f"<strong>{escape(step.title)}</strong><br>{escape(step.detail)}{command}",
+            ]
         )
-    return f"<table><tbody>{''.join(rows)}</tbody></table>"
+    return docshell.table(["#", "Step"], rows, widths=["8%", "92%"])
 
 
-def render_release_record_html(record, *, today: date | None = None) -> str:
+def render_release_record_html(record, *, today: date | None = None, source: str = "") -> str:
     """The release record: what shipped, the evidence, and who signed it.
 
     Deliberately leads with what shipped and ends with the notes, rather than
     the other way round — the reader who needs this document is checking a
-    claim, not reading an announcement. The gaps block sits above the
+    claim, not reading an announcement. The gaps section sits above the
     approvals so nobody signs without having scrolled past it.
+
+    Sections that the run produced nothing for are omitted rather than left
+    empty, which is why `docshell` numbers parts at render time: a release with
+    no source-control flow and no release notes has to come out with a
+    contiguous 1-2-3, not with holes where the absent parts would have been.
     """
-    sections: list[str] = []
+    stamp = docshell.stamp(today or record.generated_at.date())
+    source = source or docshell.source_of(record.changed_files)
 
-    sections.append("<h2>What shipped</h2>")
+    # --- part 1: what shipped -------------------------------------------------
     if record.changed_files:
-        rows = "".join(
-            f'<tr><td><code>{escape(path)}</code></td></tr>' for path in record.changed_files
+        shipped = docshell.table(
+            ["#", "File"],
+            [
+                [str(i), f"<code>{escape(path)}</code>"]
+                for i, path in enumerate(record.changed_files, 1)
+            ],
+            widths=["8%", "92%"],
         )
-        sections.append(f"<table><tbody>{rows}</tbody></table>")
     else:
-        sections.append("<p>No files recorded for this release.</p>")
+        shipped = "<p>No files recorded for this release.</p>"
 
+    summary = Part("Release summary", [Section("What shipped", shipped)])
     if record.diagram_svg:
         caption = (
             f"<figcaption>{escape(record.diagram_caption)}</figcaption>"
             if record.diagram_caption
             else ""
         )
-        sections.append(f"<figure>{record.diagram_svg}{caption}</figure>")
+        summary.sections.append(
+            Section("Change map", f"<figure>{record.diagram_svg}{caption}</figure>")
+        )
 
-    sections.append("<h2>Test evidence</h2>")
+    # --- part 2: evidence -----------------------------------------------------
     if record.evidence:
         rows = []
         for item in record.evidence:
@@ -277,122 +470,168 @@ def render_release_record_html(record, *, today: date | None = None) -> str:
                 '<span class="ok">PASS</span>' if item.passed else '<span class="bad">FAIL</span>'
             )
             counts = f"{item.passed_count}/{item.total}" if item.total else "—"
-            rows.append(
-                f"<tr><td>{escape(item.name)}</td><td>{counts}</td><td>{verdict}</td>"
-                f"<td>{escape(item.note)}</td></tr>"
-            )
-        sections.append(
-            "<table><thead><tr><th>Suite</th><th>Passed</th><th>Result</th><th>Note</th>"
-            f"</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+            rows.append([escape(item.name), counts, verdict, escape(item.note)])
+        evidence_html = docshell.table(
+            ["Suite", "Passed", "Result", "Note"], rows, widths=["30%", "12%", "12%", "46%"]
         )
     else:
-        sections.append("<p>No test runs were recorded for this release.</p>")
+        evidence_html = "<p>No test runs were recorded for this release.</p>"
+
+    evidence = Part("Evidence", [Section("Test evidence", evidence_html)])
 
     if record.matrix is not None:
-        sections.append("<h2>Acceptance criteria</h2>")
         rows = []
         for row in record.matrix.rows:
             tests = "<br>".join(escape(name) for name in row.test_names) or "—"
             status = _STATUS_LABEL.get(row.status, row.status)
             css = "ok" if row.status == "passed" else "bad" if row.status == "failed" else ""
             rows.append(
-                f"<tr><td><strong>{escape(row.criterion_id)}</strong><br>"
-                f"{escape(row.criterion_text)}</td>"
-                f"<td>{escape(', '.join(row.scenario_ids)) or '—'}</td>"
-                f'<td class="mono">{tests}</td>'
-                f'<td class="{css}">{escape(status)}</td></tr>'
+                [
+                    f"<strong>{escape(row.criterion_id)}</strong><br>"
+                    f"{escape(row.criterion_text)}",
+                    escape(", ".join(row.scenario_ids)) or "—",
+                    f'<span class="mono">{tests}</span>',
+                    f'<span class="{css}">{escape(status)}</span>',
+                ]
             )
-        sections.append(
-            '<table style="table-layout:fixed"><colgroup><col style="width:42%">'
-            '<col style="width:14%"><col style="width:30%"><col style="width:14%"></colgroup>'
-            "<thead><tr><th>Criterion</th><th>Scenarios</th><th>Automated test</th>"
-            f"<th>Result</th></tr></thead><tbody>{''.join(rows)}</tbody></table>"
+        evidence.sections.append(
+            Section(
+                "Acceptance criteria",
+                docshell.table(
+                    ["Criterion", "Scenarios", "Automated test", "Result"],
+                    rows,
+                    widths=["42%", "14%", "30%", "14%"],
+                ),
+            )
         )
 
     if record.unproven:
-        items = "".join(f"<li>{escape(gap)}</li>" for gap in record.unproven)
-        sections.append(
-            '<div class="gaps"><h3>Not evidenced by this release</h3>'
-            f"<ul>{items}</ul></div>"
+        evidence.sections.append(
+            Section(
+                "Not evidenced by this release",
+                '<div class="callout">'
+                "<p>Everything below is outside what this run proved. It is listed "
+                "because a release document that only records successes is an "
+                "advertisement.</p>"
+                + docshell.bullets([escape(gap) for gap in record.unproven])
+                + "</div>",
+            )
         )
 
-    sections.append("<h2>Approvals</h2>")
+    # --- part 3: authorisation ------------------------------------------------
     if record.approvals:
-        rows = "".join(
-            f"<tr><td>{escape(item['ts'])}</td><td>{escape(item['action'])}</td>"
-            f"<td>{escape(item['detail'])}</td></tr>"
-            for item in record.approvals
-        )
-        sections.append(
-            "<table><thead><tr><th>When</th><th>Action</th><th>Detail</th></tr></thead>"
-            f"<tbody>{rows}</tbody></table>"
+        approvals_html = docshell.table(
+            ["When", "Action", "Detail"],
+            [
+                [escape(item["ts"]), escape(item["action"]), escape(item["detail"])]
+                for item in record.approvals
+            ],
+            widths=["22%", "24%", "54%"],
         )
     else:
-        sections.append("<p>No human approvals were recorded against this ticket.</p>")
+        approvals_html = "<p>No human approvals were recorded against this ticket.</p>"
+
+    authorisation = Part("Authorisation", [Section("Approvals", approvals_html)])
 
     branch = getattr(record, "branch", None)
     if branch is not None:
-        sections.append("<h2>Source control</h2>")
         rows = [
-            ("Branch", f"<code>{escape(branch.branch)}</code> (cut from "
-                       f"<code>{escape(branch.base)}</code>)"),
-            ("Status", escape(branch.status)),
+            [
+                "Branch",
+                f"<code>{escape(branch.branch)}</code> (cut from "
+                f"<code>{escape(branch.base)}</code>)",
+            ],
+            ["Status", escape(branch.status)],
         ]
         if branch.commit is not None:
             rows.append(
-                (
+                [
                     "Commit",
                     f"<code>{escape(branch.commit.sha)}</code> — "
                     f"{escape(branch.commit.message)} "
                     f"({len(branch.commit.files)} file(s), {escape(branch.commit.committed_at)})",
-                )
+                ]
             )
         if branch.pushed_at:
             rows.append(
-                ("Pipeline", f"{escape(branch.pipeline_id)} queued {escape(branch.pushed_at)}")
+                ["Pipeline", f"{escape(branch.pipeline_id)} queued {escape(branch.pushed_at)}"]
             )
-        body = "".join(
-            f"<tr><td><strong>{label}</strong></td><td>{value}</td></tr>"
-            for label, value in rows
-        )
-        sections.append(f"<table><tbody>{body}</tbody></table>")
-        # Stated here as well as in the gaps block: a reader who skims to the
-        # branch name and stops must not walk away thinking git ran.
-        sections.append(
-            '<p class="drafted">Modelled, not executed — this console does not run '
-            "git or contact a remote. See “Not evidenced by this release”.</p>"
+        authorisation.sections.append(
+            Section(
+                "Source control",
+                docshell.table(["Item", "Value"], rows, widths=["22%", "78%"])
+                # Stated here as well as in the gaps section: a reader who skims
+                # to the branch name and stops must not walk away thinking git ran.
+                + '<p class="note">Modelled, not executed — this console does not run '
+                "git or contact a remote. See “Not evidenced by this release”.</p>",
+            )
         )
 
-    sections.append("<h2>Deployment</h2>")
-    if record.plan.order_reason:
-        sections.append(
-            f"<p><strong>Order matters.</strong> {escape(record.plan.order_reason)}</p>"
-        )
-    sections.append(_steps_table(record.plan.steps))
-    sections.append("<h2>Rollback</h2>")
-    sections.append(_steps_table(record.plan.rollback))
+    # --- part 4: go-live ------------------------------------------------------
+    order = (
+        f"<p><strong>Order matters.</strong> {escape(record.plan.order_reason)}</p>"
+        if record.plan.order_reason
+        else ""
+    )
+    golive = Part(
+        "Go-live",
+        [
+            Section("Deployment", order + _steps_table(record.plan.steps)),
+            Section("Rollback", _steps_table(record.plan.rollback)),
+        ],
+    )
 
+    parts = [summary, evidence, authorisation, golive]
+
+    # --- part 5: the notes, only when a model produced them --------------------
     if record.notes is not None:
-        sections.append("<h2>Release notes</h2>")
-        sections.append('<p class="drafted">AI-drafted; the rest of this record is computed.</p>')
-        for heading, body in (
-            ("Client change log", record.notes.changelog),
-            ("Internal operations note", record.notes.ops_note),
-            ("User guide — what's new", record.notes.whats_new),
-        ):
-            sections.append(f"<h3 style=\"font-size:.9rem;margin:.9rem 0 .2rem\">{heading}</h3>")
-            sections.append(f"<p>{_inline(body)}</p>")
+        parts.append(
+            Part(
+                "Release notes",
+                [
+                    Section(
+                        heading,
+                        '<p class="note">AI-drafted; the rest of this record is computed.</p>'
+                        f"<p>{_inline(body)}</p>"
+                        if first
+                        else f"<p>{_inline(body)}</p>",
+                    )
+                    for first, heading, body in (
+                        (True, "Client change log", record.notes.changelog),
+                        (False, "Internal operations note", record.notes.ops_note),
+                        (False, "User guide — what's new", record.notes.whats_new),
+                    )
+                ],
+            )
+        )
 
-    stamp = (today or record.generated_at.date()).strftime("%d %B %Y")
-    return f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8">
-<title>{escape(record.story_label)} — Release Record</title>
-<style>{_STYLE}</style></head><body>
-<div class="letterhead"><span class="org">MapleSure Insurance</span>\
-<span class="kind">Release Record</span></div>
-<div class="meta">{escape(record.story_label)} · Ticket {escape(record.ticket_key)} · {stamp} · \
-Released by {escape(record.released_by)}</div>
-{chr(10).join(sections)}
-<div class="label">{escape(AI_SUGGESTION_LABEL)}</div>
-</body></html>
-"""
+    return docshell.render(
+        kicker="Technical documentation",
+        title="Release Record — Ready for Release",
+        running_title=(
+            f"Release Record ({record.story_label} · {record.ticket_key})"
+        ),
+        system_line=f"{docshell.ORG} · {docshell.SYSTEM}",
+        meta=[
+            ("Document ID", f"{record.ticket_key}-RR"),
+            ("User story", record.story_label),
+            ("Version", "v1.0"),
+            ("Mode", "Release record"),
+            ("Source", source),
+            ("Released by", record.released_by),
+            ("Generated", stamp),
+            ("Classification", docshell.CLASSIFICATION),
+        ],
+        control=[
+            ControlRow(
+                "v1.0", stamp, f"Assembled at release of {record.ticket_key} by {record.released_by}."
+            ),
+        ],
+        change_note=(
+            "Assembled from what the run produced — the changed files, the test runs, "
+            "the ticket's own approval history and the derived deployment plan. Nothing "
+            "in it is re-stated from memory."
+        ),
+        parts=parts,
+        closing=f'<p class="note">{escape(AI_SUGGESTION_LABEL)}</p>',
+    )

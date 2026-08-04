@@ -67,3 +67,9 @@ logs/
 # (no client names). Drop files here to work with them locally; they stay out
 # of the repo.
 ScenariosFromClient/
+
+# Screenshots of the client's own Word template, used as the structural
+# reference for the hand-off documents. Same two rules: the pages carry their
+# logo and their name in the header and footer. The *structure* was copied into
+# s3_enhancement/docshell.py; the images themselves stay local.
+wordDocforQAandRelease/
