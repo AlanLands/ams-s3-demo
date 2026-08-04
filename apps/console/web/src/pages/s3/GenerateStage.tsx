@@ -100,12 +100,18 @@ export default function GenerateStage() {
       {!dependenciesLoading && openDependencies.length > 0 && (
         <div
           className="ams-card"
-          style={{ marginBottom: '1rem', borderLeft: '3px solid var(--ams-warning)' }}
+          // Informational, not a warning: this no longer gates anything
+          // (see generateLockedReason in useS3Controller).
+          style={{ marginBottom: '1rem', borderLeft: '3px solid var(--ams-info)' }}
         >
-          <strong>Waiting on {openDependencies.length} other team{openDependencies.length > 1 ? 's' : ''}</strong>
+          <strong>
+            {openDependencies.length} other team{openDependencies.length > 1 ? 's' : ''} picking up
+            linked work
+          </strong>
           <p style={{ fontSize: 'var(--ams-text-sm)', color: 'var(--ams-ink-soft)', margin: '0.3rem 0 0.6rem' }}>
-            Someone (logged in as that team) marks their ticket Done, then it clears here —
-            no need to reload as {identity?.name}.
+            Their work runs in parallel — this ticket is not blocked, carry on below. When someone
+            (logged in as that team) marks their ticket Done, it clears here with no need to reload
+            as {identity?.name}.
           </p>
           {openDependencies.map((dep) => (
             <div

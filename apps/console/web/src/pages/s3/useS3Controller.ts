@@ -1903,9 +1903,18 @@ export function useS3Controller() {
       ? 'Confirm the repo on the Target selection stage before generating.'
       : !analysisDoneForActive
         ? 'Open the ticket on the Board stage and run AI impact analysis first.'
-        : openDependencies.length > 0
-          ? `Waiting on ${openDependencies.length} other team${openDependencies.length > 1 ? 's' : ''} to finish their tickets.`
-          : null
+        : // An open cross-team ticket deliberately does NOT lock this stage.
+          // It used to, and that was wrong about how the work actually
+          // sequences: on US-2026-045 the cross-team check raises a
+          // DocumentHub ticket for wording that only becomes reachable *once
+          // EnrolDirect starts admitting prospects*. DocumentHub is downstream
+          // and parallel, not a prerequisite — blocking here stalled the
+          // ticket that has to move first, and mid-demo it read as the
+          // console saying the two changes must ship in series. The
+          // dependency stays visible on this stage (and clears when the other
+          // team marks it Done) so the linkage is still the point; it is
+          // information, not a gate.
+          null
   const canGenerate = generateLockedReason === null
 
   const canDesignDoc = generated !== null && (generated.diff_text.trim() === '' || applied)

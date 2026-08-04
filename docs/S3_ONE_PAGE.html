@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S3 · Enhancement Delivery — what it does</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm 12mm; }
+
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #5c5c5c;
+    --line: #d8d8d8;
+    --accent: #8b1e2d;
+    --accent-soft: #f6ecee;
+    --ok: #1c6b3c;
+    --ok-soft: #edf5f0;
+    --warn: #8a5a00;
+    --warn-soft: #fdf6e6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --surface: #fbfbfa;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font: 9pt/1.32 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink); margin: 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+
+  code { font-family: var(--mono); font-size: 0.87em; background: #f1f1f1; padding: 0.3pt 1.5pt; border-radius: 2px; }
+  p { margin: 0 0 1.5mm; }
+
+  /* ---- header ---- */
+  .head { border-bottom: 3pt solid var(--accent); padding-bottom: 2.4mm; margin-bottom: 2.8mm; display: flex; align-items: flex-end; gap: 8mm; }
+  .head .left { flex: 1; }
+  .kicker { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1.5pt; color: var(--accent); font-weight: 700; margin-bottom: 1.5mm; }
+  h1 { font-size: 18pt; margin: 0 0 1.5mm; letter-spacing: -0.5pt; line-height: 1.05; }
+  .lede { font-size: 9.4pt; color: var(--ink-soft); margin: 0; }
+  .head .right { flex: 0 0 76mm; }
+
+  .statrow { display: flex; gap: 2mm; }
+  .stat { flex: 1; border: 0.5pt solid var(--line); border-radius: 1.2mm; padding: 1.3mm 1.6mm; background: var(--surface); text-align: center; }
+  .stat .v { font-size: 13pt; font-weight: 700; letter-spacing: -0.4pt; line-height: 1.1; }
+  .stat .k { font-size: 6.6pt; text-transform: uppercase; letter-spacing: 0.6pt; color: var(--ink-soft); margin-top: 0.4mm; }
+
+  /* ---- stage flow ---- */
+  .flowlabel { display: flex; justify-content: space-between; font-size: 7.5pt; text-transform: uppercase;
+               letter-spacing: 1.2pt; color: var(--ink-soft); font-weight: 700; margin-bottom: 1.2mm; }
+  .flow { display: flex; gap: 2.2mm; margin-bottom: 2.6mm; }
+  .stage { flex: 1; border: 0.5pt solid var(--line); border-radius: 1.5mm; overflow: hidden; display: flex; flex-direction: column; }
+  .stage .top { background: var(--accent); color: #fff; padding: 1.8mm 2.4mm; }
+  .stage .num { font-size: 6.6pt; letter-spacing: 1.2pt; text-transform: uppercase; opacity: 0.85; }
+  .stage .nm { font-size: 10.5pt; font-weight: 700; letter-spacing: -0.2pt; line-height: 1.1; }
+  .stage .body { padding: 1.6mm 2mm 2mm; flex: 1; }
+  .stage .sub { font-size: 6.4pt; text-transform: uppercase; letter-spacing: 0.8pt; font-weight: 700; color: var(--ink-soft); margin: 1.5mm 0 0.5mm; }
+  .stage .sub:first-child { margin-top: 0; }
+  .stage ul { margin: 0; padding-left: 3.2mm; font-size: 8pt; }
+  .stage li { margin-bottom: 0.5mm; }
+  .stage .in { font-size: 8pt; }
+  .stage .human { background: var(--warn-soft); border-left: 2pt solid var(--warn); padding: 1.2mm 1.6mm; margin: 0.8mm 0 0; font-size: 8pt; }
+  .stage .out { background: var(--ok-soft); border-left: 2pt solid var(--ok); padding: 1.2mm 1.6mm; margin-top: 1mm; font-size: 8pt; }
+  .stage .sub.h { color: var(--warn); }
+  .stage .sub.o { color: var(--ok); }
+
+  /* ---- bottom ---- */
+  .cols { display: flex; gap: 6mm; }
+  .cols > * { flex: 1; min-width: 0; }
+  h2 { font-size: 10pt; margin: 0 0 1.5mm; padding-bottom: 1mm; border-bottom: 1.5pt solid var(--accent); letter-spacing: -0.2pt; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.2pt; margin: 0; }
+  th, td { text-align: left; padding: 0.9mm 1.4mm; border-bottom: 0.5pt solid var(--line); vertical-align: top; }
+  th { font-size: 6.8pt; text-transform: uppercase; letter-spacing: 0.4pt; color: var(--ink-soft); border-bottom: 1pt solid var(--ink-soft); }
+  td.mono { font-family: var(--mono); font-size: 7.6pt; }
+
+  .callout { background: var(--accent-soft); border-left: 2.2pt solid var(--accent); padding: 1.7mm 2.2mm; margin-top: 1.6mm; font-size: 8.2pt; }
+  .callout .lead { font-size: 6.8pt; text-transform: uppercase; letter-spacing: 0.9pt; color: var(--accent); font-weight: 700; margin-bottom: 1mm; }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .foot { font-size: 7.4pt; color: var(--ink-soft); border-top: 0.5pt solid var(--line); padding-top: 1.4mm; margin-top: 2.4mm; }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div class="left">
+    <div class="kicker">MapleSure Insurance · Application Management Services</div>
+    <h1>S3 — Enhancement Delivery</h1>
+    <p class="lede">A change request arrives on the board and comes out as reviewed code, passing tests and a release
+    record. <strong>AI helps at all five stages; a person signs off at all five.</strong></p>
+  </div>
+  <div class="right">
+    <div class="statrow">
+      <div class="stat"><div class="v">5</div><div class="k">stages</div></div>
+      <div class="stat"><div class="v">5</div><div class="k">sign-offs</div></div>
+      <div class="stat"><div class="v">4</div><div class="k">applications</div></div>
+      <div class="stat"><div class="v">0</div><div class="k">AI-editable tests</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="flowlabel"><span>Request comes in</span><span style="letter-spacing:0;text-transform:none;font-weight:400">each stage's output is the next stage's input</span><span>Goes live</span></div>
+
+<div class="flow">
+
+  <div class="stage">
+    <div class="top"><div class="num">Stage 1</div><div class="nm">Impact analysis</div></div>
+    <div class="body">
+      <div class="sub">AI does</div>
+      <ul>
+        <li>Reads the story and the code together</li>
+        <li>Asks what the story leaves out, then sizes the job</li>
+        <li>Checks every system that depends on this one</li>
+      </ul>
+      <div class="sub h">A person decides</div>
+      <div class="human">Answers the questions AI raised, then accepts the assessment.</div>
+      <div class="sub o">You get</div>
+      <div class="out">A written assessment, and a job raised for the one other team that must change code.</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="top"><div class="num">Stage 2</div><div class="nm">Target selection</div></div>
+    <div class="body">
+      <div class="sub">AI does</div>
+      <ul>
+        <li>Finds the right repository and narrows the file set</li>
+        <li>Marks the files it may read but not edit</li>
+        <li>Checks out a working copy</li>
+      </ul>
+      <div class="sub h">A person decides</div>
+      <div class="human">Confirms the repository and file set before anything is checked out.</div>
+      <div class="sub o">You get</div>
+      <div class="out">A working copy, and an explicit list of files AI may touch.</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="top"><div class="num">Stage 3</div><div class="nm">Code generation</div></div>
+    <div class="body">
+      <div class="sub">AI does</div>
+      <ul>
+        <li>Works on a branch, never on main</li>
+        <li>Edits each file with a stated reason</li>
+        <li>Answers "why did you do that?", and writes the design document</li>
+      </ul>
+      <div class="sub h">A person decides</div>
+      <div class="human">Reviews the diff, questions it, then approves or rejects — file by file.</div>
+      <div class="sub o">You get</div>
+      <div class="out">A reviewed change on a branch, plus a design document with a change map.</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="top"><div class="num">Stage 4</div><div class="nm">Test</div></div>
+    <div class="body">
+      <div class="sub">AI does</div>
+      <ul>
+        <li>Drafts a test plan from the acceptance criteria, then writes and runs the tests</li>
+        <li>Re-runs the existing regression suite</li>
+        <li>Traces each criterion to its test</li>
+      </ul>
+      <div class="sub h">A person decides</div>
+      <div class="human">The tester approves the plan <em>before</em> any test code exists — and can fail the ticket back to the developer.</div>
+      <div class="sub o">You get</div>
+      <div class="out">Results, plus proof each requirement was checked and nothing else broke.</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="top"><div class="num">Stage 5</div><div class="nm">Release</div></div>
+    <div class="body">
+      <div class="sub">AI does</div>
+      <ul>
+        <li>Writes release notes for three audiences</li>
+        <li>Derives the go-live order from the change map</li>
+        <li>Writes the rollback steps and assembles the release record</li>
+      </ul>
+      <div class="sub h">A person decides</div>
+      <div class="human">Approves the release and closes the ticket. Approvals are read from the ticket, not posted by a screen.</div>
+      <div class="sub o">You get</div>
+      <div class="out">A release note, a go-live and rollback plan, and a record that matches what happened.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="cols">
+  <div>
+    <h2>What makes the claims checkable</h2>
+    <table>
+      <tr><th>Guarantee</th><th>Why it is there</th></tr>
+      <tr>
+        <td><strong>AI may never write to the regression suite</strong></td>
+        <td>Each application keeps a checked-in, human-authored suite that must pass before <em>and</em> after. A suite the pipeline can rewrite is not an independent check of anything.</td>
+      </tr>
+      <tr>
+        <td><strong>The test plan is approved before test code exists</strong></td>
+        <td>Otherwise the tester reviews tests written to pass. They can also fail the ticket back to the developer.</td>
+      </tr>
+      <tr>
+        <td><strong>Approvals and gates are read server-side</strong></td>
+        <td>"Tests passed" comes off the ticket's event log, never a flag a screen posts — a client that could assert it could commit a red branch.</td>
+      </tr>
+      <tr>
+        <td><strong>Nothing overstates what happened</strong></td>
+        <td>The release record names what it did <em>not</em> prove, and source control is shown as commands a real integration would issue. Nothing runs git; no screen claims a deployment.</td>
+      </tr>
+    </table>
+  </div>
+
+  <div>
+    <h2>What it runs on, and what is in the box</h2>
+    <table>
+      <tr><th>Application</th><th>Change it delivers</th></tr>
+      <tr><td><strong>PolicyCore</strong> <span style="color:#5c5c5c">· plan administration</span></td><td>Plan tier upgrade <span class="mono">(US-2026-041)</span> · amendment priority field <span class="mono">(US-2026-042)</span></td></tr>
+      <tr><td><strong>EnrolDirect</strong> <span style="color:#5c5c5c">· online enrolment</span></td><td>Prospect access at the enrolment gate <span class="mono">(US-2026-045)</span> — the story used in the walkthrough</td></tr>
+      <tr><td><strong>DocumentHub</strong> <span style="color:#5c5c5c">· enrolment documents</span></td><td>Confirmation-pack wording for rostered guests <span class="mono">(US-2026-046)</span> — the downstream job raised at stage 1</td></tr>
+    </table>
+
+    <div class="callout">
+      <div class="lead">A new repository is dropped in, not coded in</div>
+      <p>DocumentHub joined by being copied into <code>repos/</code> with a manifest file — no edit to the pipeline.
+      It all runs on plain Python and a virtual environment: no cloud service, no container, and it replays from a
+      committed cache, so it behaves the same offline.</p>
+    </div>
+  </div>
+</div>
+
+<p class="foot">
+  MapleSure Insurance is a fictional demo insurer; everything here is synthetic. Companions:
+  <code>S3_SCENARIO_OVERVIEW.pdf</code> (a page per stage) · <code>ENROLDIRECT_WALKTHROUGH.pdf</code> (one application
+  and its user story in detail).
+</p>
+
+</body>
+</html>
