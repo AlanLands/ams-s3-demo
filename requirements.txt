@@ -23,3 +23,9 @@ playwright==1.49.1
 # pinned explicitly because a repo script now imports it directly, so it must
 # not disappear if a transitive dependency drops it.
 markdown-it-py==4.2.0
+
+# The Word export of the two hand-off documents
+# (s3_enhancement/docx_export.py). Pulls lxml, which is a compiled wheel — in
+# line with what is already here (pandas, scikit-learn, chromadb) and still
+# installable offline from a wheelhouse, so hard rule 4 holds.
+python-docx==1.1.2

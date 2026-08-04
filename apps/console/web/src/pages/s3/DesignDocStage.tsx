@@ -128,6 +128,16 @@ export default function DesignDocStage() {
                     <button className="ams-button-secondary" onClick={() => setDocOpen(true)}>
                       View document
                     </button>
+                    {/* Word sits beside the PDF rather than in the modal with
+                        the other formats: it is the format the client asked
+                        for by name on the 2026-08-03 walkthrough. */}
+                    <button
+                      className="ams-button-secondary"
+                      onClick={() => handleExportDesignDoc('docx')}
+                      disabled={exportingDoc !== null}
+                    >
+                      {exportingDoc === 'docx' ? 'Building…' : '⬇ Word'}
+                    </button>
                     <button
                       className="ams-button"
                       onClick={() => handleExportDesignDoc('pdf')}

@@ -509,7 +509,9 @@ as a parameter?` → **Ask**. Takes about 10 seconds.]
 > where QA should look.
 >
 > Built from what actually happened in this run — not written on a Friday
-> afternoon from memory. And it downloads as a PDF.
+> afternoon from memory. And it downloads as a PDF **or as a Word document** —
+> cover page, contents, document control, numbered sections. Same for the
+> release document at the end.
 
 [**Hand off to QA: Priya Nair** → **Assign tester & move to QA**. Then **Log out**.]
 
@@ -644,10 +646,22 @@ hand it back*), so you can point at it without running it.
 > somebody picking a name — with the tester's reason on the timeline.
 
 **"Can we get the design document in Word?"** — she asked on the review call.
-PDF today; Word template is next, not built.
+**This is now built.** There is a **⬇ Word** button next to Download PDF on the
+design-doc stage, and another on the release stage. Show it rather than
+describing it.
 
-> Today it's PDF. A Word version with a proper template — contents page, version
-> number, header and footer — is the next thing on that document.
+> Yes — there it is. It comes out with a cover page, a contents page, document
+> control, and numbered sections, the same shape as the technical documents your
+> teams already file. The contents page fills itself in when Word opens it.
+>
+> And where the run genuinely doesn't know something — who reviewed it, who
+> countersigned it — it says **"TODO — SME input required"** rather than making
+> a name up.
+
+**⚠ If you open the Word file on the day:** Word may ask *"update the fields in
+this document?"* — say **yes**; that is what builds the contents page. And the
+sign-off tables are meant to be blank. Don't apologise for them; they're the
+part a person fills in.
 
 **"What's this release document called?"** — the retitle to "Change Request" was
 asked for and is **held by the project owner**. Don't rename it on the day.

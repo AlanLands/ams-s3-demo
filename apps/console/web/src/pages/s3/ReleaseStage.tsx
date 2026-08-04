@@ -99,8 +99,19 @@ export default function ReleaseStage() {
       }
       actions={
         <>
-          <button className="ams-button" onClick={handleDownloadRecord} disabled={exportingRecord}>
+          <button
+            className="ams-button"
+            onClick={() => handleDownloadRecord('pdf')}
+            disabled={exportingRecord}
+          >
             {exportingRecord ? 'Building…' : '⬇ Download (PDF)'}
+          </button>
+          <button
+            className="ams-button-secondary"
+            onClick={() => handleDownloadRecord('docx')}
+            disabled={exportingRecord}
+          >
+            ⬇ Word
           </button>
           <button
             className="ams-button-secondary"

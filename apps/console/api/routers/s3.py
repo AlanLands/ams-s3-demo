@@ -70,8 +70,10 @@ from s3_enhancement.story import render_story, sanitize_tier_name
 from s3_enhancement.design_sync import review_after_apply
 from s3_enhancement.designdoc import (
     PdfUnavailableError,
+    render_document_docx,
     render_document_html,
     render_pdf,
+    render_release_record_docx,
     render_release_record_html,
 )
 from s3_enhancement.diagram import build_change_map, build_svg, caption_for
@@ -137,7 +139,7 @@ class DesignDocRequest(TierRequest):
 
 
 class DesignDocExportRequest(DesignDocRequest):
-    format: Literal["html", "pdf"] = "pdf"
+    format: Literal["html", "pdf", "docx"] = "pdf"
     include_diagram: bool = True
 
 
@@ -160,7 +162,7 @@ class ReleaseRecordRequest(ReleaseRequest):
     reported by the same client that is asking for the certificate.
     """
 
-    format: Literal["pdf", "html"] = "pdf"
+    format: Literal["pdf", "html", "docx"] = "pdf"
     scenarios: list[dict] = []
     generated_cases: list[dict] = []
     regression_cases: list[dict] = []
@@ -2520,6 +2522,14 @@ def design_doc(
     }
 
 
+# The OOXML media type. Serving a .docx as octet-stream makes Windows offer
+# "unknown file" rather than "open in Word", which on a client's laptop reads as
+# a broken download.
+DOCX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
+
+
 def _target_source(target: Target, changed_files: list[str]) -> str:
     """The repository the document's SOURCE row names.
 
@@ -2556,8 +2566,7 @@ def design_doc_document(
     story_label = _story_label_for(target)
     diagram_svg, change_map = build_svg(target, downstream=payload.downstream_apps)
     changed_files = [node.rel_path for node in change_map.nodes]
-    html = render_document_html(
-        text,
+    document_args = dict(
         story_label=story_label,
         ticket_key=payload.ticket_number or "unassigned",
         diagram_svg=diagram_svg if payload.include_diagram else None,
@@ -2566,6 +2575,7 @@ def design_doc_document(
         changed_files=changed_files,
         prepared_by=identity.name,
     )
+    html = render_document_html(text, **document_args)
 
     if payload.format == "html":
         return Response(
@@ -2573,6 +2583,22 @@ def design_doc_document(
             media_type="text/html; charset=utf-8",
             headers={
                 "Content-Disposition": f'attachment; filename="{story_label}-design-doc.html"'
+            },
+        )
+
+    if payload.format == "docx":
+        if payload.ticket_number:
+            record_event(
+                payload.ticket_number,
+                "human",
+                "design_doc_exported",
+                detail=f"Word document downloaded by {identity.name}",
+            )
+        return Response(
+            content=render_document_docx(text, **document_args),
+            media_type=DOCX_MEDIA_TYPE,
+            headers={
+                "Content-Disposition": f'attachment; filename="{story_label}-design-doc.docx"'
             },
         )
 
@@ -2756,6 +2782,13 @@ def release_record(
             content=html,
             media_type="text/html; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{filename}.html"'},
+        )
+    if payload.format == "docx":
+        source = _target_source(targets.get_target(payload.target_id), record.changed_files)
+        return Response(
+            content=render_release_record_docx(record, source=source),
+            media_type=DOCX_MEDIA_TYPE,
+            headers={"Content-Disposition": f'attachment; filename="{filename}.docx"'},
         )
     try:
         pdf = render_pdf(html)

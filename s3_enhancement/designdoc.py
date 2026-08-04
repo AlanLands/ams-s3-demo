@@ -32,7 +32,17 @@ from html import escape
 
 from common.constants import AI_SUGGESTION_LABEL
 from s3_enhancement import docshell
-from s3_enhancement.docshell import ControlRow, Part, Section
+from s3_enhancement.docshell import (
+    Bullets,
+    Callout,
+    ControlRow,
+    Figure,
+    Para,
+    Part,
+    Section,
+    Sub,
+    Table,
+)
 
 
 class PdfUnavailableError(Exception):
@@ -88,29 +98,6 @@ def _inline(value: str) -> str:
     return _INLINE_CODE_RE.sub(r"<code>\1</code>", marked)
 
 
-def _blocks_html(blocks: list[DocBlock]) -> str:
-    """Render a run of model blocks. Headings inside a section are subheadings —
-    the section's own number came from the skeleton, not from the model."""
-    out: list[str] = []
-    open_list = False
-    for block in blocks:
-        if block.kind == "bullet" and not open_list:
-            out.append("<ul>")
-            open_list = True
-        elif block.kind != "bullet" and open_list:
-            out.append("</ul>")
-            open_list = False
-        if block.kind == "heading":
-            out.append(f"<h4>{_inline(block.text)}</h4>")
-        elif block.kind == "bullet":
-            out.append(f"<li>{_inline(block.text)}</li>")
-        else:
-            out.append(f"<p>{_inline(block.text)}</p>")
-    if open_list:
-        out.append("</ul>")
-    return "".join(out)
-
-
 # The model writes four loose sections (see docgen.build_design_doc_prompt) and
 # titles them however it likes. Each bucket is claimed by the first heading that
 # matches one of its keywords; anything unclaimed lands in "Additional notes"
@@ -161,163 +148,6 @@ def _split_by_bucket(design_doc: str) -> dict[str, list[DocBlock]]:
         found["extra"] = leftovers
     return found
 
-
-def render_document_html(
-    design_doc: str,
-    *,
-    story_label: str,
-    ticket_key: str,
-    diagram_svg: str | None = None,
-    diagram_caption: str = "",
-    source: str = "",
-    changed_files: list[str] | None = None,
-    prepared_by: str = "",
-    today: date | None = None,
-) -> str:
-    """The standalone design document, identical for the HTML and PDF exports."""
-    buckets = _split_by_bucket(design_doc)
-    stamp = docshell.stamp(today or date.today())
-    files = changed_files or []
-    source = source or docshell.source_of(files)
-
-    intro = Part(
-        "Introduction",
-        [
-            Section(
-                "Purpose of this document",
-                docshell.paragraphs(
-                    "This document hands the change described below from engineering to "
-                    f"QA. It is generated from the run that produced the change — {escape(ticket_key)} "
-                    f"for user story {escape(story_label)} — and records what was altered, what it "
-                    "reaches, and where testing should concentrate.",
-                    "It is written before any test has been run. Nothing in it is evidence "
-                    "that the change works; that is the release record's job.",
-                ),
-            ),
-            Section(
-                "Intended audience",
-                docshell.bullets(
-                    [
-                        "<strong>The tester</strong> picking the ticket up — sections 3.1 and "
-                        "3.2 are addressed to them.",
-                        "<strong>The reviewing engineer</strong>, as the record of what was "
-                        "agreed at hand-off.",
-                        "<strong>Whoever supports the application later</strong>, as the "
-                        "account of why this change was made.",
-                    ]
-                ),
-            ),
-            Section(
-                "Scope of this change",
-                _blocks_html(buckets.get("scope", []))
-                or f"<p>{docshell.todo('the model returned no summary section for this run.')}</p>",
-            ),
-        ],
-    )
-
-    change_sections = []
-    if diagram_svg:
-        # The caption is not decoration: without it a reader assumes the model
-        # drew the diagram, which is the one thing it did not do.
-        caption = (
-            f"<figcaption>{escape(diagram_caption)}</figcaption>" if diagram_caption else ""
-        )
-        change_sections.append(
-            Section("Change map", f"<figure>{diagram_svg}{caption}</figure>")
-        )
-    change_sections.append(
-        Section(
-            "Affected areas",
-            _blocks_html(buckets.get("affected", []))
-            or f"<p>{docshell.todo('the model returned no affected-areas section for this run.')}</p>",
-        )
-    )
-    if files:
-        change_sections.append(
-            Section(
-                "Files changed",
-                docshell.table(
-                    ["#", "File"],
-                    [[str(i), f"<code>{escape(path)}</code>"] for i, path in enumerate(files, 1)],
-                    widths=["8%", "92%"],
-                ),
-            )
-        )
-    change = Part("The change", change_sections)
-
-    handoff = Part(
-        "Hand-off to QA",
-        [
-            Section(
-                "Risk areas",
-                _blocks_html(buckets.get("risk", []))
-                or f"<p>{docshell.todo('the model returned no risk section for this run.')}</p>",
-            ),
-            Section(
-                "Suggested QA focus",
-                _blocks_html(buckets.get("focus", []))
-                or f"<p>{docshell.todo('the model returned no QA-focus section for this run.')}</p>",
-            ),
-        ],
-    )
-    if "extra" in buckets:
-        handoff.sections.append(Section("Additional notes", _blocks_html(buckets["extra"])))
-
-    signoff = Part(
-        "Sign-off",
-        [
-            Section(
-                "Prepared by",
-                docshell.table(
-                    ["Role", "Name", "Date"],
-                    [
-                        [
-                            "Engineer",
-                            escape(prepared_by) if prepared_by else docshell.FILL_MARK,
-                            escape(stamp),
-                        ],
-                        ["Reviewer", docshell.FILL_MARK, docshell.FILL_MARK],
-                    ],
-                    widths=["24%", "46%", "30%"],
-                ),
-            ),
-            Section(
-                "Accepted by QA",
-                f"<p>{docshell.todo('countersigned by the tester when the ticket is accepted into QA.')}</p>"
-                + docshell.table(
-                    ["Role", "Name", "Date"],
-                    [["Tester", docshell.FILL_MARK, docshell.FILL_MARK]],
-                    widths=["24%", "46%", "30%"],
-                ),
-            ),
-        ],
-    )
-
-    return docshell.render(
-        kicker="Technical documentation",
-        title="Design Document — Ready for QA",
-        running_title=f"Design Document — Ready for QA ({story_label} · {ticket_key})",
-        system_line=f"{docshell.ORG} · {docshell.SYSTEM}",
-        meta=[
-            ("Document ID", f"{ticket_key}-DD"),
-            ("User story", story_label),
-            ("Version", "v1.0"),
-            ("Mode", "Engineering → QA hand-off"),
-            ("Source", source),
-            ("Generated", stamp),
-            ("Classification", docshell.CLASSIFICATION),
-        ],
-        control=[
-            ControlRow("v1.0", stamp, f"Issued at hand-off to QA from run {ticket_key}."),
-        ],
-        change_note=(
-            "Generated per run. Each run issues a fresh version 1.0 — there is no "
-            "revision history to carry, because the run that produced the document "
-            "is the record."
-        ),
-        parts=[intro, change, handoff, signoff],
-        closing=f'<p class="note">{escape(AI_SUGGESTION_LABEL)}</p>',
-    )
 
 
 _CHROME_CSS = (
@@ -394,7 +224,257 @@ def render_pdf(html: str) -> bytes:
         ) from exc
 
 
-# --- the release record -----------------------------------------------------
+
+
+# --- the QA design document --------------------------------------------------
+
+
+def _model_blocks(blocks: list[DocBlock], *, missing: str) -> list[docshell.Block]:
+    """Turn a bucket of the model's blocks into shell blocks.
+
+    A heading inside a bucket is a *sub*heading: the section's own number came
+    from the skeleton, not from the model. An empty bucket becomes a stated gap
+    rather than an empty section — the reader has to be able to tell "the model
+    said nothing here" apart from "there is nothing to say".
+    """
+    if not blocks:
+        return [Para(docshell.todo(missing))]
+
+    out: list[docshell.Block] = []
+    pending: list[list[docshell.Run]] = []
+
+    def flush() -> None:
+        if pending:
+            out.append(Bullets(list(pending)))
+            pending.clear()
+
+    for block in blocks:
+        if block.kind == "bullet":
+            pending.append(docshell.markup(block.text))
+            continue
+        flush()
+        if block.kind == "heading":
+            out.append(Sub(block.text))
+        else:
+            out.append(Para(docshell.markup(block.text)))
+    flush()
+    return out
+
+
+def _file_table(paths: list[str]) -> Table:
+    return Table(
+        ["#", "File"],
+        [
+            [docshell.runs(str(i)), docshell.runs(path, code=True)]
+            for i, path in enumerate(paths, 1)
+        ],
+        widths=(8, 92),
+    )
+
+
+def build_design_document(
+    design_doc: str,
+    *,
+    story_label: str,
+    ticket_key: str,
+    diagram_svg: str | None = None,
+    diagram_caption: str = "",
+    source: str = "",
+    changed_files: list[str] | None = None,
+    prepared_by: str = "",
+    today: date | None = None,
+) -> docshell.Document:
+    """The QA hand-off document, as the model every renderer draws from."""
+    buckets = _split_by_bucket(design_doc)
+    stamp = docshell.stamp(today or date.today())
+    files = changed_files or []
+    source = source or docshell.source_of(files)
+
+    intro = Part(
+        "Introduction",
+        [
+            Section(
+                "Purpose of this document",
+                [
+                    Para(
+                        docshell.markup(
+                            "This document hands the change described below from engineering "
+                            f"to QA. It is generated from the run that produced the change — "
+                            f"**{ticket_key}** for user story **{story_label}** — and records "
+                            "what was altered, what it reaches, and where testing should "
+                            "concentrate."
+                        )
+                    ),
+                    Para(
+                        docshell.runs(
+                            "It is written before any test has been run. Nothing in it is "
+                            "evidence that the change works; that is the release record's job."
+                        )
+                    ),
+                ],
+            ),
+            Section(
+                "Intended audience",
+                [
+                    Bullets(
+                        [
+                            docshell.markup(
+                                "**The tester** picking the ticket up — sections 3.1 and 3.2 "
+                                "are addressed to them."
+                            ),
+                            docshell.markup(
+                                "**The reviewing engineer**, as the record of what was agreed "
+                                "at hand-off."
+                            ),
+                            docshell.markup(
+                                "**Whoever supports the application later**, as the account of "
+                                "why this change was made."
+                            ),
+                        ]
+                    )
+                ],
+            ),
+            Section(
+                "Scope of this change",
+                _model_blocks(
+                    buckets.get("scope", []),
+                    missing="the model returned no summary section for this run.",
+                ),
+            ),
+        ],
+    )
+
+    change_sections: list[Section] = []
+    if diagram_svg:
+        # The caption is not decoration: without it a reader assumes the model
+        # drew the diagram, which is the one thing it did not do.
+        change_sections.append(
+            Section("Change map", [Figure(diagram_svg, diagram_caption)])
+        )
+    change_sections.append(
+        Section(
+            "Affected areas",
+            _model_blocks(
+                buckets.get("affected", []),
+                missing="the model returned no affected-areas section for this run.",
+            ),
+        )
+    )
+    if files:
+        change_sections.append(Section("Files changed", [_file_table(files)]))
+
+    handoff = Part(
+        "Hand-off to QA",
+        [
+            Section(
+                "Risk areas",
+                _model_blocks(
+                    buckets.get("risk", []),
+                    missing="the model returned no risk section for this run.",
+                ),
+            ),
+            Section(
+                "Suggested QA focus",
+                _model_blocks(
+                    buckets.get("focus", []),
+                    missing="the model returned no QA-focus section for this run.",
+                ),
+            ),
+        ],
+    )
+    if "extra" in buckets:
+        handoff.sections.append(
+            Section("Additional notes", _model_blocks(buckets["extra"], missing=""))
+        )
+
+    signoff = Part(
+        "Sign-off",
+        [
+            Section(
+                "Prepared by",
+                [
+                    Table(
+                        ["Role", "Name", "Date"],
+                        [
+                            [
+                                docshell.runs("Engineer"),
+                                docshell.runs(prepared_by or docshell.FILL_MARK),
+                                docshell.runs(stamp),
+                            ],
+                            [
+                                docshell.runs("Reviewer"),
+                                docshell.runs(docshell.FILL_MARK),
+                                docshell.runs(docshell.FILL_MARK),
+                            ],
+                        ],
+                        widths=(24, 46, 30),
+                    )
+                ],
+            ),
+            Section(
+                "Accepted by QA",
+                [
+                    Para(
+                        docshell.todo(
+                            "countersigned by the tester when the ticket is accepted into QA."
+                        )
+                    ),
+                    Table(
+                        ["Role", "Name", "Date"],
+                        [
+                            [
+                                docshell.runs("Tester"),
+                                docshell.runs(docshell.FILL_MARK),
+                                docshell.runs(docshell.FILL_MARK),
+                            ]
+                        ],
+                        widths=(24, 46, 30),
+                    ),
+                ],
+            ),
+        ],
+    )
+
+    return docshell.Document(
+        kicker="Technical documentation",
+        title="Design Document — Ready for QA",
+        running_title=f"Design Document — Ready for QA ({story_label} · {ticket_key})",
+        system_line=f"{docshell.ORG} · {docshell.SYSTEM}",
+        meta=[
+            ("Document ID", f"{ticket_key}-DD"),
+            ("User story", story_label),
+            ("Version", "v1.0"),
+            ("Mode", "Engineering → QA hand-off"),
+            ("Source", source),
+            ("Generated", stamp),
+            ("Classification", docshell.CLASSIFICATION),
+        ],
+        control=[
+            ControlRow("v1.0", stamp, f"Issued at hand-off to QA from run {ticket_key}.")
+        ],
+        change_note=(
+            "Generated per run. Each run issues a fresh version 1.0 — there is no "
+            "revision history to carry, because the run that produced the document "
+            "is the record."
+        ),
+        parts=[intro, Part("The change", change_sections), handoff, signoff],
+        closing=AI_SUGGESTION_LABEL,
+    )
+
+
+def render_document_html(*args, **kwargs) -> str:
+    """The standalone design document, identical for the HTML and PDF exports."""
+    return docshell.render_html(build_design_document(*args, **kwargs))
+
+
+def render_document_docx(*args, **kwargs) -> bytes:
+    """The same document as a Word file."""
+    from s3_enhancement import docx_export
+
+    return docx_export.render_docx(build_design_document(*args, **kwargs))
+
+
+# --- the release record ------------------------------------------------------
 
 _STATUS_LABEL = {
     "passed": "Evidenced",
@@ -405,24 +485,21 @@ _STATUS_LABEL = {
 }
 
 
-def _steps_table(steps) -> str:
+def _steps_table(steps) -> list[docshell.Block]:
     if not steps:
-        return "<p>None.</p>"
+        return [Para(docshell.runs("None."))]
     rows = []
     for step in steps:
-        command = (
-            f'<code class="step-cmd">$ {escape(step.command)}</code>' if step.command else ""
-        )
-        rows.append(
-            [
-                str(step.order),
-                f"<strong>{escape(step.title)}</strong><br>{escape(step.detail)}{command}",
-            ]
-        )
-    return docshell.table(["#", "Step"], rows, widths=["8%", "92%"])
+        cell = [docshell.Run(step.title, bold=True), docshell.Run("\n" + step.detail)]
+        if step.command:
+            cell.append(docshell.Run("\n$ " + step.command, code=True))
+        rows.append([docshell.runs(str(step.order)), cell])
+    return [Table(["#", "Step"], rows, widths=(8, 92))]
 
 
-def render_release_record_html(record, *, today: date | None = None, source: str = "") -> str:
+def build_release_record(
+    record, *, today: date | None = None, source: str = ""
+) -> docshell.Document:
     """The release record: what shipped, the evidence, and who signed it.
 
     Deliberately leads with what shipped and ends with the notes, rather than
@@ -430,78 +507,75 @@ def render_release_record_html(record, *, today: date | None = None, source: str
     claim, not reading an announcement. The gaps section sits above the
     approvals so nobody signs without having scrolled past it.
 
-    Sections that the run produced nothing for are omitted rather than left
-    empty, which is why `docshell` numbers parts at render time: a release with
-    no source-control flow and no release notes has to come out with a
-    contiguous 1-2-3, not with holes where the absent parts would have been.
+    Sections the run produced nothing for are omitted rather than left empty,
+    which is why `docshell` numbers parts at render time: a release with no
+    source-control flow and no release notes has to come out with a contiguous
+    1-2-3, not with holes where the absent parts would have been.
     """
     stamp = docshell.stamp(today or record.generated_at.date())
     source = source or docshell.source_of(record.changed_files)
 
     # --- part 1: what shipped -------------------------------------------------
-    if record.changed_files:
-        shipped = docshell.table(
-            ["#", "File"],
-            [
-                [str(i), f"<code>{escape(path)}</code>"]
-                for i, path in enumerate(record.changed_files, 1)
-            ],
-            widths=["8%", "92%"],
-        )
-    else:
-        shipped = "<p>No files recorded for this release.</p>"
-
+    shipped: list[docshell.Block] = (
+        [_file_table(record.changed_files)]
+        if record.changed_files
+        else [Para(docshell.runs("No files recorded for this release."))]
+    )
     summary = Part("Release summary", [Section("What shipped", shipped)])
     if record.diagram_svg:
-        caption = (
-            f"<figcaption>{escape(record.diagram_caption)}</figcaption>"
-            if record.diagram_caption
-            else ""
-        )
         summary.sections.append(
-            Section("Change map", f"<figure>{record.diagram_svg}{caption}</figure>")
+            Section("Change map", [Figure(record.diagram_svg, record.diagram_caption)])
         )
 
     # --- part 2: evidence -----------------------------------------------------
     if record.evidence:
         rows = []
         for item in record.evidence:
-            verdict = (
-                '<span class="ok">PASS</span>' if item.passed else '<span class="bad">FAIL</span>'
+            verdict = docshell.runs(
+                "PASS" if item.passed else "FAIL", bold=True, tone="ok" if item.passed else "bad"
             )
             counts = f"{item.passed_count}/{item.total}" if item.total else "—"
-            rows.append([escape(item.name), counts, verdict, escape(item.note)])
-        evidence_html = docshell.table(
-            ["Suite", "Passed", "Result", "Note"], rows, widths=["30%", "12%", "12%", "46%"]
-        )
+            rows.append(
+                [
+                    docshell.runs(item.name),
+                    docshell.runs(counts),
+                    verdict,
+                    docshell.runs(item.note),
+                ]
+            )
+        evidence_blocks: list[docshell.Block] = [
+            Table(["Suite", "Passed", "Result", "Note"], rows, widths=(30, 12, 12, 46))
+        ]
     else:
-        evidence_html = "<p>No test runs were recorded for this release.</p>"
+        evidence_blocks = [Para(docshell.runs("No test runs were recorded for this release."))]
 
-    evidence = Part("Evidence", [Section("Test evidence", evidence_html)])
+    evidence = Part("Evidence", [Section("Test evidence", evidence_blocks)])
 
     if record.matrix is not None:
         rows = []
         for row in record.matrix.rows:
-            tests = "<br>".join(escape(name) for name in row.test_names) or "—"
-            status = _STATUS_LABEL.get(row.status, row.status)
-            css = "ok" if row.status == "passed" else "bad" if row.status == "failed" else ""
+            tone = "ok" if row.status == "passed" else "bad" if row.status == "failed" else ""
             rows.append(
                 [
-                    f"<strong>{escape(row.criterion_id)}</strong><br>"
-                    f"{escape(row.criterion_text)}",
-                    escape(", ".join(row.scenario_ids)) or "—",
-                    f'<span class="mono">{tests}</span>',
-                    f'<span class="{css}">{escape(status)}</span>',
+                    [
+                        docshell.Run(row.criterion_id, bold=True),
+                        docshell.Run("\n" + row.criterion_text),
+                    ],
+                    docshell.runs(", ".join(row.scenario_ids) or "—"),
+                    docshell.runs("\n".join(row.test_names) or "—", code=True),
+                    docshell.runs(_STATUS_LABEL.get(row.status, row.status), tone=tone),
                 ]
             )
         evidence.sections.append(
             Section(
                 "Acceptance criteria",
-                docshell.table(
-                    ["Criterion", "Scenarios", "Automated test", "Result"],
-                    rows,
-                    widths=["42%", "14%", "30%", "14%"],
-                ),
+                [
+                    Table(
+                        ["Criterion", "Scenarios", "Automated test", "Result"],
+                        rows,
+                        widths=(42, 14, 30, 14),
+                    )
+                ],
             )
         )
 
@@ -509,74 +583,112 @@ def render_release_record_html(record, *, today: date | None = None, source: str
         evidence.sections.append(
             Section(
                 "Not evidenced by this release",
-                '<div class="callout">'
-                "<p>Everything below is outside what this run proved. It is listed "
-                "because a release document that only records successes is an "
-                "advertisement.</p>"
-                + docshell.bullets([escape(gap) for gap in record.unproven])
-                + "</div>",
+                [
+                    Callout(
+                        [
+                            Para(
+                                docshell.runs(
+                                    "Everything below is outside what this run proved. It is "
+                                    "listed because a release document that only records "
+                                    "successes is an advertisement."
+                                )
+                            ),
+                            Bullets([docshell.runs(gap) for gap in record.unproven]),
+                        ]
+                    )
+                ],
             )
         )
 
     # --- part 3: authorisation ------------------------------------------------
     if record.approvals:
-        approvals_html = docshell.table(
-            ["When", "Action", "Detail"],
-            [
-                [escape(item["ts"]), escape(item["action"]), escape(item["detail"])]
-                for item in record.approvals
-            ],
-            widths=["22%", "24%", "54%"],
-        )
+        approvals: list[docshell.Block] = [
+            Table(
+                ["When", "Action", "Detail"],
+                [
+                    [
+                        docshell.runs(item["ts"]),
+                        docshell.runs(item["action"]),
+                        docshell.runs(item["detail"]),
+                    ]
+                    for item in record.approvals
+                ],
+                widths=(22, 24, 54),
+            )
+        ]
     else:
-        approvals_html = "<p>No human approvals were recorded against this ticket.</p>"
+        approvals = [
+            Para(docshell.runs("No human approvals were recorded against this ticket."))
+        ]
 
-    authorisation = Part("Authorisation", [Section("Approvals", approvals_html)])
+    authorisation = Part("Authorisation", [Section("Approvals", approvals)])
 
     branch = getattr(record, "branch", None)
     if branch is not None:
         rows = [
             [
-                "Branch",
-                f"<code>{escape(branch.branch)}</code> (cut from "
-                f"<code>{escape(branch.base)}</code>)",
+                docshell.runs("Branch"),
+                [
+                    docshell.Run(branch.branch, code=True),
+                    docshell.Run(" (cut from "),
+                    docshell.Run(branch.base, code=True),
+                    docshell.Run(")"),
+                ],
             ],
-            ["Status", escape(branch.status)],
+            [docshell.runs("Status"), docshell.runs(branch.status)],
         ]
         if branch.commit is not None:
             rows.append(
                 [
-                    "Commit",
-                    f"<code>{escape(branch.commit.sha)}</code> — "
-                    f"{escape(branch.commit.message)} "
-                    f"({len(branch.commit.files)} file(s), {escape(branch.commit.committed_at)})",
+                    docshell.runs("Commit"),
+                    [
+                        docshell.Run(branch.commit.sha, code=True),
+                        docshell.Run(
+                            f" — {branch.commit.message} "
+                            f"({len(branch.commit.files)} file(s), "
+                            f"{branch.commit.committed_at})"
+                        ),
+                    ],
                 ]
             )
         if branch.pushed_at:
             rows.append(
-                ["Pipeline", f"{escape(branch.pipeline_id)} queued {escape(branch.pushed_at)}"]
+                [
+                    docshell.runs("Pipeline"),
+                    docshell.runs(f"{branch.pipeline_id} queued {branch.pushed_at}"),
+                ]
             )
         authorisation.sections.append(
             Section(
                 "Source control",
-                docshell.table(["Item", "Value"], rows, widths=["22%", "78%"])
-                # Stated here as well as in the gaps section: a reader who skims
-                # to the branch name and stops must not walk away thinking git ran.
-                + '<p class="note">Modelled, not executed — this console does not run '
-                "git or contact a remote. See “Not evidenced by this release”.</p>",
+                [
+                    Table(["Item", "Value"], rows, widths=(22, 78)),
+                    # Stated here as well as in the gaps section: a reader who
+                    # skims to the branch name and stops must not walk away
+                    # thinking git ran.
+                    Para(
+                        docshell.runs(
+                            "Modelled, not executed — this console does not run git or "
+                            "contact a remote. See “Not evidenced by this release”."
+                        ),
+                        note=True,
+                    ),
+                ],
             )
         )
 
     # --- part 4: go-live ------------------------------------------------------
-    order = (
-        f"<p><strong>Order matters.</strong> {escape(record.plan.order_reason)}</p>"
-        if record.plan.order_reason
-        else ""
-    )
+    deployment: list[docshell.Block] = []
+    if record.plan.order_reason:
+        deployment.append(
+            Para(docshell.markup(f"**Order matters.** {record.plan.order_reason}"))
+        )
+    deployment.extend(_steps_table(record.plan.steps))
+
     golive = Part(
         "Go-live",
         [
-            Section("Deployment", order + _steps_table(record.plan.steps)),
+            Section("Deployment", deployment),
             Section("Rollback", _steps_table(record.plan.rollback)),
         ],
     )
@@ -585,32 +697,28 @@ def render_release_record_html(record, *, today: date | None = None, source: str
 
     # --- part 5: the notes, only when a model produced them --------------------
     if record.notes is not None:
-        parts.append(
-            Part(
-                "Release notes",
-                [
-                    Section(
-                        heading,
-                        '<p class="note">AI-drafted; the rest of this record is computed.</p>'
-                        f"<p>{_inline(body)}</p>"
-                        if first
-                        else f"<p>{_inline(body)}</p>",
+        note_sections = []
+        for first, heading, text in (
+            (True, "Client change log", record.notes.changelog),
+            (False, "Internal operations note", record.notes.ops_note),
+            (False, "User guide — what's new", record.notes.whats_new),
+        ):
+            blocks: list[docshell.Block] = []
+            if first:
+                blocks.append(
+                    Para(
+                        docshell.runs("AI-drafted; the rest of this record is computed."),
+                        note=True,
                     )
-                    for first, heading, body in (
-                        (True, "Client change log", record.notes.changelog),
-                        (False, "Internal operations note", record.notes.ops_note),
-                        (False, "User guide — what's new", record.notes.whats_new),
-                    )
-                ],
-            )
-        )
+                )
+            blocks.append(Para(docshell.markup(text)))
+            note_sections.append(Section(heading, blocks))
+        parts.append(Part("Release notes", note_sections))
 
-    return docshell.render(
+    return docshell.Document(
         kicker="Technical documentation",
         title="Release Record — Ready for Release",
-        running_title=(
-            f"Release Record ({record.story_label} · {record.ticket_key})"
-        ),
+        running_title=f"Release Record ({record.story_label} · {record.ticket_key})",
         system_line=f"{docshell.ORG} · {docshell.SYSTEM}",
         meta=[
             ("Document ID", f"{record.ticket_key}-RR"),
@@ -624,8 +732,10 @@ def render_release_record_html(record, *, today: date | None = None, source: str
         ],
         control=[
             ControlRow(
-                "v1.0", stamp, f"Assembled at release of {record.ticket_key} by {record.released_by}."
-            ),
+                "v1.0",
+                stamp,
+                f"Assembled at release of {record.ticket_key} by {record.released_by}.",
+            )
         ],
         change_note=(
             "Assembled from what the run produced — the changed files, the test runs, "
@@ -633,5 +743,15 @@ def render_release_record_html(record, *, today: date | None = None, source: str
             "in it is re-stated from memory."
         ),
         parts=parts,
-        closing=f'<p class="note">{escape(AI_SUGGESTION_LABEL)}</p>',
+        closing=AI_SUGGESTION_LABEL,
     )
+
+
+def render_release_record_html(*args, **kwargs) -> str:
+    return docshell.render_html(build_release_record(*args, **kwargs))
+
+
+def render_release_record_docx(*args, **kwargs) -> bytes:
+    from s3_enhancement import docx_export
+
+    return docx_export.render_docx(build_release_record(*args, **kwargs))

@@ -892,7 +892,7 @@ export const s3Api = {
   // ApiError so the 503 "no chromium" fallback can be caught by status.
   designDocDocument: async (
     tierName: string,
-    format: 'pdf' | 'html',
+    format: 'pdf' | 'html' | 'docx',
     targetId?: string | null,
     ticketNumber?: string,
     downstreamApps?: string[]

@@ -2638,3 +2638,54 @@ def test_release_attach_requires_a_ticket():
         json={"tier_name": "Elite", "target_id": "mockapp-endorsement-field-add"},
     )
     assert response.status_code == 422
+
+
+# --- the Word export ---------------------------------------------------------
+
+
+def test_design_doc_document_returns_a_word_file():
+    client = _client()
+    with patch("apps.console.api.routers.s3.draft_design_doc", return_value="1. Summary\nx"):
+        response = client.post(
+            "/api/s3/design-doc/document",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "format": "docx",
+                "include_diagram": False,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert "US-2026-042-design-doc.docx" in response.headers["content-disposition"]
+    # A .docx is a zip; anything else here is a file Word will refuse to open.
+    assert response.content.startswith(b"PK")
+
+
+def test_the_word_export_needs_no_browser():
+    """The PDF path 503s without Chromium. The Word path must not — it is the
+    fallback a locked-down host is left with, so it cannot share that
+    dependency for anything but the change map."""
+    client = _client()
+    with (
+        patch("apps.console.api.routers.s3.draft_design_doc", return_value="1. Summary\nx"),
+        patch(
+            "apps.console.api.routers.s3.render_pdf",
+            side_effect=AssertionError("the Word path must not render a PDF"),
+        ),
+        patch("s3_enhancement.docx_export._rasterise", return_value=None),
+    ):
+        response = client.post(
+            "/api/s3/design-doc/document",
+            json={
+                "tier_name": "Elite",
+                "target_id": "mockapp-endorsement-field-add",
+                "format": "docx",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"PK")

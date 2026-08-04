@@ -360,6 +360,45 @@ State lives at `s3_enhancement/out/{proposal_id}/scm.json`, keyed by proposal
 like staged files, backups, and rejections — so `demo/reset_s3.sh`'s
 `rm -rf s3_enhancement/out/*` already clears it.
 
+## The two hand-off documents share one model, and three renderers
+
+`s3_enhancement/docshell.py` holds the controlled-document model — cover,
+contents, document control, numbered parts — and the HTML renderer.
+`s3_enhancement/docx_export.py` renders the same model to Word.
+`s3_enhancement/designdoc.py` decides what goes in the sections and owns the
+PDF path. The shape follows the client's own technical documents, branded
+**MapleSure**, never with their logo or name (hard rule 2 — the reference
+screenshots live in the gitignored `wordDocforQAandRelease/`).
+
+Four things hold it together:
+
+- **Sections carry blocks, not HTML strings.** `Para`, `Sub`, `Bullets`,
+  `Table`, `Figure`, `Callout` — that is the whole vocabulary, and both
+  renderers draw those and nothing else. An HTML-string body would make the
+  Word writer a parser, and the two would drift the first time one learned a
+  tag the other did not. Adding a block type means teaching both;
+  `tests/test_s3_docx_export.py` fails loudly if you teach only one.
+- **Numbering is assigned at render time.** Both documents drop whole parts
+  when the run produced nothing for them (no source-control flow, no release
+  notes), so hard-coded numbers would leave holes. `docshell.numbered()`
+  numbers whatever it is handed.
+- **The HTML contents page has no page numbers, on purpose.** Chromium
+  paginates at print time and exposes nothing to compute one from, so any
+  number there would be a guess printed as a fact — the entries are anchors.
+  Word gets a real `TOC` field plus `w:updateFields`, because Word computes
+  them.
+- **Word needs no browser; the PDF does.** `render_pdf` 503s without Chromium
+  and the console falls back to browser print. The `.docx` path must never
+  acquire that dependency for anything but rasterising the change map, and a
+  missing browser there writes a stated "not embedded" line rather than
+  silently dropping the diagram.
+
+Two traps already paid for: `paragraph.text = ""` does **not** clear a
+python-docx paragraph — it leaves an empty run at `runs[0]` carrying none of the
+real formatting (`_clear()` exists for this). And the cover must stay in the
+**same section** as the body; a second section without its own header/footer
+references leaves the running chrome to Word's inherit-when-absent rule.
+
 ## Two things in the QA hand-off are deliberately not AI output
 
 `s3_enhancement/diagram.py` (the design doc's change map) and

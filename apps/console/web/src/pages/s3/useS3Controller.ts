@@ -1029,7 +1029,9 @@ export function useS3Controller() {
   // machine without that browser installed answers 503, which is not an
   // error worth surfacing — the browser in front of the user can print the
   // same document to PDF itself, so fall back to that instead.
-  async function handleExportDesignDoc(format: 'pdf' | 'html') {
+  // Word needs no browser on the server, so it never 503s — the fallback
+  // below is a PDF-only path.
+  async function handleExportDesignDoc(format: 'pdf' | 'html' | 'docx') {
     if (!activeTicketKey) return
     const active = getLinked(activeTicketKey)
     setExportingDoc(format)
@@ -1231,7 +1233,7 @@ export function useS3Controller() {
   // Everything the record needs that only this browser knows. Approvals are
   // deliberately absent — the server reads those from its own event log
   // rather than taking the client's word for who signed what.
-  function releaseRecordPayload(format: 'pdf' | 'html') {
+  function releaseRecordPayload(format: 'pdf' | 'html' | 'docx') {
     const active = activeTicketKey ? getLinked(activeTicketKey) : undefined
     return {
       tier_name: active?.tierName ?? 'Elite',
@@ -1259,14 +1261,14 @@ export function useS3Controller() {
     }
   }
 
-  async function handleDownloadRecord() {
+  async function handleDownloadRecord(format: 'pdf' | 'docx' = 'pdf') {
     if (!activeTicketKey) return
     setExportingRecord(true)
     setReleaseError(null)
     try {
-      const blob = await s3Api.releaseRecord(releaseRecordPayload('pdf'))
+      const blob = await s3Api.releaseRecord(releaseRecordPayload(format))
       const label = getLinked(activeTicketKey)?.storyLabel ?? 'release'
-      downloadBlob(`${label}-release-record.pdf`, blob)
+      downloadBlob(`${label}-release-record.${format}`, blob)
     } catch (err) {
       setReleaseError(err instanceof ApiError ? err.message : 'Could not build the record.')
     } finally {

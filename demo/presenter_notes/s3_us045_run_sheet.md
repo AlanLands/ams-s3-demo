@@ -230,11 +230,13 @@ in the run depends on it.
 
 ## Still open against her feedback
 
-- **Word export of the design doc** — asked for, with a document template: table of
-  contents, version number, header/footer and a logo. Today it is PDF only. Not on the
-  critical path for this run sheet. Note the branding constraint: her answer to "should we
-  use client names" was *"we can mimic and mock-up"* — build it as **MapleSure**, not
-  client branding.
+- ~~**Word export of the design doc**~~ — **done.** Both hand-off documents now export
+  as `.docx` from a **⬇ Word** button beside Download PDF, in the same shape as the
+  client's own technical documents: cover with the document identity, contents page
+  (a real Word TOC field, so Word numbers the pages), document control, numbered
+  sections, header/footer with `Page N of M`. Gaps the run cannot fill are marked
+  `[TODO — SME input required]` rather than invented. Branded **MapleSure**, per her
+  own answer to "should we use client names" — *"we can mimic and mock-up"*.
 - **Retitling the release document "Change Request"** — she asked; held by the project
   owner on 2026-08-03. Do not apply without asking.
 - **Highlighting which AI skills were used**, somewhere around impact analysis. Raised for
