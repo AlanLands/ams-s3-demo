@@ -34,6 +34,7 @@ from common.ticket_events import (
 from s3_enhancement import (
     admin_ops,
     applications,
+    qa_handback,
     routing,
     scm,
     scm_live,
@@ -1124,6 +1125,40 @@ class AssignTicketRequest(BaseModel):
     assignee: str | None = None
 
 
+def _current_assignee(key: str) -> str | None:
+    """Who holds a ticket right now, read from Jira rather than from the caller.
+
+    A read that fails comes back as "nobody", which is the conservative answer
+    everywhere this is used: `_assert_may_reassign` then refuses instead of
+    granting, and the QA hand-back finds no holder to skip.
+    """
+    try:
+        return (get_jira_client().get_issue(key) or {}).get("assignee")
+    except JiraError:
+        return None
+
+
+def _assert_may_reassign(key: str, identity: Identity) -> str | None:
+    """Refuse a caller taking a ticket **off** somebody else. Returns the
+    current holder so the caller can use it without a second read.
+
+    A manager may do anything; anyone else may pick up an unassigned ticket or
+    hand on a ticket already assigned to them. Shared by the assign endpoint and
+    the QA hand-back so the two can never drift into disagreeing about who may
+    move a ticket.
+    """
+    current = _current_assignee(key)
+    if identity.role != "manager" and current not in (None, "", identity.name):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"{key} is assigned to {current}. Only a manager can "
+                f"reassign someone else's ticket."
+            ),
+        )
+    return current
+
+
 @router.post("/jira/assign-ticket")
 def assign_ticket(
     payload: AssignTicketRequest, identity: Identity = Depends(require_identity)
@@ -1146,21 +1181,7 @@ def assign_ticket(
     approvals (see CLAUDE.md).
     """
     assignee = (payload.assignee or "").strip() or None
-    if identity.role != "manager":
-        try:
-            current = (get_jira_client().get_issue(payload.key) or {}).get("assignee")
-        except JiraError:
-            # Never let an inability to read the current holder turn into a
-            # silent grant — refuse and let a manager do it.
-            current = None
-        if current not in (None, "", identity.name):
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"{payload.key} is assigned to {current}. Only a manager can "
-                    f"reassign someone else's ticket."
-                ),
-            )
+    _assert_may_reassign(payload.key, identity)
     try:
         issue = get_jira_client().assign_issue(payload.key, assignee)
     except JiraError as exc:
@@ -1174,6 +1195,78 @@ def assign_ticket(
     else:
         record_event(payload.key, "human", "ticket_assigned", detail=assignee)
     return {"label": AI_SUGGESTION_LABEL, "issue": issue}
+
+
+class QaReturnRequest(BaseModel):
+    key: str
+    # What the tester found. Free text, and the only thing the client gets to
+    # decide here — who the ticket goes back to is derived server-side below.
+    reason: str = ""
+
+
+@router.post("/jira/return-to-developer")
+def return_ticket_to_developer(
+    payload: QaReturnRequest, identity: Identity = Depends(require_identity)
+) -> dict:
+    """QA fails a ticket and hands it back to the developer who built it.
+
+    The mirror of the hand-off on the design-doc stage, and the half that was
+    missing: a tester who found a defect had no control anywhere in the console
+    that moved the ticket, so the round trip ended in a conversation and the
+    board went stale. This assigns the ticket back, returns it to In Progress,
+    and records the reason on the timeline in one action, because a hand-back
+    split across three clicks is one a tester can leave half-done.
+
+    Who "the developer" is comes from `qa_handback.previous_developer`, reading
+    the ticket's own assignee history — never from the request. The reason is
+    the client's to write; the responsibility is not.
+    """
+    reason = payload.reason.strip()
+    current = _assert_may_reassign(payload.key, identity)
+    events = events_for(payload.key)
+    developer = qa_handback.previous_developer(events, current_holder=current)
+    if developer is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{payload.key} has no earlier developer recorded on it, so there is "
+                f"nobody to hand it back to. A manager can reassign it from the board."
+            ),
+        )
+
+    client = get_jira_client()
+    try:
+        issue = client.assign_issue(payload.key, developer)
+        # Back to In Progress, not To Do: the change exists, is applied, and is
+        # being fixed. To Do would read as work that has not been started.
+        issue = {**issue, **client.set_issue_status(payload.key, "In Progress")}
+    except JiraError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    evidence = qa_handback.failure_evidence(events)
+    # Numbered, because `record_event` dedups on (ticket, actor, action,
+    # detail) and the same defect reported twice in the same words is exactly
+    # the history worth keeping. See `qa_handback.return_count`.
+    attempt = qa_handback.return_count(events) + 1
+    detail = f"#{attempt} to {developer} — {reason or 'no reason given'}"
+    if evidence:
+        detail += f" [{evidence}]"
+    record_event(payload.key, "human", qa_handback.QA_RETURNED_ACTION, detail=detail)
+    # The same two events every other assignment and transition writes, so the
+    # timeline reads uniformly and `previous_developer` can walk this hand-back
+    # on the next round trip.
+    record_event(payload.key, "human", "ticket_assigned", detail=developer)
+    record_event(payload.key, "human", "ticket_status_changed", detail="In Progress")
+    return {
+        "label": AI_SUGGESTION_LABEL,
+        "issue": issue,
+        "developer": developer,
+        "reason": reason,
+        # "" when no suite failed — the console says so rather than implying a
+        # red run behind a return that rests on the tester's judgement.
+        "evidence": evidence,
+        "returns": attempt,
+    }
 
 
 class TicketStatusRequest(BaseModel):
@@ -1897,13 +1990,6 @@ def _record_story_ticket(ticket: story_intake.StoryTicket) -> None:
             f";target_method={_detail_value(match.method)}"
         )
     record_event(ticket.key, "system", story_intake.TICKET_CREATED_ACTION, detail=detail)
-    default_assignee = _story_default_assignee()
-    if default_assignee is not None:
-        # The board row carries this assignee on every load; without an event
-        # for it the timeline would show a ticket someone is holding with no
-        # record of how they came to hold it. Actor "system", not "human" —
-        # nobody made this decision, a default did.
-        record_event(ticket.key, "system", "ticket_assigned", detail=default_assignee)
     if match.resolved and match.target is not None:
         record_event(
             ticket.key,
@@ -1938,6 +2024,36 @@ def _story_default_assignee() -> str | None:
     return name if name in ROSTER else None
 
 
+# Written by every path that assigns or clears a ticket. One of these existing
+# is what makes the ticket's assignee history authoritative — see below.
+_ASSIGNMENT_ACTIONS = ("ticket_assigned", "ticket_unassigned")
+
+
+def _ensure_default_assignment_event(key: str, assignee: str) -> None:
+    """Record the default assignment on a story ticket that has no assignment
+    history at all.
+
+    Checked on every board load rather than once at first sighting, because the
+    board row's assignee is *derived* on every load while an event is written
+    once — and anything that misses that one moment (an events log cleared
+    mid-run, a ticket first seen by an older build) leaves a ticket the board
+    shows as Ravi's with nothing in its history saying so. That is not just an
+    untidy timeline: `qa_handback.previous_developer` reads exactly this
+    history, so QA cannot hand the ticket back to a developer whose name was
+    never written down. Found on 2026-08-04 by a live run doing precisely that.
+
+    The guard is "no assignment event at all", not "no event naming this
+    person": once anyone has assigned or unassigned the ticket, the log is the
+    record of a decision somebody made, and back-filling a default into it
+    would be inventing history. `record_event` is idempotent, so reaching this
+    twice costs a read and writes nothing.
+    """
+    if any(event.get("action") in _ASSIGNMENT_ACTIONS for event in events_for(key)):
+        return
+    # Actor "system", not "human" — nobody made this decision, a default did.
+    record_event(key, "system", "ticket_assigned", detail=assignee)
+
+
 def _story_board_rows(issues: list[dict], project_key: str) -> list[dict]:
     """Board rows for every user story under `stories/` that no existing ticket covers.
 
@@ -1963,9 +2079,15 @@ def _story_board_rows(issues: list[dict], project_key: str) -> list[dict]:
     existing_keys = {issue.get("key") for issue in issues}
 
     rows: list[dict] = []
+    default_assignee = _story_default_assignee()
     for ticket in story_intake.all_story_tickets(project_key):
         if ticket.story_id in covered_ids or ticket.key in existing_keys:
             continue
+        if default_assignee is not None:
+            try:
+                _ensure_default_assignment_event(ticket.key, default_assignee)
+            except Exception:  # noqa: BLE001 - same backstop as below
+                pass
         if not _story_link_fields(ticket.key):
             try:
                 _record_story_ticket(ticket)

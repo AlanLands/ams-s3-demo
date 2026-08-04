@@ -288,10 +288,12 @@ be set-once; it is now assign / reassign / unassign, and `POST
 assignee** — a manager may do anything, and anyone else may only pick up an
 unassigned ticket or hand on one already assigned to them. That last rule is
 what lets an engineer hand a ticket to a tester at QA without being able to
-take a ticket off a third person. The return leg (tester → engineer on a failed
-test) is permitted by the same rule but has **no control in the console yet** —
-the Reassign dialog renders for a manager only, so if you are asked about it on
-stage, the honest answer is "a manager hands it back today".
+take a ticket off a third person. The return leg is the **Failed QA — hand it
+back** card at the bottom of the tester's test stage: it reassigns to the
+developer, moves the ticket back to In Progress and records the tester's
+finding in one action. The developer's name is derived from the ticket's
+assignee history server-side, so the tester writes what failed and never picks
+who it goes to.
 
 ---
 

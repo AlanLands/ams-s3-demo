@@ -434,6 +434,28 @@ passed `reason` as the description (`useS3Controller.ts`), which handed another
 team a one-line ticket they had to come back and ask about. It falls back to
 `reason` when absent so an older recording still creates a usable ticket.
 
+## QA can fail a ticket, and the developer it goes back to is derived
+
+`POST /s3/jira/return-to-developer` (the "Failed QA — hand it back" card on the
+tester's test stage) is the return leg of the QA hand-off, added 2026-08-04 on
+the client's 2026-08-03 walkthrough ask. It reassigns, moves the ticket to **In
+Progress** and records the tester's finding in one action — three separate
+controls is a hand-back a tester can leave half-done.
+
+`qa_handback.previous_developer` reads the ticket's own assignee history for
+the last holder who is neither the current one nor a tester. **Never take that
+name from the client** — same rule as `scm.commit_blockers` and the release
+record's approvals. Two things it must keep doing: skip testers (a
+tester-to-tester second-pair-of-eyes hand-off must not make a tester the
+developer), and return 409 rather than guess when there is no earlier
+non-tester holder. Permission goes through `_assert_may_reassign`, shared with
+`/jira/assign-ticket`, so the fail path can never become a way around the rule
+that nobody takes a ticket off a third person.
+
+The recorded reason is numbered (`#2 to Ravi Kumar — …`) because `record_event`
+dedups on (ticket, actor, action, detail): the same defect reported twice in
+the same words is exactly the history worth keeping.
+
 ## Hard rules — carried over, still non-negotiable
 
 1. **No real client data, ever.** All data must be synthetic (generated) or from public

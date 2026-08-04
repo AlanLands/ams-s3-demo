@@ -969,6 +969,60 @@ def test_board_opens_a_ticket_for_a_story_with_none(tmp_path, monkeypatch):
     assert ("system", "ticket_assigned", s3_router.DEFAULT_STORY_ASSIGNEE) in events
 
 
+def test_board_backfills_the_default_assignment_on_a_ticket_it_has_seen_before(
+    tmp_path, monkeypatch
+):
+    """The board row's assignee is derived on every load; the event is written
+    once. A log that missed that one moment — cleared mid-run, or written by a
+    build older than this default — left a ticket the board showed as Ravi's
+    with nothing in its history saying so, and `qa_handback.previous_developer`
+    reads exactly that history, so QA could not hand it back. Found by a live
+    run on 2026-08-04.
+
+    So the event is ensured on every load, not just at first sighting.
+    """
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    monkeypatch.setattr(story_intake, "STORIES_ROOT", tmp_path / "stories")
+    _write_scratch_story(tmp_path / "stories", "US-2027-008.md", "US-2027-008: Renewal Reminder")
+    monkeypatch.setattr(s3_router, "_STORY_TARGET_MEMO", {})
+    client = _client()
+
+    # Stand in for "this ticket was first seen by an older build": the link
+    # fields exist, so `_record_story_ticket` is skipped, but no assignment was
+    # ever recorded.
+    record_event("AMS-1008", "system", story_intake.TICKET_CREATED_ACTION, detail="story_file=x.md")
+
+    with patch.object(s3_router, "resolve_target_for_story", side_effect=AssertionError("resolved")):
+        board = client.get("/api/s3/jira/board")
+
+    assert board.status_code == 200
+    actions = [(event["actor"], event["action"], event["detail"]) for event in events_for("AMS-1008")]
+    assert ("system", "ticket_assigned", s3_router.DEFAULT_STORY_ASSIGNEE) in actions
+
+
+def test_board_does_not_backfill_over_a_real_assignment_decision(tmp_path, monkeypatch):
+    """Once anyone has assigned or unassigned the ticket, its history is the
+    record of a decision a human made. Back-filling a default into it would be
+    inventing history — including re-assigning a ticket a manager deliberately
+    unassigned."""
+    monkeypatch.setenv("TICKET_EVENTS_PATH", str(tmp_path / "ticket_events.jsonl"))
+    monkeypatch.setattr(story_intake, "STORIES_ROOT", tmp_path / "stories")
+    _write_scratch_story(tmp_path / "stories", "US-2027-009.md", "US-2027-009: Statement Reissue")
+    monkeypatch.setattr(s3_router, "_STORY_TARGET_MEMO", {})
+    client = _client()
+    record_event("AMS-1009", "human", "ticket_unassigned", detail="")
+
+    with patch.object(
+        s3_router, "resolve_target_for_story", return_value=TargetMatch(target=None, method="none")
+    ):
+        assert client.get("/api/s3/jira/board").status_code == 200
+
+    assigned = [
+        event for event in events_for("AMS-1009") if event["action"] == "ticket_assigned"
+    ]
+    assert assigned == []
+
+
 def test_story_default_assignee_falls_back_to_unassigned_when_off_the_roster(monkeypatch):
     """A misspelled or retired name would put the ticket on nobody's board —
     the console filters by exact display name — so it lands unassigned in the
