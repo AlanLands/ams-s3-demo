@@ -218,50 +218,34 @@
 </div>
 
 <div class="section">
-  <h2>The classification bites twice</h2>
-  <p>The obvious effect is at the gate: how many prospects get in. The second effect is
-  past it, in the catalogue — some plans attach to existing coverage and are open to
-  members only, so a prospect admitted <em>as a guest</em> also reaches a smaller
-  catalogue. The two effects run in opposite directions, and reporting only the first
-  would understate the gap between the policies.</p>
+  <h2>What each policy costs, priced against the book</h2>
+  <p>The question the analysis answers is how many prospects each policy lets in. Both
+  options are measured, not just the recommended one — pricing only the option you
+  advocate is advocacy, and the figure below is what reopens the decision later if the
+  narrower grant turns out to cost too much.</p>
 
   <figure>
-    <div class="fig-title">What each policy changes, measured against the seeded book</div>
-    <div class="fig-sub">Left: prospects admitted at the gate, of 6. Right: plan openings
-      those admitted prospects can reach.</div>
+    <div class="fig-title">Prospects admitted at the gate, measured against the seeded book</div>
+    <div class="fig-sub">Of 6 prospects on the roster, under each of the two policies.</div>
     <div class="legend">
       <span><span class="sw" style="background:var(--policy-member)"></span>Prospects treated as members</span>
       <span><span class="sw" style="background:var(--policy-guest)"></span>Prospects treated as guests</span>
     </div>
-    <svg viewBox="0 0 640 168" role="img" aria-label="Prospects admitted: member policy 3, guest policy 2. Plan openings reachable: member policy 7, guest policy 4.">
-      <!-- left panel: admitted at gate (max 6) -->
-      <text x="0" y="12" font-size="11" font-weight="700" fill="#1a1a1a">Admitted at the gate</text>
+    <svg viewBox="0 0 640 128" role="img" aria-label="Prospects admitted of 6: member policy 3, guest policy 2. The two policies disagree on 3 prospects, in both directions.">
+      <text x="0" y="12" font-size="11" font-weight="700" fill="#1a1a1a">Admitted</text>
       <text x="0" y="26" font-size="10" fill="#8a8a8a">of 6 prospects</text>
-      <line x1="96" y1="36" x2="96" y2="120" stroke="#e6e6e4" stroke-width="1"/>
+      <line x1="96" y1="36" x2="96" y2="100" stroke="#e6e6e4" stroke-width="1"/>
       <text x="90" y="56" font-size="10" fill="#5c5c5c" text-anchor="end">as member</text>
-      <rect x="96" y="44" width="102" height="16" rx="4" fill="#2a78d6"/>
-      <text x="206" y="56" font-size="11" font-weight="700" fill="#1a1a1a">3</text>
+      <rect x="96" y="44" width="204" height="16" rx="4" fill="#2a78d6"/>
+      <text x="308" y="56" font-size="11" font-weight="700" fill="#1a1a1a">3</text>
       <text x="90" y="88" font-size="10" fill="#5c5c5c" text-anchor="end">as guest</text>
-      <rect x="96" y="76" width="68" height="16" rx="4" fill="#eb6834"/>
-      <text x="172" y="88" font-size="11" font-weight="700" fill="#1a1a1a">2</text>
-      <text x="96" y="116" font-size="9" fill="#8a8a8a">disagreement on 3 prospects, in both directions</text>
+      <rect x="96" y="76" width="136" height="16" rx="4" fill="#eb6834"/>
+      <text x="240" y="88" font-size="11" font-weight="700" fill="#1a1a1a">2</text>
 
-      <!-- right panel: catalogue reach (max 7) -->
-      <text x="340" y="12" font-size="11" font-weight="700" fill="#1a1a1a">Plan openings reachable</text>
-      <text x="340" y="26" font-size="10" fill="#8a8a8a">for the prospects each policy admits</text>
-      <line x1="436" y1="36" x2="436" y2="120" stroke="#e6e6e4" stroke-width="1"/>
-      <text x="430" y="56" font-size="10" fill="#5c5c5c" text-anchor="end">as member</text>
-      <rect x="436" y="44" width="140" height="16" rx="4" fill="#2a78d6"/>
-      <text x="584" y="56" font-size="11" font-weight="700" fill="#1a1a1a">7</text>
-      <text x="430" y="88" font-size="10" fill="#5c5c5c" text-anchor="end">as guest</text>
-      <rect x="436" y="76" width="80" height="16" rx="4" fill="#eb6834"/>
-      <text x="524" y="88" font-size="11" font-weight="700" fill="#1a1a1a">4</text>
-      <text x="436" y="116" font-size="9" fill="#8a8a8a">2 further openings blocked as member-only</text>
-
-      <line x1="0" y1="140" x2="640" y2="140" stroke="#e6e6e4" stroke-width="1"/>
-      <text x="0" y="158" font-size="9" fill="#8a8a8a">Reach is counted only for prospects the gate admits — a plan you cannot reach because you were refused at the door is already a denial.</text>
+      <line x1="0" y1="106" x2="640" y2="106" stroke="#e6e6e4" stroke-width="1"/>
+      <text x="0" y="122" font-size="9" fill="#8a8a8a">The two policies disagree on 3 prospects, in both directions — the guest policy is not simply a subset of the member policy.</text>
     </svg>
-    <figcaption><strong>Both figures use the same colour for the same policy.</strong>
+    <figcaption><strong>Both bars use the colour of the policy they measure.</strong>
       Colour follows the entity, never its rank within a chart, and every bar carries
       its value directly so identity never depends on colour alone.</figcaption>
   </figure>
@@ -280,7 +264,7 @@
     <tbody>
       <tr><td class="mono">/api/analysis/consumers</td><td>Which systems read or write these preferences, and in which direction — upstream, enforcing, downstream.</td></tr>
       <tr><td class="mono">/api/analysis/preference-usage</td><td>Which contracts enable which preference; headcount per applicant category.</td></tr>
-      <tr><td class="mono">/api/analysis/prospect-impact</td><td>Both policies' grant counts, catalogue reach, every applicant they disagree about, and a recommendation.</td></tr>
+      <tr><td class="mono">/api/analysis/prospect-impact</td><td>Both policies' grant counts, every applicant they disagree about, and a recommendation.</td></tr>
     </tbody>
   </table>
 
@@ -379,7 +363,7 @@
       <tr><td><strong>Enrol</strong></td><td>The real journey: identify, see your catalogue, pick a tier, submit. Unavailable plans stay listed with their reason.</td></tr>
       <tr><td><strong>Access check</strong></td><td>Run the gate for any applicant under either policy and read the reasons back.</td></tr>
       <tr><td><strong>Contracts &amp; plans</strong></td><td>Every contract, its enabled preferences, and the plans behind them.</td></tr>
-      <tr><td><strong>Preference analysis</strong></td><td>Impact, catalogue reach, preference usage, consumers.</td></tr>
+      <tr><td><strong>Preference analysis</strong></td><td>Impact, preference usage, consumers.</td></tr>
       <tr><td><strong>Audit log</strong></td><td>Every attempt, successful or refused, with the preference that authorised it.</td></tr>
     </tbody>
   </table>
@@ -391,7 +375,7 @@
       <tr><td class="mono">preferences.py</td><td>The two access preferences and the PolicyCore integration contract.</td></tr>
       <tr><td class="mono">applicants.py</td><td>The three categories, the prospect policy, and the validation that a MEMBER without coverage is a data fault.</td></tr>
       <tr><td class="mono">directory.py</td><td>Seeded contracts and applicants, shaped so the two policies genuinely disagree.</td></tr>
-      <tr><td class="mono">benefits.py</td><td>Plans, coverage tiers, and <span class="mono">memberOnly</span> — the second bite.</td></tr>
+      <tr><td class="mono">benefits.py</td><td>Plans, coverage tiers, and which of them are open to members only.</td></tr>
       <tr><td class="mono">eligibility.py</td><td>The three-gate access check and the effective-category resolution.</td></tr>
       <tr><td class="mono">enrolments.py</td><td>Submission, the four refusal codes, and the audit store.</td></tr>
       <tr><td class="mono">impact.py</td><td>The whole analysis surface. No model call.</td></tr>
@@ -419,8 +403,7 @@
       <tr><td>The prospect policy never moves a member's or guest's outcome</td><td>That is the promise the reclassification makes to every other consumer of these preferences.</td></tr>
       <tr><td>The two policies genuinely disagree, in both directions</td><td>A comparison reporting two identical columns looks like agreement and is in fact a broken parameter.</td></tr>
       <tr><td>Nothing the gate refuses can be enrolled by any route</td><td>The enrolment path reuses the gate rather than reimplementing it; this is the observable consequence.</td></tr>
-      <tr><td>Catalogue reach counts only prospects the gate admits</td><td>Otherwise a prospect refused at the door is counted twice and the gap is inflated.</td></tr>
-      <tr><td>Unavailable plans are marked, not hidden</td><td>A plan that silently vanishes generates the support call an explained one does not.</td></tr>
+            <tr><td>Unavailable plans are marked, not hidden</td><td>A plan that silently vanishes generates the support call an explained one does not.</td></tr>
       <tr><td>The analysis states what it does not establish</td><td>The honesty clause is load-bearing, so it is enforced rather than trusted.</td></tr>
     </tbody>
   </table>

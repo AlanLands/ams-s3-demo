@@ -526,7 +526,6 @@ function viewAnalysis() {
     <div class="card">
       <div class="tabs" id="an-tabs">
         <button data-pane="impact" aria-selected="true">Prospect impact</button>
-        <button data-pane="reach" aria-selected="false">Catalogue reach</button>
         <button data-pane="usage" aria-selected="false">Preference usage</button>
         <button data-pane="consumers" aria-selected="false">Consumers</button>
       </div>
@@ -572,22 +571,6 @@ function renderAnalysisPane() {
       <ul class="reasons">${d.notEvidencedByThisAnalysis.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
       <h4 style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:1.1rem 0 .4rem">Standing risks</h4>
       <ul class="reasons">${d.standingRisks.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
-  } else if (state.analysisTab === 'reach') {
-    const r = d.catalogueReach;
-    el.innerHTML = `
-      <p class="muted" style="margin-bottom:.8rem">Counted only for prospects the gate
-        would admit under that option — a plan you cannot reach because you were
-        refused at the door is already counted as a denial.</p>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Policy</th><th class="num">Prospects admitted</th><th class="num">Plan openings reachable</th><th class="num">Blocked as member-only</th></tr></thead>
-        <tbody>${Object.entries(r).map(([policy, v]) => `<tr>
-          <td><span class="chip neutral"><span class="swatch" style="background:${POLICY_COLOR[policy]}"></span>${esc(policy)}</span></td>
-          <td class="num">${v.prospectsAdmitted}</td><td class="num">${v.planOpeningsReachable}</td><td class="num">${v.planOpeningsBlockedAsMemberOnly}</td>
-        </tr>`).join('')}</tbody>
-      </table></div>
-      <div class="note info">The classification bites twice. Guest access admits fewer
-        prospects at the gate <em>and</em> gives the ones it admits a smaller catalogue,
-        because member-only plans attach to coverage a prospect does not hold.</div>`;
   } else if (state.analysisTab === 'usage') {
     const u = state.usage;
     el.innerHTML = `
