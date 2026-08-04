@@ -237,7 +237,7 @@ DETAIL_SLOT = re.compile(
     re.DOTALL,
 )
 
-PAGE_COUNT = 8  # cover + overview + five stages + closing
+PAGE_COUNT = 9  # orientation + cover + overview + five stages + closing
 
 
 def write_html() -> None:

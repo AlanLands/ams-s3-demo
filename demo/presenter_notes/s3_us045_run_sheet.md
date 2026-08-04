@@ -51,17 +51,24 @@ and beat 8 — rehearse that switch so it is not dead air.
 
 ## The run
 
-### 0 · Scenario overview — 2:00 · *the PDF tab, not the console*
+### 0 · Scenario overview — 3:00 · *the PDF tab, not the console*
 
-The PDF is eight pages; **beat 0 uses only the first two.** Page 1: EnrolDirect is
-MapleSure's online enrolment channel, and one check decides who gets in — members and
-guests today, prospects refused; the change adds one rule. Page 2: the five stages,
-each with what AI does, where a person signs off, and the impact.
+The PDF is nine pages; **beat 0 uses only the first three.** Page 1 is the ground:
+what S3 — enhancement delivery — is, why the insurer is invented, what EnrolDirect
+does, and the estate row showing the sponsor and PolicyCore behind the rule and
+DocumentHub / NightlyBatch / IntegrationBridge in front of it. Page 2: the change
+itself — members and guests get in today, prospects are refused, the change adds one
+rule. Page 3: the five stages, each with what AI does, where a person signs off, and
+the impact.
 
-Pages 3–7 are one page per stage — impact analysis, target selection, code generation,
+**Page 1 is not optional.** Without it the demo reads as a code exercise, and beat 3's
+cross-team result has nothing to land against — call back to that estate row when the
+analysis names DocumentHub.
+
+Pages 4–8 are one page per stage — impact analysis, target selection, code generation,
 test, release — each showing how that stage actually works. **Do not walk these on the
 day.** They are there to answer a question without you leaving the demo, and to hand
-out afterwards. Page 8 is what the run gives you, in numbers.
+out afterwards. Page 9 is what the run gives you, in numbers.
 
 Rebuild it with `python -m tools.render_scenario_overview` after editing the copy in
 that script — the diagrams are generated, and the build fails if any label outgrows
@@ -195,8 +202,8 @@ The 2026-08-03 walkthrough ran **over 15 minutes with no interruptions**, and th
 ~15. Seetha: *"it takes so long to walk through this scenario — it will take more than 15
 minutes unless somebody interrupts you."*
 
-The budget above totals 16:00 including the overview, so something has to give. Cut in
-this order:
+The budget above totals 17:00 including the overview, which grew to 3:00 when the
+orientation page went in front of it. Something has to give. Cut in this order:
 
 1. The optional QA-fail beat (already out).
 2. Beat 5 down to 1:30 — one diff, one question to the AI, apply.

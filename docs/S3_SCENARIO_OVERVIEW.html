@@ -52,7 +52,30 @@
   .icon { width: 100%; height: 100%; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
   .fig { width: 100%; height: auto; display: block; }
 
-  /* ---------- page 1 ---------- */
+  /* ---------- page 1 (orientation) ---------- */
+  .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; margin-bottom: 4.5mm; }
+  .card {
+    border: 1pt solid var(--line); border-radius: 4px; padding: 3.5mm 4mm;
+    background: var(--paper); break-inside: avoid;
+  }
+  .card .tag {
+    font-size: 8pt; text-transform: uppercase; letter-spacing: 1.2pt;
+    font-weight: 700; color: var(--accent); margin-bottom: 1.5mm;
+  }
+  .card h3 { font-size: 13pt; margin: 0 0 2.5mm; }
+  .card p { font-size: 9.5pt; color: var(--ink-soft); line-height: 1.4; margin: 0 0 2mm; }
+  .card p:last-child { margin-bottom: 0; }
+  .card p strong { color: var(--ink); }
+
+  /* the orientation page carries three cards, a figure and a callout — it runs
+     tighter than the rest of the deck, so its furniture is scoped down here. */
+  .page-orient .cover { padding-bottom: 2.5mm; margin-bottom: 4mm; }
+  .page-orient h1 { font-size: 24pt; }
+  .page-orient .subtitle { font-size: 12.5pt; }
+  .page-orient .oneline { margin-top: 3mm; padding: 3.5mm 4.5mm; font-size: 12pt; }
+  .page-orient .footnote { margin-top: 3mm; }
+
+  /* ---------- page 2 ---------- */
   .lead-line { font-size: 13.5pt; margin-bottom: 4mm; }
   .lead-line strong { color: var(--accent); }
 
@@ -121,7 +144,126 @@
   </symbol>
 </svg>
 
-<!-- ============================ PAGE 1 ============================ -->
+<!-- ================= PAGE 1 · ORIENTATION ================= -->
+<div class="page page-orient">
+
+<div class="cover">
+  <div class="kicker">MapleSure Insurance · Application Management Services · Scenario S3</div>
+  <h1>Enhancement delivery — what you are looking at</h1>
+  <p class="subtitle">The scenario, the insurer, and the application. Two minutes of ground
+    before anything moves.</p>
+</div>
+
+<div class="section">
+  <div class="trio">
+
+    <div class="card">
+      <div class="tag">The scenario</div>
+      <h3>S3 · Enhancement delivery</h3>
+      <p><strong>A small, ordinary change to an application that is already live</strong> — the
+        kind a team picks up most weeks. We follow one end to end: a written request on a board,
+        out to a released change.</p>
+      <p>Five stages, and <strong>a person signs off at every one.</strong> This is not a slide —
+        the applications are running, and the change is really made to their code.</p>
+    </div>
+
+    <div class="card">
+      <div class="tag">The estate</div>
+      <h3>MapleSure Insurance</h3>
+      <p>A made-up group benefits insurer. <strong>Every application, contract, plan sponsor and
+        person here is invented</strong> — no client code and no client data anywhere.</p>
+      <p>What is not invented is the shape: applications owned by different teams, with the same
+        hand-offs you have. Most of what goes wrong in a change like this goes wrong
+        <strong>between</strong> applications, not inside one.</p>
+    </div>
+
+    <div class="card">
+      <div class="tag">The application</div>
+      <h3>EnrolDirect</h3>
+      <p>MapleSure's online enrolment channel. <strong>Its user is the plan member</strong> — an
+        employee joining a benefit plan themselves, on the web, instead of phoning the service
+        centre.</p>
+      <p>Every one of them meets the same question: <strong>is this person allowed to enrol
+        online?</strong> EnrolDirect does not own that rule — the sponsor agrees it, PolicyCore
+        stores it, EnrolDirect enforces it, and three other systems read the answer.</p>
+    </div>
+
+  </div>
+
+  <svg class="fig" viewBox="0 0 1000 150" role="img"
+       aria-label="The plan sponsor agrees at contract signing who may enrol online. PolicyCore stores the group contract and its two access preferences. EnrolDirect enforces them and decides person by person who may enrol online. Three systems then use that answer: DocumentHub words the confirmation pack, NightlyBatch counts the totals, IntegrationBridge passes the decision on.">
+    <defs>
+      <marker id="e-side" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 10 5 0 10z" fill="#9a9a9a"/>
+      </marker>
+    </defs>
+    <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+
+      <text x="0" y="10" font-size="10.5" font-weight="700" fill="#8a8a8a" letter-spacing="1.2">WHERE THE RULE COMES FROM</text>
+      <text x="744" y="10" font-size="10.5" font-weight="700" fill="#8a8a8a" letter-spacing="1.2">WHO USES THE ANSWER</text>
+
+      <rect x="0" y="24" width="196" height="120" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
+      <text x="12" y="52" font-size="15" font-weight="700" fill="#1a1a1a">Plan sponsor</text>
+      <text x="12" y="98" font-size="11.5" fill="#5c5c5c" data-maxw="172">The employer. Agrees at</text>
+      <text x="12" y="114" font-size="11.5" fill="#5c5c5c" data-maxw="172">contract signing who may</text>
+      <text x="12" y="130" font-size="11.5" fill="#5c5c5c" data-maxw="172">enrol online.</text>
+
+      <path d="M198 84 H224" stroke="#9a9a9a" stroke-width="2" fill="none" marker-end="url(#e-side)"/>
+
+      <rect x="228" y="24" width="196" height="120" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
+      <text x="240" y="52" font-size="15" font-weight="700" fill="#1a1a1a">PolicyCore</text>
+      <rect x="240" y="60" width="98" height="17" rx="8.5" fill="#efefef"/>
+      <text x="289" y="72" text-anchor="middle" font-size="9" font-weight="700" fill="#5c5c5c" letter-spacing="0.6">HOLDS THE RULE</text>
+      <text x="240" y="98" font-size="11.5" fill="#5c5c5c" data-maxw="172">Stores the group contract</text>
+      <text x="240" y="114" font-size="11.5" fill="#5c5c5c" data-maxw="172">and the two access</text>
+      <text x="240" y="130" font-size="11.5" fill="#5c5c5c" data-maxw="172">preferences on it.</text>
+
+      <path d="M426 84 H452" stroke="#9a9a9a" stroke-width="2" fill="none" marker-end="url(#e-side)"/>
+
+      <rect x="456" y="24" width="252" height="120" rx="4" fill="#f6ecee" stroke="#8b1e2d" stroke-width="2"/>
+      <text x="468" y="52" font-size="15" font-weight="700" fill="#8b1e2d">EnrolDirect</text>
+      <rect x="468" y="60" width="104" height="17" rx="8.5" fill="#8b1e2d"/>
+      <text x="520" y="72" text-anchor="middle" font-size="9" font-weight="700" fill="#fff" letter-spacing="0.6">THIS SCENARIO</text>
+      <text x="468" y="98" font-size="11.5" fill="#5c5c5c" data-maxw="228">Enforces those preferences.</text>
+      <text x="468" y="114" font-size="11.5" fill="#5c5c5c" data-maxw="228">Decides, person by person,</text>
+      <text x="468" y="130" font-size="11.5" fill="#5c5c5c" data-maxw="228">who may enrol online.</text>
+
+      <path d="M710 84 H726" stroke="#9a9a9a" stroke-width="2" fill="none"/>
+      <path d="M726 42 V126" stroke="#9a9a9a" stroke-width="2" fill="none"/>
+      <path d="M726 42 H740"  stroke="#9a9a9a" stroke-width="2" fill="none" marker-end="url(#e-side)"/>
+      <path d="M726 84 H740"  stroke="#9a9a9a" stroke-width="2" fill="none" marker-end="url(#e-side)"/>
+      <path d="M726 126 H740" stroke="#9a9a9a" stroke-width="2" fill="none" marker-end="url(#e-side)"/>
+
+      <rect x="744" y="24" width="256" height="36" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
+      <text x="756" y="41" font-size="12" font-weight="700" fill="#1a1a1a">DocumentHub</text>
+      <text x="756" y="54" font-size="10" fill="#5c5c5c" data-maxw="232">Words the confirmation pack we send</text>
+
+      <rect x="744" y="66" width="256" height="36" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
+      <text x="756" y="83" font-size="12" font-weight="700" fill="#1a1a1a">NightlyBatch</text>
+      <text x="756" y="96" font-size="10" fill="#5c5c5c" data-maxw="232">Counts the overnight totals</text>
+
+      <rect x="744" y="108" width="256" height="36" rx="4" fill="#fcfcfb" stroke="#d8d8d8"/>
+      <text x="756" y="125" font-size="12" font-weight="700" fill="#1a1a1a">IntegrationBridge</text>
+      <text x="756" y="138" font-size="10" fill="#5c5c5c" data-maxw="232">Carries the decision onward</text>
+
+    </g>
+  </svg>
+
+  <div class="oneline">
+    Nothing here is a technical decision. <strong>A plan sponsor's rule, enforced by one
+    application and read by three others.</strong> What follows is what happens when that rule
+    has to cover a group of people nobody ever wrote a rule for.
+  </div>
+</div>
+
+<div class="footnote">
+  MapleSure Insurance is a made-up insurer and all data is invented.
+  Scenario: US-2026-045 · EnrolDirect · who is allowed to enrol online.
+</div>
+
+</div>
+
+<!-- ============================ PAGE 2 ============================ -->
 <div class="page">
 
 <div class="cover">
@@ -227,7 +369,7 @@
 
 </div>
 
-<!-- ============================ PAGE 2 ============================ -->
+<!-- ============================ PAGE 3 ============================ -->
 <div class="page">
 
 <div class="runhead">MapleSure Insurance · Enhancement Delivery · Scenario Overview</div>
