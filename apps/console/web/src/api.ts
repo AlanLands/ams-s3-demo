@@ -12,6 +12,40 @@ export class ApiError extends Error {
   }
 }
 
+// FastAPI answers a *validation* failure with `detail` as an array of objects
+// — `{loc, msg, type}` — not a string. Handing that to `new Error()` renders
+// the literal text "[object Object]" on screen, which is what the console
+// showed for every 422 it ever received: no field name, no reason, nothing to
+// act on. Anything that is not already a string gets turned into one here, at
+// the single place every response passes through.
+export function detailMessage(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail) return detail
+
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (!item || typeof item !== 'object') return ''
+        const { loc, msg } = item as { loc?: unknown[]; msg?: string }
+        // Drop the leading "body"/"query" — it names where the value came
+        // from, which the person reading this already knows.
+        const field = Array.isArray(loc)
+          ? loc.filter((part) => part !== 'body' && part !== 'query').join('.')
+          : ''
+        return field && msg ? `${field}: ${msg}` : (msg ?? '')
+      })
+      .filter(Boolean)
+    if (parts.length) return parts.join('; ')
+  }
+
+  if (detail && typeof detail === 'object') {
+    const { msg, message } = detail as { msg?: string; message?: string }
+    if (msg || message) return (msg ?? message) as string
+  }
+
+  return fallback
+}
+
 // Backend origin, e.g. "https://ams.example.com". Empty (the default) means
 // same-origin: dev goes through vite.config.ts's /api proxy, and the packaged
 // build is served by api/main.py's SPA fallback on the same host. Set it only
@@ -26,7 +60,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
-    throw new ApiError(response.status, body.detail ?? response.statusText)
+    throw new ApiError(response.status, detailMessage(body.detail, response.statusText))
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>

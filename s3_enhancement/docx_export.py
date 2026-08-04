@@ -37,7 +37,7 @@ import re
 
 from docx import Document as _WordDocument
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_LEADER
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Emu, Pt, RGBColor
@@ -114,6 +114,38 @@ def _borders(table) -> None:
     table._tbl.tblPr.append(borders)
 
 
+def _left_rule(table) -> None:
+    """The cover's vertical maroon rule, as a table's left edge.
+
+    Word draws no free-standing vertical lines, so the rule beside the
+    identity block is a border on the block that sits against it — which is
+    also how the HTML does it.
+    """
+    borders = OxmlElement("w:tblBorders")
+    borders.append(_el("w:left", val="single", sz="18", space="0", color=docshell.ACCENT))
+    for edge in ("top", "bottom", "right", "insideH", "insideV"):
+        borders.append(_el(f"w:{edge}", val="none", sz="0", space="0", color="auto"))
+    table._tbl.tblPr.append(borders)
+
+
+def _rule_below(paragraph, color: str = "E6E6E6") -> None:
+    borders = OxmlElement("w:pBdr")
+    borders.append(_el("w:bottom", val="single", sz="4", space="4", color=color))
+    paragraph._p.get_or_add_pPr().append(borders)
+
+
+def _rule_above(paragraph, color: str = "E6E6E6") -> None:
+    borders = OxmlElement("w:pBdr")
+    borders.append(_el("w:top", val="single", sz="4", space="4", color=color))
+    paragraph._p.get_or_add_pPr().append(borders)
+
+
+def _left_border(paragraph) -> None:
+    borders = OxmlElement("w:pBdr")
+    borders.append(_el("w:left", val="single", sz="18", space="10", color=docshell.ACCENT))
+    paragraph._p.get_or_add_pPr().append(borders)
+
+
 def _clear(paragraph):
     """Empty a paragraph without leaving a run behind.
 
@@ -180,9 +212,15 @@ def _running_chrome(section, running_title: str) -> None:
     run = head.add_run(running_title)
     run.font.size = Pt(8)
     run.font.color.rgb = INK_FAINT
+    _rule_below(head)
 
     foot = _clear(section.footer.paragraphs[0])
-    foot.paragraph_format.tab_stops.add_tab_stop(Emu(CONTENT_W), WD_ALIGN_PARAGRAPH.RIGHT)
+    _rule_above(foot)
+    # A dot leader between the classification and the page number, which is
+    # what the client's own footer does.
+    foot.paragraph_format.tab_stops.add_tab_stop(
+        Emu(CONTENT_W), WD_ALIGN_PARAGRAPH.RIGHT, WD_TAB_LEADER.DOTS
+    )
     left = foot.add_run(f"{docshell.ORG} · {docshell.SYSTEM} — {docshell.CLASSIFICATION}\t")
     left.font.size = Pt(8)
     left.font.color.rgb = INK_FAINT
@@ -352,12 +390,15 @@ def _write_cover(document, doc: Document) -> None:
     run.font.color.rgb = INK
 
     system = document.add_paragraph()
+    system.paragraph_format.left_indent = Pt(14)
+    _left_border(system)
     run = system.add_run(doc.system_line)
     run.font.size = Pt(11)
     run.font.color.rgb = INK_SOFT
 
     meta = document.add_table(rows=0, cols=2)
     meta.autofit = False
+    _left_rule(meta)
     for label, value in doc.meta:
         cells = meta.add_row().cells
         cells[0].width = Emu(int(CONTENT_W * 0.28))

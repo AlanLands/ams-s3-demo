@@ -2,7 +2,7 @@
 // Mirrors the api/routers/s3.py response shapes exactly — no client-side
 // business logic, same "thin view" convention as api.ts's s1Api/s2Api.
 
-import { ApiError, request } from './api'
+import { ApiError, detailMessage, request } from './api'
 
 export interface SubsystemScreen {
   in_scope: string[]
@@ -911,7 +911,7 @@ export const s3Api = {
     })
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
-      throw new ApiError(response.status, body.detail ?? response.statusText)
+      throw new ApiError(response.status, detailMessage(body.detail, response.statusText))
     }
     return response.blob()
   },
@@ -1040,7 +1040,7 @@ export const s3Api = {
     })
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}))
-      throw new ApiError(response.status, errorBody.detail ?? response.statusText)
+      throw new ApiError(response.status, detailMessage(errorBody.detail, response.statusText))
     }
     return response.blob()
   },

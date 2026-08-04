@@ -1270,6 +1270,16 @@ export function useS3Controller() {
       const label = getLinked(activeTicketKey)?.storyLabel ?? 'release'
       downloadBlob(`${label}-release-record.${format}`, blob)
     } catch (err) {
+      // 503 is the "no browser on the server" answer, and it only applies to
+      // the PDF. Word is rendered without one, so say that rather than leaving
+      // the reader with a Playwright command they cannot run.
+      if (format === 'pdf' && err instanceof ApiError && err.status === 503) {
+        setReleaseError(
+          'The server has no browser installed to render a PDF. Use the Word button ' +
+            'beside this one — it needs no browser — or print this page from the browser.'
+        )
+        return
+      }
       setReleaseError(err instanceof ApiError ? err.message : 'Could not build the record.')
     } finally {
       setExportingRecord(false)
