@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S3 · Enhancement delivery — scenario overview</title>
+<style>
+  :root {
+    --maroon: #8e1f2f;
+    --maroon-dark: #6e1220;
+    --dark: #212121;
+    --muted: #6b6b6b;
+    --line: #d9d3d0;
+    --paper: #ffffff;
+    --cream: #faf3f1;
+    --green: #1e7a3c;
+    --green-bg: #e9f4ec;
+    --red: #b3262a;
+    --red-bg: #fbeced;
+    --gray-bg: #f4f2f1;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Calibri, Helvetica, Arial, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font);
+    color: var(--dark);
+    background: #efeae8;
+    overflow: hidden;
+  }
+
+  .deck { height: 100svh; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    background: var(--paper);
+    padding: 3.2vh 4vw 8vh;
+    flex-direction: column;
+  }
+  .slide.on { display: flex; animation: slidein .48s cubic-bezier(.2, .7, .2, 1) both; }
+  @keyframes slidein {
+    from { opacity: 0; transform: translateY(3px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* ---------- shared chrome ---------- */
+  .kicker {
+    color: var(--maroon); font-weight: 700; letter-spacing: .14em;
+    font-size: clamp(11px, 1.7vh, 22px); text-transform: uppercase;
+    margin-bottom: .6vh;
+  }
+  h1 {
+    font-size: clamp(26px, 6vh, 69px); font-weight: 800; line-height: 1.12;
+    letter-spacing: -.01em;
+  }
+  .rule { height: 4px; background: var(--maroon); margin: 1.6vh 0 1.8vh; }
+  .lede { font-size: clamp(15px, 2.9vh, 33px); color: var(--dark); max-width: 72em; }
+  .lede strong { color: var(--maroon); }
+  .footer {
+    position: absolute; left: 4vw; right: 4vw; bottom: 2vh;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: clamp(10px, 1.7vh, 20px); color: var(--muted);
+  }
+  .callout {
+    background: var(--cream); border-left: 5px solid var(--maroon);
+    padding: 1.6vh 1.6vw; margin-top: auto;
+  }
+  .callout .big { font-weight: 700; font-size: clamp(15px, 3vh, 36px); }
+  .callout .sub { color: var(--muted); font-size: clamp(13px, 2.5vh, 30px); margin-top: .4vh; }
+
+  /* ---------- fragments (stepped builds) ---------- */
+  .frag {
+    opacity: 0; transform: translateY(8px);
+    transition: opacity .38s ease, transform .38s cubic-bezier(.2, .7, .2, 1);
+  }
+  .frag.on { opacity: 1; transform: none; }
+  .frag.pop { transform: scale(.85); }
+  .frag.pop.on { transform: scale(1); }
+
+  /* ---------- generic diagram pieces ---------- */
+  .card {
+    background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.4vh 1.1vw;
+  }
+  .card h3 { font-size: clamp(13px, 2.9vh, 36px); }
+  .card .tag { font-size: clamp(11px, 2.1vh, 26px); color: var(--muted); }
+  .card p { font-size: clamp(12px, 2.5vh, 30px); margin-top: .6vh; }
+  .arrow {
+    color: #9a938f; font-size: clamp(24px, 5.5vh, 69px); font-weight: 700;
+    align-self: center; line-height: 1; flex: 0 0 auto;
+  }
+  .arrow.green { color: var(--green); }
+  .badge {
+    display: inline-block; font-weight: 800; border-radius: 10px;
+    padding: 1.4vh 1.6vw; font-size: clamp(20px, 4.7vh, 60px); letter-spacing: .02em;
+  }
+  .badge.denied { color: var(--red); background: var(--red-bg); border: 2px solid var(--red); }
+  .badge.granted { color: var(--green); background: var(--green-bg); border: 2px solid var(--green); }
+
+  /* =============== SLIDE 1 · objective =============== */
+  .ask-quote {
+    background: var(--cream); border-left: 6px solid var(--maroon);
+    border-radius: 0 12px 12px 0;
+    padding: 2.6vh 1.8vw; margin-top: 1vh;
+    font-size: clamp(18px, 3.9vh, 51px); line-height: 1.4; max-width: 60em;
+  }
+  .ask-quote b { color: var(--maroon); }
+  .obj-statement { font-size: clamp(17px, 3.6vh, 42px); max-width: 62em; margin-top: 1vh; }
+  .obj-statement b { color: var(--maroon); }
+  .obj-arc {
+    display: flex; gap: .8vw; align-items: center; margin: 3vh 0 2.4vh;
+  }
+  .obj-arc .node {
+    background: var(--gray-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1.8vh 1.4vw; font-size: clamp(13px, 2.7vh, 33px); font-weight: 600;
+    text-align: center;
+  }
+  .obj-arc .node.hot { background: var(--red-bg); border-color: var(--maroon); color: var(--maroon); }
+  .obj-arc .node.done { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+  .obj-arc .node small { display: block; font-weight: 400; color: var(--muted); font-size: clamp(11px, 2.2vh, 26px); }
+  .obj-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vw; }
+  .obj-cards .card { background: var(--gray-bg); }
+  .obj-cards h3 { color: var(--maroon); }
+
+  /* =============== SLIDE 2 · what is EnrolDirect =============== */
+  .ed-stage { display: flex; flex-direction: column; gap: 2.6vh; flex: 1; justify-content: center; }
+  .ed-rulerow, .ed-mainrow { display: flex; gap: .9vw; align-items: stretch; }
+  .ed-rulerow { align-items: center; }
+  .ed-rulerow .card, .ed-mainrow .card { flex: 1; }
+  .ed-rulerow .card { padding: 2vh 1.2vw; }
+  .ed-mainrow { min-height: 40vh; }
+  .persona {
+    display: flex; gap: .9vw; align-items: center;
+    background: var(--gray-bg); border: 1px solid var(--line); border-radius: 12px;
+    padding: 2.2vh 1.2vw; flex: 1;
+  }
+  .persona .face {
+    width: clamp(48px, 11vh, 138px); height: clamp(48px, 11vh, 138px);
+    border-radius: 50%; background: var(--maroon); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(22px, 5.2vh, 66px); flex: 0 0 auto;
+  }
+  .persona h3 { font-size: clamp(16px, 3.4vh, 42px); }
+  .persona .tag { font-size: clamp(13px, 2.6vh, 32px) !important; }
+  .ed-app {
+    flex: 1.4; border: 2px solid var(--maroon); border-radius: 12px;
+    background: var(--red-bg); padding: 2vh 1.2vw;
+    display: flex; flex-direction: column; justify-content: center; gap: 1.4vh;
+  }
+  .ed-app h3 { color: var(--maroon); font-size: clamp(17px, 3.6vh, 45px); }
+  .ed-app .q {
+    background: var(--paper); border: 1px solid var(--line);
+    border-radius: 8px; padding: 1.8vh 1.2vw; font-weight: 700;
+    font-size: clamp(14px, 3vh, 38px);
+  }
+  .ed-readers { flex: 1; display: flex; flex-direction: column; gap: 1vh; justify-content: center; }
+  .ed-readers .card { padding: 1.4vh 1vw; }
+  .ed-readers b { font-size: clamp(13px, 2.7vh, 33px); }
+  .ed-readers span { color: var(--muted); font-size: clamp(11px, 2.3vh, 27px); }
+  .lane-label { font-size: clamp(11px, 2.1vh, 24px); font-weight: 700; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+  .ed-col { flex: 1; display: flex; flex-direction: column; gap: 1.2vh; }
+  .ed-col .persona { flex: 1; }
+  .ed-answers { flex: 1; display: flex; flex-direction: column; gap: 1.4vh; justify-content: center; }
+  .ans {
+    border-radius: 12px; padding: 2.6vh 1.2vw; font-weight: 700;
+    font-size: clamp(14px, 2.7vh, 33px); line-height: 1.3;
+  }
+  .ans.yes { background: var(--green-bg); border: 2px solid var(--green); color: var(--green); }
+  .ans.no { background: var(--red-bg); border: 2px solid var(--red); color: var(--red); }
+
+  /* =============== SLIDE 3/4 · issue & solution =============== */
+  .gate-row { display: flex; gap: 1vw; align-items: center; flex: 1; }
+  .gate-row > * { max-height: 56vh; }
+  .gate-person { flex: 1; align-self: stretch; display: flex; }
+  .gate-person .persona { justify-content: center; }
+  .gate { align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
+  .gate-answer { display: flex; flex-direction: column; justify-content: center; align-items: center; align-self: stretch; }
+  .gate {
+    flex: 1.5; border: 2px solid var(--maroon); border-radius: 14px;
+    padding: 2.6vh 1.4vw; background: var(--paper);
+  }
+  .gate h3 { text-align: center; font-size: clamp(15px, 3.2vh, 39px); margin-bottom: 2vh; }
+  .gate .rulebox {
+    border: 1px solid var(--line); background: var(--gray-bg); border-radius: 8px;
+    padding: 2.2vh 1.2vw; font-size: clamp(13px, 2.7vh, 33px); margin-bottom: 1.4vh;
+    display: flex; justify-content: space-between; align-items: center; gap: .6vw;
+  }
+  .gate .rulebox .verdict { font-weight: 700; white-space: nowrap; }
+  .gate .rulebox .verdict.no { color: var(--red); }
+  .gate .rulebox .verdict.yes { color: var(--green); }
+  .gate .rulebox.newrule { background: var(--green-bg); border: 1.5px solid var(--green); }
+  .gate .rulebox.newrule .nr-tag { color: var(--green); font-weight: 800; font-size: clamp(10px, 1.7vh, 20px); letter-spacing: .08em; }
+  .gate-answer { flex: 1; text-align: center; }
+  .gate-answer .why { margin-top: 1.4vh; color: var(--muted); font-size: clamp(12px, 2.5vh, 28px); }
+
+  /* =============== SLIDE 5 · console stages =============== */
+  .stages { display: grid; grid-template-columns: repeat(5, 1fr); gap: .8vw; }
+  .stage .head {
+    background: var(--maroon); color: #fff; border-radius: 10px 10px 0 0;
+    text-align: center; font-weight: 700; padding: 1.2vh 0; font-size: clamp(13px, 2.7vh, 33px);
+  }
+  .stage .body {
+    border: 1px solid var(--line); border-top: 0; border-radius: 0 0 10px 10px;
+    padding: 1.4vh .8vw; min-height: 20vh; background: var(--paper);
+  }
+  .stage .body .ai { color: var(--maroon); font-weight: 800; font-size: clamp(10px, 1.8vh, 21px); letter-spacing: .1em; }
+  .stage .body ul { list-style: none; margin-top: .6vh; }
+  .stage .body li { font-size: clamp(11px, 2.3vh, 27px); margin-bottom: .5vh; padding-left: .9em; text-indent: -.9em; }
+  .stage .body li::before { content: "• "; color: var(--maroon); }
+  .stage .person {
+    margin-top: .8vh; background: var(--green-bg); border: 1.5px solid var(--green);
+    border-radius: 8px; text-align: center; padding: .7vh .4vw;
+  }
+  .stage .person b { color: var(--green); font-size: clamp(10px, 2vh, 22px); letter-spacing: .06em; display: block; }
+  .stage .person span { font-size: clamp(11px, 2.2vh, 26px); }
+  .stages-ends { display: flex; justify-content: space-between; font-weight: 800; font-size: clamp(12px, 2.5vh, 28px); margin-bottom: .8vh; }
+  .stages-ends .live { color: var(--green); }
+  .stages-ends .req { color: var(--muted); }
+
+  /* =============== SLIDE 6 · before/after =============== */
+  .watch { display: flex; gap: 1vw; align-items: center; flex: 1; }
+  .watch .side {
+    flex: 1.3; border-radius: 14px; text-align: center; padding: 3vh 1.4vw;
+  }
+  .watch .side .label { font-weight: 800; letter-spacing: .12em; font-size: clamp(12px, 2.5vh, 28px); }
+  .watch .side p { margin-top: 1.6vh; font-size: clamp(13px, 2.7vh, 33px); }
+  .watch .before { background: var(--red-bg); border: 2px solid var(--red); }
+  .watch .before .label { color: var(--red); }
+  .watch .after { background: var(--green-bg); border: 2px solid var(--green); }
+  .watch .after .label { color: var(--green); }
+  .watch .mid { flex: 1; text-align: center; }
+  .watch .mid .card p { color: var(--muted); }
+  .watch .mid .card b { color: var(--maroon); }
+
+  /* =============== SLIDE 7 · guardrails =============== */
+  .guards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vw; flex: 1; align-content: center; }
+  .guards .card { border-left: 5px solid var(--maroon); }
+  .guards h3 { color: var(--maroon); }
+
+  /* ---------- progress + hint ---------- */
+  .dots { display: flex; gap: 8px; }
+  .dots i {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--line);
+    display: inline-block; cursor: pointer;
+  }
+  .dots i.here { background: var(--maroon); }
+  .hint {
+    position: absolute; right: 4vw; bottom: 5.4vh; color: var(--muted);
+    font-size: clamp(11px, 2vh, 21px); opacity: .85; transition: opacity .5s;
+  }
+  .hint.gone { opacity: 0; }
+
+  /* ---------- staged focus animation ---------- */
+  .slide.is-building .frag {
+    opacity: .13;
+    filter: grayscale(.72) saturate(.35);
+    transform: none;
+  }
+  .slide.is-building .frag.on.complete {
+    opacity: .68;
+    filter: saturate(.65);
+  }
+  .slide.is-building .frag.on.complete:has(.frag.active),
+  .slide.is-building .frag.on.complete:has(.frag.complete) {
+    opacity: 1;
+    filter: none;
+  }
+  .slide.is-building .frag.on.active {
+    position: relative;
+    z-index: 3;
+    opacity: 1;
+    filter: none;
+    transform: translateY(-2px) scale(1);
+  }
+  .slide.is-building .frag.active:is(.card, .node, .stage, .rulebox, .gate-answer, .callout, .mid, .side) {
+    box-shadow: 0 0 0 2px rgba(152, 35, 63, .2), 0 13px 28px rgba(54, 42, 37, .12);
+  }
+  .slide.is-building .ed-col.frag.active > :is(.persona, .ed-app, .ed-answers) {
+    box-shadow: 0 0 0 2px rgba(152, 35, 63, .2), 0 13px 28px rgba(54, 42, 37, .12);
+  }
+  .slide.is-building .frag.active:is(.card, .node, .stage, .rulebox, .gate-answer, .callout, .mid, .side),
+  .slide.is-building .ed-col.frag.active > :is(.persona, .ed-app, .ed-answers) {
+    animation: focus-in .52s cubic-bezier(.2, .75, .2, 1) both;
+  }
+  .slide.is-building .stage.frag:not(.active):not(.complete) .head {
+    background: #d8d2cd;
+    color: var(--muted);
+  }
+  .slide.is-building .stage.frag.complete .head {
+    background: var(--green);
+  }
+  .slide.is-building .node.frag:not(.active):not(.complete) {
+    border-color: var(--line);
+    background: transparent;
+    color: var(--muted);
+  }
+  .slide.is-building .node.frag.complete {
+    border-color: var(--green);
+    background: var(--green-bg);
+    color: var(--green);
+  }
+  .slide.is-building .card.frag.complete {
+    border-left-color: var(--green);
+  }
+  .slide.is-building .arrow.frag {
+    opacity: 0;
+    filter: none;
+  }
+  .slide.is-building .arrow.frag.complete {
+    opacity: .5;
+  }
+  .slide.is-building .arrow.frag.active {
+    opacity: 1;
+    animation: flow-arrow .58s cubic-bezier(.2, .75, .2, 1) both;
+  }
+  @keyframes focus-in {
+    from { opacity: .25; transform: translateY(7px) scale(.985); }
+    to { opacity: 1; transform: translateY(-2px) scale(1); }
+  }
+  @keyframes flow-arrow {
+    from { opacity: 0; transform: translateX(-14px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .build-rail {
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+    margin-top: .8vh;
+  }
+  .build-rail i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--line);
+    cursor: pointer;
+    transition: background .25s ease, transform .25s ease;
+  }
+  .build-rail i.done { background: #8aa69f; }
+  .build-rail i.active {
+    background: var(--maroon);
+    transform: scale(1.35);
+  }
+  .transition-wash {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    background: var(--paper);
+    opacity: 0;
+    transition: opacity .22s ease;
+  }
+  .transition-wash.on { opacity: 1; pointer-events: auto; }
+
+  /* ---------- MapleSure editorial theme ---------- */
+  :root {
+    --maroon: #98233f;
+    --maroon-dark: #70162c;
+    --dark: #292624;
+    --muted: #706a66;
+    --line: #d8d1cb;
+    --paper: #faf8f5;
+    --cream: #f3eeea;
+    --green: #316e66;
+    --green-bg: #e8f0ed;
+    --red: #a62b42;
+    --red-bg: #f7e9eb;
+    --gray-bg: #f1efec;
+    --serif: Georgia, "Times New Roman", serif;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+  body {
+    background: #e6e1dc;
+  }
+  .slide {
+    background-color: var(--paper);
+    padding: 2.8vh 4vw 7.2vh;
+  }
+  .slide::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    background: var(--maroon);
+  }
+  .slide-head {
+    display: grid;
+    grid-template-columns: minmax(150px, 12vw) minmax(0, 1fr) minmax(270px, 27vw);
+    gap: 1.5vw;
+    align-items: start;
+    padding-bottom: 1.6vh;
+    margin-bottom: 1.8vh;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand-lockup {
+    display: flex;
+    align-items: center;
+    gap: .7vw;
+    min-height: 5.4vh;
+  }
+  .brand-mark {
+    width: clamp(34px, 4.6vh, 52px);
+    height: clamp(34px, 4.6vh, 52px);
+    display: grid;
+    place-items: center;
+    background: var(--maroon);
+    color: #fff;
+    border-radius: 3px;
+    font-family: var(--serif);
+    font-size: clamp(17px, 2.6vh, 30px);
+    font-weight: 700;
+  }
+  .brand-name {
+    color: var(--dark);
+    font-family: var(--serif);
+    font-size: clamp(15px, 2.1vh, 24px);
+    line-height: 1;
+  }
+  .brand-name small {
+    display: block;
+    margin-top: .45vh;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: clamp(8px, 1vh, 12px);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .head-copy .kicker {
+    margin-bottom: .25vh;
+  }
+  .slide-head h1 {
+    font-family: var(--serif);
+    font-size: clamp(24px, 4.2vh, 50px);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: 0;
+  }
+  .slide-head h1 span {
+    font-family: var(--font);
+    font-size: .55em;
+    letter-spacing: 0;
+  }
+  .slide-head .rule {
+    width: clamp(58px, 5vw, 90px) !important;
+    height: 2px;
+    margin: .9vh 0 0;
+  }
+  .slide-meta {
+    text-align: right;
+    padding-top: .25vh;
+  }
+  .slide-meta .meta-label {
+    display: block;
+    color: var(--maroon);
+    font-family: var(--mono);
+    font-size: clamp(9px, 1.15vh, 14px);
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .slide-meta .meta-summary {
+    display: block;
+    max-width: 30em;
+    margin: .7vh 0 0 auto;
+    color: var(--muted);
+    font-size: clamp(11px, 1.55vh, 18px);
+    line-height: 1.35;
+  }
+  .slide-meta .meta-count {
+    display: inline-block;
+    margin-top: .9vh;
+    color: var(--dark);
+    font-family: var(--mono);
+    font-size: clamp(9px, 1.15vh, 14px);
+    font-weight: 700;
+    letter-spacing: .08em;
+  }
+  .kicker,
+  .lane-label,
+  .stages-ends,
+  .watch .side .label {
+    font-family: var(--mono);
+    letter-spacing: .1em;
+  }
+  .kicker {
+    font-size: clamp(9px, 1.25vh, 15px);
+  }
+  h1 {
+    font-family: var(--serif);
+    letter-spacing: 0;
+  }
+  .lede {
+    font-size: clamp(14px, 2.25vh, 27px);
+  }
+  .card,
+  .persona,
+  .ed-app,
+  .ans,
+  .gate,
+  .watch .side {
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(54, 42, 37, .045);
+  }
+  .card {
+    padding: 1.25vh 1vw;
+  }
+  .card h3 {
+    font-family: var(--serif);
+    font-size: clamp(14px, 2.25vh, 27px);
+    letter-spacing: 0;
+  }
+  .card p {
+    font-size: clamp(12px, 1.9vh, 23px);
+    line-height: 1.4;
+  }
+  .callout {
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--maroon);
+    border-radius: 0 4px 4px 0;
+    background: #f4f0ec;
+    padding: 1.15vh 1.1vw;
+  }
+  .callout .big {
+    font-family: var(--serif);
+    font-size: clamp(14px, 2.25vh, 27px);
+    line-height: 1.25;
+  }
+  .callout .sub {
+    font-size: clamp(11px, 1.65vh, 19px);
+  }
+  .ask-quote {
+    border-left-width: 4px;
+    border-radius: 0 5px 5px 0;
+    padding: 1.8vh 1.4vw;
+    font-family: var(--serif);
+    font-size: clamp(17px, 3vh, 36px);
+    line-height: 1.3;
+  }
+  .obj-arc .node {
+    border-radius: 5px;
+    padding: 1.35vh 1vw;
+    font-size: clamp(12px, 2vh, 24px);
+  }
+  .obj-arc .node small {
+    font-family: var(--mono);
+    font-size: clamp(9px, 1.35vh, 16px);
+    line-height: 1.35;
+  }
+  .persona .face {
+    border-radius: 4px;
+    background: transparent;
+    color: var(--maroon);
+    border: 1.5px solid var(--maroon);
+    font-family: var(--serif);
+    font-weight: 700;
+  }
+  .badge {
+    border-radius: 4px;
+    padding: 1.1vh 1.15vw;
+    font-family: var(--mono);
+    font-size: clamp(18px, 3.4vh, 41px);
+    letter-spacing: .04em;
+  }
+  .gate .rulebox,
+  .stage .person,
+  .ed-app .q {
+    border-radius: 4px;
+  }
+  .gate .rulebox {
+    padding: 1.6vh 1vw;
+    font-size: clamp(12px, 2.05vh, 25px);
+  }
+  .gate h3 {
+    font-family: var(--serif);
+    font-size: clamp(15px, 2.6vh, 31px);
+  }
+  .stage .head {
+    border-radius: 5px 5px 0 0;
+    font-family: var(--serif);
+    font-size: clamp(13px, 2.1vh, 25px);
+  }
+  .stage .body {
+    border-radius: 0 0 5px 5px;
+    min-height: 19vh;
+  }
+  .stage .body .ai,
+  .stage .person b {
+    font-family: var(--mono);
+    letter-spacing: .08em;
+  }
+  .stage .body li {
+    font-size: clamp(11px, 1.75vh, 20px);
+    line-height: 1.35;
+  }
+  .guards .card {
+    min-height: 12.5vh;
+    border-left-width: 3px;
+  }
+  .footer {
+    left: 4vw;
+    right: 4vw;
+    bottom: 1.2vh;
+    min-height: 3.7vh;
+    padding-top: .8vh;
+    border-top: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: clamp(8px, 1.15vh, 14px);
+  }
+  .footer > span:first-child::before {
+    content: "S3";
+    display: inline-grid;
+    place-items: center;
+    min-width: 28px;
+    min-height: 20px;
+    margin-right: .65vw;
+    border-radius: 3px;
+    background: var(--maroon);
+    color: #fff;
+    font-weight: 800;
+  }
+  .dots {
+    gap: 6px;
+  }
+  .dots i {
+    width: 7px;
+    height: 7px;
+  }
+  .hint {
+    right: 4vw;
+    bottom: 5.5vh;
+    font-family: var(--mono);
+    font-size: clamp(9px, 1.2vh, 14px);
+  }
+  @media (max-width: 1100px), (max-height: 720px) {
+    .slide-head {
+      grid-template-columns: minmax(130px, 14vw) minmax(0, 1fr) minmax(210px, 25vw);
+      gap: 1.2vw;
+    }
+    .brand-name small,
+    .slide-meta .meta-summary {
+      display: none;
+    }
+    .slide-head h1 {
+      font-size: clamp(21px, 3.8vh, 38px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .slide.on { animation: none; }
+    .frag { transition: none; }
+    .slide.is-building .frag.active,
+    .slide.is-building .arrow.frag.active,
+    .transition-wash { animation: none; transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- ================= 1 · THE ASK ================= -->
+  <section class="slide">
+    <div class="slide-head">
+      <div class="brand-lockup"><span class="brand-mark">M</span><span class="brand-name">MapleSure<small>Insurance</small></span></div>
+      <div class="head-copy">
+        <div class="kicker">Application Management Services · Scenario S3</div>
+        <h1>S3 · Minor Enhancement <span style="color:var(--muted); font-weight:600;">(Support Scope)</span></h1>
+        <div class="rule"></div>
+      </div>
+      <div class="slide-meta"><span class="meta-label">Brief · the objective</span><span class="meta-summary">From a small support request to a controlled production release.</span><span class="meta-count">01 / 07</span></div>
+    </div>
+
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; gap:3.2vh;">
+
+      <div>
+        <div class="kicker">What we were asked to create</div>
+        <div class="ask-quote">
+          &ldquo;Small change / production fix within support scope:
+          <b>AI-assisted analysis, code generation, testing, documentation and
+          release</b>.&rdquo;
+        </div>
+      </div>
+
+      <div>
+        <div class="kicker frag" data-step="1">Every part of that sentence is demonstrated live, in order</div>
+        <div class="obj-arc" style="margin:1.2vh 0 0;">
+          <div class="node hot frag" data-step="1">1 · Analysis<br><small>AI-assisted, on real code</small></div>
+          <div class="arrow frag" data-step="2">&#10132;</div>
+          <div class="node hot frag" data-step="2">2 · Code generation<br><small>reviewed by the developer</small></div>
+          <div class="arrow frag" data-step="3">&#10132;</div>
+          <div class="node hot frag" data-step="3">3 · Testing<br><small>plus the human-owned suite</small></div>
+          <div class="arrow frag" data-step="4">&#10132;</div>
+          <div class="node hot frag" data-step="4">4 · Documentation<br><small>design doc &amp; hand-offs</small></div>
+          <div class="arrow frag" data-step="5">&#10132;</div>
+          <div class="node done frag" data-step="5">5 · Release<br><small>notes, go-live &amp; rollback</small></div>
+        </div>
+      </div>
+
+      <div class="obj-cards" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="card frag" data-step="6">
+          <h3>On a live application</h3>
+          <p>A small, ordinary change to an application that is already running —
+          the kind a support team picks up most weeks.</p>
+        </div>
+        <div class="card frag" data-step="6">
+          <h3>People keep the decisions</h3>
+          <p>AI does the work at all five stages, and nothing moves until a
+          person approves it. Same process the teams follow today.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout frag" data-step="7">
+      <div class="big">Today's change: letting prospect members enrol online — made to a live application, while you watch.</div>
+    </div>
+  </section>
+
+  <!-- ================= 2 · WHAT IS ENROLDIRECT ================= -->
+  <section class="slide">
+    <div class="slide-head">
+      <div class="brand-lockup"><span class="brand-mark">M</span><span class="brand-name">MapleSure<small>Insurance</small></span></div>
+      <div class="head-copy"><div class="kicker">The demo application</div><h1>First — what is EnrolDirect?</h1><div class="rule"></div></div>
+      <div class="slide-meta"><span class="meta-label">Context · the application</span><span class="meta-summary">A self-service website with one access decision at the front door.</span><span class="meta-count">02 / 07</span></div>
+    </div>
+
+    <div class="lede">In simple terms: <strong>the website where people join their
+    workplace benefits themselves</strong> — without phoning anyone.</div>
+
+    <div class="ed-stage">
+      <div class="ed-mainrow">
+        <div class="ed-col frag" data-step="1">
+          <div class="lane-label">The user</div>
+          <div class="persona" style="flex-direction:column; align-items:flex-start; gap:1.6vh;">
+            <div style="display:flex; gap:1vw; align-items:center;">
+              <div class="face">D</div>
+              <h3>Meet Devon</h3>
+            </div>
+            <p class="tag">An employee. His workplace gives him a benefits plan
+            with MapleSure.<br><br><b>He wants to join it — from his sofa,
+            tonight.</b></p>
+          </div>
+        </div>
+        <div class="arrow frag" data-step="2">&#10132;</div>
+        <div class="ed-col frag" data-step="2" style="flex:1.4;">
+          <div class="lane-label">The website</div>
+          <div class="ed-app" style="flex:1;">
+            <h3>EnrolDirect</h3>
+            <p style="font-size: clamp(13px, 2.6vh, 32px); margin:0;">He signs up on the
+            web himself, instead of phoning the service centre — <i>like banking
+            on your phone instead of going into the branch.</i></p>
+            <div class="q frag" data-step="3">Before anything else, it asks one question:<br>
+            &ldquo;Is this person allowed to enrol online?&rdquo;</div>
+          </div>
+        </div>
+        <div class="arrow frag" data-step="4" data-late>&#10132;</div>
+        <div class="ed-col frag" data-step="4" data-late>
+          <div class="lane-label">The answer</div>
+          <div class="ed-answers">
+            <div class="ans yes">&#10003;&nbsp; Yes — he joins in minutes, on his own</div>
+            <div class="ans no">&#10007;&nbsp; No — he's turned away, and has to phone us</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout frag" data-step="5">
+      <div class="big">One website. One question. Today's change is about who gets a yes.</div>
+    </div>
+  </section>
+
+  <!-- ================= 3 · THE ISSUE ================= -->
+  <section class="slide">
+    <div class="slide-head">
+      <div class="brand-lockup"><span class="brand-mark">M</span><span class="brand-name">MapleSure<small>Insurance</small></span></div>
+      <div class="head-copy"><div class="kicker">The issue</div><h1>Devon is turned away — and nobody ever decided that</h1><div class="rule"></div></div>
+      <div class="slide-meta"><span class="meta-label">Before · the missing rule</span><span class="meta-summary">A valid prospect reaches a decision path that was never defined.</span><span class="meta-count">03 / 07</span></div>
+    </div>
+
+    <div class="gate-row">
+      <div class="gate-person">
+        <div class="persona" style="flex-direction: column; align-items: flex-start;">
+          <div style="display:flex; gap:.8vw; align-items:center;">
+            <div class="face">D</div>
+            <h3>Devon — a <span style="color:var(--maroon);">prospect</span></h3>
+          </div>
+          <p class="tag" style="margin-top:.8vh;">On his workplace's list of
+          people — a real person, on a real contract. He just hasn't joined a
+          plan yet.</p>
+        </div>
+      </div>
+      <div class="arrow">&#10132;</div>
+      <div class="gate">
+        <h3>&ldquo;Is this person allowed to enrol online?&rdquo;</h3>
+        <div class="rulebox frag" data-step="1"><span>Member rule — already has a benefit</span>
+          <span class="verdict no">&#10007; not Devon</span></div>
+        <div class="rulebox frag" data-step="2"><span>Guest rule — allowed in as an exception</span>
+          <span class="verdict no">&#10007; not Devon</span></div>
+        <div class="rulebox frag" data-step="3" style="background:var(--red-bg); border-color:var(--red);">
+          <span><b>Prospects — no rule was ever written</b></span>
+          <span class="verdict no">nothing to check</span></div>
+      </div>
+      <div class="arrow frag" data-step="4">&#10132;</div>
+      <div class="gate-answer frag pop" data-step="4">
+        <span class="badge denied">&#10007;&nbsp; DENIED</span>
+        <p class="why">&ldquo;Applicant category PROSPECT has no online enrolment
+        preference and cannot be granted access.&rdquo;</p>
+      </div>
+    </div>
+
+    <div class="callout frag" data-step="5">
+      <div class="big">Nothing crashed. The application is doing exactly what it was built to do — when there is no rule, the system says no.</div>
+      <div class="sub">And every wrong &ldquo;no&rdquo; is a phone call to the service centre.</div>
+    </div>
+  </section>
+
+  <!-- ================= 4 · THE SOLUTION ================= -->
+  <section class="slide">
+    <div class="slide-head">
+      <div class="brand-lockup"><span class="brand-mark">M</span><span class="brand-name">MapleSure<small>Insurance</small></span></div>
+      <div class="head-copy"><div class="kicker">What needed to be done</div><h1>Add the missing rule — one group of people gets a yes</h1><div class="rule"></div></div>
+      <div class="slide-meta"><span class="meta-label">After · the controlled change</span><span class="meta-summary">The existing guest preference becomes the traceable rule for prospects.</span><span class="meta-count">04 / 07</span></div>
+    </div>
+
+    <div class="gate-row">
+      <div class="gate-person">
+        <div class="persona" style="flex-direction: column; align-items: flex-start;">
+          <div style="display:flex; gap:.8vw; align-items:center;">
+            <div class="face">D</div>
+            <h3>Devon — a prospect</h3>
+          </div>
+          <p class="tag" style="margin-top:.8vh;">Same person, same screen,
+          same question.</p>
+        </div>
+      </div>
+      <div class="arrow">&#10132;</div>
+      <div class="gate">
+        <h3>&ldquo;Is this person allowed to enrol online?&rdquo;</h3>
+        <div class="rulebox"><span>Member rule</span>
+          <span class="verdict yes">&#10003; unchanged</span></div>
+        <div class="rulebox"><span>Guest rule</span>
+          <span class="verdict yes">&#10003; unchanged</span></div>
+        <div class="rulebox newrule frag" data-step="1">
+          <span><span class="nr-tag">+ ADDED BY THIS CHANGE&nbsp;&nbsp;</span>
+          <b>Prospects — covered by the guest rule</b></span>
+          <span class="verdict yes">&#10003; Devon</span></div>
+      </div>
+      <div class="arrow green frag" data-step="2">&#10132;</div>
+      <div class="gate-answer frag pop" data-step="2">
+        <span class="badge granted">&#10003;&nbsp; GRANTED</span>
+        <p class="why">And the system can name <b>which rule</b> let him in —
+        traceable back to the request.</p>
+      </div>
+    </div>
+
+    <div class="callout frag" data-step="3">
+      <div class="big">That is the whole change: one new rule, and one group of people gets a yes instead of a no.</div>
+      <div class="sub">It arrives as a written user story on the delivery team's board — which is where the demo begins.</div>
+    </div>
+  </section>
+
+  <!-- ================= 5 · THE CONSOLE ================= -->
+  <section class="slide">
+    <div class="slide-head">
+      <div class="brand-lockup"><span class="brand-mark">M</span><span class="brand-name">MapleSure<small>Insurance</small></span></div>
+      <div class="head-copy"><div class="kicker">The console — where the work happens</div><h1>What AI does at each step — and where a person decides</h1><div class="rule"></div></div>
+      <div class="slide-meta"><span class="meta-label">Workflow · human controlled</span><span class="meta-summary">Five AI-assisted stages with explicit approval at every hand-off.</span><span class="meta-count">05 / 07</span></div>
+    </div>
+
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+      <div class="stages-ends"><span class="req">REQUEST &#10132;</span><span class="live">&#10132; LIVE</span></div>
+      <div class="stages">
+        <div class="stage frag" data-step="1">
+          <div class="head">1 · Analyse</div>
+          <div class="body">
+            <div class="ai">AI DOES</div>
+            <ul><li>Reads the request <i>and</i> the code</li>
+                <li>Asks what is unclear</li>
+                <li>Finds the one other team affected</li></ul>
+            <div class="person"><b>&#10003; A PERSON</b><span>accepts the analysis</span></div>
+          </div>
+        </div>
+        <div class="stage frag" data-step="2">
+          <div class="head">2 · Pick the code</div>
+          <div class="body">
+            <div class="ai">AI DOES</div>
+            <ul><li>Finds the right repository</li>
+                <li>Narrows to the files it may touch</li></ul>
+            <div class="person"><b>&#10003; A PERSON</b><span>confirms the target</span></div>
+          </div>
+        </div>
+        <div class="stage frag" data-step="3">
+          <div class="head">3 · Write it</div>
+          <div class="body">
+            <div class="ai">AI DOES</div>
+            <ul><li>Writes the change on a branch</li>
+                <li>Explains every file</li>
+                <li>Answers &ldquo;why did you&hellip;?&rdquo;</li></ul>
+            <div class="person"><b>&#10003; A PERSON</b><span>reviews &amp; approves</span></div>
+          </div>
+        </div>
+        <div class="stage frag" data-step="4">
+          <div class="head">4 · Test it</div>
+          <div class="body">
+            <div class="ai">AI DOES</div>
+            <ul><li>Drafts the test plan</li>
+                <li>Writes and runs tests</li>
+                <li>Re-runs 27 human-owned tests</li></ul>
+            <div class="person"><b>&#10003; A PERSON</b><span>approves the plan first</span></div>
+          </div>
+        </div>
+        <div class="stage frag" data-step="5">
+          <div class="head">5 · Release</div>
+          <div class="body">
+            <div class="ai">AI DOES</div>
+            <ul><li>Writes the release notes</li>
+                <li>Go-live and rollback steps</li></ul>
+            <div class="person"><b>&#10003; A PERSON</b><span>signs off; ticket updated</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout frag" data-step="6">
+      <div class="big">AI does the labour. It never makes the decision — the work does not move until a person says yes.</div>
+      <div class="sub">Same process the teams already follow. AI is doing the typing.</div>
+    </div>
+  </section>
+
+  <!-- ================= 6 · WHAT YOU WILL WATCH ================= -->
+  <section class="slide">
+    <div class="slide-head">
+      <div class="brand-lockup"><span class="brand-mark">M</span><span class="brand-name">MapleSure<small>Insurance</small></span></div>
+      <div class="head-copy"><div class="kicker">The demonstration</div><h1>What you will watch — the same screen, ten minutes apart</h1><div class="rule"></div></div>
+      <div class="slide-meta"><span class="meta-label">Demo · visible evidence</span><span class="meta-summary">The same user and application before and after the delivery workflow.</span><span class="meta-count">06 / 07</span></div>
+    </div>
+
+    <div class="watch">
+      <div class="side before">
+        <div class="label">BEFORE</div>
+        <div class="badge denied" style="margin-top:1.6vh;">&#10007;&nbsp; DENIED</div>
+        <p>A prospect asks to enrol.<br>No rule exists — the system turns him away.</p>
+      </div>
+      <div class="arrow frag" data-step="1">&#10132;</div>
+      <div class="mid frag" data-step="1">
+        <div class="card">
+          <h3>the five stages</h3>
+          <p>analysis &#8594; code &#8594; review &#8594; tests &#8594; release</p>
+          <p><b>a person approves each one</b></p>
+        </div>
+      </div>
+      <div class="arrow green frag" data-step="2">&#10132;</div>
+      <div class="side after frag pop" data-step="2">
+        <div class="label">AFTER</div>
+        <div class="badge granted" style="margin-top:1.6vh;">&#10003;&nbsp; GRANTED</div>
+        <p>Same person, same screen.<br>And the system names the rule that let him in.</p>
+      </div>
+    </div>
+
+    <div class="callout frag" data-step="3">
+      <div class="big">These are running applications, not slides — the code really is changed, tested and released while you watch.</div>
+    </div>
+  </section>
+
+  <!-- ================= 7 · GUARDRAILS ================= -->
+  <section class="slide">
+    <div class="slide-head">
+      <div class="brand-lockup"><span class="brand-mark">M</span><span class="brand-name">MapleSure<small>Insurance</small></span></div>
+      <div class="head-copy"><div class="kicker">The guardrails</div><h1>How it is kept safe — by design, not by promise</h1><div class="rule"></div></div>
+      <div class="slide-meta"><span class="meta-label">Assurance · enforced controls</span><span class="meta-summary">Technical boundaries make the workflow auditable and repeatable.</span><span class="meta-count">07 / 07</span></div>
+    </div>
+
+    <div class="guards">
+      <div class="card frag" data-step="1"><h3>A narrow blast radius</h3>
+        <p>AI may only edit an approved list of files. The impact analysis it
+        must read — it cannot edit.</p></div>
+      <div class="card frag" data-step="2"><h3>An independent check</h3>
+        <p>The regression suite is human-owned. AI has no write path to it —
+        so passing it means something.</p></div>
+      <div class="card frag" data-step="3"><h3>Separation of duties</h3>
+        <p>The tester cannot generate code; the developer cannot approve their
+        own tests. Enforced by role, not policy.</p></div>
+      <div class="card frag" data-step="4"><h3>Derived, not drafted</h3>
+        <p>Deploy order comes from the service dependency graph. Cross-team
+        tickets are raised only where code must change.</p></div>
+      <div class="card frag" data-step="5"><h3>Honest paperwork</h3>
+        <p>The release record lists what this run did <b>not</b> prove —
+        unevidenced claims are stated, never hidden.</p></div>
+      <div class="card frag" data-step="6"><h3>Server-side gates</h3>
+        <p>Commit is blocked until tests and regression really passed — read
+        from the event log, never asserted by the screen.</p></div>
+    </div>
+
+    <div class="callout frag" data-step="7">
+      <div class="big">Every gate is enforced by the server, not the screen — a client cannot assert its way past one.</div>
+    </div>
+  </section>
+
+  <div class="footer">
+    <span>MapleSure Insurance is a made-up insurer — all data is invented. &nbsp;·&nbsp;
+      US-2026-045 · EnrolDirect · who is allowed to enrol online</span>
+    <span class="dots" id="dots"></span>
+  </div>
+  <div class="hint" id="hint">&#8594; or click to advance</div>
+  <div class="transition-wash" id="transitionWash" aria-hidden="true"></div>
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var dots = document.getElementById('dots');
+  var hint = document.getElementById('hint');
+  var transitionWash = document.getElementById('transitionWash');
+  var cur = 0;
+  var transitioning = false;
+  var positions = slides.map(function () { return -1; });
+
+  function fragsOf(slide) {
+    return Array.prototype.slice.call(slide.querySelectorAll('.frag'));
+  }
+  function stepsOf(slide) {
+    return fragsOf(slide).reduce(function (steps, frag, index) {
+      if (!frag.hasAttribute('data-step')) frag.setAttribute('data-step', String(index + 1));
+      var step = parseInt(frag.getAttribute('data-step'), 10);
+      if (steps.indexOf(step) === -1) steps.push(step);
+      return steps;
+    }, []).sort(function (a, b) { return a - b; });
+  }
+
+  var buildSteps = slides.map(stepsOf);
+
+  slides.forEach(function (slide, i) {
+    var d = document.createElement('i');
+    d.setAttribute('role', 'button');
+    d.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+    d.setAttribute('tabindex', '0');
+    d.addEventListener('click', function (e) { e.stopPropagation(); move(i, true); });
+    d.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); move(i, true); }
+    });
+    dots.appendChild(d);
+
+    if (buildSteps[i].length) {
+      slide.classList.add('is-building');
+      var rail = document.createElement('span');
+      rail.className = 'build-rail';
+      rail.setAttribute('aria-label', 'Build progress');
+      buildSteps[i].forEach(function (_, stepIndex) {
+        var marker = document.createElement('i');
+        marker.setAttribute('role', 'button');
+        marker.setAttribute('tabindex', '0');
+        marker.setAttribute('aria-label', 'Show build step ' + (stepIndex + 1));
+        marker.addEventListener('click', function (e) {
+          e.stopPropagation();
+          positions[i] = stepIndex;
+          renderBuild(i);
+        });
+        marker.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            positions[i] = stepIndex;
+            renderBuild(i);
+          }
+        });
+        rail.appendChild(marker);
+      });
+      slide.querySelector('.slide-meta').appendChild(rail);
+    }
+  });
+
+  function renderBuild(slideIndex) {
+    var slide = slides[slideIndex];
+    var steps = buildSteps[slideIndex];
+    var position = positions[slideIndex];
+
+    fragsOf(slide).forEach(function (frag) {
+      var step = parseInt(frag.getAttribute('data-step'), 10);
+      var groupIndex = steps.indexOf(step);
+      var active = position >= 0 && position < steps.length && groupIndex === position;
+      var complete = position >= steps.length || groupIndex < position;
+      frag.classList.toggle('active', active);
+      frag.classList.toggle('complete', complete);
+      frag.classList.toggle('on', active || complete);
+    });
+
+    var rail = slide.querySelector('.build-rail');
+    if (rail) {
+      Array.prototype.forEach.call(rail.children, function (marker, index) {
+        marker.classList.toggle('active', index === position);
+        marker.classList.toggle('done', position >= steps.length || index < position);
+        marker.setAttribute('aria-current', index === position ? 'step' : 'false');
+      });
+    }
+  }
+
+  function paint() {
+    slides.forEach(function (s, i) { s.classList.toggle('on', i === cur); });
+    Array.prototype.forEach.call(dots.children, function (d, i) {
+      d.classList.toggle('here', i === cur);
+      d.setAttribute('aria-current', i === cur ? 'page' : 'false');
+    });
+    var h = '#' + (cur + 1);
+    if (location.hash !== h) history.replaceState(null, '', h);
+  }
+
+  function go(i, showAll) {
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    positions[cur] = showAll ? buildSteps[cur].length : -1;
+    renderBuild(cur);
+    paint();
+  }
+
+  function move(i, showAll) {
+    var target = Math.max(0, Math.min(slides.length - 1, i));
+    if (target === cur) {
+      positions[cur] = showAll ? buildSteps[cur].length : -1;
+      renderBuild(cur);
+      return;
+    }
+    if (transitioning) return;
+    transitioning = true;
+    transitionWash.classList.add('on');
+    window.setTimeout(function () {
+      go(target, showAll);
+      window.requestAnimationFrame(function () {
+        transitionWash.classList.remove('on');
+        window.setTimeout(function () { transitioning = false; }, 260);
+      });
+    }, 220);
+  }
+
+  function next() {
+    if (transitioning) return;
+    hint.classList.add('gone');
+    var lastStep = buildSteps[cur].length - 1;
+    if (positions[cur] < lastStep) {
+      positions[cur] += 1;
+      renderBuild(cur);
+      return;
+    }
+    if (cur < slides.length - 1) move(cur + 1, false);
+  }
+
+  function prev() {
+    if (transitioning) return;
+    if (positions[cur] > -1) {
+      positions[cur] = Math.min(positions[cur] - 1, buildSteps[cur].length - 1);
+      renderBuild(cur);
+      return;
+    }
+    if (cur > 0) move(cur - 1, true);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') move(0, false);
+    else if (e.key === 'End') move(slides.length - 1, true);
+  });
+  document.addEventListener('click', function () { next(); });
+
+  var start = parseInt((location.hash || '#1').slice(1), 10);
+  go(isNaN(start) ? 0 : start - 1, false);
+})();
+</script>
+</body>
+</html>
